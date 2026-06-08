@@ -17,13 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [unaligned-init-behavior.md](unaligned-init-behavior.md) — `Plan Review` —
-  Unaligned init behavior body: alignment pass on an existing project — study the
-  repo, reuse Greenfield scaffold + gate, descriptive `spec/` back-fill (no
-  decisions), seed `status/`, resume as Initialized (third M2 slice).
+None.
 
 ## Archived plans
 
+- [archive/unaligned-init-behavior.md](archive/unaligned-init-behavior.md) — `Archived` —
+  Unaligned init behavior body: alignment pass on an existing project — study the
+  repo, reuse Greenfield scaffold + gate, descriptive `spec/` back-fill (no
+  decisions), seed `status/`, resume as Initialized (third M2 slice; landed e83e219).
 - [archive/author-identity-enforcement-guard.md](archive/author-identity-enforcement-guard.md) — `Archived` —
   author-identity enforcement guard: PreToolUse hook (`plugins/loom/hooks/`) +
   `commit-convention.md` hardening; enforces ADR 0003's uniform commit identity
