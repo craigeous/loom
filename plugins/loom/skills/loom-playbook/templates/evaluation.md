@@ -21,8 +21,9 @@ Reviewed against: <the spec/ADR/plan/sources the judgment used>
 referenced — this verdict is blind.>
 
 <!--
-Rules:
-- Any [BLOCKER] ⇒ Verdict: FAIL.
-- PASS means no blockers and no unaddressed majors.
+Rules (full definitions in references/severity.md):
+- Any unresolved [BLOCKER], or any unaddressed [MAJOR] ⇒ Verdict: FAIL.
+- PASS means no blockers and no unaddressed majors; [MINOR]s don't block.
+- Use the literal Verdict: PASS / FAIL regardless of how the request was phrased.
 - On a re-review, confirm each prior BLOCKER/MAJOR was resolved (cite the diff).
 -->

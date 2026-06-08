@@ -1,7 +1,8 @@
 # Plan-Evaluation Rubric
 
 The plan evaluator judges blind, against the artifact's authority (not impressions).
-Any `[BLOCKER]` ⇒ FAIL.
+Tag findings and derive the verdict per [`severity.md`](severity.md)
+(BLOCKER/MAJOR/MINOR → PASS/FAIL).
 
 ## Research notes (light gate)
 

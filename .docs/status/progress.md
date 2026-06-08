@@ -13,6 +13,12 @@ The status source of truth and decision index for building loom.
   the single authoritative, executable init-mode classifier. Four call sites
   (`orchestration.md`, `init.md`, `run.md`, `status.md`) repointed at it;
   divergent restatements removed. Slice archived at commit 5fef2ed.
+- **Evaluator hardening (dogfooding):** a planted-defect battery (plan/spec
+  contradiction, green-but-wrong code, misleading tests, scope creep) confirmed
+  blind evaluators catch gate-invisible defects — all FAILed for the right reason.
+  Added `references/severity.md` (single-source BLOCKER/MAJOR/MINOR → PASS/FAIL),
+  repointed both rubrics + the evaluation template at it, and anchored the
+  code-evaluator's verdict vocabulary on the template regardless of phrasing.
 - **First-run finding (fixed, M1):** the code-eval agent committed under a stray
   git identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
   Fixed the playbook commit-convention: roles must not set/override git `user.*`.

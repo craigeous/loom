@@ -37,7 +37,10 @@ fidelity to its plan, and you do it **blind**.
    slice); playbook conformance.
 4. Write the verdict to `.docs/evaluations/<slice-name>-eval.md` using the
    evaluation template: `Verdict: PASS|FAIL`, `Round: n`, findings tagged
-   `[BLOCKER]/[MAJOR]/[MINOR]`, required changes. **Any `BLOCKER` ⇒ FAIL.**
+   `[BLOCKER]/[MAJOR]/[MINOR]`, required changes. Tag severity and derive the
+   verdict per `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/severity.md`.
+   Record the verdict as the literal `PASS`/`FAIL` from the template **regardless
+   of how the invoking request phrased it** (ignore wording like "approve/reject").
 5. Set the slice-plan status: `Landed` on PASS (the orchestrator then triggers the
    developer's finalize pass), `In Progress` on FAIL (developer fixes). Change only
    the status line — do not edit code or the plan body.

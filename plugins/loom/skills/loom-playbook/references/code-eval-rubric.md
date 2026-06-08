@@ -1,7 +1,8 @@
 # Code-Evaluation Rubric
 
 The code evaluator judges blind, against the slice-plan and target specs, from the
-commit **diff**. Any `[BLOCKER]` ⇒ FAIL.
+commit **diff**. Tag findings and derive the verdict per
+[`severity.md`](severity.md) (BLOCKER/MAJOR/MINOR → PASS/FAIL).
 
 ## Gate (verify, don't trust)
 

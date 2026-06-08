@@ -45,6 +45,8 @@ archived on landing. On conflict, the spec wins.
   role identity; blind review reads commits).
 - `plan-eval-rubric.md` — what the plan evaluator checks.
 - `code-eval-rubric.md` — what the code evaluator checks.
+- `severity.md` — the shared BLOCKER/MAJOR/MINOR taxonomy and the PASS/FAIL rule
+  both evaluators apply.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 
