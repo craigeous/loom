@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [recommended-tooling-and-mechanical-checks.md](recommended-tooling-and-mechanical-checks.md) — `Plan Review` —
+  add a recommended CLI/LSP toolkit reference (`references/tooling.md`) + a
+  mechanical-invariant-check rule in both eval rubrics; cross-link from SKILL.md
+  and the three relevant agents.
 
 ## Archived plans
 
