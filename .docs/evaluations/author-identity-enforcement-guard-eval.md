@@ -245,3 +245,124 @@ itself but a factual error in how the plan characterizes its own residual: it cl
 fail-open where the prototype shows fail-closed on escaped-inner-quote messages.
 Correcting the claim and adding a balanced-quote fail-open guard (change 2) should
 clear the verdict; no other rework is needed.
+
+---
+
+# Evaluation: author-identity-enforcement-guard (Round 3)
+
+Verdict: PASS
+Round: 3
+Reviewed against: the same authority as Rounds 1–2 (Approved research note
+`.docs/research/2026-06-08-plugin-pretooluse-hook-guard.md` + its eval, ADR 0003,
+and `commit-convention.md`). The revised three-stage de-quote transform (commit
+`bf6cff0`) was **independently re-implemented from the plan text alone** as a
+`#!/bin/sh` script and exercised against the full ALLOW/BLOCK matrix plus the
+critical Stage-A/Stage-C trace checks. Findings cite observed exit codes and the
+traced intermediate values (`$DEESC`, `$STRIPPED`, quote counts), not the plan's
+assertions. Pre-state of every file the plan touches was re-confirmed against the
+tree.
+
+## Round-2 finding — resolution check (diff `bf6cff0`)
+
+- **[MAJOR] escaped-quote limitation described with wrong failure direction
+  (false-positive / fail-closed) — RESOLVED.** Step 2 now specifies an ordered
+  three-stage de-quote: Stage A (`s/\\"//g`, `s/\\'//g`) removes backslash-escaped
+  quote characters first; Stage B strips `'...'`/`"..."` bodies; Stage C exits 0 if
+  an odd `"` or `'` count remains in `$STRIPPED`. I prototyped the exact transform
+  and traced intermediates for the Round-2 failing cases:
+  - `git commit -m "use \"--author=\" flag carefully"` → DEESC
+    `... -m "use --author= flag carefully"` → STRIPPED `git commit -m ` (dq=0,sq=0)
+    → no token → **exit 0 (ALLOW).** The Round-2 false-positive is gone.
+  - `git commit -m "mention \"GIT_AUTHOR_NAME=x\" here"` → **exit 0.**
+  - `git commit -m "note \"-c user.email=\" thing"` → **exit 0.**
+  The limitation paragraph (lines 231-249) is now factually correct: it states the
+  prior draft's claim was wrong, that a naïve single body-strip fails **closed**
+  (exposes an in-message token), that Stage A eliminates that subclass, and that
+  Stage C fails **open** on any residual unparseable quoting. Accurate against the
+  prototype.
+
+## Independent full-matrix prototype (built from plan text, not trusted)
+
+| Case | Expect | Got |
+|---|---|---|
+| `git commit -m "fix --author= parsing"` | 0 | 0 |
+| `git commit -m "use \"--author=\" flag carefully"` (D4) | 0 | 0 |
+| `git commit -m "mention \"GIT_AUTHOR_NAME=x\" here"` (D4) | 0 | 0 |
+| `git commit -m "note \"-c user.email=\" thing"` (D4) | 0 | 0 |
+| `git log --grep="--author="` | 0 | 0 |
+| `git commit -m "msg"` | 0 | 0 |
+| `git -c core.pager=delta commit -m "x"` | 0 | 0 |
+| `git commit -m "wip` (unbalanced → fail-open, D5) | 0 | 0 |
+| `ls -la` | 0 | 0 |
+| `git commit --author="evil <e@e>" -m "ok"` | 2 | 2 |
+| `git commit --author "evil <e@e>"` | 2 | 2 |
+| `git commit --author=evil` | 2 | 2 |
+| `git commit --author=evil -m "say \"hi\""` (D3 #3) | 2 | 2 |
+| `git -c user.email=x@y commit -m "x"` | 2 | 2 |
+| `GIT_AUTHOR_NAME=foo git commit -m "x"` | 2 | 2 |
+| `GIT_COMMITTER_EMAIL=z@z git commit -m "x"` | 2 | 2 |
+
+16/16 match (9 ALLOW → 0, 7 BLOCK → 2).
+
+Critical questions answered (each traced, not assumed):
+1. **Stage A never destroys a real override token.** D3 case 3
+   (`--author=evil -m "say \"hi\""`): Stage A removes only the in-message `\"`
+   pair; DEESC retains `--author=evil`, STRIPPED retains `--author=evil` → BLOCK.
+   Real tokens carry no backslash-escaped quotes, so Stage A is provably a no-op on
+   them.
+2. **Stage C never lets a clean real override slip (no false-negative).** Every
+   BLOCK case yields an **even** (zero) quote count in `$STRIPPED` — the override
+   token is unquoted, so its surrounding quotes (if any) strip in balanced pairs.
+   None of the seven BLOCK cases hit the odd-count backstop; all reach the override
+   checks and exit 2. Confirmed by trace (e.g. `--author="evil <e@e>" -m "ok"` →
+   STRIPPED `git commit --author= -m `, dq=0).
+3. **No remaining false-positive.** All nine ALLOW cases exit 0, including the three
+   escaped-inner-quote messages and the `-c core.pager` non-identity config.
+4. **Limitation paragraph accurate.** The guard fails **open** (never closed) on
+   unparseable quoting; clean overrides (even quote count) always reach detection.
+   Verified directly: a hand-crafted odd-quote payload alongside a real override
+   (`git commit --author=evil -m "wip` with a lone trailing quote) exits 0 —
+   exactly the documented Stage-C fail-open residual, covered by the doc layer.
+5. **Verification matrix complete with recorded-exit-code instructions.** Section C
+   (6 BLOCK), D (4 ALLOW), D2 (5 message-text ALLOW), D3 (3 adversarial BLOCK incl.
+   the new escaped-quote-no-op case), D4 (3 escaped-inner-quote ALLOW), D5
+   (unbalanced-quote fail-open ALLOW), plus E (jq-absent fallback) and F
+   (doc + scope). Each requires `echo $?` evidence recorded in Notes.
+6. **Previously-confirmed items intact.** Re-confirmed against the tree:
+   `plugin.json` declares no `hooks` key and `plugins/loom/hooks/` does not exist
+   (Step 3 no-op correct); `commit-convention.md` lines 14-20 cover only `-c user.*`
+   / `git config user.*` (Step 4's extension to `--author=` and the four env vars is
+   correctly scoped); detection completeness, exit-2-with-stderr-only, POSIX sh,
+   jq-with-grep-fallback (fallback extraction prototyped correct), quoted
+   `${CLAUDE_PLUGIN_ROOT}` path, auto-discovered `hooks/hooks.json`, and the
+   defense-in-depth framing are unchanged.
+
+## Findings
+
+- [MINOR] **Residual hyper-adversarial fail-open is real but correctly documented.**
+  A deliberately hand-crafted command that appends a lone unbalanced quote to a real
+  override is allowed (exit 0) via the Stage-C backstop, as the prototype confirms.
+  This is an intentional, documented design choice (fail-open over fail-closed) with
+  the `commit-convention.md` doc rule as the authoritative layer — not a guard
+  defect. A self-inflicted bypass by an actor who is already declining to follow the
+  binding doc rule is outside what a best-effort defense-in-depth hook must close.
+  Non-blocking.
+
+- [MINOR] **Bare `git commit --author` (no `=`, no trailing space) still uncaught**
+  (carried from Round 1). `--author([[:space:]]|=)` does not match a flag at
+  end-of-string with no delimiter; git itself rejects that incomplete invocation, so
+  it is not an identity-override hole. Noted for completeness only. Non-blocking.
+
+## Verdict rationale
+
+The Round-2 MAJOR is genuinely fixed: the three-stage transform was independently
+re-derived from the plan and passes 16/16, the Stage-A no-op and Stage-C
+no-false-negative properties hold under trace, and the limitation paragraph now
+states the residual in the correct (fail-open) direction. Verification covers D4,
+D5, the new adversarial D3, and the prior matrix with recorded exit codes. No
+BLOCKER or MAJOR remains; the two residuals are documented MINORs consistent with
+the defense-in-depth framing. PASS.
+
+## Required changes
+
+None (the two MINORs are optional polish, not required for PASS).
