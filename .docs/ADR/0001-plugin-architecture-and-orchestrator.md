@@ -3,6 +3,10 @@
 Status: Accepted
 Date: 2026-06-08
 
+> Note: the bare `/loom` command references below are superseded by ADR 0007
+> (namespaced command surface — the orchestrator is `/loom:run`); 0001's
+> plugin/orchestrator architecture decision otherwise stands.
+
 ## Context
 
 loom needs to run five role agents on different models and coordinate handoffs.
