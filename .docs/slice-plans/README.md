@@ -18,7 +18,8 @@ Review → Landed → Archived` (see
 
 ## Active plans
 
-_(none yet)_
+- [init-mode-detection.md](init-mode-detection.md) — `Plan Review` — one
+  authoritative, precise init-mode classifier (first M2 slice).
 
 ## Archived plans
 
