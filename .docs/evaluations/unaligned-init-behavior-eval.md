@@ -79,3 +79,80 @@ link resolution). Appropriate for a markdown repo with no compiled gate.
 No place in the plan instructs the back-fill to make a decision or propose a change;
 the boundary is enforced as a content requirement of `unaligned.md` Step 3 rather
 than something the slice itself produces. The two MINORs above are cosmetic wording.
+
+---
+
+# Round 2 (code)
+
+Verdict: PASS
+Round: 2
+Reviewed: commit `54b387e` (`git show`), blind, against `.docs/spec/06-init-modes.md`
+§2 + Gate establishment + Playbook re-application; `greenfield.md` (the reused body);
+`docs-layout.md`; call sites `orchestration.md`, `commands/run.md`, `commands/init.md`;
+`SKILL.md`; root `CLAUDE.md`; and the Round 1 plan-eval above. Markdown repo — no
+compiled gate; acceptance is review-against-spec verified mechanically with `rg`/test.
+
+## Mechanical-check results (verified against the real tree, not by eye)
+
+1. **Spec-06 §2 fidelity — every obligation realized in `unaligned.md`:**
+   - *Study the repo* → Step 1 (lines 18-37): read-only survey of languages /
+     build-test-lint tooling / existing docs / structure; explicitly "does not yet
+     write project files"; feeds gate detection + back-fill. Matches §2 bullet 1.
+   - *Create `.docs/` + apply playbook + establish gate* → Step 2 (lines 41-72) **by
+     reuse** of `greenfield.md` Steps A–E, with only Unaligned deltas (populated repo
+     / "update never clobber", gate detection fed by Step 1, alignment-phase status
+     marker). Rust = verified gate (`Cargo.toml` signal — matches `gates/rust.md:5`);
+     unknown stack = forthcoming gate-learning, explicitly **not implemented**
+     (lines 60-67), faithful to greenfield Step E lines 105-116.
+   - *Descriptive back-fill only, no decisions, Draft→Plan Review→Approved* → Step 3
+     (lines 76-119). No-decisions boundary is explicit and hard (lines 96-99); Draft
+     lifecycle present (lines 108-109, cross-linked to `03-artifact-lifecycle.md`,
+     which resolves); correctly populates the `spec/README.md` reading order that
+     greenfield Step B seeds empty (lines 113-118), leaving non-negotiables empty.
+   - *Seed `status/` with current state + initial roadmap* → Step 4 (lines 123-144).
+   - *Resume-as-Initialized handoff* → Step 5 (lines 146-160) + Step 4 handoff.
+2. **Single-source:** `rg` for `research/README|ADR/README|slice-plans/README|cargo
+   fmt --check|cargo clippy|cargo test|.gitkeep|Non-negotiable decisions` in
+   `unaligned.md` → **empty**. No scaffold/gate mechanics restated; `greenfield.md`
+   referenced as the single source (lines 43, 46). No divergent restatement.
+3. **No-decisions boundary:** explicit and unambiguous — "records what *is*, never
+   what *should be*", "No ADRs are authored", "No spec text prescribes a change…",
+   "Any new decision … requires a real planning phase" (lines 96-99). Problems/
+   opportunities are routed to `status/roadmap.md` as candidate milestones for the
+   owner, never into a spec body (lines 101-103) — this defers a decision, it does
+   not license one. No spec-invariant violation.
+4. **Forward pointers intact:** `Initialized` remains a forward pointer in
+   `orchestration.md:47` ("behavior body forthcoming … *initialized-init-behavior*"),
+   `init.md:23` (step 3 idempotent re-apply, unchanged), `run.md:25` ("initialized →
+   summarize current state and continue", unchanged). Gate-learning left
+   unimplemented (`unaligned.md:60-67`).
+5. **Call sites + links:** `run.md:23`, `init.md:19` point at
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/unaligned.md` (target exists
+   under plugin root `plugins/loom/`); `orchestration.md:44` links `unaligned.md`
+   (resolves); `SKILL.md:53` + `CLAUDE.md:44` reference it. Every link in
+   `unaligned.md` resolves from `references/`: `greenfield.md`, `../gates/rust.md`,
+   `commit-convention.md`, `../../../../../.docs/spec/06-init-modes.md`,
+   `../../../../../.docs/spec/03-artifact-lifecycle.md` — all present.
+6. **Scope:** `git show --name-only` = `unaligned.md` + `orchestration.md` + `run.md`
+   + `init.md` + `SKILL.md` + `CLAUDE.md` + slice-plan only. `git show --name-only |
+   rg "\.docs/spec/|\.docs/ADR/"` → empty. No spec/ADR drive-by edits. Slice-plan
+   diff is confined to `Status: Approved`→`Implemented` plus appended gate evidence.
+
+## Hygiene
+
+Commit `54b387e` is author-neutral (no co-author trailer, no role/author identity
+in the message). Single-slice. Gate evidence recorded in the slice-plan and matches
+reality (re-ran each cited `rg` invariant). `CLAUDE.md`/`SKILL.md` layout notes
+updated consistently, leaving Initialized as the only forthcoming M2 body.
+
+## Round 1 MINORs
+
+- MINOR 1 (A–F vs A–E guard wording): the body correctly scopes reuse to greenfield
+  **Steps A–E** (`unaligned.md:43`), owning commit/hand-back as its own Step 5.
+  Resolved in the implemented body.
+- MINOR 2 (target-specs header framing): cosmetic, non-blocking; left as-is — does
+  not affect scope or correctness.
+
+No new findings. No BLOCKER/MAJOR/MINOR.
+
+Verdict: PASS

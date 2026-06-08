@@ -1,6 +1,6 @@
 # Unaligned Init Behavior — the align-an-existing-project body
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md, 08-playbook.md, 04-orchestrator.md
 
 ## Context
