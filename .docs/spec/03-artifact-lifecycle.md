@@ -16,8 +16,7 @@ commits the next role can diff against.
 | `Plan Review`        | Planning artifact ready for blind review     | plan evaluator        |
 | `Approved`           | Artifact accepted                            | developer (if a slice)|
 | `In Progress`        | Developer implementing                       | developer             |
-| `Implemented`        | Developer done; gate green; awaiting review  | code evaluator        |
-| `Code Review`        | Code under blind review                       | code evaluator        |
+| `Implemented`        | Gate green; awaiting code review             | code evaluator        |
 | `Landed`             | Code approved; finalize pass underway        | developer (finalize)  |
 | `Archived`           | Plan moved to `archive/`; history            | —                     |
 | `Needs Clarification`| Blocked on a question in `## Notes`          | clarifying role       |
@@ -53,15 +52,22 @@ Draft ──▶ Plan Review ──approve──▶ Approved
 ```
 Draft ──▶ Plan Review ──approve──▶ Approved ──▶ In Progress ──▶ Implemented
   ▲            │                                    ▲                │
-  └──reject────┘                                    │                ▼
-   (planner revises)                                │          Code Review
-                                                    │           │      │
-                                       reject (eval notes)──────┘      │approve
-                                                                       ▼
-                                                            Landed ──▶ Archived
+  └──reject────┘                                    │                │ PASS
+   (planner revises)                                │                ▼
+                                                    │          Landed ──▶ Archived
+                                                    │                │
+                                       FAIL (eval notes)─────────────┘
 ```
 
-On **approve at Code Review**, the developer runs a **finalize pass** (cold):
+`Implemented` is the awaiting-review status: the code evaluator holds the slice
+under **code review** (a phase, not a status) and writes a verdict. On **PASS** it
+sets `Landed`; on **FAIL** it sets `In Progress` with eval notes and the developer
+fixes. The full string is therefore `… Implemented → (code review) → Landed →
+Archived`, where *code review* names the evaluator's pass over an `Implemented`
+artifact rather than a distinct `Status:`.
+
+On **code-eval PASS** (the slice is `Landed`), the developer runs a **finalize
+pass** (cold):
 1. Update `status/progress.md` and `status/handoff.md` (and `roadmap.md` if a
    milestone closed).
 2. `git mv` the plan into `slice-plans/archive/`, set status `Archived`, commit.
@@ -79,14 +85,20 @@ opens a planning task instead of patching the spec.
 ## Clarification sub-flow
 
 ```
-<any status> ──role asks in ## Notes, sets──▶ Needs Clarification
+<prior status> ──role asks in ## Notes, sets──▶ Needs Clarification
                                                    │
                   orchestrator spawns clarifying role (cold)
                                                    │
-                  answer written in ## Notes, status restored, commit
+                  answer written in ## Notes, commit
                                                    ▼
-                                          <prior status resumes>
+                  orchestrator restores the prior status, resumes the loop
 ```
+
+The orchestrator records the status the artifact held when it became `Needs
+Clarification` and restores that status once the clarifying role (usually the
+planner) has answered in `## Notes` ([02](02-roles.md) — Clarification between
+roles). The loop then resumes from the restored status via the dispatch rules
+below.
 
 ## Dispatch rules (status → role)
 
