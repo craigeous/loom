@@ -149,20 +149,58 @@ guard's correctness fully verifiable by the script-level tests in Verification.
      string and still take effect). So: build a **de-quoted copy** of the command
      by removing the *contents* of every single-quoted and double-quoted segment,
      then run all override patterns on that de-quoted copy (not the raw command).
-     Use a single POSIX `sed` (BRE), applied to the extracted command string:
+
+     De-quoting is a **three-stage, ordered** transform (belt-and-suspenders).
+     Stage order matters — earlier stages must run before later ones:
+
+     **Stage A — remove backslash-escaped quote characters FIRST.** Delete every
+     `\"` and `\'` from the working copy *before* stripping any quoted body. This
+     is what defeats the escaped-inner-quote false-positive: an escaped quote inside
+     a message (`-m "use \"--author=\" flag"`) is not a real quote delimiter, so
+     removing it first lets the surrounding *real* `"..."` body strip cleanly as one
+     span (carrying the in-message `--author=` away with it) instead of the body-strip
+     `sed` mis-pairing across the `\"` and leaving the token exposed. Critically,
+     Stage A is a **no-op on real overrides**, because a genuine `--author="x"` /
+     `-c user.email=x` / inline `VAR=` token contains no backslash-escaped quotes —
+     so removing `\"`/`\'` cannot erase a real override token (verified below).
+
+     **Stage B — strip the contents (and delimiters) of every quoted segment.**
+     After Stage A, delete each `'...'` and `"..."` span. A real flag/assignment
+     token sits *before* the opening quote of its value (or is wholly unquoted), so
+     it survives Stage B; only message/argument text is removed.
 
      ```
-     STRIPPED=$(printf '%s' "$CMD" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+     DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")
+     STRIPPED=$(printf '%s' "$DEESC" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
      ```
 
-     - `s/'[^']*'//g` deletes each `'...'` segment (single-quoted bodies).
-     - `s/"[^"]*"//g` deletes each `"..."` segment (double-quoted bodies).
+     - Stage A: `s/\\"//g` deletes `\"`; `s/\\'//g` deletes `\'` (POSIX sed; the
+       backslash is doubled in the shell single-/double-quoted literals above).
+     - Stage B: `s/'[^']*'//g` deletes each `'...'` segment; `s/"[^"]*"//g` deletes
+       each `"..."` segment.
+
+     **Stage C — fail-open backstop on ambiguous quoting.** After Stages A+B, if
+     `$STRIPPED` **still** contains an unbalanced (odd) count of `"` or `'`
+     characters, the command's quoting could not be cleanly resolved — so
+     **exit 0 (allow)** without running any override check. This is a *deliberate*
+     fail-open: the guard never blocks a command whose quoting it cannot parse
+     (consistent with defense-in-depth — the doc layer is the authoritative
+     guarantee). It does not create a false-negative for clean overrides, because a
+     cleanly-parsed real override (`--author=evil`, `-c user.email=x`,
+     `VAR= git ...`) leaves an *even* (typically zero) quote count in `$STRIPPED`
+     and so passes the backstop into the override checks. Concretely:
+
+     ```
+     DQ=$(printf '%s' "$STRIPPED" | tr -cd '"' | wc -c | tr -d ' ')
+     SQ=$(printf '%s' "$STRIPPED" | tr -cd "'" | wc -c | tr -d ' ')
+     if [ $((DQ % 2)) -ne 0 ] || [ $((SQ % 2)) -ne 0 ]; then exit 0; fi
+     ```
 
      Run BOTH the `git`-word gate's existence checks **and** all override EREs
-     below against `$STRIPPED`. (Run the env-var trigger of the git gate against
-     `$STRIPPED` too, so `git commit -m "set GIT_AUTHOR_NAME=foo"` does not even
-     trip the gate.) Keep the original `$CMD` only for nothing — detection is
-     entirely on `$STRIPPED`.
+     below against `$STRIPPED` (the Stage A+B output that passed the Stage C
+     backstop). (Run the env-var trigger of the git gate against `$STRIPPED` too, so
+     `git commit -m "set GIT_AUTHOR_NAME=foo"` does not even trip the gate.)
+     Detection is entirely on `$STRIPPED`, never on the raw `$CMD`.
 
      Worked discrimination (prototyped — all confirmed):
      - `git commit -m "fix --author= parsing"` → body stripped → no `--author=`
@@ -179,17 +217,36 @@ guard's correctness fully verifiable by the script-level tests in Verification.
        outside quotes → survives → **BLOCK**; only the `"msg"` value is stripped.
      - `git -c user.email=x@y commit -m z` → `-c user.email=` is unquoted →
        survives → **BLOCK**.
+     - `git commit -m "use \"--author=\" flag carefully"` → Stage A removes the two
+       `\"` → `... -m "use --author= flag carefully"` → Stage B strips the now-clean
+       `"..."` body (carrying `--author=` with it) → `git commit -m ` → no token →
+       **ALLOW**. (Under the old ordering this wrongly BLOCKED.)
+     - `git commit -m "mention \"GIT_AUTHOR_NAME=x\" here"` → Stage A removes `\"` →
+       Stage B strips the body → no token → **ALLOW**.
+     - `git commit -m "note \"-c user.email=\" thing"` → same path → **ALLOW**.
+     - `git commit -m "wip` (genuinely unbalanced quoting) → Stages A/B cannot
+       resolve the lone `"`; Stage C sees an odd quote count → **ALLOW** (fail open,
+       never block on unparseable quoting).
 
-     **Documented limitation (fails open).** This `sed` treats `\"` / `\'`
-     (backslash-escaped quotes) as ordinary quote characters, so a command that
-     escapes a quote *inside* a message could leave a quote unbalanced and cause
-     over- or under-stripping. The residual effect is at worst that a real
-     override hidden behind a hand-crafted escaped-quote payload is **not**
-     blocked — i.e. the guard **fails open**, consistent with the defense-in-depth
-     framing (the doc layer remains the authoritative guarantee). It will **not**
-     newly false-*positive* a legitimate commit, because over-stripping only
-     removes text (it cannot manufacture an override token). This edge case is
-     accepted, not resolved here.
+     **Documented limitation — fail-open on unparseable quoting (corrected).**
+     The earlier draft of this plan claimed escaped inner quotes could *only* fail
+     open; that was wrong. With a naïve single body-strip, deleting the contents and
+     boundaries of a *mis-paired* quote span can **expose** an override token that was
+     genuinely inside the message, so the guard would **false-positive (fail
+     **closed**)** and block a legitimate commit such as
+     `git commit -m "use \"--author=\" flag carefully"`. That is exactly the
+     "blocks legitimate commits" failure mode. The Stage A escaped-quote pre-removal
+     above **eliminates** that subclass (verified: all three escaped-inner-quote
+     messages now ALLOW). For any *remaining* quoting the transform still cannot
+     resolve cleanly (e.g. a truly unbalanced quote), the **Stage C backstop fails
+     open (exit 0)** — the guard never blocks a command whose quoting it could not
+     parse. Net residual: the guard may, at worst, **fail open** (not block) on a
+     pathological hand-crafted quoting payload — consistent with defense-in-depth,
+     where the `commit-convention.md` doc rule is the authoritative guarantee. It
+     does **not** fail closed on any case in the Verification matrix. A
+     cleanly-parsed real override is never allowed by Stage C, because its
+     `$STRIPPED` quote count is even (the override token is unquoted), so it always
+     reaches — and is caught by — the override checks (verified by D3).
 
    - **Detection — block (exit 2) if `$STRIPPED` (the de-quoted command) contains
      ANY of:**
@@ -218,11 +275,13 @@ guard's correctness fully verifiable by the script-level tests in Verification.
      non-identity config and must **not** be blocked — the `-c user.*` /
      `-c GIT_AUTHOR/COMMITTER` patterns are scoped to identity keys only).
 
-   The script must be ordered: parse `$CMD` → empty-check (allow) → build
-   `$STRIPPED` (de-quote `$CMD`) → git-word/env gate on `$STRIPPED` (else allow) →
-   override checks on `$STRIPPED` (block) → final allow. All pattern matching
-   (gate and overrides) runs on `$STRIPPED`, never on the raw `$CMD`. Keep it fast
-   (research Gotcha 5; the de-quoting is a single `sed` pass).
+   The script must be ordered: parse `$CMD` → empty-check (allow) →
+   **Stage A** (remove `\"`/`\'` → `$DEESC`) → **Stage B** (strip `'...'`/`"..."`
+   bodies → `$STRIPPED`) → **Stage C** (odd quote count in `$STRIPPED` → allow,
+   fail-open backstop) → git-word/env gate on `$STRIPPED` (else allow) → override
+   checks on `$STRIPPED` (block) → final allow. All pattern matching (gate and
+   overrides) runs on `$STRIPPED`, never on the raw `$CMD`. Keep it fast (research
+   Gotcha 5; de-quoting is two short `sed` passes plus a `tr`/`wc` quote count).
 
 3. **`plugins/loom/.claude-plugin/plugin.json` — NO edit (verification only).**
    Confirm `hooks/hooks.json` is the auto-discovered location and that no `hooks`
@@ -314,12 +373,38 @@ Every one must print `0`.
 
 **D3. Adversarial — a real override whose VALUE is quoted must still BLOCK
 (print `2`).** Confirms quote-stripping does not create a new false-negative: the
-flag/assignment token lives outside the quotes and survives stripping.
+flag/assignment token lives outside the quotes and survives stripping. The third
+case proves Stage A (escaped-quote removal) is a **no-op on real overrides** — it
+combines a real `--author=` with an escaped quote elsewhere and must still block.
 ```
 echo '{"tool_input":{"command":"git commit --author=\"evil <e@e>\" -m \"ok\""}}'   | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
 echo '{"tool_input":{"command":"git commit --author \"evil <e@e>\""}}'             | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit --author=evil -m \"say \\\"hi\\\"\""}}' | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
 ```
-Both must print `2`.
+All three must print `2`.
+
+**D4. ALLOWED — override syntax inside ESCAPED inner quotes within a message —
+each must print `0`.** These are the Round-2 MAJOR cases: a legitimate commit whose
+message contains an override token between backslash-escaped inner double-quotes.
+Stage A removes the `\"` pair before Stage B strips the (now-clean) outer `"..."`
+body, so the in-message token is carried away and no override survives. (In the JSON
+stdin below, each in-message `\"` is encoded as `\\\"`.)
+```
+echo '{"tool_input":{"command":"git commit -m \"use \\\"--author=\\\" flag carefully\""}}'   | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit -m \"mention \\\"GIT_AUTHOR_NAME=x\\\" here\""}}'  | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit -m \"note \\\"-c user.email=\\\" thing\""}}'       | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+```
+Every one must print `0`. (Sanity-check the decoded command with
+`jq -r '.tool_input.command'` first if unsure of the encoding — the decoded form is
+`git commit -m "use \"--author=\" flag carefully"`, etc.)
+
+**D5. ALLOWED — genuinely unparseable (unbalanced) quoting fails OPEN — must print
+`0`.** Proves the Stage C backstop never blocks a command whose quoting it cannot
+resolve cleanly.
+```
+echo '{"tool_input":{"command":"git commit -m \"wip"}}'   | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+```
+Must print `0`.
 
 **E. jq-absent fallback (best-effort).** Re-run at least one BLOCKED case (C) and
 one ALLOWED case (D) with `jq` made unavailable, e.g. by running the script with a
@@ -371,15 +456,37 @@ result, but a non-firing live check does **not** fail this slice.
   (`sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g'`) into `$STRIPPED` and runs the
   git-word gate **and** all override patterns on `$STRIPPED`, never on the raw
   command. A real flag/assignment token sits outside the quotes and survives, so
-  quoting an override's value does not hide it (verified). Quote-stripping only
-  *removes* text, so it cannot manufacture a false positive; the documented
-  residual (escaped quotes) fails open. Verification gained Section D2 (five
-  message-text ALLOW cases, each must print `0`) and D3 (two adversarial
+  quoting an override's value does not hide it (verified). Verification gained
+  Section D2 (five message-text ALLOW cases, each must print `0`) and D3 (adversarial
   quoted-value overrides, each must print `2`). MINOR path-drift fixed: Context
   now cites the research eval at its real path. All eval-confirmed items
   (detection completeness, exit-2, POSIX sh, jq+fallback, `${CLAUDE_PLUGIN_ROOT}`,
   hooks.json location, fail-open, doc hardening, defense-in-depth framing) are
-  unchanged.
+  unchanged. (NOTE: the Round-1 claim that quote-stripping "only removes text, so
+  it cannot manufacture a false positive" was **incorrect for escaped inner
+  quotes** and is superseded by the Round-3 revision below.)
+- **Round-2 FAIL revision (planner, 2026-06-08):** Round 2 PASSED the 14/14 matrix
+  but found a MAJOR — the escaped-quote limitation was described with the wrong
+  failure direction. A single body-strip `sed` mis-pairs across a backslash-escaped
+  inner quote (`-m "use \"--author=\" flag"`), **exposing** the in-message
+  `--author=` token and thereby **false-positiving (failing CLOSED)** — blocking a
+  legitimate commit, not failing open as the plan claimed. Fix (Step 2): the
+  de-quote transform is now **three ordered stages** — **Stage A** removes
+  backslash-escaped quote characters (`\"`, `\'`) *before* any body strip (this
+  collapses the escaped-inner-quote case so the real outer `"..."` body strips
+  cleanly and carries the in-message token away; it is a no-op on real overrides,
+  which contain no escaped quotes); **Stage B** strips `'...'`/`"..."` bodies;
+  **Stage C** is a fail-open backstop — if `$STRIPPED` still has an odd count of
+  `"` or `'`, exit 0 (never block on quoting the guard can't parse). The limitation
+  paragraph is corrected to state the residual accurately (Stage A eliminates the
+  escaped-inner-quote false-positive; Stage C fails OPEN on any remaining
+  unparseable quoting; clean overrides have an even quote count and always reach the
+  override checks). Verification gained **D4** (three escaped-inner-quote ALLOW
+  cases, each `0`), **D5** (one unbalanced-quote ALLOW case, `0`), and a third **D3**
+  adversarial BLOCK (`--author=evil` alongside an escaped quote → `2`, proving
+  Stage A is a no-op on real overrides). The full Round-2 14-case matrix, the three
+  escaped-quote ALLOW cases, and the adversarial BLOCK were re-prototyped under the
+  new ordering before commit — all pass. All other eval-confirmed items unchanged.
 - **Prompt-hook fallback deferred (planner, 2026-06-08):** if a future Claude Code
   version is confirmed to drop the command hook (#34573), converting to a
   `type: "prompt"` hook is the research's recommended hedge; out of scope for this
