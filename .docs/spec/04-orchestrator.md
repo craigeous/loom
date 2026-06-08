@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Draft
+Status: Approved
 
 ## What the orchestrator is
 
