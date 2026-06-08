@@ -306,3 +306,151 @@ BLOCKER. FAIL.
 
 The two Round-1 MINORs (prose/sketch glob; `commit-tree` row) are already addressed
 or non-blocking; no further action needed on them.
+
+---
+
+# Evaluation: scope-identity-guard-to-commit-subcommands (Round 3 — redesigned plan)
+
+Verdict: FAIL
+Round: 3
+Reviewed against: the redesigned slice-plan
+`scope-identity-guard-to-commit-subcommands.md` (commit `5e108a1`), its prior eval
+rounds (this file, R1 plan-PASS and R2 code-FAIL), the shipped guard
+`plugins/loom/hooks/git-identity-guard.sh`, and ADR 0003. Per the mechanical-check
+rule, I did not judge the redesign by eye: I reconstructed the proposed script
+**from the plan text alone** (Steps 2–4 + the unchanged Stage 1 stages), ran the
+full A/B/C/D matrix against it, and then ran independent adversarial probes —
+including the compound-command shadowing case the redesign's `--author` carve-out
+is most exposed to. Every exit code below is observed from that reconstruction; one
+override was additionally confirmed reachable by running it in a throwaway repo and
+reading back the recorded author.
+
+## What the redesign gets right (verified)
+
+The unconditional env/`-c` posture is sound and fully closes the Round-2 regression
+class. Reconstructed and run, the previously-regressed cases all BLOCK:
+
+| Case | Command | Exit | Note |
+|---|---|---|---|
+| A1 | `export GIT_AUTHOR_NAME=Evil; git commit -m z` | 2 | env (unconditional) |
+| A3 | `env GIT_AUTHOR_NAME=Evil git commit -m z` | 2 | env via `env` |
+| A9 | `GIT_AUTHOR_NAME=foo git commit -m z` | 2 | inline env |
+| A7 | `git -c user.email=x@y commit -m z` | 2 | `-c user.*` |
+| A22 | `git -c GIT_AUTHOR_NAME=x log` | 2 | `-c GIT_*` on read (intended) |
+| A20 | `GIT_AUTHOR_NAME=foo git log` | 2 | env on read (intended) |
+
+The unconditional checks are prefix-agnostic — they need no `git` locator, so no
+shell prefix (`export`, `cd &&`, `env`, `true;`, `sudo`) can create a fail-open
+hole for these vectors. Confirmed against compound forms too: `git log; git -c
+user.email=x@y commit` → 2, `git show HEAD && export GIT_AUTHOR_NAME=Evil; git
+commit` → 2, `git blame f; GIT_AUTHOR_NAME=Evil git commit` → 2. The task's claim
+that the env/`-c` detection "truly needs no prefix parsing" is correct. The full
+matrix as written (A1–A23, B1–B8, C1–C12) replays exactly as asserted: 23/23 A
+BLOCK, 8/8 B ALLOW, the listed C ALLOWs all 0. `sh -n` and `dash -n` clean on the
+reconstruction. The actual reported false-positive is genuinely fixed (B1–B8,
+C12 all ALLOW), and a clean `git commit --author=` is never swallowed by the
+Stage-C fail-open (A6 → 2).
+
+## [BLOCKER] `--author` carve-out: a leading read shadows a riding commit override (reachable false-negative)
+
+This is the exact compound-command hole the task asked to be checked, and it is
+**reachable**. The §2 subcommand locator walks `$STRIPPED`, skips to the **first**
+`git` word, then takes the **first bare token after it** as `$SUBCMD` and `break`s.
+In a compound command, a leading read invocation supplies that first bare token; if
+it is a clean allowlist word (`log`, `show`, `blame`, `shortlog`, `rev-list`,
+`whatchanged`), the `case` ALLOWs — while a `git commit --author=…` later in the
+**same string** is never inspected. The `--author` regex (§2 guard) fires on the
+whole `$STRIPPED`, so the carve-out is consulted; the locator then mis-identifies
+the operation as a read.
+
+Reconstructed-script exit codes (want 2, observed **0** = override slips):
+
+| Command | Exit |
+|---|---|
+| `git log --author=alice; git commit --author="E <e@v>" -m z` | **0** |
+| `git show HEAD && git commit --author="E <e@v>"` | **0** |
+| `git log && git cherry-pick --author="E <e@v>" abc` | **0** |
+| `git blame f && git cherry-pick --author="E <e@v>" abc` | **0** |
+| `git rev-list HEAD; git commit --author="E <e@v>"` | **0** |
+| `git shortlog -sn; git commit --author="E <e@v>"` | **0** |
+
+Reachability confirmed end-to-end in a throwaway repo: running
+`git log --author=alice; git commit --author="Evil <evil@x.com>" -m z` produced a
+commit with `author=Evil <evil@x.com>`, and the reconstructed guard exited 0 on the
+identical command string. This is a real commit-time identity override reaching
+exit 0 — the task's BLOCKER condition ("a real override → ALLOW"), and the same
+*class* of failure (a real, previously-or-otherwise-guardable override slipping)
+that sank Round 2, merely relocated from the env/`-c` vectors to `--author`.
+
+Root cause: the redesign claims (§3, Notes) that a too-strict locator "can only
+over-block … never under-block." That holds for a *single* `git` invocation, but
+not for compound commands: the locator does not partition the string into
+per-invocation segments, so the first invocation's subcommand decides the verdict
+for an `--author` that belongs to a *later* invocation. The plan's own framing
+("the locator only enables an ALLOW for positively-identified reads") is the bug —
+it enables that ALLOW for the wrong invocation. (Cases like `git log; git commit
+--author=evil` happen to BLOCK only incidentally, because de-quoting does not split
+on `;`/`&&`, so the first bare token is `log;` ≠ `log` and fail-closes; the hole
+opens precisely when the read subcommand is followed by whitespace — i.e. the
+normal `git log -1`, `git show HEAD`, `git blame f` forms — which is the common
+case, not the exotic one.)
+
+## [MAJOR] Verification matrix does not exercise the compound `--author` case it most needs
+
+Section A adds the Round-2 regressed shell-prefix cases (A1–A5), but every `--author`
+row places the override on a *single* `git` invocation. No row pairs a leading
+allowlisted read with a trailing `git commit/cherry-pick --author=` in one string.
+Because the redesign's only remaining scoped (fail-closed-by-intent) decision is the
+`--author` locator, the matrix must prove it against the compound case or it cannot
+claim the fail-closed property. A read-counterpart row (e.g. `git log --author=alice;
+git diff` → 0) would also be needed to show the fix does not re-block legitimate
+compound reads. This gap is why the BLOCKER was not caught at plan time — the same
+shape of matrix gap noted in Round 2 (§"the plan's matrix never exercised a
+shell-prefixed `git commit`").
+
+## Scope / hygiene
+
+In scope (script + slice-plan only; the plan explicitly forbids edits to
+`hooks.json`, specs, ADRs, `commit-convention.md`). Playbook-conformant: correct
+location/naming, `Status:` line present, template-shaped. Single-purpose. The
+redesign commit is author-neutral. Scope and hygiene are not the problem.
+
+## Verdict rationale
+
+The redesign genuinely and soundly closes the Round-2 regression: the env/`-c`
+vectors now BLOCK unconditionally with no prefix-parsing fail-open, verified across
+inline/`export`/`env`/`-c` forms and compound prefixes, and the targeted read
+false-positive is fixed. **But** the `--author` carve-out introduces a new reachable
+false-negative: in a compound command, a leading allowlisted read (`git log -1`,
+`git show HEAD`, `git blame f`, etc.) shadows the locator, so a riding `git commit
+--author="Evil <e@v>"` reaches exit 0 — confirmed to record the evil author. Per the
+task's decision rule (real override → ALLOW = BLOCKER) and the rubric ("no silent
+regressions"; "invariants verified mechanically"), this is a BLOCKER. The matrix
+also lacks the compound `--author` rows that would have surfaced it (MAJOR). FAIL.
+
+## Required changes (for FAIL)
+
+1. **Close the compound-command `--author` shadowing hole.** The fail-closed
+   `--author` decision must not be ALLOWed by a read subcommand that belongs to a
+   *different* `git` invocation than the one carrying `--author`. Options the
+   implementer/planner should weigh (a plan amendment is warranted, since the §3
+   locator design is the defect):
+   - Split `$STRIPPED` on shell separators (`;`, `&&`, `||`, `|`, newline) into
+     segments and apply the `--author` carve-out per segment — ALLOW only if the
+     segment that contains `--author` has a positively-identified read subcommand;
+     or
+   - require that the located read subcommand and the `--author` token belong to the
+     same invocation (e.g. there is no intervening separator between the `git` word
+     used for the locator and the `--author` token); or
+   - tighten to fail-closed on *any* compound/multi-`git` string when `--author` is
+     present (BLOCK if more than one `git` word, or any separator, appears alongside
+     `--author`). Whatever the approach, it must keep B1–B8 and C12 ALLOWed.
+2. **Add compound-command rows to the verification matrix**, proving both the BLOCK
+   and the preserved ALLOW: at minimum
+   `git log --author=alice; git commit --author="E <e@v>" -m z` → 2,
+   `git show HEAD && git cherry-pick --author="E <e@v>" abc` → 2, and a
+   read-only compound counterpart `git log --author=alice; git diff` → 0.
+3. Re-run the full matrix (including the jq-absent fallback) on the committed script
+   and record observed exit codes.
+
+The env/`-c` unconditional redesign is sound and should be retained as-is.
