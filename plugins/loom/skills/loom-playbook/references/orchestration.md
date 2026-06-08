@@ -37,8 +37,16 @@ running the command — not one of the roles. Read this plus
 ## Init-mode detection (run at the start of `/loom:run` and `/loom:init`)
 
 Run the classifier in [`init-detection.md`](init-detection.md) first; it returns
-Greenfield / Unaligned / Initialized. Then act per that mode (behaviors per
-`06-init-modes.md` and the relevant M2 slice).
+Greenfield / Unaligned / Initialized. Then act per that mode:
+
+- **Greenfield** → [`greenfield.md`](greenfield.md) — scaffold `.docs/`, apply
+  playbook, establish gate, hand back.
+- **Unaligned** → behavior body forthcoming (follow-up M2 slice
+  *unaligned-init-behavior*): scaffold (per `greenfield.md`) plus descriptive
+  back-fill of `spec/`.
+- **Initialized** → behavior body forthcoming (follow-up M2 slice
+  *initialized-init-behavior*): derive menu from `.docs/` + git state and
+  continue.
 
 Re-alignment is idempotent: auto-apply clean merges, **recommend** for conflicts
 and let the owner decide. Never clobber project edits.

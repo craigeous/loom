@@ -49,6 +49,7 @@ archived on landing. On conflict, the spec wins.
   both evaluators apply.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
+- `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).
 
 ## Gates (`gates/`)
 

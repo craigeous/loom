@@ -12,12 +12,13 @@ detection) and `docs-layout.md`.
 1. Detect init mode by running the classifier in
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/init-detection.md`
    (Greenfield / Unaligned / Initialized).
-2. **Greenfield/Unaligned:** scaffold `.docs/` per `docs-layout.md`, apply the
-   playbook (seed `CLAUDE.md`, establish the gate — Rust verified; for another
-   stack identify the tooling, propose commands, confirm with the owner, and record
-   a new `gates/<stack>.md`). For Unaligned, also descriptively back-fill `spec/`
-   mapping what the project currently is (no decisions). Seed `status/`. Commit
+2. **Greenfield:** run the scaffold/seed/gate body in
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/greenfield.md`. Commit
    author-neutral.
+   **Unaligned:** scaffold per `greenfield.md` **plus** descriptive back-fill of
+   `spec/` mapping what the project currently is (no decisions). Unaligned
+   back-fill behavior is a forward pointer to the forthcoming M2 slice
+   *unaligned-init-behavior*; do not author the back-fill body here.
 3. **Initialized:** re-apply the current playbook idempotently — auto-apply clean
    merges, recommend for conflicts and let the owner decide. Never clobber project
    edits.

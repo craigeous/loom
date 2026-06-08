@@ -1,6 +1,6 @@
 # Greenfield Init Behavior — the scaffold-and-seed body
 
-Status: In Progress
+Status: Implemented
 Target specs: 06-init-modes.md, 08-playbook.md, 04-orchestrator.md
 
 ## Context
@@ -227,5 +227,57 @@ Greenfield wiring changes.
 
 ## Notes
 
-<Clarification requests between roles go here, dated. Formal verdicts live in
-`.docs/evaluations/`.>
+### MINOR resolutions (from eval)
+
+1. **`archive/README.md` vs `.gitkeep`:** Seeded `archive/` with a `README.md`
+   (consistent with every other scaffolded folder) rather than a bare `.gitkeep`.
+   Rationale: (a) every other folder gets a README per `docs-layout.md`; (b) a
+   README is more useful than a silent placeholder for a future agent reading the
+   directory. `greenfield.md` Step A records this decision explicitly.
+
+2. **Non-Rust placeholder clarity:** Step E now clearly states the non-Rust path
+   records only a **marked-unverified placeholder** (`Status: unverified —
+   gate-learning not yet complete`) and that this placeholder is never treated as
+   a live gate. The inspect/propose/confirm/learn mechanism is explicitly deferred
+   to the gate-learning slice.
+
+### Verification evidence (gate: review-against-spec)
+
+`git diff --name-only` (relative to the In-Progress commit) touches only:
+```
+CLAUDE.md
+plugins/loom/commands/init.md
+plugins/loom/commands/run.md
+plugins/loom/skills/loom-playbook/SKILL.md
+plugins/loom/skills/loom-playbook/references/orchestration.md
+plugins/loom/skills/loom-playbook/references/greenfield.md  (new)
+.docs/slice-plans/greenfield-init-behavior.md
+```
+No files under `.docs/spec/` or `.docs/ADR/` touched — confirmed by
+`git diff --name-only HEAD | grep -E "spec/|ADR/"` returning empty.
+
+**Single-source check:** `grep -rn "scaffold" plugins/loom/commands
+plugins/loom/skills/loom-playbook/references/` shows step bodies only in
+`greenfield.md`; `init.md`, `run.md`, and `orchestration.md` reference it.
+
+**Link resolution:** all relative links in `greenfield.md` resolve to real files:
+`docs-layout.md`, `init-detection.md`, `commit-convention.md`,
+`../gates/rust.md`, `../../../../../.docs/spec/06-init-modes.md` — each
+confirmed present.
+
+**Spec fidelity (06 §1):** Steps A–C = scaffold `.docs/` + seed `status/`; Step D =
+write project `CLAUDE.md`; Step E = establish gate; Step F = hand back to owner
+for design loop. Greenfield writes no design artifacts — boundary is explicit.
+
+**Layout completeness:** six folders (`research/`, `ADR/`, `spec/`,
+`slice-plans/` + `archive/`, `evaluations/`, `status/`); each with `README.md`;
+`spec/README.md` with reading-order + non-negotiables; three `status/` files with
+named fields — matches `docs-layout.md` item by item.
+
+**Gate establishment:** Step E adopts `gates/rust.md` verified Rust path and
+references deferred gate-learning for other stacks, marking non-Rust gates as
+unverified placeholder only.
+
+**Regression guard:** `run.md` steps 2–4 unchanged; `init.md` steps 1, 3, 4
+unchanged; Unaligned and Initialized branches are forward pointers only, not
+fleshed out.

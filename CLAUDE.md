@@ -37,6 +37,9 @@ after approval and change only via planning. Design decisions are in
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
   is the single authoritative source for Greenfield / Unaligned / Initialized
   detection. All `/loom:*` commands run this classifier first.
+- **Greenfield behavior body** (M2): `plugins/loom/skills/loom-playbook/references/greenfield.md`
+  is the single authoritative body for Greenfield init (scaffold + seed + CLAUDE.md
+  + gate). Unaligned and Initialized bodies are forthcoming M2 slices.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions
