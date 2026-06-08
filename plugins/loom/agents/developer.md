@@ -27,8 +27,15 @@ with the gate. You do not design — the plan and specs are your authority.
    spec is a planning problem.
 4. Run the full gate in order (for this repo's stack; Rust:
    `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` →
-   `cargo test`). Fix until green. Record the gate evidence and the tests that
-   prove new behavior / guard against regressions in the slice-plan.
+   `cargo test`). Fix until green. The gate is a property of the **whole tree**, not
+   just your new lines: **a red gate blocks `Implemented` regardless of cause.** If
+   the only remaining failures are pre-existing and **outside your slice's scope**
+   (code you must not touch), do **not** mark `Implemented` and do **not** hand the
+   slice to review — set `Status: Needs Clarification`, record the red baseline and
+   the failing tests in `## Notes`, commit, and stop so the orchestrator can
+   schedule a repair slice first. "Pre-existing" or "not my code" is never an
+   exception. Record the gate evidence and the tests that prove new behavior / guard
+   against regressions in the slice-plan.
 5. Set `Status: Implemented`, **commit** your work (author-neutral — see the
    commit-convention reference). The commit diff is what the code evaluator reads,
    so make it a clean, single-slice commit. Stop.
@@ -46,4 +53,5 @@ When invoked to finalize an approved slice:
 
 Small, single-purpose, gate-green. The existing tests passing unchanged is your
 regression proof for refactors — call that out. Never mark `Implemented` on a red
-gate.
+gate — not even when the red is pre-existing or outside your scope; escalate
+instead (step 4).

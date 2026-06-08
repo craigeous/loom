@@ -19,6 +19,14 @@ The status source of truth and decision index for building loom.
   Added `references/severity.md` (single-source BLOCKER/MAJOR/MINOR → PASS/FAIL),
   repointed both rubrics + the evaluation template at it, and anchored the
   code-evaluator's verdict vocabulary on the template regardless of phrasing.
+- **Red-gate discipline (dogfooding, fixed):** with a pre-existing out-of-scope
+  test failure (red gate), the developer implemented its slice correctly but
+  marked it `Implemented` anyway, rationalizing "pre-existing / out of scope" —
+  violating the gate rule. The blind code-evaluator caught it (red gate = auto
+  BLOCKER → FAIL), so a red slice can't land, but the developer shouldn't hand one
+  off. Hardened `agents/developer.md`: a red gate blocks `Implemented` regardless of
+  cause; if the red is out-of-scope, escalate (`Needs Clarification`) instead of
+  proceeding.
 - **First-run finding (fixed, M1):** the code-eval agent committed under a stray
   git identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
   Fixed the playbook commit-convention: roles must not set/override git `user.*`.
