@@ -22,6 +22,15 @@ running the command — not one of the roles. Read this plus
   [`commit-convention.md`](commit-convention.md)). If an agent didn't commit,
   commit its output yourself following the convention.
 - **Never let a role review its own work** — the dispatch table guarantees this.
+- **Never edit code yourself; route every code change through a role.** You plan,
+  dispatch, verify, and manage `.docs/`/status/branches — you do **not** write or
+  fix source. A bug fix, revert, or repair — even a one-liner, even cleaning up an
+  out-of-scope change an evaluator flagged — is a **developer** slice, re-verified by
+  the **evaluator**. Committing an agent's *already-produced* output (above) is fine;
+  authoring or modifying code is not.
+- **One slice in flight at a time (M1).** Land or revert a slice before starting the
+  next; don't stack unrelated in-flight slices on one branch, or a re-review's
+  diff-against-prior-commit will conflate them and flag the wrong thing.
 - **Ambiguity → ask.** If a role can't proceed without the owner, pause and ask a
   clear question rather than guessing.
 
