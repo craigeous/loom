@@ -31,6 +31,11 @@ source of truth; `roadmap.md` is milestone order.
   `init.md`) repointed at it. Both plan and code evals: PASS (blind, independent;
   one MINOR on status file seeding — non-blocking). Deferred follow-up slices:
   unaligned-init-behavior, initialized-init-behavior, gate-learning.
+- **`retire-code-review-status-token` landed (a85885f).** The obsolete `Code Review`
+  status token removed repo-wide from `SKILL.md`, `status-machine.md`,
+  `developer.md`, and the slice-plans README `Lifecycle:` string. All lifecycle
+  strings now match spec 03: `… → Implemented → (code review) → Landed → Archived`.
+  Slice archived.
 - **Published:** GitHub repo `craigeous/loom` (public), default branch `main`.
 - **All ten content specs (00–08, 10) are `Status: Approved`** after a retroactive
   blind plan-eval pass (eval records in `.docs/evaluations/spec-*-eval.md`). Several
@@ -40,10 +45,10 @@ source of truth; `roadmap.md` is milestone order.
 - Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
 - **Deferred follow-ups from the spec pass** (in `progress.md` Open, for a future
   slice / owner decision): bare `/loom` in ADR 0001 needs a superseding ADR or
-  erratum (ADRs are immutable — no rewrite); the "Code Review" phase-label string in
-  `status-machine.md` / `SKILL.md` / `agents/developer.md` should be reconciled
-  repo-wide; the commit-identity guard gap (`--author=` / `GIT_AUTHOR_*` env vars are
-  not blocked) should be closed in `commit-convention.md` / the agent guards.
+  erratum (ADRs are immutable — no rewrite); the commit-identity guard gap
+  (`--author=` / `GIT_AUTHOR_*` env vars are not blocked) should be closed in
+  `commit-convention.md` / the agent guards. ~~The "Code Review" phase-label string~~
+  is **resolved** (commit a85885f — token retired repo-wide).
 
 ## Immediate next steps
 

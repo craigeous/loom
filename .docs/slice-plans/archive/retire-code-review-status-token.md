@@ -1,6 +1,6 @@
 # Retire the `Code Review` status token from playbook & agent files
 
-Status: Landed
+Status: Archived
 Target specs: 03-artifact-lifecycle.md
 
 ## Context

@@ -17,10 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [retire-code-review-status-token.md](retire-code-review-status-token.md) —
-  `Plan Review` — remove the obsolete `Code Review` **status token** from three
-  playbook/agent files (SKILL.md, status-machine.md, developer.md), keeping the
-  generic "code review" action wording; align to spec 03.
+(none)
 
 ## Archived plans
 
@@ -29,3 +26,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 - [archive/greenfield-init-behavior.md](archive/greenfield-init-behavior.md) — `Archived` —
   Greenfield init behavior body: scaffold `.docs/`, seed `status/`, write project
   `CLAUDE.md`, establish the gate (second M2 slice; landed a58ff7e).
+- [archive/retire-code-review-status-token.md](archive/retire-code-review-status-token.md) — `Archived` —
+  retired the obsolete `Code Review` status token from `SKILL.md`, `status-machine.md`,
+  `developer.md`, and the slice-plans README `Lifecycle:` string; aligned to spec 03
+  (landed a85885f).

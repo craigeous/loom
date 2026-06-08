@@ -7,7 +7,13 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** retroactive spec-approval pass completed. All ten content specs
+- **Last action:** `retire-code-review-status-token` slice landed (commit a85885f,
+  code-eval PASS). The obsolete `Code Review` status token has been removed repo-wide
+  from `SKILL.md`, `status-machine.md`, `developer.md`, and the slice-plans README
+  `Lifecycle:` string. All four lifecycle strings now read
+  `… → Implemented → (code review) → Landed → Archived`, matching spec 03.
+  The deferred follow-up tracking this work is now resolved (see Resolved below).
+- **Prior action:** retroactive spec-approval pass completed. All ten content specs
   (00–08, 10) ran through blind plan-eval and are now `Status: Approved`, each with
   an eval record in `.docs/evaluations/spec-*-eval.md`. Several FAILed round 1 and
   were fixed before approval — evidence the blind review caught real drift:
@@ -96,11 +102,11 @@ for a future slice / owner decision):
 - **Bare `/loom` in ADR 0001 (and possibly the spec README history)** still appears.
   ADRs are immutable (ADR 0005 / 0004 discipline), so this needs a **superseding ADR
   or an erratum note, not a rewrite**. Owner decision.
-- **The "Code Review" phase-label string** still appears in
-  `plugins/loom/skills/loom-playbook/references/status-machine.md`, `SKILL.md`, and
-  `agents/developer.md` ("approved at Code Review"). These are **phase labels, not
-  status rows** (not the spec-03 phantom-status defect), but should be reconciled
-  repo-wide for consistency in a future slice.
+- ~~**The "Code Review" phase-label string**~~ **Resolved (commit a85885f).** The
+  `Code Review` status token has been retired repo-wide. All four lifecycle strings
+  (`SKILL.md`, `status-machine.md`, `developer.md`, slice-plans `README.md`) now
+  match spec 03: `… → Implemented → (code review) → Landed → Archived`. Only
+  legitimate action-phrasing and historical eval/status records remain.
 - **Commit-identity guard gap.** The role guard blocks `git config` and `-c user.*`
   but **not** `--author=` or `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars — a planner
   commit slipped through as `loom <loom@localhost>` this run and had to be repaired.
