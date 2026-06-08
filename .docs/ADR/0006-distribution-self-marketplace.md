@@ -12,19 +12,23 @@ local subdir (`./plugins/x`), the repo root, or an external git repo/subdir.
 
 ## Decision
 
-- The **loom repo is its own single-plugin marketplace.** Both
-  `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` live at the
-  repo root, with the marketplace listing loom at `source: "."`.
-- Install flow: `/plugin marketplace add <owner>/loom` → `/plugin install loom@loom`.
+- The **loom repo is its own single-plugin marketplace.** The marketplace catalog
+  lives at the repo-root `.claude-plugin/marketplace.json`; the shippable plugin
+  lives in a subdirectory `plugins/loom/` with its own
+  `plugins/loom/.claude-plugin/plugin.json`, listed at `source: "./plugins/loom"`.
+- Install flow: `/plugin marketplace add <owner>/loom` (or `./loom` locally) →
+  `/plugin install loom@loom`.
 
 ## Consequences
 
 - One repo, one `marketplace add`, one `install` — simplest distribution for a
   single plugin.
-- If loom later grows into a suite, split the marketplace into its own repo and
-  reference loom via `git-subdir`.
-- The exact root-plugin `source: "."` form must be verified against current docs at
-  M1; fallback is `plugins/loom/` with `source: "./plugins/loom"` (tracked as
-  OQ-E in spec 09).
-- loom's own `.docs/` is dev memory, not a plugin component; installing loom
-  elsewhere creates a fresh `.docs/` in the target project.
+- **Why the subdir, not root:** docs confirm a relative `source` must be `"./sub"`
+  resolved from the marketplace root; a root plugin (`source: "."`) is not
+  documented, so we use the proven `./plugins/loom` form (resolves former OQ-E).
+- The repo root is "the loom project" (with `.docs/` design memory + the
+  marketplace); `plugins/loom/` is the artifact it ships. loom's own `.docs/` is
+  dev memory, not a plugin component — installing loom elsewhere creates a fresh
+  `.docs/` in the target project.
+- If loom later grows into a suite, additional plugins become sibling
+  `plugins/<name>/` entries in the same marketplace.

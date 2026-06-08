@@ -6,43 +6,37 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M0 — Design (nearly complete).
-- **Last action:** researched Claude Code plugin/agent/marketplace mechanics
-  (note in `research/`), then revised the full spec spine and promoted the firm
-  decisions to ADRs 0001–0006.
-- **Next:** owner final review of the revised spec + ADRs, then begin **M1 —
-  Minimum loop** (hand-built orchestration), resolving build-time open questions
-  (OQ-D namespacing, OQ-E marketplace root form, OQ-F helper portability).
+- **Phase:** M1 — Minimum loop. **Scaffold built; not yet run end-to-end.**
+- **Last action:** built the loom plugin — manifests (`marketplace.json`,
+  `plugins/loom/.claude-plugin/plugin.json`), the five role agents, the
+  `skills/loom-playbook/` (templates, rubrics, conventions, Rust gate), and the
+  `/loom` orchestrator command. Resolved OQ-D/E/F.
+- **Next:**
+  1. Install (`/plugin marketplace add ./loom` → `/plugin install loom@loom`) and
+     `/plugin validate`; confirm `/loom` resolves and the `loom:*` agents load.
+  2. First real run: a sequential single slice on a throwaway target to exercise
+     the full loop (research/plan → eval → develop → eval → land).
 
 ## Accepted decisions (ADRs)
 
-- 0001 — Plugin architecture; orchestrator = main `/loom` session; roles =
-  sub-agents; no peer spawning.
-- 0002 — Model selection by tier (haiku/sonnet/opus); exact versions not pinnable.
-- 0003 — File-based cold handoffs; a commit at every handoff; evaluators diff.
-- 0004 — Blind evaluation by controlled inputs + role separation (no self-approval).
-- 0005 — Specs frozen after approval; change only via planning; devs touch only
-  slices + handoffs.
-- 0006 — Distribution as a single-plugin self-marketplace.
+0001 plugin/orchestrator · 0002 model tiers · 0003 commit-per-handoff · 0004 blind
+eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir layout).
 
-## Other settled points (in spec)
+## Resolved build-time questions (M1)
 
-- Five roles; researcher requires citations and is lightly gated; plan evaluator
-  also does the research source-check.
-- Owner declares scope + claimed gates (`all` or a list) at kickoff; otherwise
-  evaluator approval advances.
-- Round limit 5; escalation = pause + summary.
-- On code-eval PASS, the developer runs a cold finalize pass (update living docs,
-  archive plan). No spec edit.
-- Rust is the only verified gate; other stacks' gates are created during init and
-  recorded back into the playbook.
-- Parallelism (worktree-per-slice) is designed-for but built after the sequential
-  loop.
-- loom dogfoods its own structure; living docs kept separate.
+- OQ-D — one `/loom` command dispatches on its first argument; roles are `agents/`.
+- OQ-E — plugin under `plugins/loom/`, `source: "./plugins/loom"` (root undocumented).
+- OQ-F — no compiled helpers; agents do detection/parsing with their own tools.
 
 ## Open
 
-See [`../spec/09-open-questions.md`](../spec/09-open-questions.md): OQ-A (parallel
-`.docs/` coordination), OQ-B (research-review tier), OQ-C (finalize-pass owner),
-OQ-D (command namespacing), OQ-E (marketplace root form), OQ-F (helper
-portability). OQ-D/E/F are the ones blocking M1 build choices.
+Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
+(research-review tier — empirical), OQ-C (finalize-pass owner). See
+[`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+
+## Known unknowns to verify on first install
+
+- Exact invocation string for the command (`/loom` vs `/loom:loom`) and the Task
+  `subagent_type` form for namespaced agents (`loom:researcher` vs `researcher`).
+- Whether `/plugin marketplace add ./loom` + `source: "./plugins/loom"` resolves as
+  expected locally.

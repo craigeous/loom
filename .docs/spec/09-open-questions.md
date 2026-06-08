@@ -47,9 +47,11 @@ Resolved items are kept for traceability; settled ones became ADRs or spec text.
 - **OQ-C. Finalize pass owner.** Confirm the finalize doc-update is best as a
   re-spawned cold role pass vs. the orchestrator doing it directly. (Current
   design: re-spawned role, per Q7.)
-- **OQ-D. Command namespacing.** `/loom-research` (flat) vs. `/loom:research`
-  (subdir). Decide at M1 against current Claude Code behavior.
-- **OQ-E. marketplace `source: "."`.** Verify the root-plugin self-marketplace
-  form; fall back to `plugins/loom/` if unsupported (spec 10).
-- **OQ-F. Plugin helper code.** Keep helpers minimal/in-prompt for portability
-  (avoid forcing a toolchain on installers). Confirm no compiled helper is needed.
+- ~~**OQ-D. Command namespacing.**~~ **RESOLVED (M1):** one `/loom` command
+  dispatches on its first argument; roles are `agents/`. → spec 10.
+- ~~**OQ-E. marketplace `source: "."`.**~~ **RESOLVED (M1):** root plugin is
+  undocumented; use `plugins/loom/` with `source: "./plugins/loom"`. → ADR 0006,
+  spec 10.
+- ~~**OQ-F. Plugin helper code.**~~ **RESOLVED (M1):** no compiled helpers; agents
+  do detection/parsing with their own tools (portable, no toolchain forced on
+  installers).

@@ -24,6 +24,16 @@ work it produced — role separation guarantees no self-approval. Specs are froz
 after approval and change only via planning. Design decisions are in
 `.docs/spec/` and `.docs/ADR/` (ADRs 0001–0006).
 
+## Repo layout (M1)
+
+- The **shippable plugin** lives in `plugins/loom/` (`commands/loom.md`, `agents/`,
+  `skills/loom-playbook/`); the marketplace catalog is `.claude-plugin/marketplace.json`.
+- `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.
+- No compiled code: loom is markdown (prompts/templates), so this repo has no gate
+  to run. The Rust gate loom *imposes on managed projects* is in
+  `plugins/loom/skills/loom-playbook/gates/rust.md`.
+- When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
+
 ## Project conventions
 
 - Durable memory is `.docs/spec/` and `.docs/ADR/`. Specs win over plans on

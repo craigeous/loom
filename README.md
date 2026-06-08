@@ -22,9 +22,38 @@ agent** on the model best suited to its job, hands off work through files in
 
 ## Status
 
-Design phase. The authoritative design lives in [`.docs/spec/`](.docs/spec/README.md).
-Start with [`00-overview.md`](.docs/spec/00-overview.md).
+**M1 — minimum sequential loop (in progress).** The plugin is scaffolded: the
+`/loom` orchestrator command, the five role agents, and the playbook all exist.
+Not yet run end-to-end. The authoritative design lives in
+[`.docs/spec/`](.docs/spec/README.md) — start with
+[`00-overview.md`](.docs/spec/00-overview.md); decisions are in
+[`.docs/ADR/`](.docs/ADR/README.md).
+
+## Repository layout
+
+```
+loom/                          # this repo = the loom project + its marketplace
+├── .claude-plugin/marketplace.json   # lists the loom plugin (source ./plugins/loom)
+├── plugins/loom/              # the shippable plugin
+│   ├── .claude-plugin/plugin.json
+│   ├── commands/loom.md       # /loom orchestrator (dispatches on its argument)
+│   ├── agents/                # researcher · planner · plan-evaluator · developer · code-evaluator
+│   └── skills/loom-playbook/  # templates, rubrics, conventions, gates
+└── .docs/                     # loom's OWN design memory (dogfooding) — not shipped
+```
+
+## Install
+
+```sh
+/plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local)
+/plugin install loom@loom
+/plugin validate                            # optional: check manifests + frontmatter
+```
+
+Then, inside any repo, run `/loom` (orchestrated) or a single role pass
+(`/loom research <topic>`, `/loom plan`, `/loom eval-plan`, `/loom develop`,
+`/loom eval-code`, `/loom status`, `/loom init`). loom operates on that repo's
+`.docs/`.
 
 loom **dogfoods its own structure**: this repository is managed by the very
-process loom implements. Its specs, ADRs, slice-plans, and evaluations live in
-`.docs/`.
+process loom implements.
