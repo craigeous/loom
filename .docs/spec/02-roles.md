@@ -5,7 +5,7 @@ Status: Draft
 Five roles. Each is spawned as a **cold agent** on a chosen model **tier**, reads
 only the files (and prompt) it is given, does one job, writes files, **commits**,
 updates status, and exits. No role shares live context with another. The
-**orchestrator** (the main session running `/loom`, see [04](04-orchestrator.md))
+**orchestrator** (the main session running `/loom:run`, see [04](04-orchestrator.md))
 is the only thing that spawns roles; it is not itself a role.
 
 **The self-approval guarantee:** the role that *produces* an artifact is never the
@@ -25,7 +25,7 @@ exact versions track the user's environment (ADR 0002).
 - **Reads:** the owner's topic; existing `research/`, `spec/`, code as needed;
   external sources (web, GitHub, local projects, files, databases).
 - **Writes:** a dated topic note to `research/`, then commits.
-- **Tools:** Read, Grep, Glob, WebSearch, WebFetch (+ available MCP readers).
+- **Tools:** Read, Grep, Glob, WebSearch, WebFetch, Bash (+ available MCP readers).
 - **Output contract — citations required.** Every claim in a research note must
   cite its source (URL, file path, repo+ref, query). A note states: findings,
   the sources backing each finding, and open questions. Uncited assertions are a
@@ -88,9 +88,16 @@ collaborating with the owner.
   the real tree (in the slice's worktree) → run the full gate (format → lint →
   test) → on green, set `Implemented`, commit → exit. On a code-eval rejection,
   read the eval, fix, re-run gate, recommit.
+- **Red gate blocks `Implemented`, always.** A red gate prevents `Implemented`
+  regardless of cause — the gate is a property of the whole tree, not just the new
+  lines. If the only remaining failures are pre-existing and outside the slice's
+  scope, the developer does **not** proceed: it sets `Needs Clarification`, records
+  the red baseline in `## Notes`, and stops so a repair slice can be scheduled.
+  "Pre-existing" or "not my code" is never an exception.
 - **Finalize pass:** after code-eval PASS, the developer is re-spawned cold for a
-  short finalize task — update `status/progress.md` + `status/handoff.md`, archive
-  the slice-plan, and (for parallel work) land the branch. No spec edit.
+  short finalize task — update `status/progress.md` + `status/handoff.md` (and
+  `status/roadmap.md` if a milestone closed), archive the slice-plan, and (for
+  parallel work) land the branch. No spec edit.
 - **Model rationale:** implementation is well-scoped by an approved plan.
 
 ## Code Evaluator — `opus` tier
