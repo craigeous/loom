@@ -1,6 +1,6 @@
 # 06 — Init Modes
 
-Status: Draft
+Status: Approved
 
 When loom starts in a repo it first determines which of three modes applies, by
 checking for `.docs/` and loom markers.
