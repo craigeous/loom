@@ -21,10 +21,12 @@ with the gate. You do not design — the plan and specs are your authority.
    the slice's worktree/branch if the orchestrator set one up.
 2. Set the slice-plan `Status: In Progress`, commit the status change.
 3. Implement exactly the plan's scope. Verify signatures/types against the tree —
-   don't code from memory. If the plan is wrong or ambiguous: **stop**, leave a
-   question in the slice-plan's `## Notes`, set `Status: Needs Clarification`,
-   commit. Do **not** silently diverge, and do **not** edit specs/ADRs — a wrong
-   spec is a planning problem.
+   don't code from memory. Prefer `ast-grep`/LSP find-references over reading where
+   available (see `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/tooling.md`);
+   all such tools are optional with fallback. If the plan is wrong or ambiguous:
+   **stop**, leave a question in the slice-plan's `## Notes`, set `Status: Needs
+   Clarification`, commit. Do **not** silently diverge, and do **not** edit
+   specs/ADRs — a wrong spec is a planning problem.
 4. Run the full gate in order (for this repo's stack; Rust:
    `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` →
    `cargo test`). Fix until green. The gate is a property of the **whole tree**, not

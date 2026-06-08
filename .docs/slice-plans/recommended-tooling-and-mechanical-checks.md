@@ -1,6 +1,6 @@
 # Recommended Tooling Reference + Mechanical-Invariant-Check Rubric
 
-Status: In Progress
+Status: Implemented
 Target specs: 08-playbook.md
 
 ## Context
@@ -242,3 +242,46 @@ discipline (check 6) — nothing outside the listed files changes.
   goal — "adopt the recommended toolkit + mechanical-check discipline" — and each
   edit is a small additive pointer/rule/entry off the one new reference. There is
   no second independent goal to split out.
+- Step 7 (slice-plans README active entry) was already present on disk (committed
+  with the plan at 9e567ab per the eval MINOR finding); treated as already-satisfied.
+
+## Gate Evidence (review-against-spec; dogfooding rg -U/grep per the slice's own rule)
+
+This repo has no compiled gate. Verification is review-against-spec.
+
+**Check 1 — No "must install" / hard-require phrasing in tooling.md:**
+`rg -Ui 'must install|requires? .*(ast-grep|yq|difft|shellcheck|comby|scc)' plugins/loom/skills/loom-playbook/references/tooling.md`
+→ exit 1 (no matches). Policy header says "RECOMMENDED, not required … never
+hard-requires … A missing tool is never a blocker". PASS.
+
+**Check 2 — Every tool has a fallback:**
+Task table has 8 rows; each has a non-empty Fallback column. Each role subsection
+names a fallback. No orphan tool. PASS.
+
+**Check 3 — Mechanical-check rule in BOTH rubrics:**
+`rg -l 'mechanically' plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md plugins/loom/skills/loom-playbook/references/code-eval-rubric.md`
+→ lists both files. PASS.
+
+**Check 4 — Cross-links resolve in all six files:**
+`rg -n 'tooling\.md' SKILL.md plan-eval-rubric.md code-eval-rubric.md developer.md plan-evaluator.md code-evaluator.md`
+→ one match in each of the six files. Target file
+`plugins/loom/skills/loom-playbook/references/tooling.md` exists on disk. PASS.
+
+**Check 5 — Internal consistency:**
+Both rubric bullets name `rg -U`, `yq`/`jq`, `ast-grep`/LSP — all present in
+tooling.md's task table and per-role sections. The two motivating misses (bare
+`/loom`, wrapped `Code\nReview`) appear in tooling.md's mechanical-check section
+and in the code-eval rubric bullet. PASS.
+
+**Check 6 — Scope discipline:**
+`git diff --name-only HEAD` (after staging) shows only:
+  - `plugins/loom/skills/loom-playbook/references/tooling.md` (new)
+  - `plugins/loom/skills/loom-playbook/SKILL.md`
+  - `plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md`
+  - `plugins/loom/skills/loom-playbook/references/code-eval-rubric.md`
+  - `plugins/loom/agents/developer.md`
+  - `plugins/loom/agents/plan-evaluator.md`
+  - `plugins/loom/agents/code-evaluator.md`
+  - `CLAUDE.md` (update-before-commit rule)
+  - `.docs/slice-plans/recommended-tooling-and-mechanical-checks.md` (this file)
+No `.docs/spec/` or `.docs/ADR/` edits. No new `gates/` file. PASS.

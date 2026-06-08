@@ -38,6 +38,12 @@ Tag findings and derive the verdict per [`severity.md`](severity.md)
 - **Single-purpose** — one coherent goal; split if not.
 - **Verification named** — the gate and the tests that prove behavior / guard
   regressions are stated.
+- **Invariants verified mechanically** — any invariant the plan asserts (e.g.
+  "no bare `/loom`", a config key's value, a symbol's callers) must be checkable
+  with a tool, not by eye: `rg -U` for text/wrapped-token invariants, `yq`/`jq`
+  for config facts, `ast-grep`/LSP find-references for code-symbol invariants.
+  Do not approve (or assert) an invariant established by reading alone. See
+  [`tooling.md`](tooling.md).
 
 ## All artifacts
 

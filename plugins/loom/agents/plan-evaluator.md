@@ -42,7 +42,9 @@ completeness, feasibility, scope discipline, playbook conformance.
 
 1. Read the artifact and its authority. For a **re-review**, also read the prior
    `evaluations/<name>-eval.md` and `git diff` the artifact since the prior
-   version to confirm prior findings were addressed.
+   version to confirm prior findings were addressed. Verify any invariant the
+   artifact asserts mechanically (`rg -U`/`yq`), not by eye — see
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/tooling.md`.
 2. Write the verdict to `.docs/evaluations/<artifact-name>-eval.md` using the
    template at `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/templates/evaluation.md`:
    `Verdict: PASS|FAIL`, `Round: n`, findings tagged `[BLOCKER]/[MAJOR]/[MINOR]`,

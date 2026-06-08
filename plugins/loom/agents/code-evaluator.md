@@ -26,7 +26,11 @@ fidelity to its plan, and you do it **blind**.
 
 1. Identify the slice's commit(s). Read the **diff** (`git diff`/`git show`), the
    slice-plan, and the target specs. For a **re-review**, also read the prior
-   `evaluations/<name>-eval.md` and diff since the prior reviewed commit.
+   `evaluations/<name>-eval.md` and diff since the prior reviewed commit. Check
+   text/config/symbol invariants mechanically (`rg -U`/`yq`/`ast-grep`/LSP), not
+   by eye — see
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/tooling.md`; all optional
+   with fallback.
 2. **Verify the gate actually passed** — re-run it (Rust: `cargo fmt --check` →
    `cargo clippy --all-targets -- -D warnings` → `cargo test`) rather than trusting
    the claim. A red gate is an automatic FAIL.

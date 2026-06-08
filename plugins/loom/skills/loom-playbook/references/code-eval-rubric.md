@@ -27,6 +27,12 @@ commit **diff**. Tag findings and derive the verdict per
   prior tests pass unchanged (that is the regression proof).
 - **Tests prove behavior** — new tests actually exercise the new behavior, not just
   compile. A passing gate is necessary, not sufficient.
+- **Invariants verified mechanically** — check invariants with a tool, never by
+  eye: `rg -U` for text/wrapped-token invariants (a line-based grep cannot see
+  `Code\nReview`), `yq`/`jq` for config facts, `ast-grep`/LSP find-references for
+  code-symbol invariants and "did this diff break callers?". Never assert an
+  invariant (e.g. "no bare `/loom`") from reading alone. See
+  [`tooling.md`](tooling.md).
 
 ## Hygiene
 

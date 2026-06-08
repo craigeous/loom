@@ -41,6 +41,9 @@ after approval and change only via planning. Design decisions are in
 - **Greenfield behavior body** (M2): `plugins/loom/skills/loom-playbook/references/greenfield.md`
   is the single authoritative body for Greenfield init (scaffold + seed + CLAUDE.md
   + gate). Unaligned and Initialized bodies are forthcoming M2 slices.
+- **Recommended tooling + mechanical-check discipline**: `plugins/loom/skills/loom-playbook/references/tooling.md`
+  — CLI/LSP toolkit by role (all optional with fallback); verify invariants with `rg -U`/`yq`/`ast-grep`,
+  not by eye. Cross-linked from `SKILL.md`, both eval rubrics, and the three agent files.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions
