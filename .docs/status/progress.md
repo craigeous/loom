@@ -43,7 +43,12 @@ Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
   `loom:<role>`. `${CLAUDE_PLUGIN_ROOT}` resolves correctly.
 - **Rung 1 passed:** `/loom:run` (status) loads, reads `.docs/` + git, and reports.
 
-## Still to verify (rung 2+)
+## Verified at rung 2 (first agent spawn)
 
-- Task `subagent_type` form for spawning a namespaced agent (`loom:researcher`):
-  confirm on the first real agent spawn (`/loom:research`).
+- `subagent_type: loom:researcher` resolves — the orchestrator spawns a namespaced
+  plugin agent via the Task tool. The haiku researcher wrote a cited note
+  (`Status: Research Review`, sources + citations) and committed author-neutral;
+  the orchestrator verified it. The full spawn → work → commit → verify pipeline
+  works for one role.
+- Remaining for M1: rung 3 — first full slice (plan → eval → develop → eval → land)
+  on a throwaway target.
