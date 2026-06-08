@@ -1,6 +1,6 @@
 # 05 — Blind Evaluation
 
-Status: Draft
+Status: Approved
 
 Blind evaluation is loom's mechanism for impartial, critical review. It is
 enforced by **controlling what goes into the evaluator's prompt**, not by asking
