@@ -5,7 +5,7 @@ Status: Draft
 ## What the orchestrator is
 
 The orchestrator is **the main, interactive Claude Code session that runs when you
-invoke `/loom`.** The `commands/loom.md` body is its operating instructions. It is
+invoke `/loom:run`.** The `commands/run.md` body is its operating instructions. It is
 not a sixth role and not a sub-agent — it is the session you are talking to, and it
 is the only actor that holds the Task tool and can **spawn role sub-agents**.
 

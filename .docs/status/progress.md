@@ -34,7 +34,8 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 
 ## Resolved build-time questions (M1)
 
-- OQ-D — one `/loom` command dispatches on its first argument; roles are `agents/`.
+- OQ-D — command surface is split into namespaced `/loom:<name>` commands
+  (`/loom:run` + one-off role commands); roles are `agents/` (`loom:<role>`).
 - OQ-E — plugin under `plugins/loom/`, `source: "./plugins/loom"` (root undocumented).
 - OQ-F — no compiled helpers; agents do detection/parsing with their own tools.
 

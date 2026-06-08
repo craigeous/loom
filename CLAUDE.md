@@ -1,6 +1,6 @@
 # CLAUDE.md — loom
 
-loom is a Claude Code skill that automates a spec-driven development loop with
+loom is a Claude Code plugin that automates a spec-driven development loop with
 five blind-reviewed roles. This file is the entry point for any agent working in
 this repo.
 

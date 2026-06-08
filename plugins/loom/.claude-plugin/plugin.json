@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "description": "Spec-driven dev loop with five blind-reviewed roles and an orchestrator",
   "author": { "name": "Craig", "email": "craigeous@gmail.com" },
-  "homepage": "https://github.com/craigeous/loom",
-  "repository": "https://github.com/craigeous/loom",
+  "homepage": "https://github.com/Craigeous/loom",
+  "repository": "https://github.com/Craigeous/loom",
   "license": "MIT",
   "keywords": ["spec-driven", "agents", "orchestration", "code-review", "workflow"]
 }

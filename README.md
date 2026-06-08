@@ -5,7 +5,7 @@
 them through a file-based, spec-driven process so that work survives context
 resets and is reviewed with blind, impartial rigor.
 
-loom is a Claude Code **skill**. You invoke it inside any repository; it detects
+loom is a Claude Code **plugin**. You invoke it inside any repository; it detects
 how aligned that repo is with loom's conventions and either bootstraps,
 migrates, or resumes work. A thin orchestrator spawns each role as a **cold
 agent** on the model best suited to its job, hands off work through files in
@@ -22,9 +22,10 @@ agent** on the model best suited to its job, hands off work through files in
 
 ## Status
 
-**M1 — minimum sequential loop (in progress).** The plugin is scaffolded: the
-`/loom` orchestrator command, the five role agents, and the playbook all exist.
-Not yet run end-to-end. The authoritative design lives in
+**M1 complete; M2 (init modes & gate learning) in progress.** The plugin is built,
+installed, validated, and run end-to-end (planner → blind plan-eval →
+developer + gate → blind code-eval → finalize). The `/loom:run` orchestrator, the
+five role agents, and the playbook all exist. The authoritative design lives in
 [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); decisions are in
 [`.docs/ADR/`](.docs/ADR/README.md).
