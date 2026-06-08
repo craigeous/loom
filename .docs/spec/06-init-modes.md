@@ -17,8 +17,11 @@ else                                        → Initialized
 
 Start from nothing, like a fresh design conversation.
 
-- Create the `.docs/` structure and seed `status/` (empty roadmap, progress,
-  handoff).
+- Create the `.docs/` structure and seed `status/` empty of design content —
+  the roadmap, progress, and handoff files carry no project decisions, only
+  scaffold metadata (e.g. a phase / next-step marker pointing at the first
+  owner step). "Empty" here means no prior design/project content, not a
+  zero-byte file.
 - Apply the **playbook**: write a project `CLAUDE.md`, establish the gate (see
   *Gate establishment* below).
 - Begin with the owner: research → ADRs → specs → slice-plans, per scope.
