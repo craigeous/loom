@@ -1,6 +1,6 @@
 # Unaligned Init Behavior — the align-an-existing-project body
 
-Status: Approved
+Status: Implemented
 Target specs: 06-init-modes.md, 08-playbook.md, 04-orchestrator.md
 
 ## Context
@@ -300,3 +300,59 @@ forward pointer. Only the Unaligned wiring changes.
 Needs Clarification; the answering role replies here and the status is restored.
 Resolutions are marked, not deleted. (Formal verdicts live in evaluations/, not
 here.)>
+
+## Gate evidence (2026-06-08)
+
+Markdown repo — no compiled gate. Verified mechanically against the spec:
+
+**Single-source check (scaffold details not restated):**
+`rg -n "research/README|ADR/README|cargo fmt --check|cargo clippy" plugins/loom/skills/loom-playbook/references/unaligned.md`
+→ empty (no scaffold/gate mechanics restated).
+
+**Greenfield reference present:**
+`rg -n "greenfield.md" plugins/loom/skills/loom-playbook/references/unaligned.md`
+→ lines 43, 46 — points at `greenfield.md` Steps A–E for shared work.
+
+**Gate-learning deferred (not implemented):**
+`rg -n "gate-learning" plugins/loom/skills/loom-playbook/references/unaligned.md`
+→ lines 65, 67, 149 — referenced as forthcoming slice, not implemented.
+
+**No-decisions boundary explicit:**
+`rg -n "No ADRs" plugins/loom/skills/loom-playbook/references/unaligned.md`
+→ line 97: "No ADRs are authored during back-fill. No spec text prescribes a change..."
+Step 3 also states: "records what *is*, never what *should be*" and "any decision/change
+requires a real planning phase."
+
+**Call sites repointed:**
+`rg -n "unaligned" plugins/loom/commands plugins/loom/skills/loom-playbook/references`
+→ run.md:22-23 (${CLAUDE_PLUGIN_ROOT}/.../unaligned.md), init.md:19 (same), orchestration.md:44
+(unaligned.md link). Step bodies only in unaligned.md.
+
+**Initialized remains a forward pointer:**
+orchestration.md line 47: "behavior body forthcoming (follow-up M2 slice *initialized-init-behavior*)".
+init.md step 3: "re-apply the current playbook idempotently" (unchanged).
+run.md: "initialized → summarize current state and continue" (unchanged).
+
+**No spec/ADR edits:**
+`git diff --name-only HEAD | rg "spec/|ADR/"` → empty.
+
+**Files changed (git diff --name-only HEAD):**
+- `.docs/slice-plans/unaligned-init-behavior.md` (status + evidence)
+- `CLAUDE.md` (added unaligned.md line, adjusted Initialized-forthcoming note)
+- `plugins/loom/commands/init.md` (Unaligned step 2 repointed)
+- `plugins/loom/commands/run.md` (Unaligned branch repointed)
+- `plugins/loom/skills/loom-playbook/SKILL.md` (unaligned.md added to References)
+- `plugins/loom/skills/loom-playbook/references/orchestration.md` (Unaligned bullet repointed)
+- `plugins/loom/skills/loom-playbook/references/unaligned.md` (new file — the behavior body)
+
+**Links resolve (all confirmed present before use):**
+- `greenfield.md` ✓
+- `../gates/rust.md` ✓
+- `commit-convention.md` ✓
+- `../../../../../.docs/spec/06-init-modes.md` ✓
+- `../../../../../.docs/spec/03-artifact-lifecycle.md` ✓
+- `unaligned.md` from each call site ✓
+
+**Eval MINORs addressed:**
+- MINOR 1 (A–F vs A–E): unaligned.md Step 2 references "Steps A–E" explicitly, not A–F.
+- MINOR 2 (target specs framing): cosmetic, non-blocking — left as-is per "non-blocking" verdict.

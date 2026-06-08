@@ -50,6 +50,7 @@ archived on landing. On conflict, the spec wins.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 - `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).
+- `unaligned.md` — the Unaligned init behavior body (alignment pass: reuse Greenfield scaffold + gate, then descriptive `spec/` back-fill).
 - `tooling.md` — **recommended** CLI/LSP toolkit by role, and the mechanical
   invariant-check discipline (verify with `rg -U`/`yq`/`ast-grep`/LSP, not by eye).
   All tools optional with graceful fallback.

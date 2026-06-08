@@ -15,10 +15,11 @@ detection) and `docs-layout.md`.
 2. **Greenfield:** run the scaffold/seed/gate body in
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/greenfield.md`. Commit
    author-neutral.
-   **Unaligned:** scaffold per `greenfield.md` **plus** descriptive back-fill of
-   `spec/` mapping what the project currently is (no decisions). Unaligned
-   back-fill behavior is a forward pointer to the forthcoming M2 slice
-   *unaligned-init-behavior*; do not author the back-fill body here.
+   **Unaligned:** run the alignment body in
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/unaligned.md` — study
+   the repo, scaffold + gate (per `greenfield.md`), descriptively back-fill
+   `spec/` (no decisions), seed `status/`; leaves the repo ready to resume as
+   Initialized. Commit author-neutral.
 3. **Initialized:** re-apply the current playbook idempotently — auto-apply clean
    merges, recommend for conflicts and let the owner decide. Never clobber project
    edits.

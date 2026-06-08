@@ -41,9 +41,9 @@ Greenfield / Unaligned / Initialized. Then act per that mode:
 
 - **Greenfield** → [`greenfield.md`](greenfield.md) — scaffold `.docs/`, apply
   playbook, establish gate, hand back.
-- **Unaligned** → behavior body forthcoming (follow-up M2 slice
-  *unaligned-init-behavior*): scaffold (per `greenfield.md`) plus descriptive
-  back-fill of `spec/`.
+- **Unaligned** → [`unaligned.md`](unaligned.md) — alignment pass: study the
+  repo, scaffold + gate (per `greenfield.md`), descriptive `spec/` back-fill,
+  resume as Initialized.
 - **Initialized** → behavior body forthcoming (follow-up M2 slice
   *initialized-init-behavior*): derive menu from `.docs/` + git state and
   continue.
