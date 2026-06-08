@@ -18,7 +18,10 @@ Review → Landed → Archived` (see
 
 ## Active plans
 
-_(none — next slice not yet planned)_
+- [retire-code-review-status-token.md](retire-code-review-status-token.md) —
+  `Plan Review` — remove the obsolete `Code Review` **status token** from three
+  playbook/agent files (SKILL.md, status-machine.md, developer.md), keeping the
+  generic "code review" action wording; align to spec 03.
 
 ## Archived plans
 
