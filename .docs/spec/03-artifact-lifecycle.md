@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Draft
+Status: Approved
 
 Status is loom's dispatcher. Each gated artifact carries a `Status:` line; the
 orchestrator reads it (and git state) to decide which role to spawn next. **Every

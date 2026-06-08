@@ -100,6 +100,59 @@ load-bearing defect is the promotion of `Code Review` from a phase label to a
 status, which fractures the authoritative state machine; everything downstream of
 that (findings 2 and the MAJOR diagram edge) flows from it.
 
+---
+
+# Round 2 re-review
+
+Verdict: PASS
+Round: 2
+Reviewed against the same authority set, focusing on the commit `05fef29` diff
+versus the Round 1 findings: references/status-machine.md (status + dispatch
+tables, lifecycle strings), agents/code-evaluator.md, agents/developer.md,
+Approved spec 02-roles.
+
+## Resolution of prior findings (cite: `git show 05fef29`)
+
+- [BLOCKER] `Code Review` as a first-class Status — **RESOLVED.** The diff removes
+  the `| Code Review | … |` row from the Statuses table; the `Implemented` row now
+  reads "Gate green; awaiting code review → code evaluator", matching
+  status-machine.md line 15 verbatim. No status exists that no role sets.
+
+- [BLOCKER] Statuses↔Dispatch contradiction on the code evaluator's trigger —
+  **RESOLVED.** Neither table now carries `Code Review`. The actor-bearing
+  statuses and the dispatch rows form the same set with no orphan, and the
+  dispatch table is row-for-row identical to status-machine.md lines 23–31. The
+  code evaluator is dispatched off `Implemented` in both tables and in
+  code-evaluator.md ("When to invoke: a slice is at `Implemented`").
+
+- [MAJOR] Slice-plan diagram edges anchored on the phantom `Code Review` node —
+  **RESOLVED.** The redrawn diagram (current lines 52–60) originates PASS from
+  `Implemented → Landed → Archived` and FAIL from `Implemented → In Progress`, with
+  no `Code Review` node. This matches status-machine.md line 51 ("FAIL edges back
+  to `Draft` (plan) or `In Progress` (code)") and code-evaluator.md step 5
+  (`Landed` on PASS, `In Progress` on FAIL). The follow-on prose (current lines
+  62–67) names "code review" as a phase over an `Implemented` artifact, not a
+  `Status:`, and line 69 now reads "On **code-eval PASS**" (was "approve at Code
+  Review").
+
+- [MINOR] Ungrounded "prior status resumes" mechanic — **RESOLVED.** Current lines
+  96–101 state the orchestrator records the held status and restores it after the
+  clarifying role answers, cross-referencing 02-roles, which matches 02-roles line
+  126 ("then restores the prior status").
+
+- [MINOR] `Implemented` row wording — **RESOLVED.** Now verbatim with
+  status-machine.md line 15 ("Gate green; awaiting code review").
+
+## Notes
+
+The spec's parenthesized phase label `… Implemented → (code review) → Landed →
+Archived` is consistent with — and more precise than — status-machine.md's
+lifecycle string (line 50), which itself uses `Code Review` only as a stage label
+inside a string, never in its status or dispatch tables. No new findings. The
+status machine is internally consistent (Statuses table, Dispatch table, and all
+three lifecycle diagrams agree) and matches status-machine.md, code-evaluator.md,
+developer.md, and Approved spec 02-roles.
+
 <!--
 Rules (full definitions in references/severity.md):
 - Any unresolved [BLOCKER], or any unaddressed [MAJOR] ⇒ Verdict: FAIL.
