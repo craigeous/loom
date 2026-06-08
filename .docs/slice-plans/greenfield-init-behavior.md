@@ -1,6 +1,6 @@
 # Greenfield Init Behavior — the scaffold-and-seed body
 
-Status: Plan Review
+Status: Approved
 Target specs: 06-init-modes.md, 08-playbook.md, 04-orchestrator.md
 
 ## Context
