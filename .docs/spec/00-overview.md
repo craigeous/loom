@@ -4,8 +4,10 @@ Status: Draft
 
 ## What loom is
 
-loom is a Claude Code skill that runs a **spec-driven development loop** staffed
-by five specialist roles and driven by a thin orchestrator. The roles hand off
+loom is a Claude Code plugin that runs a **spec-driven development loop** staffed
+by five specialist roles and driven by a thin orchestrator. (loom *bundles* a
+skill — the `loom-playbook` of conventions and templates — but loom itself *is* a
+plugin.) The roles hand off
 work through files in a project's `.docs/` directory, so any role can be spawned
 as a fresh "cold" agent and pick up exactly where the last one left off — the
 files are the memory.
@@ -21,7 +23,7 @@ The loop:
    owner ◀────▶┌─────────────┐──▶ ADRs ─▶ specs ─▶ slice-plans (draft)
                │   planner   │
                └─────────────┘
-                       │ (status: ready for review)
+                       │ (status: Plan Review)
                        ▼
                 ┌──────────────┐   reject (notes) ─┐
                 │plan evaluator│◀──────────────────┘
@@ -31,7 +33,7 @@ The loop:
                 ┌─────────────┐   reject (notes) ─┐
                 │  developer  │◀──────────────────┘
                 └─────────────┘
-                       │ (status: implemented)
+                       │ (status: Implemented)
                        ▼
                 ┌──────────────┐
                 │code evaluator│── approve ─▶ land + archive
@@ -56,7 +58,7 @@ The loop:
 
 ## Goals (v1)
 
-- A working `/loom` orchestrated loop plus per-role one-off commands.
+- A working `/loom:run` orchestrated loop plus per-role one-off commands.
 - The full `.docs/` artifact structure with a status-driven state machine.
 - Blind evaluation enforced by construction (controlled prompt inputs).
 - Three init modes: greenfield, unaligned-project alignment, resume.
@@ -78,7 +80,7 @@ The loop:
 
 - **Owner** — the human running loop. Starts each loop and sets its scope.
 - **Role** — one of the five specialist cold agents.
-- **Orchestrator** — the main interactive session running the `/loom` command; it
+- **Orchestrator** — the main interactive session running the `/loom:run` command; it
   spawns every role agent and routes work. Not a sixth role.
 - **Artifact** — a file the loop produces: research note, ADR, spec, slice-plan,
   or evaluation.
