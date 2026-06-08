@@ -37,14 +37,19 @@ project's durable and working memory.
 
 ## Durable vs transient
 
-- **Durable** (`spec/`, `ADR/`) — the authoritative model of the system. Changes
-  only when a slice lands. On any conflict between a plan and a spec, the **spec
-  wins**. ADRs are immutable once accepted: to change a decision, write a new ADR
-  that supersedes the old one.
+- **Durable** (`spec/`, `ADR/`) — the authoritative model of the system. An
+  approved spec is **frozen** (ADR 0005): it changes **only through a planning
+  cycle** (`Draft → Plan Review → Approved`), authored by the planner — never as a
+  side effect of a slice landing. On any conflict between a plan and a spec, the
+  **spec wins**. ADRs are immutable once accepted (ADR 0005): to change a decision,
+  write a new ADR that supersedes the old one.
 
 - **Transient** (`slice-plans/`) — proposals for the next unit of work. They are
-  discussed, evaluated, executed, and then **folded back into the durable specs**
-  and archived. A landed plan is history; the specs are the record.
+  discussed, evaluated, executed, and on landing **archived**, with the **living
+  docs (`status/`) updated** to record what was built (ADR 0005). The spec is
+  **not** edited at landing — it is intended design, not current state. If
+  implementation reveals the spec is wrong, the divergence is surfaced as explicit
+  planning work rather than patched silently.
 
 ## Research
 
