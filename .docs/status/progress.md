@@ -7,15 +7,32 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** resolved the spec 06 §1 "empty" vs scaffold-metadata
+- **Last action:** retroactive spec-approval pass completed. All ten content specs
+  (00–08, 10) ran through blind plan-eval and are now `Status: Approved`, each with
+  an eval record in `.docs/evaluations/spec-*-eval.md`. Several FAILed round 1 and
+  were fixed before approval — evidence the blind review caught real drift:
+  - **00** — loom called a "skill" not a "plugin"; bare `/loom` instead of
+    `/loom:run`; stale status labels.
+  - **01** — old "specs change at landing / fold back into specs" model corrected to
+    the frozen-spec model (ADR 0005).
+  - **02** — bare `/loom` → `/loom:run` plus 3 minors.
+  - **03** — `Code Review` was a phantom first-class status; reconciled so the code
+    evaluator dispatches off `Implemented`.
+  - **10** — agent-frontmatter verified-fields list corrected to
+    `name,description,model,color,tools`; M3 isolation/background reframed as
+    forward-looking.
+  - 04, 05, 07, 08 passed round 1.
+  Spec `09-open-questions.md` and the spec `README.md` are not frozen designs and are
+  now `Status: Living` (09 is a live OQ tracker; README is the spec index).
+- **Prior action:** resolved the spec 06 §1 "empty" vs scaffold-metadata
   clarification: spec `06 §1` was amended and re-approved (blind plan-eval PASS,
   commit 86fa7d1, eval `spec-06-status-seed-clarification-eval.md`) to define
   "empty" as no design content — authorizing the scaffold metadata
   `greenfield.md` seeds. The prior code-eval MINOR is now closed.
-- **Prior action:** M2 slice 2 (Greenfield init behavior body) landed.
+- **Earlier:** M2 slice 2 (Greenfield init behavior body) landed.
   Both plan-eval and code-eval ran blind and independently: both PASS (code-eval
   Round 2 PASS at commit a58ff7e; the one MINOR — spec 06 §1 "empty" vs
-  `greenfield.md` phase metadata — has since been resolved, see Last action).
+  `greenfield.md` phase metadata — has since been resolved, see Prior action).
   Deliverable: `plugins/loom/skills/loom-playbook/references/greenfield.md` —
   the single authoritative Greenfield behavior body (scaffold + seed + CLAUDE.md +
   gate). Three call sites (`orchestration.md`, `run.md`, `init.md`) repointed at
@@ -67,9 +84,27 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 
 ## Open
 
-Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
-(research-review tier — empirical), OQ-C (finalize-pass owner). See
-[`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+Deferred to later milestones: OQ-A (parallel `.docs/` coordination — planner owns,
+M3), OQ-B (research-review tier — owner leans haiku-sufficient, decide empirically),
+OQ-C (finalize-pass owner — owner undecided, wants a compare-and-contrast of
+re-spawned cold role vs. orchestrator-direct before choosing). Owner guidance is
+recorded inline in [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+
+Deferred follow-ups discovered during the retroactive spec-approval pass (flagged
+for a future slice / owner decision):
+
+- **Bare `/loom` in ADR 0001 (and possibly the spec README history)** still appears.
+  ADRs are immutable (ADR 0005 / 0004 discipline), so this needs a **superseding ADR
+  or an erratum note, not a rewrite**. Owner decision.
+- **The "Code Review" phase-label string** still appears in
+  `plugins/loom/skills/loom-playbook/references/status-machine.md`, `SKILL.md`, and
+  `agents/developer.md` ("approved at Code Review"). These are **phase labels, not
+  status rows** (not the spec-03 phantom-status defect), but should be reconciled
+  repo-wide for consistency in a future slice.
+- **Commit-identity guard gap.** The role guard blocks `git config` and `-c user.*`
+  but **not** `--author=` or `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars — a planner
+  commit slipped through as `loom <loom@localhost>` this run and had to be repaired.
+  `commit-convention.md` / the agent guards should close that hole.
 
 ## Verified at first install (M1)
 

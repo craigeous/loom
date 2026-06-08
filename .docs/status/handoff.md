@@ -32,7 +32,18 @@ source of truth; `roadmap.md` is milestone order.
   one MINOR on status file seeding — non-blocking). Deferred follow-up slices:
   unaligned-init-behavior, initialized-init-behavior, gate-learning.
 - **Published:** GitHub repo `craigeous/loom` (public), default branch `main`.
+- **All ten content specs (00–08, 10) are `Status: Approved`** after a retroactive
+  blind plan-eval pass (eval records in `.docs/evaluations/spec-*-eval.md`). Several
+  FAILed round 1 and were fixed (00/01/02/03/10) — see `progress.md` for the
+  findings. Spec `09-open-questions.md` and the spec `README.md` are now
+  `Status: Living` (09 is a live OQ tracker; README is the index).
 - Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
+- **Deferred follow-ups from the spec pass** (in `progress.md` Open, for a future
+  slice / owner decision): bare `/loom` in ADR 0001 needs a superseding ADR or
+  erratum (ADRs are immutable — no rewrite); the "Code Review" phase-label string in
+  `status-machine.md` / `SKILL.md` / `agents/developer.md` should be reconciled
+  repo-wide; the commit-identity guard gap (`--author=` / `GIT_AUTHOR_*` env vars are
+  not blocked) should be closed in `commit-convention.md` / the agent guards.
 
 ## Immediate next steps
 
@@ -45,7 +56,8 @@ source of truth; `roadmap.md` is milestone order.
    `06 §3`, slice "initialized-init-behavior") and gate-learning for unknown stacks
    (slice "gate-learning").
 3. **M3 — parallelism:** worktree-per-slice + background agents (research note
-   `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A).
+   `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A —
+   owner guidance: the **planner** owns the `.docs/` coordination design).
 
 ## Notes for the next agent
 

@@ -1,6 +1,6 @@
 # loom Specs
 
-Status: Draft
+Status: Living
 
 These docs are loom's durable design memory. Read this file first, then the spec
 for the area you are working on.

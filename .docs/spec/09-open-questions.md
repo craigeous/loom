@@ -1,6 +1,6 @@
 # 09 — Open Questions
 
-Status: Draft
+Status: Living
 
 Resolved items are kept for traceability; settled ones became ADRs or spec text.
 
@@ -42,11 +42,20 @@ Resolved items are kept for traceability; settled ones became ADRs or spec text.
   status live — a cross-slice dashboard on the main branch vs. per-slice
   plan/eval on slice branches — and how is it reconciled at landing? Settle when
   parallelism is built (post-M1).
+  - _Owner guidance (M2), to be worked next:_ the **planner** owns this — address it
+    when M3 parallelism is designed.
 - **OQ-B. Research-review tier.** Is the sources-match-claims check cheap enough to
   run on `sonnet`/`haiku` rather than `opus`? Decide empirically.
+  - _Owner guidance (M2), to be worked next:_ owner leans **haiku is sufficient** —
+    research review is just checking that the cited sources support the claims
+    (source-vs-claims matching), which haiku can do. Decide empirically, but bias
+    toward haiku.
 - **OQ-C. Finalize pass owner.** Confirm the finalize doc-update is best as a
   re-spawned cold role pass vs. the orchestrator doing it directly. (Current
   design: re-spawned role, per Q7.)
+  - _Owner guidance (M2), to be worked next:_ owner is **undecided** and wants a
+    compare-and-contrast of the two options (re-spawned cold role pass vs. the
+    orchestrator doing the finalize directly) before choosing.
 - ~~**OQ-D. Command namespacing.**~~ **RESOLVED (M1, empirically):** plugin
   components are namespaced — there is no bare `/loom`. Surface is one file per
   command: `/loom:run` (orchestrator) + one-off `/loom:research|plan|eval-plan|
