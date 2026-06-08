@@ -1,6 +1,6 @@
 # Init-Mode Detection — one authoritative procedure
 
-Status: Plan Review
+Status: Approved
 Target specs: 06-init-modes.md, 04-orchestrator.md, 08-playbook.md
 
 ## Context
