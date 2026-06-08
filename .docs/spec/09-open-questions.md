@@ -47,8 +47,10 @@ Resolved items are kept for traceability; settled ones became ADRs or spec text.
 - **OQ-C. Finalize pass owner.** Confirm the finalize doc-update is best as a
   re-spawned cold role pass vs. the orchestrator doing it directly. (Current
   design: re-spawned role, per Q7.)
-- ~~**OQ-D. Command namespacing.**~~ **RESOLVED (M1):** one `/loom` command
-  dispatches on its first argument; roles are `agents/`. → spec 10.
+- ~~**OQ-D. Command namespacing.**~~ **RESOLVED (M1, empirically):** plugin
+  components are namespaced — there is no bare `/loom`. Surface is one file per
+  command: `/loom:run` (orchestrator) + one-off `/loom:research|plan|eval-plan|
+  develop|eval-code|status|init`; agents are `loom:<role>`. → spec 07, 10.
 - ~~**OQ-E. marketplace `source: "."`.**~~ **RESOLVED (M1):** root plugin is
   undocumented; use `plugins/loom/` with `source: "./plugins/loom"`. → ADR 0006,
   spec 10.

@@ -1,5 +1,6 @@
 # Research: Claude Code plugin/skill/agent mechanics
 
+Status: Approved
 Date: 2026-06-07
 Topic: How to package loom as a plugin with role-agents + orchestrator commands,
 pin a model per role, bundle the playbook, and distribute via a marketplace.

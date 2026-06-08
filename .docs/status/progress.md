@@ -34,9 +34,16 @@ Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
 (research-review tier — empirical), OQ-C (finalize-pass owner). See
 [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
 
-## Known unknowns to verify on first install
+## Verified at first install (M1)
 
-- Exact invocation string for the command (`/loom` vs `/loom:loom`) and the Task
-  `subagent_type` form for namespaced agents (`loom:researcher` vs `researcher`).
-- Whether `/plugin marketplace add ./loom` + `source: "./plugins/loom"` resolves as
-  expected locally.
+- Local marketplace add + `source: "./plugins/loom"` installs cleanly; `/plugin
+  validate ./loom` passes.
+- Plugin components are **namespaced** — no bare `/loom`. Command surface split into
+  one file per command (`/loom:run` + one-off `/loom:<role>`); agents are
+  `loom:<role>`. `${CLAUDE_PLUGIN_ROOT}` resolves correctly.
+- **Rung 1 passed:** `/loom:run` (status) loads, reads `.docs/` + git, and reports.
+
+## Still to verify (rung 2+)
+
+- Task `subagent_type` form for spawning a namespaced agent (`loom:researcher`):
+  confirm on the first real agent spawn (`/loom:research`).

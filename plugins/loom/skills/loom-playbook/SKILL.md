@@ -61,6 +61,7 @@ researcher `haiku` · developer `sonnet` · planner + plan-evaluator + code-eval
 
 ## Roles (ADR 0001, 0004)
 
-The orchestrator (the main `/loom` session) spawns five cold role agents; they hand
-off through `.docs/` files and a commit per handoff. Evaluators review blind; no role
-approves its own work.
+The orchestrator (the main `/loom:run` session) spawns five cold role agents; they
+hand off through `.docs/` files and a commit per handoff. Evaluators review blind; no
+role approves its own work. Plugin commands are namespaced `/loom:<name>`; agents are
+`loom:<role>`.

@@ -14,7 +14,7 @@ this repo.
 ## What loom is (one paragraph)
 
 loom is a Claude Code **plugin**. The **orchestrator is the main session running
-the `/loom` command**; it spawns five cold role agents — researcher, planner, plan
+the `/loom:run` command**; it spawns five cold role agents — researcher, planner, plan
 evaluator, developer, code evaluator — each on a chosen model **tier** (sub-agents
 can't spawn sub-agents, so only the orchestrator spawns). Roles never share live
 context; they hand off through files in `.docs/`, and **every handoff commits**.
@@ -26,8 +26,10 @@ after approval and change only via planning. Design decisions are in
 
 ## Repo layout (M1)
 
-- The **shippable plugin** lives in `plugins/loom/` (`commands/loom.md`, `agents/`,
-  `skills/loom-playbook/`); the marketplace catalog is `.claude-plugin/marketplace.json`.
+- The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus
+  one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`); the
+  marketplace catalog is `.claude-plugin/marketplace.json`. Plugin components are
+  namespaced `loom:<name>` (no bare `/loom`).
 - `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.
 - No compiled code: loom is markdown (prompts/templates), so this repo has no gate
   to run. The Rust gate loom *imposes on managed projects* is in

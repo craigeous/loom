@@ -2,66 +2,42 @@
 
 Status: Draft
 
-loom is a Claude Code **plugin**. The surface is one orchestrated entry command
-plus per-role one-off commands (in `commands/`), backed by the five role agents
-(in `agents/`). See [10 — Packaging](10-packaging.md) for the full layout.
+loom is a Claude Code **plugin**. Plugin components are **namespaced by plugin
+name** — there is no bare `/loom`; commands are `/loom:<name>` and agents are
+`loom:<role>` (confirmed empirically at M1 install). See
+[10 — Packaging](10-packaging.md).
 
-## Plugin files behind the surface
+## Commands (`plugins/loom/commands/`)
 
-```
-loom/
-├── commands/        # the invokable slash-command surface
-│   ├── loom.md            # /loom — the orchestrator
-│   ├── loom-research.md   # one-off researcher
-│   ├── loom-plan.md       # one-off planner
-│   ├── loom-eval-plan.md  # one-off plan evaluator
-│   ├── loom-develop.md    # one-off developer
-│   ├── loom-eval-code.md  # one-off code evaluator
-│   ├── loom-status.md     # print .docs/ state
-│   └── loom-init.md       # explicit init/alignment
-└── agents/          # the cold role agents the orchestrator spawns
-    ├── researcher.md      (haiku)
-    ├── planner.md         (opus)
-    ├── plan-evaluator.md  (opus)
-    ├── developer.md       (sonnet)
-    └── code-evaluator.md  (opus)
-```
+One file per command (each surfaces as `/loom:<filename>`):
 
-> Exact invocation naming (`/loom-research` vs. subdir-namespaced `/loom:research`)
-> is a build-time detail; the intent below is stable. Per-role commands may set
-> `disable-model-invocation: true` where an owner-only action is intended.
+| Command | File | What it does |
+|---|---|---|
+| `/loom:run [scope]` | `run.md` | The **orchestrator** — detect init mode, take scope + claimed gates, drive the driver loop. |
+| `/loom:research <topic>` | `research.md` | One-off researcher pass → cited `.docs/research/` note. |
+| `/loom:plan` | `plan.md` | One-off planner pass → ADR / spec / slice-plan. |
+| `/loom:eval-plan [artifact]` | `eval-plan.md` | One-off **blind** plan/research review → verdict. |
+| `/loom:develop [slice]` | `develop.md` | One-off developer pass → implement + gate. |
+| `/loom:eval-code [slice]` | `eval-code.md` | One-off **blind** code review → verdict. |
+| `/loom:status` | `status.md` | Print `.docs/` state; no agents, no writes. |
+| `/loom:init` | `init.md` | Initialize / align this repo to loom. |
 
-## Orchestrated entry
+## Agents (`plugins/loom/agents/`)
 
-- **`/loom`** — detect init mode ([06](06-init-modes.md)); for greenfield/unaligned
-  bootstrap or align, for initialized show the resume menu; then ask **scope** and
-  **claimed gates** and run the driver loop ([04](04-orchestrator.md)).
-- **`/loom <scope>`** — start with scope pre-declared
-  (`research` | `adr` | `plan` | `implement` | `slice` | `full` | ranges).
+The five roles the commands spawn via the Task tool, namespaced `loom:<role>`:
+`loom:researcher` (haiku), `loom:planner` (opus), `loom:plan-evaluator` (opus),
+`loom:developer` (sonnet), `loom:code-evaluator` (opus).
 
-## One-off role commands
+## Orchestrated vs one-off
 
-Each runs a single cold-agent pass against current `.docs/` + git state, then
-commits — no chaining:
+`/loom:run` chains roles automatically within the declared scope, pausing at
+claimed gates and stopping at the scope boundary. The one-off commands each run a
+single cold-agent pass and stop — for targeted manual work ("just re-evaluate this
+plan"). Both spawn the same agents against the same files; only the chaining
+differs.
 
-- **`/loom-research <topic>`** — researcher writes a cited `research/` note.
-- **`/loom-plan`** — planner advances planning per current state + owner input.
-- **`/loom-eval-plan [<artifact>]`** — plan evaluator blind-reviews the named (or
-  next `Plan Review`/`Research Review`) artifact.
-- **`/loom-develop [<slice>]`** — developer implements the named (or next
-  `Approved`) slice-plan.
-- **`/loom-eval-code [<slice>]`** — code evaluator blind-reviews the named (or next
-  `Implemented`) slice's commit diff.
+## Shared logic
 
-## Utility commands
-
-- **`/loom-status`** — summary of `.docs/` state (roadmap target, in-flight
-  artifacts + statuses, blockers, round counts).
-- **`/loom-init`** — explicitly run init/alignment for the current repo.
-
-## Mediation note
-
-The one-off commands are how a human drives manually; `/loom` is how loom drives
-itself. Both spawn the same cold role agents against the same files — the only
-difference is whether the orchestrator chains the next role automatically
-(orchestrated) or stops after one pass (one-off).
+The orchestrator rules common to all commands live in the playbook at
+`skills/loom-playbook/references/orchestration.md` (+ `status-machine.md`); each
+command file is thin and references them, so behavior stays consistent.

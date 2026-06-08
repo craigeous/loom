@@ -19,7 +19,7 @@ loom/                                  # project repo = marketplace
 ├── plugins/
 │   └── loom/                          # the shippable plugin
 │       ├── .claude-plugin/plugin.json # plugin manifest (required, here)
-│       ├── commands/loom.md           # /loom — orchestrator (dispatches on $ARGUMENTS)
+│       ├── commands/                  # /loom:run + one-off /loom:<role> commands
 │       ├── agents/                    # the five role agents
 │       │   ├── researcher.md  planner.md  plan-evaluator.md
 │       │   └── developer.md   code-evaluator.md
@@ -35,18 +35,15 @@ Default component dirs (`commands/`, `agents/`, `skills/`) are auto-discovered
 within the plugin. `.docs/` is loom's design memory, not a plugin component — when
 loom is installed elsewhere it *creates* a fresh `.docs/` in that project.
 
-## Command surface (OQ-D resolved)
+## Command surface (OQ-D resolved, empirically)
 
-A **single `/loom` command dispatches on its first argument** rather than shipping
-one command file per role:
-
-- `/loom` / `/loom <scope>` → orchestrated driver loop.
-- `/loom research|plan|eval-plan|develop|eval-code|status|init [...]` → one-off
-  single-role pass.
-
-This is the `feature-dev` pattern and avoids per-command namespacing questions.
-The five roles are `agents/` the command spawns via the Task tool; they appear as
-`loom:researcher` etc. (plugin name namespaces components).
+Plugin components are **namespaced by plugin name** — there is no bare `/loom`. The
+surface is **one file per command** (each → `/loom:<filename>`): `run` (the
+orchestrator) plus one-off `research`, `plan`, `eval-plan`, `develop`, `eval-code`,
+`status`, `init`. The five roles are `agents/` the commands spawn via the Task tool,
+namespaced `loom:<role>`. Shared orchestrator rules live in
+`skills/loom-playbook/references/orchestration.md` so the thin command files stay
+consistent. See [07 — Command Surface](07-command-surface.md).
 
 ## plugin.json (`plugins/loom/.claude-plugin/plugin.json`)
 

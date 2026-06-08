@@ -36,7 +36,7 @@ loom/                          # this repo = the loom project + its marketplace
 ├── .claude-plugin/marketplace.json   # lists the loom plugin (source ./plugins/loom)
 ├── plugins/loom/              # the shippable plugin
 │   ├── .claude-plugin/plugin.json
-│   ├── commands/loom.md       # /loom orchestrator (dispatches on its argument)
+│   ├── commands/              # /loom:run + one-off /loom:research, :plan, :eval-plan, :develop, :eval-code, :status, :init
 │   ├── agents/                # researcher · planner · plan-evaluator · developer · code-evaluator
 │   └── skills/loom-playbook/  # templates, rubrics, conventions, gates
 └── .docs/                     # loom's OWN design memory (dogfooding) — not shipped
@@ -45,15 +45,26 @@ loom/                          # this repo = the loom project + its marketplace
 ## Install
 
 ```sh
-/plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local)
+/plugin marketplace add Craigeous/loom     # or: /plugin marketplace add ./loom (local)
 /plugin install loom@loom
-/plugin validate                            # optional: check manifests + frontmatter
+/plugin validate ./loom                     # optional: check manifests + frontmatter
 ```
 
-Then, inside any repo, run `/loom` (orchestrated) or a single role pass
-(`/loom research <topic>`, `/loom plan`, `/loom eval-plan`, `/loom develop`,
-`/loom eval-code`, `/loom status`, `/loom init`). loom operates on that repo's
-`.docs/`.
+Then, inside any repo, run the orchestrated loop or a single role pass. Plugin
+commands are namespaced as `/loom:<name>`:
+
+| Command | What it does |
+|---|---|
+| `/loom:run [scope]` | the orchestrator — detect state, take scope/gates, drive the roles |
+| `/loom:research <topic>` | one-off researcher pass |
+| `/loom:plan` | one-off planner pass |
+| `/loom:eval-plan [artifact]` | one-off blind plan/research review |
+| `/loom:develop [slice]` | one-off developer pass |
+| `/loom:eval-code [slice]` | one-off blind code review |
+| `/loom:status` | print `.docs/` state |
+| `/loom:init` | initialize/align this repo to loom |
+
+loom operates on the current repo's `.docs/`.
 
 loom **dogfoods its own structure**: this repository is managed by the very
 process loom implements.
