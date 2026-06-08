@@ -1,6 +1,6 @@
 # Scope the author-identity guard to commit-creating subcommands
 
-Status: Plan Review
+Status: Approved
 Target specs: (none — implementation refinement of the ADR 0003 enforcement hook;
 specs/ADRs unchanged)
 
