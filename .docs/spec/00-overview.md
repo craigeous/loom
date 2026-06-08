@@ -1,6 +1,6 @@
 # 00 — Overview & Goals
 
-Status: Draft
+Status: Approved
 
 ## What loom is
 

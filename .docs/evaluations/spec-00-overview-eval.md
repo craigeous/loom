@@ -69,6 +69,48 @@ describes an earlier conception ("skill", bare `/loom`) that the accepted ADR an
 the built plugin have since moved past. Because this is the *entry-point* spec a
 cold agent reads first, those two terms must be correct before approval.
 
+---
+
+# Round 2
+
+Verdict: PASS
+Round: 2
+Reviewed against: revision commit `14ade9d`; ADR 0001 (Accepted,
+`0001-plugin-architecture-and-orchestrator.md`); sibling specs
+03-artifact-lifecycle and 07-command-surface; and the built plugin tree under
+`plugins/loom/` (`.claude-plugin/plugin.json`, `commands/`, `skills/loom-playbook/`).
+
+## Disposition of Round 1 findings
+
+- [BLOCKER → RESOLVED] Plugin identity. Line 7 now reads "loom is a Claude Code
+  plugin," with a parenthetical clarifying that loom *bundles* a skill
+  (`loom-playbook`) but *is* a plugin. This matches ADR 0001 ("loom is a **Claude
+  Code plugin** comprising `commands/`... `agents/`... `skills/loom-playbook/`")
+  and the built tree (`plugin.json` name "loom"; `skills/loom-playbook/` present).
+  The bundled-skill framing is accurate and introduces no new contradiction —
+  `skills/` and the playbook both exist on disk.
+
+- [MAJOR → RESOLVED] Command name. The two bare `/loom` references are now
+  `/loom:run` (line 61 goals, line 83 glossary). This matches the shipped command
+  (`plugins/loom/commands/run.md`) and spec 07's explicit "no bare `/loom`" rule.
+  The upstream ADR 0001 still uses bare `/loom`, but that is ADR staleness to be
+  fixed through the planning channel (ADRs are immutable except by supersession);
+  spec 00 no longer drifts from the built system or spec 07. No new contradiction.
+
+- [MINOR → RESOLVED] Status labels. The loop diagram now uses "status: Plan
+  Review" (line 26) and "status: Implemented" (line 36), the canonical names from
+  spec 03's status table. The earlier informal "ready for review"/"implemented"
+  paraphrases are gone.
+
+## New findings
+
+None. The fix touched only the four flagged lines plus the identity paragraph; the
+substantive design (three problems, goals, non-goals, glossary) is unchanged and
+remains consistent with ADRs 0001–0006. No regression or new inconsistency
+introduced by the revision.
+
+All Round 1 issues are resolved; no blockers and no unaddressed majors remain.
+
 <!--
 Rules (full definitions in references/severity.md):
 - Any unresolved [BLOCKER], or any unaddressed [MAJOR] ⇒ Verdict: FAIL.
