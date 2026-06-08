@@ -1,5 +1,6 @@
 {
   "name": "loom",
+  "description": "loom — a spec-driven, multi-agent development loop with blind evaluation",
   "owner": { "name": "Craig", "email": "craigeous@gmail.com" },
   "plugins": [
     {
