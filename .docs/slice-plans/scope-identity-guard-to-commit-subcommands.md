@@ -1,6 +1,6 @@
 # Scope the author-identity guard to commit-creating subcommands
 
-Status: In Progress
+Status: Implemented
 Target specs: (none — implementation refinement of the ADR 0003 enforcement hook;
 specs/ADRs unchanged)
 
@@ -277,3 +277,54 @@ any case B/C BLOCK that allows → FAIL (BLOCKER/false-negative).
   (see "The rule …" §4). It is consistent with ADR 0003's binding doc-layer rule and
   the existing Stage-C fail-open; the hook is best-effort defense-in-depth, never the
   sole guarantee.
+
+## Implementation gate evidence (2026-06-08, developer)
+
+POSIX syntax: `sh -n` → OK, `dash -n` → OK. `git diff --name-only`: only
+`plugins/loom/hooks/git-identity-guard.sh` (+ this slice-plan).
+
+Full 30-case matrix exit codes (all match expected):
+
+| # | Command | Expected | Actual |
+|---|---|---|---|
+| A1 | `git log --author=alice` | 0 | 0 |
+| A2 | `git shortlog -sn --author=bob` | 0 | 0 |
+| A3 | `git blame --author x` | 0 | 0 |
+| A4 | `git blame -L1,2 file` | 0 | 0 |
+| A5 | `git -c user.email=x@y log` | 0 | 0 |
+| A6 | `GIT_AUTHOR_NAME=foo git log` | 0 | 0 |
+| A7 | `git show --format=%an HEAD` | 0 | 0 |
+| A8 | `git config user.name` | 0 | 0 |
+| B9 | `git commit --author='x <x@y>' -m z` | 2 | 2 |
+| B10 | `git -c user.email=x@y commit -m z` | 2 | 2 |
+| B11 | `git -c user.name=x cherry-pick abc` | 2 | 2 |
+| B12 | `GIT_AUTHOR_NAME=foo git commit -m z` | 2 | 2 |
+| B13 | `git -c GIT_COMMITTER_NAME=x commit -m z` | 2 | 2 |
+| B14 | `git revert --author=x HEAD` | 2 | 2 |
+| B15 | `git rebase -c user.email=x@y main` | 2 | 2 |
+| B16 | `git merge --author=x topic` | 2 | 2 |
+| B17 | `GIT_AUTHOR_EMAIL=x git am file` | 2 | 2 |
+| C18 | `git commit -m msg --author='A B <a@b>'` | 2 | 2 |
+| C19 | `git -c user.name=AB commit -m x` | 2 | 2 |
+| C20 | `GIT_COMMITTER_EMAIL=a@b git commit -m x` | 2 | 2 |
+| D21 | `git commit -m "fix --author= handling in docs"` | 0 | 0 |
+| D22 | `git commit -m "set GIT_AUTHOR_NAME in the script"` | 0 | 0 |
+| D23 | `git commit -m 'add -c user.email note'` | 0 | 0 |
+| D24 | `git commit -m "escaped \"--author\" mention"` | 0 | 0 |
+| D25 | `echo --author=foo` | 0 | 0 |
+| D26 | `ls -c user.name=x` | 0 | 0 |
+| D27 | `git commit -m "unbalanced quote --author` (odd quote) | 0 | 0 |
+| E28 | `git --some-unknown-global commit --author=x` | 0 | 0 |
+| E29 | `git` (bare, no subcommand) | 0 | 0 |
+| F-block | case #9 via grep/sed fallback (PATH without jq, curated symlink dir) | 2 | 2 |
+| F-allow | case #1 via grep/sed fallback (PATH without jq, curated symlink dir) | 0 | 0 |
+
+Additional cases (eval MINOR + plan narrative):
+- `git -c user.email=x@y commit-tree abc` → 2 (BLOCK; commit-tree in set)
+- `git --no-pager log --author=x` → 0 (ALLOW; --no-pager is valueless global)
+- `git -C /p commit --author=x` → 2 (BLOCK; -C skipped, commit found)
+- `GIT_COMMITTER_EMAIL=z@z git cherry-pick -x abc` → 2 (BLOCK)
+- `git -c user.name=x rebase --continue` → 2 (BLOCK)
+
+30/30 match. No false-negative (real commit-time override slips to ALLOW). No
+false-positive (read subcommand with filter flag blocked). Gate: clean.
