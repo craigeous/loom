@@ -7,11 +7,15 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** M2 slice 2 (Greenfield init behavior body) landed.
+- **Last action:** resolved the spec 06 §1 "empty" vs scaffold-metadata
+  clarification: spec `06 §1` was amended and re-approved (blind plan-eval PASS,
+  commit 86fa7d1, eval `spec-06-status-seed-clarification-eval.md`) to define
+  "empty" as no design content — authorizing the scaffold metadata
+  `greenfield.md` seeds. The prior code-eval MINOR is now closed.
+- **Prior action:** M2 slice 2 (Greenfield init behavior body) landed.
   Both plan-eval and code-eval ran blind and independently: both PASS (code-eval
-  Round 2 PASS at commit a58ff7e; one MINOR recorded — spec 06 §1 says seed
-  "empty" status files while `greenfield.md` seeds `progress.md`/`handoff.md` with
-  phase metadata; non-blocking, noted in open/decision index below).
+  Round 2 PASS at commit a58ff7e; the one MINOR — spec 06 §1 "empty" vs
+  `greenfield.md` phase metadata — has since been resolved, see Last action).
   Deliverable: `plugins/loom/skills/loom-playbook/references/greenfield.md` —
   the single authoritative Greenfield behavior body (scaffold + seed + CLAUDE.md +
   gate). Three call sites (`orchestration.md`, `run.md`, `init.md`) repointed at
@@ -54,19 +58,18 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 - OQ-E — plugin under `plugins/loom/`, `source: "./plugins/loom"` (root undocumented).
 - OQ-F — no compiled helpers; agents do detection/parsing with their own tools.
 
+## Resolved build-time questions (M2)
+
+- Spec 06 §1 "empty" vs scaffold-metadata (was a code-eval MINOR on
+  greenfield-init-behavior): spec `06 §1` was amended and re-approved (commit
+  86fa7d1, eval `spec-06-status-seed-clarification-eval.md`) to define "empty" as
+  no design content, authorizing the scaffold/phase metadata `greenfield.md` seeds.
+
 ## Open
 
 Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
 (research-review tier — empirical), OQ-C (finalize-pass owner). See
 [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
-
-**Open spec clarification (non-blocking):** code-eval MINOR on greenfield-init-behavior
-— spec `06 §1` says seed "empty" status files, but `greenfield.md` seeds
-`progress.md` and `handoff.md` with phase metadata (Phase: init / Greenfield
-scaffold complete; next step: declare scope and run `/loom:run`). Spec `06` may
-need a clarification distinguishing "empty" (no prior design content) from
-"blank" (zero bytes). Not acted on here; warrants a spec-clarification slice if
-the ambiguity causes a future conflict.
 
 ## Verified at first install (M1)
 
