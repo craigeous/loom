@@ -1,6 +1,6 @@
 # Initialized init behavior body
 
-Status: Approved
+Status: In Progress
 Target specs: 06-init-modes.md
 
 ## Context
