@@ -1,6 +1,6 @@
 # Initialized init behavior body
 
-Status: In Progress
+Status: Implemented
 Target specs: 06-init-modes.md
 
 ## Context
@@ -320,6 +320,30 @@ obligation to a concrete mechanical test:
     remains a forward pointer. `rg -i "gate-learning" plugins/loom/skills/loom-playbook/references/initialized.md`
     confirms it is referenced as deferred, not implemented.
 
-## Notes
+## Gate evidence
 
-(none)
+No compiled gate (loom is markdown). Verification done mechanically with `rg`.
+
+1. **File exists:** `test -f plugins/loom/skills/loom-playbook/references/initialized.md` → PASS.
+
+2. **Menu items map to real statuses:** `rg -i "Plan Review|In Progress|Implemented|Research Review|roadmap|show status" initialized.md` → hits for all five menu items with their status triggers (table in Step 1).
+
+3. **Dispatch table referenced (not static list):** `rg -i "status-machine|dispatch table" initialized.md` → two links to `status-machine.md` and two "dispatch table" references; hard rule stated explicitly.
+
+4. **Driver-loop handoff references run.md:** `rg -i "run\.md|driver loop" initialized.md` → link to `../../../commands/run.md` Step 3 and explicit "does not restate the loop." No a–g sub-steps restated.
+
+5. **Idempotent rules single-sourced:** `rg -i "initialized\.md" orchestration.md` → two hits (Initialized bullet + idempotent pointer). Old inline "auto-apply clean merges, **recommend** for conflicts and let the owner decide. Never clobber project edits." restatement is gone — replaced by a one-line pointer to `initialized.md`.
+
+6. **All call sites repointed:** `rg -l "initialized\.md"` returns all four files (orchestration.md, run.md, init.md, SKILL.md). Old phrasings "behavior body forthcoming", "forthcoming M2 slice", "summarize current state and continue" → zero hits in orchestration.md + run.md.
+
+7. **SKILL.md order:** `rg -n "unaligned\.md|initialized\.md" SKILL.md` → line 53: unaligned.md, line 54: initialized.md (immediately after).
+
+8. **CLAUDE.md updated, no over-claim:** `rg -i "initialized.md" CLAUDE.md` → new bullet present. `rg -i "forthcoming M2 slice" CLAUDE.md` → zero hits (removed). Heading still says "M2 in progress."
+
+9. **Links resolve:** all four relative links in initialized.md confirmed against real tree: `../../../../../.docs/spec/06-init-modes.md`, `status-machine.md`, `orchestration.md`, `../../../commands/run.md` — all exist.
+
+10. **No spec/ADR touched:** `git diff --name-only HEAD` shows zero paths under `.docs/spec/` or `.docs/ADR/` → PASS.
+
+11. **Gate-learning forward pointer:** `rg -i "gate-learning" initialized.md` → four hits, all marking it as deferred; closing section explicitly states "Gate-learning is out of scope here and remains a forward pointer."
+
+**Files changed (single-slice commit):** `initialized.md` (new), `orchestration.md`, `run.md`, `init.md`, `SKILL.md`, `CLAUDE.md`, `initialized-init-behavior.md` (status). No spec/ADR edits.

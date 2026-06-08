@@ -44,7 +44,13 @@ after approval and change only via planning. Design decisions are in
 - **Unaligned behavior body** (M2): `plugins/loom/skills/loom-playbook/references/unaligned.md`
   is the single authoritative body for Unaligned init (alignment pass: study repo,
   scaffold + gate via `greenfield.md`, descriptive `spec/` back-fill, resume as
-  Initialized). The Initialized body is a forthcoming M2 slice.
+  Initialized).
+- **Initialized behavior body** (M2): `plugins/loom/skills/loom-playbook/references/initialized.md`
+  is the single authoritative body for Initialized init (resume: derive a menu from
+  `.docs/` + git state, hand into scope/gates + the `/loom:run` driver loop;
+  idempotent playbook re-application — auto-apply clean, recommend for conflicts,
+  never clobber). The per-mode trio (Greenfield + Unaligned + Initialized) is now
+  complete; gate-learning remains a forward pointer (deferred *gate-learning* slice).
 - **Recommended tooling + mechanical-check discipline**: `plugins/loom/skills/loom-playbook/references/tooling.md`
   — CLI/LSP toolkit by role (all optional with fallback); verify invariants with `rg -U`/`yq`/`ast-grep`,
   not by eye. Cross-linked from `SKILL.md`, both eval rubrics, and the three agent files.

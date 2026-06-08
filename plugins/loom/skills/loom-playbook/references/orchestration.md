@@ -44,12 +44,14 @@ Greenfield / Unaligned / Initialized. Then act per that mode:
 - **Unaligned** → [`unaligned.md`](unaligned.md) — alignment pass: study the
   repo, scaffold + gate (per `greenfield.md`), descriptive `spec/` back-fill,
   resume as Initialized.
-- **Initialized** → behavior body forthcoming (follow-up M2 slice
-  *initialized-init-behavior*): derive menu from `.docs/` + git state and
-  continue.
+- **Initialized** → [`initialized.md`](initialized.md) — resume: derive the
+  menu from `.docs/` + git state (mapped to the dispatch table), then declare
+  scope + gates and run the driver loop; re-apply the current playbook
+  idempotently.
 
-Re-alignment is idempotent: auto-apply clean merges, **recommend** for conflicts
-and let the owner decide. Never clobber project edits.
+Re-running init re-applies the current playbook idempotently — see
+[`initialized.md`](initialized.md) for the merge strategy (auto-apply clean,
+recommend for conflicts, never clobber).
 
 ## Scope & claimed gates (for `/loom:run`)
 

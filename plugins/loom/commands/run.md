@@ -21,7 +21,9 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/greenfield.md`;
    unaligned → alignment pass per
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/unaligned.md`;
-   initialized → summarize current state and continue.
+   initialized → resume per
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/initialized.md`
+   (derive menu from `.docs/` + git state, then scope/gates + driver loop).
 2. **Confirm scope and claimed gates** with the owner (orchestration.md → Scope &
    claimed gates). Use `$ARGUMENTS` as the scope if given.
 3. **Driver loop:**

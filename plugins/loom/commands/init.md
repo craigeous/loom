@@ -20,7 +20,9 @@ detection) and `docs-layout.md`.
    the repo, scaffold + gate (per `greenfield.md`), descriptively back-fill
    `spec/` (no decisions), seed `status/`; leaves the repo ready to resume as
    Initialized. Commit author-neutral.
-3. **Initialized:** re-apply the current playbook idempotently — auto-apply clean
-   merges, recommend for conflicts and let the owner decide. Never clobber project
-   edits.
+3. **Initialized:** resume per
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/initialized.md` —
+   present the state-derived menu, then re-apply the current playbook
+   idempotently (auto-apply clean merges, recommend for conflicts, never
+   clobber). Commit author-neutral if re-application writes anything.
 4. Report what was created/changed and the next step (usually `/loom:run`).
