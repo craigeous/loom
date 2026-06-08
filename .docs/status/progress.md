@@ -82,6 +82,18 @@ The status source of truth and decision index for building loom.
 - **First-run finding (fixed, M1):** the code-eval agent committed under a stray
   git identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
   Fixed the playbook commit-convention: roles must not set/override git `user.*`.
+- **Prior action:** `scope-identity-guard-to-commit-subcommands` slice **ABANDONED**
+  (commit d35b565). Two code-eval-caught false-negative classes made shell-parse
+  scoping untenable: (1) the original subcommand-parser failed OPEN on any pre-`git`
+  token (`export GIT_*=…; git commit`, `env …`, `cd … &&`, `sudo`, `true;` — each
+  was verified to reach exit 0 and record the override author), and (2) fixing that
+  required a compound-command parser that would only add new fragility classes. The
+  blind code-evaluator caught a real security regression before it could land — an
+  `--author=Evil` commit reached exit 0 and was confirmed in the author field.
+  Owner chose simple fail-closed: block `--author` unconditionally. The
+  read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
+  DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
+  Abandoned.
 - **Next:** M2 slice 3 — Unaligned back-fill: study the repo, scaffold (reusing the
   Greenfield body in `greenfield.md`), then descriptive `spec/` back-fill mapping
   what the project currently is (spec `06 §2`). Follow-up slices: Initialized
@@ -143,14 +155,15 @@ for a future slice / owner decision):
   explicitly forbids `--author=`, `-c user.*`, and `GIT_AUTHOR_*`/`GIT_COMMITTER_*`
   env vars; the PreToolUse hook (`plugins/loom/hooks/git-identity-guard.sh`) enforces
   it as best-effort defense-in-depth (26-case matrix, jq-absent fallback verified).
-- **Guard `--author` pattern not scoped to commit-creating subcommands.** The
-  guard's `--author([[:space:]]|=)` ERE fires on any git command containing
-  `--author`, which means read-only commands like `git log --author=foo`,
-  `git shortlog --author=Craig`, and `git blame --author` are also blocked. This is
-  a **usability refinement** (not a security issue — the guard is correctly
-  conservative). Owner decision: scope the `--author` detection to commit-creating
-  subcommands only (`commit`, `commit-tree`, `merge`, `tag`, `notes add`, etc.), or
-  accept the current over-blocking as the safe default. Flagged for a future slice.
+- ~~**Guard `--author` pattern not scoped to commit-creating subcommands.**~~
+  **Resolved by decision (commit d35b565).** Scoping was attempted
+  (`scope-identity-guard-to-commit-subcommands`); the blind code-evaluator caught
+  two false-negative classes (pre-`git` prefix fail-open; compound-command
+  shadowing) — a real `--author=Evil` override reached exit 0 and was confirmed in
+  the author field. Owner chose unconditional `--author` blocking (fail-closed).
+  The read-filter false-positive (`git log --author=alice` blocked) is now an
+  ACCEPTED, DOCUMENTED limitation in `commit-convention.md`. Dogfooding value
+  confirmed: the blind evaluator caught a real security regression before it landed.
 
 ## Verified at first install (M1)
 

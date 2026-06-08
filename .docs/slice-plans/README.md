@@ -17,11 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [scope-identity-guard-to-commit-subcommands.md](scope-identity-guard-to-commit-subcommands.md) — `Plan Review` —
-  scope the author-identity guard's override-detection to commit-creating
-  subcommands (`commit`, `commit-tree`, `am`, `cherry-pick`, `revert`, `rebase`,
-  `merge`) so read-only commands like `git log --author=…` are no longer
-  false-positive-blocked; touches only `plugins/loom/hooks/git-identity-guard.sh`.
+No active plans.
 
 ## Archived plans
 
@@ -42,3 +38,6 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
   recommended CLI/LSP toolkit reference (`references/tooling.md`) + mechanical-invariant-check
   rule in both eval rubrics + cross-links in `SKILL.md` and three agent files;
   addresses eval-miss root cause (eyeballing invariants) (landed db39d44).
+- [archive/scope-identity-guard-to-commit-subcommands.md](archive/scope-identity-guard-to-commit-subcommands.md) — `Abandoned` —
+  reverted — shell-string carve-out leaked overrides; read-filter false-positive
+  accepted as documented limitation (commit-convention.md).

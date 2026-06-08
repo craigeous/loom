@@ -51,6 +51,12 @@ source of truth; `roadmap.md` is milestone order.
   rule added to both eval rubrics (`plan-eval-rubric.md`, `code-eval-rubric.md`);
   cross-links in `SKILL.md` and three agent files. Root cause of prior eval misses
   (eyeballing invariants) is now addressed. Slice archived.
+- **`scope-identity-guard-to-commit-subcommands` ABANDONED (commit d35b565).** Guard
+  scoping was attempted across two code-eval rounds; the blind evaluator caught a
+  real security regression each time (override reaching exit 0, author=Evil
+  confirmed). Owner reverted to unconditional `--author` blocking. The read-filter
+  false-positive (`git log --author=alice` blocked) is now an ACCEPTED, DOCUMENTED
+  limitation in `commit-convention.md`. Slice archived as Abandoned.
 - **Published:** GitHub repo `craigeous/loom` (public), default branch `main`.
 - **All ten content specs (00–08, 10) are `Status: Approved`** after a retroactive
   blind plan-eval pass (eval records in `.docs/evaluations/spec-*-eval.md`). Several
@@ -66,8 +72,10 @@ source of truth; `roadmap.md` is milestone order.
   ~~Eval-miss root cause (eyeballing invariants)~~ is **resolved** (commit db39d44 —
   mechanical-check rule in both rubrics + `tooling.md`).
 - **Open items:** (a) spec-10 line-107 bare-`/loom` — frozen-spec planner cycle
-  required; (b) guard `--author` not scoped to commit-creating subcommands — MINOR
-  usability refinement, owner decision.
+  required; (b) guard `--author` not scoped to commit-creating subcommands —
+  **RESOLVED by decision** (scoping abandoned, unconditional blocking retained,
+  read-filter false-positive documented as accepted limitation in
+  `commit-convention.md`, commit d35b565).
 
 ## Immediate next steps
 
@@ -83,14 +91,10 @@ source of truth; `roadmap.md` is milestone order.
    reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
    plan-eval, amend via planning — not a direct edit). The mechanical-check rule now
    in the rubrics ensures this kind of miss is caught earlier in future reviews.
-4. **Guard `--author` subcommand-scoping refinement (MINOR):** the guard's
-   `--author` ERE fires on read-only commands like `git log --author=` as well as
-   commit-creating ones. Usability refinement candidate (not a security issue) —
-   owner decision on whether to scope or accept current over-blocking.
-5. **Deferred follow-up slices:** `gates/shell.md` (verified shell gate with
+4. **Deferred follow-up slices:** `gates/shell.md` (verified shell gate with
    `shellcheck` as the lint step — a clean follow-up when a shell-stack project is
    first encountered; `shellcheck` already pointed from `tooling.md`).
-6. **M3 — parallelism:** worktree-per-slice + background agents (research note
+5. **M3 — parallelism:** worktree-per-slice + background agents (research note
    `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A —
    owner guidance: the **planner** owns the `.docs/` coordination design).
 
