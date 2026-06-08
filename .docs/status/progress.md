@@ -7,7 +7,18 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** `unaligned-init-behavior` slice landed (commit e83e219, code-eval
+- **Last action:** `initialized-init-behavior` slice landed (commit b0bd3e9, code-eval
+  Round 2 PASS). Shipped: new
+  `plugins/loom/skills/loom-playbook/references/initialized.md` — the single
+  authoritative Initialized init behavior body (resume: state-derived menu derived
+  from `.docs/` + git state mapped to the dispatch table in `status-machine.md`;
+  scope + gates + driver-loop handoff; Q10 idempotent playbook re-application
+  single-sourced here — auto-apply clean, recommend for conflicts, never clobber).
+  Three call sites (`orchestration.md`, `run.md`, `init.md`) repointed at it;
+  `SKILL.md` references list updated; `CLAUDE.md` updated. Slice archived. The
+  **per-mode behavior trio** (Greenfield + Unaligned + Initialized) is now
+  complete.
+- **Prior action:** `unaligned-init-behavior` slice landed (commit e83e219, code-eval
   Round 2 PASS). Shipped: new
   `plugins/loom/skills/loom-playbook/references/unaligned.md` — the single
   authoritative Unaligned init behavior body (alignment pass: study repo, scaffold +
@@ -102,11 +113,9 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M2 slice 4 — Initialized resume menu (spec `06 §3`, slice
-  "initialized-init-behavior"): derive a menu from `.docs/` + git state and
-  continue; idempotent playbook re-application machinery. Remaining M2: gate-learning
-  for unknown stacks (slice "gate-learning") + deferred follow-up
-  `gates/shell.md`.
+- **Next:** M2 slice 5 — gate-learning for unknown stacks (slice "gate-learning"):
+  identify and record the gate for a project whose stack loom has not yet seen.
+  Remaining M2: gate-learning (+ deferred `gates/shell.md`).
 
 ## Accepted decisions (ADRs)
 

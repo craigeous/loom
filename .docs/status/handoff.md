@@ -45,14 +45,22 @@ source of truth; `roadmap.md` is milestone order.
   `developer.md`, and the slice-plans README `Lifecycle:` string. All lifecycle
   strings now match spec 03: `… → Implemented → (code review) → Landed → Archived`.
   Slice archived.
+- **`initialized-init-behavior` landed (b0bd3e9).** Initialized init behavior is now
+  single-sourced in `plugins/loom/skills/loom-playbook/references/initialized.md` —
+  resume: state-derived menu from `.docs/` + git state mapped to the dispatch table
+  in `status-machine.md`; scope + gates + driver-loop handoff; Q10 idempotent
+  playbook re-application single-sourced here (auto-apply clean, recommend for
+  conflicts, never clobber). Three call sites (`orchestration.md`, `run.md`,
+  `init.md`) repointed. Code-eval Round 2 PASS (blind, independent). Slice archived.
+  **The per-mode behavior trio (Greenfield + Unaligned + Initialized) is now
+  complete.** Remaining M2: gate-learning (+ deferred `gates/shell.md`).
 - **`unaligned-init-behavior` landed (e83e219).** Unaligned init behavior is now
   single-sourced in `plugins/loom/skills/loom-playbook/references/unaligned.md` —
   alignment pass: study the repo, scaffold + gate (reusing `greenfield.md` Steps
   A–E), descriptive `spec/` back-fill with explicit no-decisions boundary, seed
   `status/`, leave project ready to resume as Initialized. Three call sites
   (`orchestration.md`, `run.md`, `init.md`) repointed. Code-eval Round 2 PASS
-  (blind, independent). Slice archived. Remaining M2: Initialized resume menu +
-  gate-learning (+ deferred `gates/shell.md`).
+  (blind, independent). Slice archived.
 - **`recommended-tooling-and-mechanical-checks` landed (db39d44).** New
   `plugins/loom/skills/loom-playbook/references/tooling.md` (recommended CLI/LSP
   toolkit by role, all optional with fallback). "Invariants verified mechanically"
@@ -87,13 +95,13 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M2 slice 4 — Initialized resume menu:** derive a menu from `.docs/` + git
-   state and continue (spec `06 §3`, slice "initialized-init-behavior"); includes
-   idempotent playbook re-application machinery. Greenfield + Unaligned behavior
-   bodies are now both landed and single-sourced; Initialized is the next M2 behavior
-   body.
-2. **Remaining M2 (after Initialized):** gate-learning for unknown stacks (slice
-   "gate-learning") + deferred `gates/shell.md`.
+1. **M2 slice 5 — gate-learning:** identify and record the gate for a project whose
+   stack loom has not yet seen (slice "gate-learning"). Greenfield + Unaligned +
+   Initialized behavior bodies are all landed; gate-learning is the last remaining
+   M2 slice.
+2. **Deferred M2:** `gates/shell.md` (verified shell gate with `shellcheck` —
+   clean follow-up when a shell-stack project is first encountered; `shellcheck`
+   already pointed from `tooling.md`).
 3. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
    reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
    plan-eval, amend via planning — not a direct edit). The mechanical-check rule now

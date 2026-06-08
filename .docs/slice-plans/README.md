@@ -17,13 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [initialized-init-behavior.md](initialized-init-behavior.md) — `Plan Review` —
-  Initialized init behavior body: resume from a state-derived menu (mapped to the
-  dispatch table) into scope/gates + the driver loop, plus idempotent playbook
-  re-application (final M2 per-mode body).
+None.
 
 ## Archived plans
 
+- [archive/initialized-init-behavior.md](archive/initialized-init-behavior.md) — `Archived` —
+  Initialized init behavior body: resume from a state-derived menu (mapped to the
+  dispatch table) into scope/gates + the driver loop, plus idempotent playbook
+  re-application (final M2 per-mode body; per-mode trio complete; landed b0bd3e9).
 - [archive/unaligned-init-behavior.md](archive/unaligned-init-behavior.md) — `Archived` —
   Unaligned init behavior body: alignment pass on an existing project — study the
   repo, reuse Greenfield scaffold + gate, descriptive `spec/` back-fill (no
