@@ -27,7 +27,8 @@ after approval and change only via planning. Design decisions are in
 ## Repo layout (M2 in progress)
 
 - The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus
-  one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`); the
+  one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`;
+  `hooks/` — PreToolUse guard scripts, auto-discovered via `hooks/hooks.json`); the
   marketplace catalog is `.claude-plugin/marketplace.json`. Plugin components are
   namespaced `loom:<name>` (no bare `/loom`).
 - `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.

@@ -1,6 +1,6 @@
 # Author-identity enforcement guard (PreToolUse hook + doc hardening)
 
-Status: Approved
+Status: Implemented
 Target specs: (none — playbook/plugin hardening; aligns with ADR 0003)
 
 ## Context
@@ -491,3 +491,68 @@ result, but a non-firing live check does **not** fail this slice.
   version is confirmed to drop the command hook (#34573), converting to a
   `type: "prompt"` hook is the research's recommended hedge; out of scope for this
   slice because acceptance is script-level and the doc layer is authoritative.
+- **Gate evidence (developer, 2026-06-08):** all checks run from repo root on macOS
+  (darwin 25.3.0), jq 1.7 present, sh = /bin/sh.
+
+  A. `jq . plugins/loom/hooks/hooks.json` → exit 0, parsed object confirmed
+     (matcher "Bash", type "command", command references ${CLAUDE_PLUGIN_ROOT}/hooks/git-identity-guard.sh).
+  B. `ls -l` shows -rwxr-xr-x; `sh -n` → exit 0.
+
+  BLOCK cases (C) — all exit 2 with ADR 0003 stderr:
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | C1 | `git commit --author="x <x@y>" -m z` | 2 |
+  | C2 | `git -c user.email=x@y commit -m z` | 2 |
+  | C3 | `git -c user.name=Foo commit -m z` | 2 |
+  | C4 | `GIT_AUTHOR_NAME=Foo git commit -m z` | 2 |
+  | C5 | `export GIT_COMMITTER_EMAIL=x@y; git commit -m z` | 2 |
+  | C6 | `git commit --author bar -m z` | 2 |
+
+  ALLOW cases (D) — all exit 0:
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | D1 | `git commit -m "msg"` | 0 |
+  | D2 | `git -c core.pager=cat log` | 0 |
+  | D3 | `ls -la` | 0 |
+  | D4 | `echo legitimate=1` | 0 |
+
+  ALLOW cases (D2) — override text inside message, all exit 0:
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | D2-1 | `git commit -m "fix --author= parsing"` | 0 |
+  | D2-2 | `git commit -m "guard against --author flag"` | 0 |
+  | D2-3 | `git commit -m "set GIT_AUTHOR_NAME=foo in script"` | 0 |
+  | D2-4 | `git commit -m "add -c user.email= override"` | 0 |
+  | D2-5 | `git log --grep="--author="` | 0 |
+
+  BLOCK cases (D3) — adversarial quoted-value overrides, all exit 2:
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | D3-1 | `git commit --author="evil <e@e>" -m "ok"` | 2 |
+  | D3-2 | `git commit --author "evil <e@e>"` | 2 |
+  | D3-3 | `git commit --author=evil -m "say \"hi\""` | 2 |
+
+  ALLOW cases (D4) — escaped inner quotes, all exit 0:
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | D4-1 | `git commit -m "use \"--author=\" flag carefully"` | 0 |
+  | D4-2 | `git commit -m "mention \"GIT_AUTHOR_NAME=x\" here"` | 0 |
+  | D4-3 | `git commit -m "note \"-c user.email=\" thing"` | 0 |
+
+  ALLOW cases (D5) — unbalanced quoting (Stage C fail-open):
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | D5-1 | `git commit -m "wip` (lone trailing quote) | 0 |
+
+  Section E — jq-absent fallback (PATH=/usr/bin:/bin, excludes /opt/homebrew/bin/jq):
+  | Case | Input command | exit |
+  |------|--------------|------|
+  | E1 | `git commit --author=x -m z` | 2 |
+  | E2 | `git commit -m z` | 0 |
+
+  F. `git diff --name-only`: confirms plugin.json unchanged; no spec/ADR edits.
+     Files changed: plugins/loom/hooks/hooks.json (new), plugins/loom/hooks/git-identity-guard.sh (new),
+     plugins/loom/skills/loom-playbook/references/commit-convention.md,
+     .docs/slice-plans/README.md, .docs/slice-plans/author-identity-enforcement-guard.md.
+
+  26 cases total (6 BLOCK + 20 ALLOW) — all match plan expectations.

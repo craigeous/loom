@@ -17,12 +17,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [author-identity-enforcement-guard.md](author-identity-enforcement-guard.md) — `Plan Review` —
-  author-identity enforcement guard: a plugin PreToolUse hook
-  (`plugins/loom/hooks/`) that blocks `git` commands overriding author identity
-  (`--author=`, `-c user.*`, `GIT_AUTHOR_*`/`GIT_COMMITTER_*`), plus hardening of
-  `commit-convention.md`; enforces ADR 0003's uniform commit identity
-  (hook is best-effort defense-in-depth, doc is the reliable layer).
+- [author-identity-enforcement-guard.md](author-identity-enforcement-guard.md) — `In Progress` —
+  author-identity enforcement guard: PreToolUse hook (`plugins/loom/hooks/`) +
+  `commit-convention.md` hardening; enforces ADR 0003's uniform commit identity.
 
 ## Archived plans
 

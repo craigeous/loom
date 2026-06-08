@@ -13,11 +13,26 @@ metadata must never reveal who produced the work.
   *producer*.
 - **One uniform git identity** across all roles, so the producing role can't be
   inferred from author/committer metadata. Roles **must not set or override** git
-  `user.name`/`user.email` — no `git -c user.*=...`, no `git config user.*`. Always
-  commit under the repository's already-configured identity. If no identity is
+  identity by any means — this is a binding rule regardless of whether the enforcement
+  hook fires. Forbidden override paths:
+  - `git commit --author=...` (the `--author` flag),
+  - `git -c user.name=...` / `git -c user.email=...` / any `-c user.*=...`,
+  - `git config user.*` (persistent config change),
+  - the environment variables `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+    `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` (whether inline `VAR=... git ...`
+    or via `export`).
+
+  Always commit under the repository's already-configured identity. If no identity is
   configured, **stop and ask** rather than inventing one (e.g. never commit as
   `loom <loom@localhost>`); the orchestrator/`/loom:init` ensures an identity exists
   before any role commits.
+
+  A plugin PreToolUse hook (`plugins/loom/hooks/git-identity-guard.sh`) enforces
+  this by blocking the above commands before they run. The hook is best-effort
+  defense-in-depth — it may not fire in every Claude Code version due to a known
+  issue ([#34573](https://github.com/anthropics/claude-code/issues/34573)) — so
+  **this rule is binding regardless of whether the hook fires**. Consistent with
+  ADR 0003 (uniform identity rationale).
 - **One commit per handoff**, scoped to that handoff (a single slice's
   implementation, one evaluation, one planning artifact).
 

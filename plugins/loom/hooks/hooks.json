@@ -1,0 +1,16 @@
+{
+  "description": "Block git commands that override the uniform commit identity (ADR 0003).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/git-identity-guard.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
