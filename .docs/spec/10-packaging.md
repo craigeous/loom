@@ -1,6 +1,6 @@
 # 10 — Packaging & Distribution
 
-Status: Approved
+Status: Plan Review
 
 loom is a Claude Code **plugin**, distributed as its own single-plugin
 **marketplace** (ADR 0001, 0006). Mechanics verified against the official
@@ -104,7 +104,8 @@ it works when users add the marketplace **via git** (not a direct URL to the JSO
 /plugin install loom@loom
 ```
 
-Then, inside any repo, `/loom` operates on that repo's `.docs/`. For local
+Then, inside any repo, `/loom:run` operates on that repo's `.docs/` (with the
+one-off `/loom:<role>` commands also available). For local
 development, the `@skills-dir` mechanism (a `plugin.json` under
 `~/.claude/skills/<name>/`) also loads a plugin with no marketplace step.
 
