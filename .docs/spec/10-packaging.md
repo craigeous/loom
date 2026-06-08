@@ -53,8 +53,8 @@ consistent. See [07 — Command Surface](07-command-surface.md).
   "version": "0.1.0",
   "description": "Spec-driven dev loop with five blind-reviewed roles and an orchestrator",
   "author": { "name": "Craig", "email": "craigeous@gmail.com" },
-  "homepage": "https://github.com/<owner>/loom",
-  "repository": "https://github.com/<owner>/loom",
+  "homepage": "https://github.com/craigeous/loom",
+  "repository": "https://github.com/craigeous/loom",
   "license": "MIT",
   "keywords": ["spec-driven", "agents", "orchestration", "code-review", "workflow"]
 }
@@ -64,24 +64,30 @@ consistent. See [07 — Command Surface](07-command-surface.md).
 
 ## Agent frontmatter (verified fields)
 
-Plugin agents support: `name`, `description`, `model`, `effort`, `maxTurns`,
-`tools`, `disallowedTools`, `skills`, `memory`, `background`, and `isolation`
-(only `"worktree"`). `hooks`/`mcpServers`/`permissionMode` are **not** allowed in
-plugin agents. `model` takes a tier (`inherit`/`sonnet`/`opus`/`haiku`) — ADR
-0002. `isolation: "worktree"` and `background` are the built-ins loom's M3
-parallelism uses.
+The five shipped agents (`plugins/loom/agents/*.md`) use exactly five frontmatter
+fields: `name` (**required** — namespaces the agent `loom:<name>`), `description`,
+`model`, `color`, and `tools`. `model` takes a tier
+(`inherit`/`sonnet`/`opus`/`haiku`) — ADR 0002.
+
+`isolation: "worktree"` and `background` agents are **not** part of today's
+verified manifest — they are loom's *planned M3 parallelism mechanism* (worktree
+per slice), described in
+[`../../plugins/loom/skills/loom-playbook/references/orchestration.md`](../../plugins/loom/skills/loom-playbook/references/orchestration.md)
+(Parallelism section, marked "M3, not yet"). They are forward-looking and must not
+be relied on until M3 verifies them.
 
 ## marketplace.json (`.claude-plugin/marketplace.json`)
 
 ```json
 {
   "name": "loom",
+  "description": "loom — a spec-driven, multi-agent development loop with blind evaluation",
   "owner": { "name": "Craig", "email": "craigeous@gmail.com" },
   "plugins": [
     {
       "name": "loom",
       "source": "./plugins/loom",
-      "description": "Spec-driven multi-agent development loop",
+      "description": "Spec-driven multi-agent development loop with blind evaluation",
       "category": "development"
     }
   ]
@@ -94,7 +100,7 @@ it works when users add the marketplace **via git** (not a direct URL to the JSO
 ## Install flow (for any project)
 
 ```
-/plugin marketplace add <owner>/loom      # or:  /plugin marketplace add ./loom  (local)
+/plugin marketplace add craigeous/loom    # or:  /plugin marketplace add ./loom  (local)
 /plugin install loom@loom
 ```
 
