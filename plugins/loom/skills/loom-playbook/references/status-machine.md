@@ -47,5 +47,5 @@ owner.
 - Research: `Draft → Research Review → Approved`.
 - ADR / Spec: `Draft → Plan Review → Approved` (ADR then immutable; spec frozen).
 - Slice-plan: `Draft → Plan Review → Approved → In Progress → Implemented →
-  Code Review → Landed → Archived`, with FAIL edges back to `Draft` (plan) or
+  (code review) → Landed → Archived`, with FAIL edges back to `Draft` (plan) or
   `In Progress` (code). Archive happens only **after** code-eval PASS.

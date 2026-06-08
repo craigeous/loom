@@ -12,8 +12,7 @@ When a slice lands, its outcomes are folded into the durable specs and the plan 
 `git mv`'d into [`archive/`](archive/) — **after** code-eval PASS, in the same
 landing step.
 
-Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented → Code
-Review → Landed → Archived` (see
+Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived` (see
 [../spec/03-artifact-lifecycle.md](../spec/03-artifact-lifecycle.md)).
 
 ## Active plans

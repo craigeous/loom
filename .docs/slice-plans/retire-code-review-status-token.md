@@ -1,6 +1,6 @@
 # Retire the `Code Review` status token from playbook & agent files
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md
 
 ## Context
@@ -170,3 +170,16 @@ Review-against-spec (no compiled gate in this markdown repo):
   it — so the Verification step now uses a wrap-aware (`-z`/`tr`/`Code\s+Review`)
   search across all four files. The README's line-22 prose that *names* the token in
   backticks (describing what this slice removes) is intentionally retained.
+
+- **Gate evidence (2026-06-08):** Wrap-aware `tr '\n' ' ' | grep -o "Code *Review"`
+  run across all four target files after edits:
+  - `SKILL.md` — (none)
+  - `status-machine.md` — (none)
+  - `developer.md` — (none)
+  - `.docs/slice-plans/README.md` — `Code Review` (one hit, line 21: the intentional
+    backtick reference naming the token)
+
+  `git diff --name-only` lists exactly the four target files plus this slice-plan.
+  `git grep -in "code review"` confirms all remaining occurrences are eval records,
+  status logs, spec authority, generic-action wording ("blind code review"), or the
+  README line-21 slice-description reference — zero lifecycle-string status tokens.

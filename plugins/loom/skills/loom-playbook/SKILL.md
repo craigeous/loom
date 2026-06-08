@@ -35,7 +35,7 @@ archived on landing. On conflict, the spec wins.
 | Research   | `research.md`           | researcher  | Draft → Research Review → Approved |
 | ADR        | `adr.md`                | planner     | Draft → Plan Review → Approved (then immutable) |
 | Spec       | `spec.md`               | planner     | Draft → Plan Review → Approved (then frozen) |
-| Slice-plan | `slice-plan.md`         | planner     | Draft → Plan Review → Approved → In Progress → Implemented → Code Review → Landed → Archived |
+| Slice-plan | `slice-plan.md`         | planner     | Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived |
 | Evaluation | `evaluation.md`         | evaluators  | (verdict file, not gated) |
 
 ## References (`references/`)
