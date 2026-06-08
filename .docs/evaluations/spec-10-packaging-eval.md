@@ -117,3 +117,73 @@ unchanged from Round 1, where it was already accurate against its authorities.
 All Round 1 findings (the one blocker and both minors) are resolved with no
 regressions. The spec describes the manifest format accurately against its cited
 authority and the shipped plugin. PASS.
+
+---
+
+# Evaluation: 10 — Packaging & Distribution (Round 3)
+
+Verdict: PASS
+Round: 3
+Reviewed against: ADR 0007 (`0007-namespaced-command-surface.md`), the Approved
+spec 07 (`07-command-surface.md`), spec 10's own line-40 "no bare `/loom`" rule,
+plus `git show a9967bb` (the revision under review) and the current file. This is
+a narrow re-review of a single fix to a previously-Approved spec.
+
+## Scope of the revision
+
+`git show a9967bb --numstat` reports a single touched file (`.docs/spec/10-packaging.md`,
++3/-2). The diff is exactly two hunks: (1) `Status: Approved` → `Status: Plan
+Review`, and (2) line 107's reword. Nothing else changed; the body Approved in
+Round 2 is otherwise byte-identical. Confirmed no regression outside the intended
+fix.
+
+## Findings
+
+- Line 107 fix — **CORRECT.** The old text `Then, inside any repo, \`/loom\`
+  operates on that repo's \`.docs/\`` used a bare command-style `/loom`,
+  contradicting line 40's rule and ADR 0007 §"no bare `/loom` command." The new
+  text reads `\`/loom:run\` operates on that repo's \`.docs/\` (with the one-off
+  \`/loom:<role>\` commands also available)`. This matches ADR 0007 lines 30–36
+  (orchestrator is `/loom:run`; one-off `/loom:<name>` commands) and spec 07 lines
+  16–23 (`/loom:run [scope]` + the one-off table). Internally consistent with line
+  40–41's own statement of the surface. No new error introduced.
+
+- Mechanical-check dogfood (`rg -nP '/loom' .docs/spec/10-packaging.md`) —
+  **CLEAN.** Every non-namespaced `/loom` occurrence is legitimate: line 40 is the
+  rule statement itself ("there is no bare `/loom`"); lines 13, 18, 22, 45, 48, 67,
+  75, 89 are file/dir paths (`plugins/loom/`, `skills/loom-playbook/`,
+  `./plugins/loom`); lines 56–57 are GitHub URLs (`github.com/craigeous/loom`);
+  line 103 is the repo path `craigeous/loom` and the local `./loom`. The only
+  command-style `/loom` occurrences are now namespaced: line 22 (`/loom:run` +
+  `/loom:<role>`), line 41 (`/loom:<filename>`), line 107 (`/loom:run`,
+  `/loom:<role>`). No remaining bare command-style `/loom`.
+
+## New findings
+
+None.
+
+## Verdict
+
+The targeted fix is correct and internally consistent; ADR 0007 and spec 07 are
+satisfied; the line-40 rule is honored throughout; and the diff is limited to the
+intended fix with no regression to the rest of the Round-2-Approved spec. PASS.
+
+Grep result (`rg -nP '/loom' .docs/spec/10-packaging.md`):
+
+```
+13:lives under `plugins/loom/`.
+18:│   └── marketplace.json               # catalog: lists loom at source ./plugins/loom
+22:│       ├── commands/                  # /loom:run + one-off /loom:<role> commands
+40:Plugin components are **namespaced by plugin name** — there is no bare `/loom`. The
+41:surface is **one file per command** (each → `/loom:<filename>`): `run` (the
+45:`skills/loom-playbook/references/orchestration.md` so the thin command files stay
+48:## plugin.json (`plugins/loom/.claude-plugin/plugin.json`)
+56:  "homepage": "https://github.com/craigeous/loom",
+57:  "repository": "https://github.com/craigeous/loom",
+67:The five shipped agents (`plugins/loom/agents/*.md`) use exactly five frontmatter
+75:[`../../plugins/loom/skills/loom-playbook/references/orchestration.md`](../../plugins/loom/skills/loom-playbook/references/orchestration.md)
+89:      "source": "./plugins/loom",
+103:/plugin marketplace add craigeous/loom    # or:  /plugin marketplace add ./loom  (local)
+107:Then, inside any repo, `/loom:run` operates on that repo's `.docs/` (with the
+108:one-off `/loom:<role>` commands also available). For local
+```
