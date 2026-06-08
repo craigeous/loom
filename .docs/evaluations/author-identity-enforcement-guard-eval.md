@@ -366,3 +366,163 @@ the defense-in-depth framing. PASS.
 ## Required changes
 
 None (the two MINORs are optional polish, not required for PASS).
+
+---
+
+# Evaluation: author-identity-enforcement-guard (Round 4 — code)
+
+Verdict: PASS
+Round: 4
+Reviewed against: the slice-plan `author-identity-enforcement-guard.md` (scope +
+acceptance authority, incl. the C/D/D2/D3/D4/D5 + E + F matrix), the Approved
+research note `.docs/research/2026-06-08-plugin-pretooluse-hook-guard.md`, ADR 0003,
+and Rounds 1–3. This round reviews the **shipped artifact** (commit `a47bf95`) — the
+actual `plugins/loom/hooks/git-identity-guard.sh` was executed, not a prototype
+re-derived from the plan. Every exit code below is observed from the committed
+script.
+
+## Gate (re-run, not trusted)
+
+- `jq . plugins/loom/hooks/hooks.json` → exit 0; valid JSON. PreToolUse event,
+  `matcher:"Bash"`, `type:"command"`, `command:"\"${CLAUDE_PLUGIN_ROOT}/hooks/git-identity-guard.sh\""`,
+  `hooks` wrapper present. Confirmed.
+- Script: `#!/bin/sh`, mode `-rwxr-xr-x` (executable), `sh -n` exit 0.
+- Block mechanism is exit **2** with explanatory stderr naming the violation class +
+  ADR 0003 + "use plain git commit" remediation (no specific name/email). Confirmed
+  by direct run.
+
+## Independently-run acceptance matrix (committed script, observed exit codes)
+
+| Case | Command (decoded) | Expect | Got |
+|---|---|---|---|
+| C1 | `git commit --author="x <x@y>" -m z` | 2 | 2 |
+| C2 | `git -c user.email=x@y commit -m z` | 2 | 2 |
+| C3 | `git -c user.name=Foo commit -m z` | 2 | 2 |
+| C4 | `GIT_AUTHOR_NAME=Foo git commit -m z` | 2 | 2 |
+| C5 | `export GIT_COMMITTER_EMAIL=x@y; git commit -m z` | 2 | 2 |
+| C6 | `git commit --author bar -m z` | 2 | 2 |
+| D1 | `git commit -m "msg"` | 0 | 0 |
+| D2 | `git -c core.pager=cat log` | 0 | 0 |
+| D3 | `ls -la` | 0 | 0 |
+| D4 | `echo legitimate=1` | 0 | 0 |
+| D2-1 | `git commit -m "fix --author= parsing"` | 0 | 0 |
+| D2-2 | `git commit -m "guard against --author flag"` | 0 | 0 |
+| D2-3 | `git commit -m "set GIT_AUTHOR_NAME=foo in script"` | 0 | 0 |
+| D2-4 | `git commit -m "add -c user.email= override"` | 0 | 0 |
+| D2-5 | `git log --grep="--author="` | 0 | 0 |
+| D3-1 | `git commit --author="evil <e@e>" -m "ok"` | 2 | 2 |
+| D3-2 | `git commit --author "evil <e@e>"` | 2 | 2 |
+| D3-3 | `git commit --author=evil -m "say \"hi\""` | 2 | 2 |
+| D4-1 | `git commit -m "use \"--author=\" flag carefully"` | 0 | 0 |
+| D4-2 | `git commit -m "mention \"GIT_AUTHOR_NAME=x\" here"` | 0 | 0 |
+| D4-3 | `git commit -m "note \"-c user.email=\" thing"` | 0 | 0 |
+| D5-1 | `git commit -m "wip` (unbalanced) | 0 | 0 |
+
+25/25 match (the Notes table's 26-count includes the two E cases below).
+
+### E — jq-absent fallback (genuinely exercised)
+
+The Notes' Section-E run used `PATH=/usr/bin:/bin`, which on this machine **still
+contains `/usr/bin/jq`** — so it did not actually test the fallback. I re-ran with a
+curated bin dir (symlinks to `sh cat grep sed tr wc head` only; `command -v jq`
+fails) so the grep/sed branch is truly taken:
+
+| Case | Expect | Got |
+|---|---|---|
+| E1 `git commit --author=x -m z` | 2 | 2 |
+| E2 `git commit -m z` | 0 | 0 |
+| `git -c user.email=x@y commit -m z` | 2 | 2 |
+| `GIT_AUTHOR_NAME=Foo git commit -m z` | 2 | 2 |
+| `export GIT_COMMITTER_EMAIL=x@y; git commit -m z` | 2 | 2 |
+| `git commit -m "fix --author= parsing"` | 0 | 0 |
+| `ls -la` | 0 | 0 |
+
+The grep/sed extraction (`grep -o '"command"...' | head -1 | sed ...`) correctly
+recovers the command on well-formed single-line JSON and preserves every block/allow
+decision. (Caveat, noted not blocking: if even `grep` is absent the script fails
+open — the intended defense-in-depth posture; the doc layer is authoritative.)
+
+## Adversarial probing (my own cases)
+
+False-negative hunt — every real override caught (all → 2): `--author=evil` (no
+`-m`); `GIT_AUTHOR_NAME='Evil Person' git commit` (single-quoted value, VAR outside
+quotes); `git -c user.email="e@e"`; `git -c core.pager=cat -c user.name=Evil commit`
+(identity `-c` buried after a benign `-c`); `git commit -m z --author=evil` (flag
+after message); `-c GIT_AUTHOR_NAME=`/`-c GIT_COMMITTER_EMAIL=`; all four inline env
+vars; double `--author`. **No false-negative found** — no identity override on a
+commit slips through.
+
+False-positive hunt on commits — all correctly allowed (→ 0): `git commit --amend
+--no-edit`; `git commit -m "see GIT_COMMITTER_NAME docs"`; `git commit -m "refactor:
+drop -c user.email handling"`; `git grep GIT_AUTHOR_NAME`; `git show HEAD:script.sh`.
+**No legitimate commit is blocked.**
+
+## Findings
+
+- [MINOR] **`--author` is blocked on non-commit git subcommands too (`git log
+  --author=`, `git shortlog --author=`, `git blame --author`).** Observed: `git log
+  --author=alice` → exit 2; `git log --author="Craig" --oneline` → exit 2. `--author`
+  is a legitimate read-only *filter* on `log`/`shortlog`/`blame`, unrelated to commit
+  identity, so the guard would refuse those while the plugin is active. **This is a
+  faithful realization of the approved plan, not an implementation deviation:** the
+  plan specifies exactly `ERE: --author([[:space:]]|=)` run on `$STRIPPED` with no
+  subcommand scoping, and its entire Verification matrix targets only `git commit
+  --author=`; this ERE was reviewed and PASSED in Rounds 1–3. The plan also frames
+  the hook as best-effort defense-in-depth with the doc as the authoritative layer,
+  and the affected commands are non-mutating. Recorded as a **planning-refinement**
+  MINOR (scope the `--author` block to `commit`/`am`/`rebase`/`cherry-pick`, or
+  require a preceding `commit`) — not a defect in this slice satisfying its plan.
+  Likewise `git add src/--author=file.txt` and `git branch feature/--author=x` block
+  (override token as an unquoted-argument substring); these are contrived and share
+  the same root (no token-boundary anchoring in the approved ERE).
+- [MINOR] **Bare `git commit --author` (no `=`, no trailing delimiter) uncaught**
+  (carried from Rounds 1/3). `--author([[:space:]]|=)` does not match a flag at
+  end-of-string with no delimiter; git itself rejects that incomplete invocation, so
+  it is not an identity-override hole. Non-blocking.
+- [MINOR] **Fail-open when `grep` itself is unavailable.** In a jq-absent *and*
+  grep-absent environment the extraction yields empty → exit 0. Consistent with the
+  documented fail-open posture; the doc layer is the guarantee. Non-blocking.
+
+## Scope
+
+`git show --name-only` lists six files. The four plan-named files
+(`hooks/hooks.json`, `git-identity-guard.sh`, `commit-convention.md`, the slice-plan)
+are exactly Steps 1/2/4 + the status flip. The two extra files are acceptable
+in-scope maintenance, not drift:
+- **`CLAUDE.md`** — adds `hooks/` to the Repo-layout description, documenting the new
+  directory this slice introduces; mandated by the repo's own "Update this file
+  before committing" rule.
+- **`.docs/slice-plans/README.md`** — the plan index; updates this plan's lifecycle
+  entry (`Plan Review` → `In Progress`), which is the index's job (plan Step 5).
+
+Confirmed **no** change to `plugins/loom/.claude-plugin/plugin.json` (Step 3 no-op
+verified; `jq 'has("hooks")'` → false, so no redundant pointer) and **no** edit to
+any `.docs/spec/` or ADR file. Commit is author-neutral; single-slice; no co-author
+trailer; commit subject ends `(Implemented)`.
+
+## Doc hardening
+
+`commit-convention.md` now forbids all override paths — `git commit --author=...`,
+`git -c user.*=...`, `git config user.*`, and the four `GIT_AUTHOR_*`/`GIT_COMMITTER_*`
+env vars (inline or `export`) — frames the hook as best-effort defense-in-depth that
+"may not fire in every Claude Code version (#34573)" with the rule "**binding
+regardless of whether the hook fires**," cites ADR 0003, and keeps the existing
+stop-and-ask / never-`loom <loom@localhost>` guidance. Consistent with ADR 0003.
+
+## Verdict rationale
+
+The shipped guard passes the full plan acceptance matrix 25/25 when I run it, the
+jq-absent fallback (genuinely exercised, unlike the recorded run) preserves every
+decision, and independent adversarial probing found **no false-negative** (no commit
+identity override slips through) and **no legitimate commit blocked**. JSON wiring,
+POSIX-sh/executable/syntax, exit-2-with-stderr, plugin.json no-op, doc hardening, and
+author-neutral single-slice hygiene all hold. The remaining items are MINORs — the
+most notable (`git log --author=` blocked) is a faithful consequence of the
+thrice-approved detection ERE and a planning-refinement candidate, not a failure of
+this implementation to satisfy its plan. No BLOCKER, no unaddressed MAJOR. PASS.
+
+## Required changes
+
+None for PASS. Recommended planning follow-up (not blocking): scope the `--author`
+block to commit-producing subcommands so legitimate `git log/shortlog/blame
+--author=` filters are not refused.
