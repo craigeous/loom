@@ -1,6 +1,6 @@
 # Init-Mode Detection — one authoritative procedure
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md, 04-orchestrator.md, 08-playbook.md
 
 ## Context
