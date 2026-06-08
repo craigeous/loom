@@ -119,3 +119,129 @@ the "worse than none" failure mode. Resolving change 1 (with the change-2 tests
 proving it) should clear the verdict — the rest of the plan does not need rework.
 The fix is testable at the script level exactly as the plan already frames its
 acceptance basis.
+
+---
+
+# Evaluation: author-identity-enforcement-guard (Round 2)
+
+Verdict: FAIL
+Round: 2
+Reviewed against: the same authority as Round 1 (Approved research note
+`.docs/research/2026-06-08-plugin-pretooluse-hook-guard.md` + its eval, ADR 0003,
+and `commit-convention.md`). The revised detection logic (commit `934d232`) was
+**independently prototyped** — the plan's exact `sed` stripping plus the four
+override EREs were implemented as a `#!/bin/sh` script and exercised against the
+full ALLOW/BLOCK matrix and adversarial edge cases. Findings below cite observed
+exit codes, not the plan's assertions.
+
+## Round-1 findings — resolution check (diff `934d232`)
+
+- **[BLOCKER] message-text false positive — RESOLVED (for the common cases).**
+  The revision adds `STRIPPED=$(printf '%s' "$CMD" | sed -e "s/'[^']*'//g" -e
+  's/"[^"]*"//g')` and runs the git-word gate **and** every override ERE against
+  `$STRIPPED`, never the raw command (Step 2, lines 142-165, 221-225). Prototyped
+  against the full matrix — all 14 task cases pass:
+
+  | Case | Expect | Got |
+  |---|---|---|
+  | `git commit -m "fix --author= parsing"` | 0 | 0 |
+  | `git commit -m "guard against --author flag"` | 0 | 0 |
+  | `git commit -m "set GIT_AUTHOR_NAME=foo in script"` | 0 | 0 |
+  | `git commit -m "add -c user.email= override"` | 0 | 0 |
+  | `git log --grep="--author="` | 0 | 0 |
+  | `git commit -m "msg"` | 0 | 0 |
+  | `git -c core.pager=delta commit -m "x"` | 0 | 0 |
+  | `ls -la` | 0 | 0 |
+  | `git commit --author="evil <e@e>" -m "ok"` | 2 | 2 |
+  | `git commit --author "evil <e@e>"` | 2 | 2 |
+  | `git commit --author=evil` | 2 | 2 |
+  | `git -c user.email=x@y commit -m "x"` | 2 | 2 |
+  | `GIT_AUTHOR_NAME=foo git commit -m "x"` | 2 | 2 |
+  | `GIT_COMMITTER_EMAIL=z@z git commit -m "x"` | 2 | 2 |
+
+  Verification questions answered: (1) quote-stripping turns every ALLOW case into a
+  string with no surviving override token — confirmed. (2) every BLOCK case retains
+  the flag/assignment token outside the quotes after stripping (the token sits
+  *before* the opening quote for `--author="..."`, or is wholly unquoted for inline
+  env / `-c user.*`) — confirmed. (3) no new false-negative in the well-formed cases
+  — additional adversarial probes (`-m "a" --author=evil -m "b"`, `-m "msg"
+  --author="evil"`, odd-quote `... -m 'wip`) all still BLOCK. (4) no remaining
+  false-positive **in well-formed (non-escaped-quote) commands** — confirmed.
+
+- **[MAJOR] no ALLOW coverage for message-text cases — RESOLVED.** Verification now
+  has Section D2 (five message-text ALLOW cases, each must print `0`) and D3 (two
+  adversarial quoted-value overrides, each must print `2`) (lines 301-322). These
+  cover the exact set the Round-1 finding required, plus the adversarial direction.
+
+- **[MINOR] research-eval path drift — RESOLVED.** Context (lines 29-31) now cites
+  `.docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md`.
+
+## New finding
+
+- [MAJOR] **The documented escaped-quote limitation is described with the wrong
+  failure direction; it actually fails *closed*, false-positiving legitimate
+  commits.** Step 2 (lines 183-192) accepts the escaped-quote edge case on the
+  explicit premise that "the residual effect is at worst that a real override ... is
+  **not** blocked — i.e. the guard **fails open**" and "It will **not** newly
+  false-*positive* a legitimate commit, because over-stripping only removes text (it
+  cannot manufacture an override token)." **Both halves are false.** I prototyped the
+  plan's exact `sed` against a legitimate commit whose message contains an override
+  token between escaped inner double-quotes:
+
+  - `git commit -m "use \"--author=\" flag carefully"` → STRIPPED becomes
+    `git commit -m --author=\ flag carefully` (the sed re-pairs `"..\"` and `\".."`,
+    leaving `--author=` exposed) → **exit 2 (BLOCKED)**. Expected: allow.
+  - `git commit -m "the \"GIT_AUTHOR_NAME=x\" trick"` → **exit 2**. Expected: allow.
+  - `git commit -m "describe \"-c user.email=\" usage"` → **exit 2**. Expected: allow.
+
+  The reasoning error: over-stripping does not merely "remove text" — by deleting the
+  contents *and the boundaries* of mis-paired quote spans it can **expose** a token
+  that was genuinely inside the message, manufacturing a surviving override token.
+  So the residual fails **closed** (blocks a legitimate commit), which is precisely
+  the "blocks legitimate commits / worse than none" failure mode that made the
+  Round-1 finding a BLOCKER. This subclass is narrower than Round 1 (it requires
+  escaped inner double-quotes flanking the token, an uncommon message shape) and the
+  limitation is at least acknowledged — hence MAJOR, not BLOCKER. But the plan's
+  stated safety justification for *accepting* the limitation rests on a claim that is
+  the opposite of the real behavior, so a developer implementing to the plan would
+  ship a guard believing escaped quotes can only fail open. Required: correct the
+  limitation paragraph to state the residual can false-positive (fail closed) on
+  escaped-inner-quote messages, and specify the mitigation — e.g. detect an
+  odd/unbalanced quote count in `$CMD` after stripping and **fail open (exit 0)** in
+  that case, so the guard never blocks a command whose quoting it could not parse
+  cleanly. Add one D-series ALLOW case with an escaped inner quote to prove it.
+
+## Verified still-correct (unchanged by the revision)
+
+The revision (111 insertions / 6 deletions) touched only the stripping logic, D2/D3,
+and the path fix. All Round-1 "verified correct" items remain intact and were
+re-confirmed where prototyped: detection completeness for real tokens (all four env
+vars inline/`export`ed, `-c user.*=`, `-c GIT_AUTHOR/COMMITTER*=`, `--author=` /
+`--author `); exit-2-not-1 with stderr only (no `permissionDecision` JSON); POSIX
+`#!/bin/sh`; jq-primary with grep fallback (jq path prototyped correct; fallback
+remains explicitly best-effort/fail-open per research Open Question 3 — unchanged
+and not regressed); `hooks.json` well-formed with `matcher:"Bash"`, `type:"command"`,
+quoted `${CLAUDE_PLUGIN_ROOT}` path at the auto-discovered location; no `plugin.json`
+pointer (Step 3 no-op); fail-open on empty/unparseable; doc hardening (Step 4) and
+defense-in-depth framing consistent with ADR 0003.
+
+## Required changes (for FAIL)
+
+1. Correct Step 2's escaped-quote limitation paragraph: state that over-stripping
+   mis-paired quote spans can **expose** an in-message token and thereby
+   **false-positive (fail closed)** a legitimate commit — not only fail open.
+2. Specify a mitigation that keeps the guard fail-open under quoting it cannot parse:
+   e.g. count quote characters in `$CMD`; if unbalanced (odd number of `"` or `'`
+   after accounting for the matched spans), **exit 0** rather than running override
+   checks. Add a D-series ALLOW case such as
+   `git commit -m "use \"--author=\" flag carefully"` that must print `0`.
+
+## Notes
+
+This is close. The load-bearing Round-1 BLOCKER is genuinely fixed for the realistic
+command space (14/14 matrix cases correct, independently prototyped), and the
+verification now proves it with D2/D3. The remaining MAJOR is not the detection logic
+itself but a factual error in how the plan characterizes its own residual: it claims
+fail-open where the prototype shows fail-closed on escaped-inner-quote messages.
+Correcting the claim and adding a balanced-quote fail-open guard (change 2) should
+clear the verdict; no other rework is needed.
