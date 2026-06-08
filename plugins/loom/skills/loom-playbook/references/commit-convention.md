@@ -33,6 +33,14 @@ metadata must never reveal who produced the work.
   issue ([#34573](https://github.com/anthropics/claude-code/issues/34573)) — so
   **this rule is binding regardless of whether the hook fires**. Consistent with
   ADR 0003 (uniform identity rationale).
+
+  **Known limitation:** the guard matches `--author` unconditionally, so
+  read-only filter uses — `git log --author=alice`, `git shortlog --author=bob`,
+  `git blame --author x` — are also blocked. This is an accepted fail-closed
+  trade-off: scoping `--author` to commit-creating subcommands requires shell
+  parsing that proved fragile (two code-eval-caught false-negative classes). To
+  filter history by author, use `--pretty`/`--format`/`--grep` alternatives, or
+  run the query outside a loom-guarded session.
 - **One commit per handoff**, scoped to that handoff (a single slice's
   implementation, one evaluation, one planning artifact).
 

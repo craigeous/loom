@@ -1,6 +1,6 @@
 # Scope the author-identity guard to commit-creating subcommands
 
-Status: Plan Review
+Status: Abandoned
 Target specs: (none — implementation refinement of the ADR 0003 enforcement hook;
 specs/ADRs unchanged)
 
@@ -385,3 +385,12 @@ case that ALLOWs → FAIL (BLOCKER). Any B/C/D-ALLOW case that BLOCKs → FAIL
   the `--author` read allowlist, so `git tag --author=…` / `git notes … --author=…`
   would BLOCK — harmless (git does not honor `--author` there; the command is git-
   invalid), and not a false-negative concern.
+- 2026-06-08: **Abandoned by owner.** Guard reverted to commit a47bf95 (unconditional
+  `--author` blocking). Reason: two code-eval-caught false-negative classes made
+  shell-parse scoping untenable — (1) the original subcommand-parser failed open on
+  any pre-`git` token (`export GIT_*=…; git commit`, `env …`, `cd … &&`, `sudo`, etc.),
+  and (2) that was not fixable without a compound-command parser that adds new
+  fragility classes. Simple + fail-closed wins over a fragile carve-out. The
+  read-filter false-positive (`git log --author=alice` blocked) is documented as an
+  accepted known limitation in
+  `plugins/loom/skills/loom-playbook/references/commit-convention.md`.
