@@ -17,10 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [recommended-tooling-and-mechanical-checks.md](recommended-tooling-and-mechanical-checks.md) — `Plan Review` —
-  add a recommended CLI/LSP toolkit reference (`references/tooling.md`) + a
-  mechanical-invariant-check rule in both eval rubrics; cross-link from SKILL.md
-  and the three relevant agents.
+(none)
 
 ## Archived plans
 
@@ -37,3 +34,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
   retired the obsolete `Code Review` status token from `SKILL.md`, `status-machine.md`,
   `developer.md`, and the slice-plans README `Lifecycle:` string; aligned to spec 03
   (landed a85885f).
+- [archive/recommended-tooling-and-mechanical-checks.md](archive/recommended-tooling-and-mechanical-checks.md) — `Archived` —
+  recommended CLI/LSP toolkit reference (`references/tooling.md`) + mechanical-invariant-check
+  rule in both eval rubrics + cross-links in `SKILL.md` and three agent files;
+  addresses eval-miss root cause (eyeballing invariants) (landed db39d44).

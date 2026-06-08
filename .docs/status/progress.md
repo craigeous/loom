@@ -7,7 +7,17 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** `author-identity-enforcement-guard` slice landed (commit a47bf95,
+- **Last action:** `recommended-tooling-and-mechanical-checks` slice landed (commit
+  db39d44, code-eval Round 2 PASS). Shipped: new
+  `plugins/loom/skills/loom-playbook/references/tooling.md` (recommended CLI/LSP
+  toolkit by role, all optional with fallback); "Invariants verified mechanically"
+  bullet added to both `plan-eval-rubric.md` and `code-eval-rubric.md`; cross-links
+  added to `SKILL.md` and the three agent files (`developer.md`,
+  `plan-evaluator.md`, `code-evaluator.md`). Root cause of the two prior eval misses
+  (eyeballing invariants — bare `/loom` and wrapped `Code\nReview` survived a read)
+  is now addressed: the mechanical-check rule in both rubrics + `tooling.md`
+  mandate `rg -U`/`yq`/`ast-grep`/LSP for any invariant assertion. Slice archived.
+- **Prior action:** `author-identity-enforcement-guard` slice landed (commit a47bf95,
   code-eval Round 4 PASS, independently re-verified). Shipped:
   `plugins/loom/hooks/hooks.json` (PreToolUse hook config) +
   `plugins/loom/hooks/git-identity-guard.sh` (POSIX sh guard script, executable) +
@@ -99,6 +109,15 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 - Commit-identity guard gap (`--author=` / `GIT_AUTHOR_*` env vars not blocked):
   closed by `author-identity-enforcement-guard` slice (commit a47bf95). The
   PreToolUse hook + `commit-convention.md` hardening cover all override paths.
+- **Eval-miss root cause (eyeballing invariants):** two prior spec-review rounds each
+  missed a defect that a mechanical check would have caught (bare `/loom` at spec 10
+  line 107; wrapped `Code\nReview` a line-based grep can't see). Root cause addressed
+  by the `recommended-tooling-and-mechanical-checks` slice (commit db39d44): the
+  "Invariants verified mechanically" rule in both eval rubrics now requires
+  `rg -U`/`yq`/`ast-grep`/LSP for any invariant assertion; `tooling.md` documents
+  the discipline and per-role guidance. The two motivating defects themselves remain
+  as separate follow-up items (spec-10 line-107 bare-`/loom` fix; the
+  wrapped-token was retired in commit a85885f).
 
 ## Open
 

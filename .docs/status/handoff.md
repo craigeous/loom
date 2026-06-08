@@ -45,6 +45,12 @@ source of truth; `roadmap.md` is milestone order.
   `developer.md`, and the slice-plans README `Lifecycle:` string. All lifecycle
   strings now match spec 03: `… → Implemented → (code review) → Landed → Archived`.
   Slice archived.
+- **`recommended-tooling-and-mechanical-checks` landed (db39d44).** New
+  `plugins/loom/skills/loom-playbook/references/tooling.md` (recommended CLI/LSP
+  toolkit by role, all optional with fallback). "Invariants verified mechanically"
+  rule added to both eval rubrics (`plan-eval-rubric.md`, `code-eval-rubric.md`);
+  cross-links in `SKILL.md` and three agent files. Root cause of prior eval misses
+  (eyeballing invariants) is now addressed. Slice archived.
 - **Published:** GitHub repo `craigeous/loom` (public), default branch `main`.
 - **All ten content specs (00–08, 10) are `Status: Approved`** after a retroactive
   blind plan-eval pass (eval records in `.docs/evaluations/spec-*-eval.md`). Several
@@ -57,10 +63,11 @@ source of truth; `roadmap.md` is milestone order.
   erratum (ADRs are immutable — no rewrite). ~~The "Code Review" phase-label string~~
   is **resolved** (commit a85885f — token retired repo-wide). ~~The commit-identity
   guard gap~~ is **resolved** (commit a47bf95 — hook + doc hardening).
-- **New Open item:** the guard's `--author` pattern is not scoped to
-  commit-creating subcommands, so `git log --author=`, `git shortlog --author`, and
-  `git blame --author` are also blocked. Usability refinement, not a security
-  issue — owner decision on whether to scope or accept current behavior.
+  ~~Eval-miss root cause (eyeballing invariants)~~ is **resolved** (commit db39d44 —
+  mechanical-check rule in both rubrics + `tooling.md`).
+- **Open items:** (a) spec-10 line-107 bare-`/loom` — frozen-spec planner cycle
+  required; (b) guard `--author` not scoped to commit-creating subcommands — MINOR
+  usability refinement, owner decision.
 
 ## Immediate next steps
 
@@ -72,12 +79,18 @@ source of truth; `roadmap.md` is milestone order.
 2. **Remaining M2 follow-ups (after Unaligned):** Initialized resume menu (spec
    `06 §3`, slice "initialized-init-behavior") and gate-learning for unknown stacks
    (slice "gate-learning").
-3. **Tooling slice (#4 recommended):** recommended CLI toolkit + mechanical-check
-   rubric (deferred; owner decision on priority).
-4. **Spec-10 line-107 bare-`/loom` fix:** spec 10 contains a bare `/loom` reference
-   at line 107; needs a superseding note or corrective pass (not a spec rewrite —
-   ADRs are immutable but specs can be amended via planning).
-5. **M3 — parallelism:** worktree-per-slice + background agents (research note
+3. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
+   reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
+   plan-eval, amend via planning — not a direct edit). The mechanical-check rule now
+   in the rubrics ensures this kind of miss is caught earlier in future reviews.
+4. **Guard `--author` subcommand-scoping refinement (MINOR):** the guard's
+   `--author` ERE fires on read-only commands like `git log --author=` as well as
+   commit-creating ones. Usability refinement candidate (not a security issue) —
+   owner decision on whether to scope or accept current over-blocking.
+5. **Deferred follow-up slices:** `gates/shell.md` (verified shell gate with
+   `shellcheck` as the lint step — a clean follow-up when a shell-stack project is
+   first encountered; `shellcheck` already pointed from `tooling.md`).
+6. **M3 — parallelism:** worktree-per-slice + background agents (research note
    `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A —
    owner guidance: the **planner** owns the `.docs/` coordination design).
 
