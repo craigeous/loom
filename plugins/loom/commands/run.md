@@ -16,8 +16,9 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
 
 ## Procedure
 
-1. **Detect init mode** (see orchestration.md) and act: greenfield → scaffold;
-   unaligned → alignment pass; initialized → summarize current state and continue.
+1. **Detect init mode** (run the classifier in `init-detection.md` via
+   orchestration.md) and act: greenfield → scaffold; unaligned → alignment pass;
+   initialized → summarize current state and continue.
 2. **Confirm scope and claimed gates** with the owner (orchestration.md → Scope &
    claimed gates). Use `$ARGUMENTS` as the scope if given.
 3. **Driver loop:**

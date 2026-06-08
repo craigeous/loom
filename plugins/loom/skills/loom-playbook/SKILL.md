@@ -46,6 +46,7 @@ archived on landing. On conflict, the spec wins.
 - `plan-eval-rubric.md` — what the plan evaluator checks.
 - `code-eval-rubric.md` — what the code evaluator checks.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
+- `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 
 ## Gates (`gates/`)
 

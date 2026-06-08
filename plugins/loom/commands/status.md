@@ -9,7 +9,9 @@ Scan and report — no agents, no writes. Read
 `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/status-machine.md` for the
 statuses.
 
-1. Determine init mode (is there a loom-shaped `.docs/`?).
+1. Determine init mode via the classifier in
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/init-detection.md`
+   (read-only).
 2. Scan `.docs/` for gated artifacts and their `Status:` lines (research, ADR, spec,
    slice-plans, evaluations), plus `git status`/`git log`.
 3. Print a summary: init mode; roadmap target (from `.docs/status/roadmap.md`);

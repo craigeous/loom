@@ -9,7 +9,9 @@ Set up (or re-align) this repo for loom, then stop. Read
 `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/orchestration.md` (Init-mode
 detection) and `docs-layout.md`.
 
-1. Detect init mode: Greenfield / Unaligned / Initialized.
+1. Detect init mode by running the classifier in
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/init-detection.md`
+   (Greenfield / Unaligned / Initialized).
 2. **Greenfield/Unaligned:** scaffold `.docs/` per `docs-layout.md`, apply the
    playbook (seed `CLAUDE.md`, establish the gate — Rust verified; for another
    stack identify the tooling, propose commands, confirm with the owner, and record

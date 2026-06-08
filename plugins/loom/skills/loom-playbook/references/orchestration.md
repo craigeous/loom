@@ -27,18 +27,9 @@ running the command — not one of the roles. Read this plus
 
 ## Init-mode detection (run at the start of `/loom:run` and `/loom:init`)
 
-Check for `.docs/` and loom markers:
-- **No `.docs/`, empty/near-empty repo → Greenfield.** Scaffold `.docs/` per
-  [`docs-layout.md`](docs-layout.md), apply the playbook (seed `CLAUDE.md`,
-  establish the gate — Rust verified at [`../gates/rust.md`](../gates/rust.md); for
-  another stack, identify tooling, propose commands, confirm with the owner, record
-  a new gate). Commit.
-- **No/incomplete `.docs/` in an existing project → Unaligned.** Alignment pass:
-  scaffold `.docs/`, apply the playbook, establish the gate, and **descriptively
-  back-fill** `spec/` mapping what the project currently is (no decisions — those
-  need planning). Seed `status/`. Commit.
-- **loom-shaped `.docs/` exists → Initialized.** Summarize current state and
-  continue.
+Run the classifier in [`init-detection.md`](init-detection.md) first; it returns
+Greenfield / Unaligned / Initialized. Then act per that mode (behaviors per
+`06-init-modes.md` and the relevant M2 slice).
 
 Re-alignment is idempotent: auto-apply clean merges, **recommend** for conflicts
 and let the owner decide. Never clobber project edits.
