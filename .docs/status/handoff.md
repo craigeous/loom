@@ -16,34 +16,28 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M1 scaffold is built.** The loom plugin exists under `plugins/loom/`:
-  `commands/loom.md` (orchestrator), five `agents/*.md`, and
-  `skills/loom-playbook/` (templates, rubrics, conventions, Rust gate). Marketplace
-  catalog at `.claude-plugin/marketplace.json`.
-- **Not yet run.** No end-to-end loop execution; not yet installed/validated.
-- Design + decisions are stable in `.docs/spec/` (00–10) and `.docs/ADR/`
-  (0001–0006).
+- **M1 is complete.** The loom plugin under `plugins/loom/` is built, installed,
+  validated, and **run end-to-end**: command surface is split into namespaced
+  `/loom:<name>` commands; agents are `loom:<role>`; the full slice loop works
+  (planner → blind plan-eval → developer+gate → blind code-eval → finalize/archive).
+- **Published:** GitHub repo `Craigeous/loom` (public), default branch `main`.
+- **Proven on a sandbox:** `/Users/craig/git/loom-sandbox` (throwaway Rust crate)
+  was driven through a real slice (`slugify`) — see its `.docs/`. It's disposable;
+  safe to delete.
+- Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
 
 ## Immediate next steps
 
-1. **Install & validate:**
-   ```
-   /plugin marketplace add ./loom        (or craigeous/loom once pushed)
-   /plugin install loom@loom
-   /plugin validate
-   ```
-   Confirm `/loom` resolves and the `loom:*` agents appear in `/agents`. Note the
-   exact command invocation and the Task `subagent_type` form for the agents.
-2. **First real run (dogfood):** point `/loom` at a throwaway repo (or a tiny slice
-   here) and drive one sequential slice through the full loop. Watch for: blind
-   inputs to evaluators, commit-per-handoff being author-neutral, status
-   transitions matching the dispatch table.
-3. Fix whatever the first run surfaces; then close M1 and move to M2 (init modes /
-   gate learning).
+1. **M2 — init modes & gate learning:** implement/verify greenfield, unaligned
+   (alignment + descriptive back-fill), and initialized behaviors; gate creation
+   for non-Rust stacks; idempotent playbook re-application.
+2. **M3 — parallelism:** worktree-per-slice + background agents (research note
+   `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A).
 
 ## Notes for the next agent
 
-- Commits in this repo are **author-neutral** (no co-author, no role identity) —
-  see `plugins/loom/skills/loom-playbook/references/commit-convention.md`.
-- The two "known unknowns" (invocation string, subagent_type form) can only be
-  confirmed by installing; adjust `commands/loom.md` if the namespacing differs.
+- Commits are **author-neutral** AND under a **single uniform git identity** —
+  roles must not set/override `user.*` (commit-convention; learned from the M1
+  first run, where an agent strayed to `loom@localhost`).
+- Command surface is `/loom:run` + one-off `/loom:<role>`; agents spawn via Task
+  `subagent_type: loom:<role>` (verified).

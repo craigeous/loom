@@ -25,8 +25,14 @@ Milestone order for building loom. "What's next and why"; detailed status in
   loop, dispatch table, commit-per-handoff.
 - [x] Playbook: `.docs/` templates, status machine, role rubrics, Rust gate.
 - [x] Blind-evaluation input contract enforced in evaluator prompts.
-- [ ] **Install + `/plugin validate`**; confirm `/loom` resolves and agents load.
-- [ ] One end-to-end sequential slice on a throwaway target (first real run).
+- [x] Install + `/plugin validate`; confirm command/agents load (namespaced
+  `/loom:<name>`, `loom:<role>`).
+- [x] One end-to-end sequential slice on a throwaway target (slugify sandbox):
+  plan → blind plan-eval (PASS) → develop+gate → blind code-eval (PASS) → finalize.
+
+**M1 complete.** First-run finding: agents could set a stray git identity
+(`loom@localhost`) — fixed in the playbook commit-convention (roles must not
+override `user.*`). Next: M2 (init modes / gate learning).
 
 ## M2 — Init modes & gate learning
 

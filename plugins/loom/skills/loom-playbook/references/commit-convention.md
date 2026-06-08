@@ -12,7 +12,12 @@ metadata must never reveal who produced the work.
   "planner:", "(researcher)", etc. The message describes the *change*, not the
   *producer*.
 - **One uniform git identity** across all roles, so the producing role can't be
-  inferred from author/committer metadata.
+  inferred from author/committer metadata. Roles **must not set or override** git
+  `user.name`/`user.email` — no `git -c user.*=...`, no `git config user.*`. Always
+  commit under the repository's already-configured identity. If no identity is
+  configured, **stop and ask** rather than inventing one (e.g. never commit as
+  `loom <loom@localhost>`); the orchestrator/`/loom:init` ensures an identity exists
+  before any role commits.
 - **One commit per handoff**, scoped to that handoff (a single slice's
   implementation, one evaluation, one planning artifact).
 

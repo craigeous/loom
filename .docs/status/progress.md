@@ -6,16 +6,16 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M1 — Minimum loop. **Scaffold built; not yet run end-to-end.**
-- **Last action:** built the loom plugin — manifests (`marketplace.json`,
-  `plugins/loom/.claude-plugin/plugin.json`), the five role agents, the
-  `skills/loom-playbook/` (templates, rubrics, conventions, Rust gate), and the
-  `/loom` orchestrator command. Resolved OQ-D/E/F.
-- **Next:**
-  1. Install (`/plugin marketplace add ./loom` → `/plugin install loom@loom`) and
-     `/plugin validate`; confirm `/loom` resolves and the `loom:*` agents load.
-  2. First real run: a sequential single slice on a throwaway target to exercise
-     the full loop (research/plan → eval → develop → eval → land).
+- **Phase:** M1 — Minimum loop. **COMPLETE** (built, installed, run end-to-end).
+- **Last action:** ran the first full sequential slice on a throwaway Rust sandbox
+  (`/Users/craig/git/loom-sandbox`, `slugify`): planner → blind plan-eval (PASS) →
+  developer (Rust gate green) → blind code-eval (re-ran gate, PASS) → finalize +
+  archive. Both evaluators ran blind and independently flagged the same lone MINOR.
+- **First-run finding (fixed):** the code-eval agent committed under a stray git
+  identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
+  Fixed the playbook commit-convention: roles must not set/override git `user.*`.
+- **Next:** M2 — init modes (greenfield / unaligned alignment / initialized) and
+  gate learning; then M3 parallelism (the worktree research note is ready input).
 
 ## Accepted decisions (ADRs)
 
