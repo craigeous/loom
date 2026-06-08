@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None.
+- [initialized-init-behavior.md](initialized-init-behavior.md) — `Plan Review` —
+  Initialized init behavior body: resume from a state-derived menu (mapped to the
+  dispatch table) into scope/gates + the driver loop, plus idempotent playbook
+  re-application (final M2 per-mode body).
 
 ## Archived plans
 
