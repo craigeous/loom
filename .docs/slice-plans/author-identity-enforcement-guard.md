@@ -25,6 +25,11 @@ identity*:
 2. **Doc hardening (the reliable layer):** extend `commit-convention.md` to forbid
    all override paths explicitly and to note that the hook enforces it.
 
+This plan is informed by the approved research note
+`.docs/research/2026-06-08-plugin-pretooluse-hook-guard.md` and its evaluation at
+`.docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md` (both verified
+to resolve against the tree).
+
 **Why the doc is the reliable layer, not the hook.** The approved research
 (`.docs/research/2026-06-08-plugin-pretooluse-hook-guard.md`, Gotcha 4 / Open
 Question 2) documents a known Claude Code issue
@@ -123,13 +128,71 @@ guard's correctness fully verifiable by the script-level tests in Verification.
      would block legitimate non-git or parse-miss commands and cause false
      positives. The doc layer, not a fail-closed hook, is the reliable guarantee.)
    - **Only act on `git`-bearing commands** to avoid false positives: proceed to the
-     override checks only if the command matches `git` as a word — i.e. matches the
+     override checks only if `$STRIPPED` (the de-quoted command, defined below)
+     matches `git` as a word — i.e. matches the
      ERE `(^|[^[:alnum:]_./-])git([[:space:]]|$)` OR contains a `GIT_AUTHOR_*` /
      `GIT_COMMITTER_*` env-var assignment (an inline `VAR=... git ...` always has
      `git`, so the word-match covers it; the env check is the trigger that also
      catches the assignment itself). If neither, **exit 0** (e.g. `ls`,
-     `digit=...`, `legitimate=1` won't match the `git` *word*).
-   - **Detection — block (exit 2) if the git command contains ANY of:**
+     `digit=...`, `legitimate=1` won't match the `git` *word*). Gating on
+     `$STRIPPED` also means `git commit -m "set GIT_AUTHOR_NAME=foo"` is evaluated
+     by the override checks (it is a real `git` command) but, because the env
+     assignment was inside the stripped message body, no override token remains →
+     it falls through to the final allow.
+   - **Strip quoted substrings BEFORE override detection (flag-vs-text
+     discrimination).** Override syntax (`--author=`, `GIT_AUTHOR_NAME=`,
+     `-c user.*=`) is legitimate when it appears inside the *value* of a message-
+     bearing option (`-m "..."`, `-F`, `--message=...`) or a `--grep`/path
+     argument — that text is not a real flag/assignment token and must NOT block.
+     A real override token always lives **outside** any quoted region (a flag like
+     `--author=` or an inline `VAR=` assignment cannot be inside the message
+     string and still take effect). So: build a **de-quoted copy** of the command
+     by removing the *contents* of every single-quoted and double-quoted segment,
+     then run all override patterns on that de-quoted copy (not the raw command).
+     Use a single POSIX `sed` (BRE), applied to the extracted command string:
+
+     ```
+     STRIPPED=$(printf '%s' "$CMD" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+     ```
+
+     - `s/'[^']*'//g` deletes each `'...'` segment (single-quoted bodies).
+     - `s/"[^"]*"//g` deletes each `"..."` segment (double-quoted bodies).
+
+     Run BOTH the `git`-word gate's existence checks **and** all override EREs
+     below against `$STRIPPED`. (Run the env-var trigger of the git gate against
+     `$STRIPPED` too, so `git commit -m "set GIT_AUTHOR_NAME=foo"` does not even
+     trip the gate.) Keep the original `$CMD` only for nothing — detection is
+     entirely on `$STRIPPED`.
+
+     Worked discrimination (prototyped — all confirmed):
+     - `git commit -m "fix --author= parsing"` → body stripped → no `--author=`
+       outside quotes → **ALLOW**.
+     - `git commit -m "set GIT_AUTHOR_NAME=foo"` → assignment is inside the quoted
+       body → stripped → **ALLOW**.
+     - `git log --grep="--author="` → `--grep` is not an identity flag and its
+       quoted value is stripped → **ALLOW**.
+     - `git commit --author="x <x@y>"` → the **value** is stripped but the
+       `--author=` flag token sits *before* the opening quote and survives →
+       **BLOCK** (this is exactly why quoting a real override does not hide it).
+     - `git commit --author=foo` (unquoted) → survives stripping → **BLOCK**.
+     - `GIT_AUTHOR_NAME=foo git commit -m "msg"` → the inline assignment is
+       outside quotes → survives → **BLOCK**; only the `"msg"` value is stripped.
+     - `git -c user.email=x@y commit -m z` → `-c user.email=` is unquoted →
+       survives → **BLOCK**.
+
+     **Documented limitation (fails open).** This `sed` treats `\"` / `\'`
+     (backslash-escaped quotes) as ordinary quote characters, so a command that
+     escapes a quote *inside* a message could leave a quote unbalanced and cause
+     over- or under-stripping. The residual effect is at worst that a real
+     override hidden behind a hand-crafted escaped-quote payload is **not**
+     blocked — i.e. the guard **fails open**, consistent with the defense-in-depth
+     framing (the doc layer remains the authoritative guarantee). It will **not**
+     newly false-*positive* a legitimate commit, because over-stripping only
+     removes text (it cannot manufacture an override token). This edge case is
+     accepted, not resolved here.
+
+   - **Detection — block (exit 2) if `$STRIPPED` (the de-quoted command) contains
+     ANY of:**
      - `--author=` **or** `--author ` (flag form with `=` or a following space).
        ERE: `--author([[:space:]]|=)`.
      - `-c user.name=` / `-c user.email=` / any `-c user.*=` config override.
@@ -155,9 +218,11 @@ guard's correctness fully verifiable by the script-level tests in Verification.
      non-identity config and must **not** be blocked — the `-c user.*` /
      `-c GIT_AUTHOR/COMMITTER` patterns are scoped to identity keys only).
 
-   The script must be ordered: parse → empty-check (allow) → git-word/env gate
-   (else allow) → override checks (block) → final allow. Keep it fast (research
-   Gotcha 5).
+   The script must be ordered: parse `$CMD` → empty-check (allow) → build
+   `$STRIPPED` (de-quote `$CMD`) → git-word/env gate on `$STRIPPED` (else allow) →
+   override checks on `$STRIPPED` (block) → final allow. All pattern matching
+   (gate and overrides) runs on `$STRIPPED`, never on the raw `$CMD`. Keep it fast
+   (research Gotcha 5; the de-quoting is a single `sed` pass).
 
 3. **`plugins/loom/.claude-plugin/plugin.json` — NO edit (verification only).**
    Confirm `hooks/hooks.json` is the auto-discovered location and that no `hooks`
@@ -233,6 +298,29 @@ echo '{"tool_input":{"command":"echo legitimate=1"}}'              | sh plugins/
 Every one must print `0` (no false positive on `-c core.*`, on non-git commands,
 or on the substring `git` inside another word).
 
+**D2. ALLOWED — override syntax appearing only inside message/argument TEXT —
+each must print `0`.** These are the false-positive cases the quote-stripping in
+Step 2 must defeat; a regression here means detection is scanning the raw command
+again. (Note: this very slice's own commit message — "guard against `--author`
+flag" — is the second case, so a guard that fails this would block its own commit.)
+```
+echo '{"tool_input":{"command":"git commit -m \"fix --author= parsing\""}}'        | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit -m \"guard against --author flag\""}}'  | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit -m \"set GIT_AUTHOR_NAME=foo in script\""}}' | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit -m \"add -c user.email= override\""}}'  | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git log --grep=\"--author=\""}}'                   | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+```
+Every one must print `0`.
+
+**D3. Adversarial — a real override whose VALUE is quoted must still BLOCK
+(print `2`).** Confirms quote-stripping does not create a new false-negative: the
+flag/assignment token lives outside the quotes and survives stripping.
+```
+echo '{"tool_input":{"command":"git commit --author=\"evil <e@e>\" -m \"ok\""}}'   | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+echo '{"tool_input":{"command":"git commit --author \"evil <e@e>\""}}'             | sh plugins/loom/hooks/git-identity-guard.sh; echo $?
+```
+Both must print `2`.
+
 **E. jq-absent fallback (best-effort).** Re-run at least one BLOCKED case (C) and
 one ALLOWED case (D) with `jq` made unavailable, e.g. by running the script with a
 `PATH` that excludes jq:
@@ -275,6 +363,23 @@ result, but a non-firing live check does **not** fail this slice.
 - **Eval MINORs honored (planner, 2026-06-08):** the script uses only exit
   code 2 + stderr (no `permissionDecision`/`permissionDecisionReason`), and
   depends only on the documented `tool_input.command` stdin field.
+- **Round-1 FAIL revision (planner, 2026-06-08):** the eval
+  (`.docs/evaluations/author-identity-enforcement-guard-eval.md`) found a BLOCKER —
+  override EREs ran against the raw command, so a commit whose *message* mentioned
+  `--author=` / `GIT_AUTHOR_NAME=` was wrongly blocked. Fix: Step 2 now strips the
+  contents of all single- and double-quoted segments
+  (`sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g'`) into `$STRIPPED` and runs the
+  git-word gate **and** all override patterns on `$STRIPPED`, never on the raw
+  command. A real flag/assignment token sits outside the quotes and survives, so
+  quoting an override's value does not hide it (verified). Quote-stripping only
+  *removes* text, so it cannot manufacture a false positive; the documented
+  residual (escaped quotes) fails open. Verification gained Section D2 (five
+  message-text ALLOW cases, each must print `0`) and D3 (two adversarial
+  quoted-value overrides, each must print `2`). MINOR path-drift fixed: Context
+  now cites the research eval at its real path. All eval-confirmed items
+  (detection completeness, exit-2, POSIX sh, jq+fallback, `${CLAUDE_PLUGIN_ROOT}`,
+  hooks.json location, fail-open, doc hardening, defense-in-depth framing) are
+  unchanged.
 - **Prompt-hook fallback deferred (planner, 2026-06-08):** if a future Claude Code
   version is confirmed to drop the command hook (#34573), converting to a
   `type: "prompt"` hook is the research's recommended hedge; out of scope for this
