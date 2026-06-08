@@ -88,3 +88,50 @@ Non-blocking observations recorded for follow-up (MINOR, do not gate this spec):
   gate — even pre-existing/out-of-scope — blocks `Implemented` and routes to
   `Needs Clarification`). Acceptable elision for an overview spec, but worth a
   one-line mention if revised.
+
+---
+
+# Evaluation: 02 — Roles (Round 2)
+
+Verdict: PASS
+Round: 2
+Reviewed against: the Round 1 verdict above; `git show 7f53911` (the revision);
+the built agents `plugins/loom/agents/{researcher,developer}.md`; sibling specs
+04-orchestrator, 09-open-questions, 10-packaging; the plan-eval rubric and
+severity taxonomy.
+
+## Re-review of prior findings
+
+All four Round 1 findings are resolved, each verified against the real authority,
+and none introduced a new contradiction:
+
+- **[blocking] Bare `/loom` → `/loom:run` (line 8).** Fixed. Now matches spec 04
+  line 8 ("invoke `/loom:run`") and the "no bare `/loom`" namespacing rule in
+  spec 09 line 51 and spec 10 line 40. A reader following spec 02 now lands on a
+  command that exists.
+- **[MINOR] Researcher tool list omitted `Bash` (line 28).** Fixed. Now reads
+  "Read, Grep, Glob, WebSearch, WebFetch, Bash (+ available MCP readers)",
+  matching `researcher.md` frontmatter `tools:` exactly.
+- **[MINOR] Finalize omitted `roadmap.md` (lines 98–100).** Fixed. Now reads
+  "(and `status/roadmap.md` if a milestone closed)", matching `developer.md`
+  finalize step 1.
+- **[MINOR] Developer loop omitted the red-gate escalation rule.** Fixed by a new
+  bullet (lines 92–96): a red gate blocks `Implemented` regardless of cause, the
+  gate is a whole-tree property, pre-existing/out-of-scope failures still route to
+  `Needs Clarification` with the red baseline recorded, and "not my code" is never
+  an exception. Faithful to `developer.md` step 4 and the quality-bar reminder.
+
+## Findings
+
+None. No `BLOCKER`/`MAJOR` remains. The added red-gate paragraph is internally
+consistent with the loop summary that follows it (the loop's "on green, set
+`Implemented`" now reads correctly as the happy path qualified by the new rule),
+and the finalize/tool-list edits are pure alignment with the built agents. No new
+drift was introduced elsewhere in the file.
+
+## Notes
+
+The substantive content confirmed in Round 1 (five roles, correct tiers,
+self-approval guarantee, per-role reads/writes/loops, clarification flow) is
+unchanged by this revision and still checks out against the agents and ADRs.
+Status set to `Approved`.
