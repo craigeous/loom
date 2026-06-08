@@ -24,7 +24,7 @@ work it produced — role separation guarantees no self-approval. Specs are froz
 after approval and change only via planning. Design decisions are in
 `.docs/spec/` and `.docs/ADR/` (ADRs 0001–0006).
 
-## Repo layout (M1)
+## Repo layout (M2 in progress)
 
 - The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus
   one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`); the
@@ -34,6 +34,9 @@ after approval and change only via planning. Design decisions are in
 - No compiled code: loom is markdown (prompts/templates), so this repo has no gate
   to run. The Rust gate loom *imposes on managed projects* is in
   `plugins/loom/skills/loom-playbook/gates/rust.md`.
+- **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
+  is the single authoritative source for Greenfield / Unaligned / Initialized
+  detection. All `/loom:*` commands run this classifier first.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions

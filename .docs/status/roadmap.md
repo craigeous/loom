@@ -36,8 +36,12 @@ override `user.*`). Next: M2 (init modes / gate learning).
 
 ## M2 — Init modes & gate learning
 
-- [ ] Greenfield / unaligned-alignment / initialized detection + behavior.
-- [ ] Descriptive back-fill for unaligned projects.
+- [x] **Detection classifier** — `init-detection.md` added as the single
+      authoritative source; concrete "loom-shaped" and "empty/near-empty"
+      definitions; all four call sites repointed (5fef2ed). Detection is done.
+- [ ] Per-mode behaviors: Greenfield scaffold, Unaligned alignment +
+      descriptive back-fill, Initialized summarize/continue. Consume the
+      classifier in `init-detection.md` (behaviors not yet implemented).
 - [ ] Gate establishment: Rust verified; create-and-record for new stacks.
 - [ ] Idempotent playbook re-application (clean-merge + recommend-rest).
 

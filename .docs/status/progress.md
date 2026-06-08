@@ -6,16 +6,20 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M1 — Minimum loop. **COMPLETE** (built, installed, run end-to-end).
-- **Last action:** ran the first full sequential slice on a throwaway Rust sandbox
-  (`/Users/craig/git/loom-sandbox`, `slugify`): planner → blind plan-eval (PASS) →
-  developer (Rust gate green) → blind code-eval (re-ran gate, PASS) → finalize +
-  archive. Both evaluators ran blind and independently flagged the same lone MINOR.
-- **First-run finding (fixed):** the code-eval agent committed under a stray git
-  identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
+- **Phase:** M2 — Init modes & gate learning. **In progress.**
+- **Last action:** M2 slice 1 (init-mode detection classifier) landed.
+  Both plan-eval and code-eval ran blind and independently: both PASS.
+  Deliverable: `plugins/loom/skills/loom-playbook/references/init-detection.md` —
+  the single authoritative, executable init-mode classifier. Four call sites
+  (`orchestration.md`, `init.md`, `run.md`, `status.md`) repointed at it;
+  divergent restatements removed. Slice archived at commit 5fef2ed.
+- **First-run finding (fixed, M1):** the code-eval agent committed under a stray
+  git identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
   Fixed the playbook commit-convention: roles must not set/override git `user.*`.
-- **Next:** M2 — init modes (greenfield / unaligned alignment / initialized) and
-  gate learning; then M3 parallelism (the worktree research note is ready input).
+- **Next:** M2 slice 2 — per-mode behaviors (greenfield scaffold, unaligned
+  alignment + descriptive back-fill, initialized summarize/continue) and gate
+  establishment. The classifier in `init-detection.md` is the input; behavior
+  bodies are the next M2 slice(s).
 
 ## Accepted decisions (ADRs)
 

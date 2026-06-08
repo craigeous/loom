@@ -20,17 +20,19 @@ source of truth; `roadmap.md` is milestone order.
   validated, and **run end-to-end**: command surface is split into namespaced
   `/loom:<name>` commands; agents are `loom:<role>`; the full slice loop works
   (planner → blind plan-eval → developer+gate → blind code-eval → finalize/archive).
+- **M2 slice 1 landed (5fef2ed).** Init-mode detection is now single-sourced in
+  `plugins/loom/skills/loom-playbook/references/init-detection.md` — concrete
+  classifier with defined "loom-shaped" and "empty/near-empty" tests; four call
+  sites repointed. Both plan and code evals: PASS (blind, independent).
 - **Published:** GitHub repo `Craigeous/loom` (public), default branch `main`.
-- **Proven on a sandbox:** `/Users/craig/git/loom-sandbox` (throwaway Rust crate)
-  was driven through a real slice (`slugify`) — see its `.docs/`. It's disposable;
-  safe to delete.
 - Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
 
 ## Immediate next steps
 
-1. **M2 — init modes & gate learning:** implement/verify greenfield, unaligned
-   (alignment + descriptive back-fill), and initialized behaviors; gate creation
-   for non-Rust stacks; idempotent playbook re-application.
+1. **M2 slice 2 — per-mode behaviors:** implement Greenfield scaffold, Unaligned
+   alignment + descriptive back-fill, and Initialized summarize/continue. Start
+   from the classifier in `init-detection.md` (detection is done; behavior bodies
+   are what remains). Gate establishment and idempotent re-application follow.
 2. **M3 — parallelism:** worktree-per-slice + background agents (research note
    `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A).
 
