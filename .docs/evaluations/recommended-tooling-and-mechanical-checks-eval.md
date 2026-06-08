@@ -100,3 +100,73 @@ The motivating-defect claim in `## Context` was independently verified: spec
 the slice is grounded in a real miss, not a hypothetical.
 
 All findings are MINOR; none blocks landing. Verdict: PASS.
+
+---
+
+## Round 2 (code)
+
+Verdict: PASS
+Round: 2
+Reviewed: commit `db39d44` (diff + `--stat`), against the slice-plan (scope
+authority), spec `08-playbook.md`, the prior plan-eval (Round 1), and the real
+agent/reference tree. Dogfooded the rule this slice adds — invariants verified
+mechanically, not by eye.
+
+### Mechanical-check results
+
+1. **Rule in BOTH rubrics** — `rg -l 'mechanically' plan-eval-rubric.md
+   code-eval-rubric.md` lists both files. Each bullet is actionable and names
+   `rg -U` (text/wrapped-token), `yq`/`jq` (config), `ast-grep`/LSP
+   find-references (code symbols), and cites `[`tooling.md`](tooling.md)` (link
+   resolves — both rubrics and the target are in `references/`). Placement matches
+   the plan: plan-eval after "Verification named"; code-eval after "Tests prove
+   behavior".
+2. **Cross-links present + resolve** — `rg -n 'tooling\.md'` returns exactly one
+   match in each of SKILL.md, both rubrics, developer.md, plan-evaluator.md,
+   code-evaluator.md. Target `references/tooling.md` exists on disk. Agents use the
+   `${CLAUDE_PLUGIN_ROOT}/...` path form; rubrics use the relative same-dir form —
+   both correct.
+3. **No mandatory framing** — `rg -ni 'must install|is required|require[sd]?'
+   tooling.md` returns only the policy line ("RECOMMENDED, not required; loom never
+   hard-requires"), which is the *negation* of a requirement. No tool is presented
+   as a hard dependency. The detect-and-prefer + graceful-fallback policy is stated
+   verbatim in the header callout; every task-table row and every role subsection
+   names a fallback.
+4. **Role guidance concrete + accurate** — developer.md step 3's real sentence
+   "Verify signatures/types against the tree — don't code from memory" receives the
+   `ast-grep`/LSP find-references pointer (on-point). code-evaluator step 1 gets the
+   "did this diff break callers?" / `rg -U` mechanical-check pointer (matches the
+   diff-reading workflow). plan-evaluator step 1 is correctly scoped to `rg -U`/`yq`
+   (no code-symbol tooling). tooling.md's Developer section honestly splits "managed
+   CODE projects" (ast-grep/LSP/shellcheck) vs "loom's own markdown repo" (rg -U).
+5. **Scope** — `git diff-tree --name-only db39d44` = tooling.md (new) + two rubrics
+   + SKILL.md + three agents + slice-plan + CLAUDE.md. `rg '/spec/|/ADR/|gates/'`
+   over the path list → CLEAN. No spec/ADR/gates edits; no new gate file. CLAUDE.md
+   edit is the update-before-commit reference entry, allowed by repo rule.
+6. **Motivating-misses honesty** — verified independently: spec
+   `10-packaging.md` line 107 does contain a bare `/loom` in prose ("inside any
+   repo, `/loom` operates..."), exactly as cited. The wrapped `Code\nReview` token
+   is grounded in the real archived slice `retire-code-review-status-token.md`, and
+   the line-based-grep blind-spot is a true general property. The managed-code vs
+   loom-markdown distinction is stated honestly (line 8) and does not over-claim AST
+   tools help loom's own markdown.
+
+### Plan-fidelity notes
+
+- Step 7 (slice-plans README "Active plans" entry) was correctly treated as
+  already-satisfied per the Round 1 MINOR finding — the entry was committed with the
+  plan at `9e567ab` and is present on disk; the developer did not re-touch README
+  (no spurious edit). The plan's `## Notes` records this. Correct handling.
+- The plan's `## Gate Evidence` block (added in this commit) accurately reflects the
+  actual file set and check results; re-running each command independently
+  reproduced the claimed outcomes.
+
+### Findings
+
+None at BLOCKER or MAJOR. The Round 1 MINORs (code-eval bullet leading with
+code-symbol framing; check-1 fixed-tool-list regex) are accepted as designed and
+not regressions. No new findings.
+
+Verdict: PASS — implementation faithfully realizes every plan step, scope is
+exactly the intended files, all invariants verified mechanically, and the two
+motivating misses are cited accurately and honestly.

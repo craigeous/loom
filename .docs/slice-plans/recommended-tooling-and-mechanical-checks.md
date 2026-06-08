@@ -1,6 +1,6 @@
 # Recommended Tooling Reference + Mechanical-Invariant-Check Rubric
 
-Status: Implemented
+Status: Landed
 Target specs: 08-playbook.md
 
 ## Context
