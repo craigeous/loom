@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-No active plans.
+- [unaligned-init-behavior.md](unaligned-init-behavior.md) — `Plan Review` —
+  Unaligned init behavior body: alignment pass on an existing project — study the
+  repo, reuse Greenfield scaffold + gate, descriptive `spec/` back-fill (no
+  decisions), seed `status/`, resume as Initialized (third M2 slice).
 
 ## Archived plans
 
