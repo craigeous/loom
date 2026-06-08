@@ -24,7 +24,7 @@ source of truth; `roadmap.md` is milestone order.
   `plugins/loom/skills/loom-playbook/references/init-detection.md` — concrete
   classifier with defined "loom-shaped" and "empty/near-empty" tests; four call
   sites repointed. Both plan and code evals: PASS (blind, independent).
-- **Published:** GitHub repo `Craigeous/loom` (public), default branch `main`.
+- **Published:** GitHub repo `craigeous/loom` (public), default branch `main`.
 - Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
 
 ## Immediate next steps

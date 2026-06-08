@@ -46,7 +46,7 @@ loom/                          # this repo = the loom project + its marketplace
 ## Install
 
 ```sh
-/plugin marketplace add Craigeous/loom     # or: /plugin marketplace add ./loom (local)
+/plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local)
 /plugin install loom@loom
 /plugin validate ./loom                     # optional: check manifests + frontmatter
 ```
