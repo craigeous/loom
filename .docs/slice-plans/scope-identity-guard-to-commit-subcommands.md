@@ -1,6 +1,6 @@
 # Scope the author-identity guard to commit-creating subcommands
 
-Status: In Progress
+Status: Plan Review
 Target specs: (none — implementation refinement of the ADR 0003 enforcement hook;
 specs/ADRs unchanged)
 
@@ -8,181 +8,257 @@ specs/ADRs unchanged)
 
 The PreToolUse hook `plugins/loom/hooks/git-identity-guard.sh` (landed a47bf95)
 enforces ADR 0003's uniform commit identity by blocking (exit 2) any git-bearing
-command that contains an identity-override vector. Its current detection
-(lines 63–87) fires on `--author`/`--author=`, `-c user.*=`, `-c GIT_AUTHOR*/GIT_COMMITTER*=`,
-and inline/exported `GIT_AUTHOR_*`/`GIT_COMMITTER_*` — **regardless of which git
-subcommand** is being run.
+command that contains an identity-override vector. The originally-shipped guard ran
+its four detection regexes on the whole de-quoted command **unconditionally** —
+it blocked `--author`, `-c user.*=`, `-c GIT_*=`, and inline/exported
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*` wherever they appeared, regardless of subcommand.
 
-This produces a known false-positive (Open MINOR in `.docs/status/progress.md`,
-"Guard `--author` pattern not scoped to commit-creating subcommands"): read-only
-commands where `--author` is a legitimate filter — `git log --author=alice`,
-`git shortlog -sn --author=bob`, `git blame --author x` — are wrongly blocked. The
-override is only meaningful on subcommands that *create commits and honor
-author/committer identity*; on a read command `--author` is a filter, and a
-`-c user.*=`/`GIT_*` override is harmless (it changes nothing recorded).
+That shipped guard had **one** known false-positive (Open MINOR in
+`.docs/status/progress.md`, "Guard `--author` pattern not scoped to commit-creating
+subcommands"): read-only commands where `--author` is a legitimate *filter* —
+`git log --author=alice`, `git shortlog -sn --author=bob`, `git blame --author x` —
+were wrongly blocked.
 
-**This slice** adds subcommand scoping to the existing detection: parse the git
-subcommand from the already-de-quoted command and run override-detection **only**
-when the subcommand is commit-creating. Everything else is unchanged.
+### Why the previous version of this slice was rejected (Round-2 code FAIL)
+
+The first redesign introduced a subcommand parser and gated **all four** detection
+checks behind a commit-creating-subcommand `case`. That parser required the command
+to *begin* with `git` (after optional leading `VAR=value` env assignments); **any
+other pre-`git` token failed OPEN.** As a result, every shell-prefixed `git commit`
+ALLOWed — including reachable identity overrides the original guard had BLOCKED:
+
+- `export GIT_AUTHOR_NAME=Evil; git commit -m z`
+- `cd /tmp && git commit --author=evil -m z`
+- `env GIT_AUTHOR_NAME=Evil git commit -m z`
+- `true; git commit --author=evil -m z`
+- `sudo git commit --author=evil`
+
+Each was verified reachable (changes recorded author/committer) and each was BLOCKED
+by the pre-slice script. **For identity overrides, fail-open = fail-unsafe.** The
+fail-OPEN-on-ambiguous posture was the design flaw, and gating the env/`-c` vectors
+behind a fragile pre-`git` locator was a regression. The eval is
+`.docs/evaluations/scope-identity-guard-to-commit-subcommands-eval.md` (Round 2).
+
+### This slice — redesigned posture
+
+Split the vectors by whether they have any legitimate read-time use, and choose a
+posture per vector that **cannot regress into a false-negative**:
+
+- **`GIT_AUTHOR_*`/`GIT_COMMITTER_*` env (inline, `export`ed, or via `env`), and
+  `-c user.*=` / `-c GIT_AUTHOR*=` / `-c GIT_COMMITTER*=`: detect UNCONDITIONALLY —
+  always BLOCK (exit 2), regardless of subcommand or shell prefix.** These are
+  *identity overrides* with no legitimate read-only use. The originally-shipped guard
+  blocked them everywhere and there was never a false-positive complaint about them.
+  Keeping them unconditional **removes all the fragile pre-`git` parsing for these
+  vectors** — the regression class above disappears because the detection no longer
+  depends on locating the `git` invocation. Consequence (intended): identity-override
+  attempts on a *read* now BLOCK too — `GIT_AUTHOR_NAME=foo git log`,
+  `git -c user.email=x@y log`. That is ACCEPTABLE: an identity override on a read is
+  pointless, and we optimize for never letting a write-time override through.
+
+- **`--author` / `--author=`: the ONLY vector with a legitimate read use** (a
+  `log`/`shortlog`/`blame` FILTER), so it is scoped — but **FAIL-CLOSED.** Block
+  `--author` **UNLESS the subcommand is positively identified as a known READ
+  command** (`log`, `shortlog`, `blame`, `whatchanged`, `rev-list`, `show`). Any
+  ambiguity — unrecognized subcommand, unrecognized prefix, no subcommand located —
+  BLOCKS. So a real `--author` commit override can never slip through, while the
+  actual reported false-positive (`git log --author=alice`, etc.) is allowed.
+
+This is faithful to the eval's prescription: fail-OPEN is eliminated for everything
+that records identity; the only `--author` carve-out is positively-identified reads.
 
 **Out of scope / must stay intact:**
-- The stdin read, `tool_input.command` extraction (jq path + grep/sed fallback,
-  lines 21–34).
+- The stdin read and `tool_input.command` extraction (jq path + grep/sed fallback,
+  current lines 29–38).
 - The three-stage de-quote transform — Stage A escaped-quote removal, Stage B
-  quoted-body stripping, Stage C odd-quote-count fail-open (lines 36–47).
-- The git-word / env-var gate (lines 49–61).
-- The four detection patterns themselves (lines 66, 72, 78, 84) — their *regexes*
-  do not change; only the condition under which they are *consulted* changes.
+  quoted-body stripping, Stage C odd-quote-count fail-open (lines 45–56).
+- The git-word / env-var gate (lines 58–70).
+- The four detection **regexes** themselves (current lines 108, 114, 120, 126) — the
+  regex *patterns* do not change; only the *control flow that consults them* changes.
 - The block messages and exit codes (BLOCK=2, ALLOW=0).
-- No edits to `hooks.json`, specs, ADRs, or `commit-convention.md` (the convention
-  text already describes the rule correctly; the override paths it forbids are still
-  forbidden — they are just only *enforceable by the hook* on commit-creating
-  subcommands, which matches reality, since that is the only place they take effect).
+- No edits to `hooks.json`, specs, ADRs, or `commit-convention.md`.
 
 ## The rule this slice implements
 
-1. **Determine the subcommand** from `$STRIPPED` (the de-quoted command): it is the
-   first bare token after the `git` word that is NOT:
-   - a leading `VAR=value` environment assignment (e.g. `GIT_AUTHOR_NAME=foo`,
-     `FOO=bar`) appearing *before* `git`;
-   - a git **global option** or its consumed value. Global options to skip:
-     - `-c <key=val>` and `-c<key=val>` — also skip the `key=val` token if `-c` is
-       separate;
-     - `-C <path>` — skip the path token;
-     - `--git-dir[=...]`, `--work-tree[=...]`, `--namespace[=...]`,
-       `--exec-path[=...]`, `--config-env[=...]` — skip the following token when the
-       `=` form is not used;
-     - bare switches with no value: `-p`, `--paginate`, `-P`/`--no-pager`,
-       `--bare`, `--no-replace-objects`, `--literal-pathspecs`,
-       `--no-optional-locks`, `--html-path`, `--man-path`, `--info-path`,
-       `--version`, `--help`.
-2. **Commit-creating subcommand set** (the *only* values that trigger detection):
-   `commit`, `commit-tree`, `am`, `cherry-pick`, `revert`, `rebase`, `merge`.
-   Rationale: these create commits and honor author/committer identity, so an
-   identity override on them actually changes recorded history. (`tag` and
-   `notes add` were considered: `git tag` records *tagger* identity, not
-   author/committer, and `notes` does not honor `--author`; they are **excluded**
-   to keep the set to the vectors this slice's matrix exercises. If a future slice
-   wants tagger-identity coverage it can extend this set — recorded in Notes.)
-3. **Apply override-detection ONLY** when the determined subcommand is in that set.
-   For any other subcommand (`log`, `shortlog`, `blame`, `show`, `diff`, `status`,
-   `config`, `push`, …) → ALLOW (exit 0), even if an override vector's text is
-   present.
-4. **Fail-open posture (explicit):** if the subcommand cannot be determined cleanly
-   — no bare token found after `git`, or an unrecognized global-option form leaves
-   parsing ambiguous — **fail OPEN (allow, exit 0)**, never block. This matches the
-   hook's existing defense-in-depth design: the binding rule lives in
-   `commit-convention.md` (ADR 0003); the hook is best-effort and must never block on
-   ambiguous parsing. This is a deliberate trade: an ambiguous *commit* override that
-   slips the hook is still forbidden by the doc layer, whereas blocking an ambiguous
-   *read* is the very regression this slice removes.
+1. **Three unconditional identity-override checks (no subcommand gating).** On
+   `$STRIPPED`, in this order, BLOCK (exit 2) if any fire:
+   - inline/exported `GIT_AUTHOR_(NAME|EMAIL)=` or `GIT_COMMITTER_(NAME|EMAIL)=`
+     (covers `VAR=x git …`, `export VAR=x; git …`, `env VAR=x git …`);
+   - `-c user.<key>=` (`-c user.name=`, `-c user.email=`, any `-c user.*=`);
+   - `-c GIT_AUTHOR*=` / `-c GIT_COMMITTER*=`.
+   These have no legitimate read use, so they fire wherever they appear — there is no
+   pre-`git` locator and therefore no shell-prefix fail-open hole.
+
+2. **One scoped, fail-CLOSED `--author` check.** If `$STRIPPED` contains
+   `--author` (flag form `--author ` or `--author=`):
+   - Locate the `git` invocation and determine its subcommand (see §3).
+   - **ALLOW (exit 0) only if** the subcommand is positively one of the known read
+     commands: `log`, `shortlog`, `blame`, `whatchanged`, `rev-list`, `show`.
+   - **Otherwise BLOCK (exit 2)** — including when the subcommand is empty/unknown,
+     unrecognized, or the invocation could not be cleanly located. Fail-closed.
+
+3. **Subcommand locator (used ONLY for the `--author` carve-out).** Tokenize
+   `$STRIPPED` on whitespace; the command is already de-quoted so quoted operands and
+   their spaces are gone. Walk tokens:
+   - Skip tokens until the first whole-word `git` is seen (this tolerates *any*
+     shell prefix — `export VAR=x;`, `cd /tmp &&`, `sudo`, `env VAR=x`, `true;` — we
+     do not care what precedes `git`, because the env/`-c` vectors are already handled
+     unconditionally in §1; the locator exists solely to identify a read subcommand).
+   - After `git`, skip global options and their consumed values with a `SKIP_NEXT`
+     flag:
+     - value-taking globals (separate form) — `-c`, `-C`, `--git-dir`,
+       `--work-tree`, `--namespace`, `--exec-path`, `--config-env` → set
+       `SKIP_NEXT=1`, continue;
+     - joined/`=` globals — `-c*`, `-C*`, `--git-dir=*`, `--work-tree=*`,
+       `--namespace=*`, `--exec-path=*`, `--config-env=*` → continue;
+     - value-less switches — `-p`, `--paginate`, `-P`, `--no-pager`, `--bare`,
+       `--no-replace-objects`, `--literal-pathspecs`, `--no-optional-locks`,
+       `--html-path`, `--man-path`, `--info-path`, `--version`, `--help` → continue;
+     - any other `-*` token → continue (skip unknown options; do NOT fail-open here —
+       the `--author` decision is fail-closed, so an unknown option just means we keep
+       scanning, and if no read subcommand is positively found we BLOCK);
+     - first bare (non-`-`) token → that is `$SUBCMD`; break.
+   - If the loop ends with no bare token (`$SUBCMD=""`), the read-allowlist test
+     below fails and the command BLOCKS — fail-closed, as required.
+
+   Crucially, the locator no longer has a `*) SUBCMD=""; break` arm for pre-`git`
+   tokens. The old arm is what caused the Round-2 regression; here, the locator only
+   *enables an ALLOW* for positively-identified reads and otherwise BLOCKS, so a
+   too-strict locator can only over-block (a MAJOR for a real read), never
+   under-block (a BLOCKER for a real override).
+
+4. **Order of operations.** The three unconditional checks (§1) run first; if none
+   fire, the `--author` check (§2) runs; if it does not fire or resolves to a read,
+   the script `exit 0`s. This ordering means an `--author` *commit* with no env/`-c`
+   vector is still caught by §2 (fail-closed), and an env/`-c` override on a read is
+   caught by §1 before the `--author` allowlist is ever consulted.
+
+5. **Preserve all prior guarantees** (unchanged, verified in the matrix):
+   - message-text ALLOW — Stage B strips quoted `-m "...--author..."` bodies before
+     any check sees them, so neither §1 nor §2 fires;
+   - escaped-quote ALLOW — Stage A/B;
+   - unbalanced-quote fail-open ALLOW — Stage C (this fail-open is about
+     *unparseable quoting*, predates this slice, and is fine; a normal
+     `git commit --author=` has balanced quoting and is never caught by it);
+   - plain `git commit -m z` ALLOW — no vector present;
+   - non-git ALLOW — the git-word/env gate (lines 58–70) exits 0 first.
 
 ## Steps
 
 All steps touch only `plugins/loom/hooks/git-identity-guard.sh`. The script is POSIX
-`sh`; keep it POSIX (no bash arrays, no `[[ ]]`). Insert the new logic **between**
-the git-word gate (ends line 61) and the override-detection block (begins line 63).
+`sh`; keep it POSIX (no bash arrays, no `[[ ]]`). The change replaces the current
+subcommand-parser + gated-`case` block (current lines 72–135) with: three
+unconditional checks, then a fail-closed `--author` check, then `exit 0`. The stages
+above line 72 (stdin/extraction, de-quote, Stage C, git gate) are **unchanged**.
 
-1. **Add a subcommand-extraction step after line 61** (after the `IS_GIT` gate,
-   before `# --- Override detection ---`). Tokenize `$STRIPPED` on whitespace via a
-   `for` loop over an unquoted expansion (word-splitting is intended here, and the
-   command is already de-quoted so embedded spaces in operands have been removed
-   with their quotes). Walk tokens with a small state machine:
+1. **Remove the current commit-scoping parser and gated `case`** (current lines
+   72–135: the `# --- Determine git subcommand ...` block, the `for tok` state
+   machine, the `case "$SUBCMD" in commit|...)` wrapper around the four `if` blocks,
+   and the trailing `exit 0`). They are replaced wholesale by Steps 2–4.
 
-   - Track whether we have passed the `git` word yet (`SEEN_GIT`).
-   - **Before `git`:** skip any token matching `^[A-Za-z_][A-Za-z0-9_]*=` (leading
-     env assignment). If a token equals `git` (whole word), set `SEEN_GIT=1` and
-     continue. Any other pre-git token → we are not at a recognizable `git ...`
-     invocation cleanly (e.g. `git` is mid-pipeline); set `SUBCMD=""` and stop
-     (fail-open handles it). Note: the `IS_GIT` gate already guaranteed a `git`
-     word *somewhere*; this loop locates the *invocation* `git`.
-   - **After `git`, skip global options + consumed values** with a `SKIP_NEXT`
-     flag:
-     - if `SKIP_NEXT=1`: clear it and continue (this token was an option value);
-     - `-c` exactly → set `SKIP_NEXT=1`, continue;
-     - `-c*` (joined, e.g. `-cuser.email=x`) → continue (value joined, nothing to
-       skip);
-     - `-C` exactly → set `SKIP_NEXT=1`, continue;
-     - `--git-dir`, `--work-tree`, `--namespace`, `--exec-path`, `--config-env`
-       (no `=`) → set `SKIP_NEXT=1`, continue;
-     - `--git-dir=*`, `--work-tree=*`, `--namespace=*`, `--exec-path=*`,
-       `--config-env=*`, `-c=*` → continue;
-     - value-less switches (`-p`, `--paginate`, `-P`, `--no-pager`, `--bare`,
-       `--no-replace-objects`, `--literal-pathspecs`, `--no-optional-locks`,
-       `--html-path`, `--man-path`, `--info-path`, `--version`, `--help`) →
-       continue;
-     - any other token beginning with `-` → unrecognized global option: set
-       `SUBCMD=""` and stop (fail-open);
-     - **first non-option token** → this is the subcommand: set `SUBCMD=$tok` and
-       break.
-
-   Sketch (illustrative; final form must be POSIX-clean and tested):
+2. **Add the three unconditional identity-override checks** immediately after the
+   git gate (after current line 70). Reuse the three existing regexes verbatim — only
+   their enclosing condition is dropped (they now run unconditionally):
 
    ```sh
-   # --- Determine git subcommand (override-detection is commit-scoped) ---
-   SUBCMD=""
-   SEEN_GIT=0
-   SKIP_NEXT=0
-   for tok in $STRIPPED; do
-       if [ "$SEEN_GIT" -eq 0 ]; then
-           case "$tok" in
-               [A-Za-z_]*=*) continue ;;     # leading VAR=value env assignment
-               git) SEEN_GIT=1; continue ;;
-               *) SUBCMD=""; break ;;         # not a clean `git ...` invocation
-           esac
-       fi
-       if [ "$SKIP_NEXT" -eq 1 ]; then SKIP_NEXT=0; continue; fi
-       case "$tok" in
-           -c)  SKIP_NEXT=1; continue ;;
-           -C)  SKIP_NEXT=1; continue ;;
-           --git-dir|--work-tree|--namespace|--exec-path|--config-env)
-                SKIP_NEXT=1; continue ;;
-           -c*|-C*|--git-dir=*|--work-tree=*|--namespace=*|--exec-path=*|--config-env=*)
-                continue ;;
-           -p|--paginate|-P|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--no-optional-locks|--html-path|--man-path|--info-path|--version|--help)
-                continue ;;
-           -*)  SUBCMD=""; break ;;           # unrecognized global option → fail open
-           *)   SUBCMD="$tok"; break ;;        # first bare token = subcommand
-       esac
-   done
+   # --- Unconditional identity-override vectors (no legitimate read use) ---
+   # These alter recorded author/committer identity and have no read-time purpose,
+   # so they BLOCK wherever they appear — no subcommand/prefix parsing, which is
+   # why a shell prefix before `git` can never create a fail-open hole here.
+
+   # Inline / exported / env'd GIT_AUTHOR_*/GIT_COMMITTER_*
+   if printf '%s' "$STRIPPED" | grep -qE '(GIT_AUTHOR_(NAME|EMAIL)|GIT_COMMITTER_(NAME|EMAIL))='; then
+       printf 'loom identity guard: blocked GIT_AUTHOR_*/GIT_COMMITTER_* env var override (overrides git commit identity).\nADR 0003 requires one uniform identity; use plain git commit under the configured identity.\n' >&2
+       exit 2
+   fi
+
+   # -c user.*= (user identity config override)
+   if printf '%s' "$STRIPPED" | grep -qE -- '-c[[:space:]]+user\.[A-Za-z]+='; then
+       printf 'loom identity guard: blocked -c user.*= config override (overrides git commit identity).\nADR 0003 requires one uniform identity; use plain git commit under the configured identity.\n' >&2
+       exit 2
+   fi
+
+   # -c GIT_AUTHOR*= or -c GIT_COMMITTER*= (identity env override via -c)
+   if printf '%s' "$STRIPPED" | grep -qE -- '-c[[:space:]]+(GIT_AUTHOR|GIT_COMMITTER)[A-Z_]*='; then
+       printf 'loom identity guard: blocked -c GIT_AUTHOR*/GIT_COMMITTER* config override (overrides git commit identity).\nADR 0003 requires one uniform identity; use plain git commit under the configured identity.\n' >&2
+       exit 2
+   fi
    ```
 
-   Note the `-c*`/`-C*` joined-form arms must come *after* the exact `-c`/`-C` arms
-   in the `case` (order matters — exact match first).
-
-2. **Gate the four override checks on the commit-creating set.** Replace the bare
-   sequence of four `if … exit 2` blocks (lines 63–87) so they run only when
-   `$SUBCMD` is commit-creating. Wrap them in a single guard:
+3. **Add the fail-closed `--author` check** after the three unconditional checks.
+   Only if `--author` is present do we locate the subcommand; ALLOW only for a
+   positively-identified read, else BLOCK:
 
    ```sh
-   case "$SUBCMD" in
-       commit|commit-tree|am|cherry-pick|revert|rebase|merge)
-           # ... the existing four override-detection if-blocks, verbatim ...
-           ;;
-   esac
-   # --- No override detected (or non-commit subcommand) → allow ---
+   # --- --author: the only vector with a legitimate read use (log/blame filter).
+   #     Scope it, but FAIL CLOSED: block unless the subcommand is positively a
+   #     known read command. Any ambiguity blocks — a real commit-time --author
+   #     override can never slip through. ---
+   if printf '%s' "$STRIPPED" | grep -qE -- '--author([[:space:]]|=)'; then
+       # Locate the git invocation and read its subcommand.
+       SUBCMD=""
+       SEEN_GIT=0
+       SKIP_NEXT=0
+       for tok in $STRIPPED; do
+           if [ "$SEEN_GIT" -eq 0 ]; then
+               [ "$tok" = "git" ] && SEEN_GIT=1
+               continue                       # ignore everything up to & incl. `git`
+           fi
+           if [ "$SKIP_NEXT" -eq 1 ]; then SKIP_NEXT=0; continue; fi
+           case "$tok" in
+               -c|-C|--git-dir|--work-tree|--namespace|--exec-path|--config-env)
+                    SKIP_NEXT=1; continue ;;
+               -c*|-C*|--git-dir=*|--work-tree=*|--namespace=*|--exec-path=*|--config-env=*)
+                    continue ;;
+               -p|--paginate|-P|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--no-optional-locks|--html-path|--man-path|--info-path|--version|--help)
+                    continue ;;
+               -*)  continue ;;               # unknown option: keep scanning (do NOT fail open)
+               *)   SUBCMD="$tok"; break ;;     # first bare token = subcommand
+           esac
+       done
+       case "$SUBCMD" in
+           log|shortlog|blame|whatchanged|rev-list|show)
+               : ;;                            # positively a read → --author is a filter → allow
+           *)
+               printf 'loom identity guard: blocked --author flag (overrides git commit identity).\nADR 0003 requires one uniform identity; use plain git commit under the configured identity.\n' >&2
+               exit 2 ;;
+       esac
+   fi
+   ```
+
+   Notes on the `case` arm order: the exact `-c`/`-C` arms must precede the joined
+   `-c*`/`-C*` arms (POSIX `case` is first-match). The `-*) continue` arm must be
+   *last* among the `-` arms so the named globals match first.
+
+4. **Add the final `exit 0`** (no override detected, or `--author` resolved to a
+   read):
+
+   ```sh
+   # --- No override detected → allow ---
    exit 0
    ```
 
-   The four inner `if` blocks (their regexes and `exit 2` messages) are **unchanged**
-   — only their enclosing condition is added. If `$SUBCMD` is empty (fail-open) or
-   any non-commit subcommand, the `case` falls through to the final `exit 0`.
+5. **Update the script header comment** (current lines 1–27). Replace the
+   "scoped to commit-creating subcommands" description with the new posture:
+   - the env (`GIT_AUTHOR_*`/`GIT_COMMITTER_*`, inline/`export`/`env`) and
+     `-c user.*`/`-c GIT_*` vectors BLOCK **unconditionally** (no subcommand gating);
+   - `--author` BLOCKS unless the subcommand is positively a known read
+     (`log`, `shortlog`, `blame`, `whatchanged`, `rev-list`, `show`), in which case
+     it is a filter and is allowed; any ambiguity BLOCKS (fail-closed);
+   - state explicitly that an identity override on a read (e.g.
+     `GIT_AUTHOR_NAME=foo git log`, `git -c user.email=x@y log`) now BLOCKS, and that
+     this is intended (pointless on a read; we never let a write-time override
+     through);
+   - keep the de-quote-transform comment block intact.
 
-3. **Update the script's header comment** (lines 1–18) to document the new behavior:
-   add a short block stating that override-detection is scoped to commit-creating
-   subcommands (`commit`, `commit-tree`, `am`, `cherry-pick`, `revert`, `rebase`,
-   `merge`), that read subcommands like `log`/`shortlog`/`blame` are allowed even
-   with `--author`, and that an undeterminable subcommand fails OPEN. Keep the
-   existing de-quote-transform comment intact.
-
-4. **Keep the file executable** (`chmod +x` already set; do not regress the mode).
-   Do not touch `hooks.json`.
+6. **Keep the file executable** (mode already `+x`; do not regress it). Do not touch
+   `hooks.json`.
 
 ## Verification
 
-This slice is script-runnable; the developer **must** run the full matrix below by
-piping crafted JSON to the script and asserting the exact exit code each time, and
-**record the observed exit code** for every case. BLOCK = exit 2, ALLOW = exit 0.
+Script-runnable. The developer **must** run the full matrix below by piping
+hook-shaped JSON to the committed script and **record the observed exit code** for
+every case. BLOCK = exit 2, ALLOW = exit 0.
 
 Drive each case with stdin shaped like the real hook payload, e.g.:
 
@@ -191,140 +267,121 @@ printf '{"tool_input":{"command":"git log --author=alice"}}' \
   | sh plugins/loom/hooks/git-identity-guard.sh; echo "exit=$?"
 ```
 
-### A. New behavior — read subcommands now ALLOW (the bug this fixes)
+**Severity rule (state in the handoff):**
+- A real identity override that resolves to **ALLOW** is a **BLOCKER**
+  (false-negative; fail-unsafe).
+- A known-read `--author` *filter* that resolves to **BLOCK** is a **MAJOR**
+  (re-introduces the false-positive this slice removes).
 
-Each must exit **0**. A non-zero here is a MAJOR (the false-positive being removed).
+### A. Required BLOCK (exit 2) — overrides, incl. the Round-2 regressed cases
 
-1. `git log --author=alice` → ALLOW
-2. `git shortlog -sn --author=bob` → ALLOW
-3. `git blame --author x` → ALLOW
-4. `git blame -L1,2 file` → ALLOW
-5. `git -c user.email=x@y log` → ALLOW (harmless override on a read)
-6. `GIT_AUTHOR_NAME=foo git log` → ALLOW (leading env, read subcommand)
-7. `git show --format=%an HEAD` → ALLOW
-8. `git config user.name` → ALLOW (read of config; `config` is not commit-creating)
+A non-zero failure to block here is a **BLOCKER**.
 
-### B. Commit-creating subcommands still BLOCK (no false-negative)
+| # | Command | Why |
+|---|---|---|
+| A1 | `export GIT_AUTHOR_NAME=Evil; git commit -m z` | env vector, shell prefix (regressed → now BLOCK) |
+| A2 | `cd /tmp && git commit --author=evil -m z` | `--author` on commit behind `cd &&` (regressed) |
+| A3 | `env GIT_AUTHOR_NAME=Evil git commit -m z` | env via `env` (regressed) |
+| A4 | `true; git commit --author=evil -m z` | `--author` on commit behind `true;` (regressed) |
+| A5 | `sudo git commit --author=evil` | `--author` on commit behind `sudo` (regressed) |
+| A6 | `git commit --author="x <x@y>" -m z` | clean `--author` commit |
+| A7 | `git -c user.email=x@y commit -m z` | `-c user.*` (unconditional) |
+| A8 | `git -c user.name=x cherry-pick abc` | `-c user.*` (unconditional) |
+| A9 | `GIT_AUTHOR_NAME=foo git commit -m z` | leading inline env |
+| A10 | `git -c GIT_COMMITTER_NAME=x commit -m z` | `-c GIT_*` (unconditional) |
+| A11 | `git revert --author="x <x@y>" HEAD` | `--author` on revert (fail-closed) |
+| A12 | `git rebase -c user.email=x@y main` | `-c user.*` (unconditional) |
+| A13 | `git merge --author="x <x@y>" topic` | `--author` on merge (fail-closed) |
+| A14 | `GIT_AUTHOR_EMAIL=x git am file` | leading inline env |
+| A15 | `git commit -m "msg" --author='A B <a@b>'` | `--author` after message (prior C18) |
+| A16 | `git -c user.name="A B" commit -m x` | `-c user.*` (prior C19) |
+| A17 | `GIT_COMMITTER_EMAIL=a@b git commit -m x` | leading inline env (prior C20) |
+| A18 | `git -c user.email=x@y commit-tree abc` | `-c user.*` on commit-tree |
+| A19 | `git cherry-pick --author=x abc` | `--author` on cherry-pick (fail-closed) |
+| A20 | `GIT_AUTHOR_NAME=foo git log` | **now BLOCK (intended):** env override on a read |
+| A21 | `git -c user.email=x@y log` | **now BLOCK (intended):** `-c user.*` on a read |
+| A22 | `git -c GIT_AUTHOR_NAME=x log` | **now BLOCK (intended):** `-c GIT_*` on a read |
+| A23 | `git push --author=evil` | `--author`, non-read subcommand → fail-closed BLOCK |
 
-Each must exit **2**. A non-zero failure to block here is a BLOCKER (false-negative —
-a real commit-time override slips through).
+### B. Required ALLOW (exit 0) — known-read `--author` filters
 
-9.  `git commit --author="x <x@y>" -m z` → BLOCK
-10. `git -c user.email=x@y commit -m z` → BLOCK (global `-c` skipped, `commit` found)
-11. `git -c user.name=x cherry-pick abc` → BLOCK (commit-creating)
-12. `GIT_AUTHOR_NAME=foo git commit -m z` → BLOCK (leading env skipped, `commit`)
-13. `git -c GIT_COMMITTER_NAME=x commit -m z` → BLOCK (`-c GIT_COMMITTER*` on commit)
-14. `git revert --author="x <x@y>" HEAD` → BLOCK
-15. `git rebase -c user.email=x@y main` → BLOCK
-16. `git merge --author="x <x@y>" topic` → BLOCK
-17. `git am --committer-date-is-author-date < p` with `GIT_AUTHOR_EMAIL=x git am ...`
-    — i.e. `GIT_AUTHOR_EMAIL=x git am file` → BLOCK
+A non-zero (BLOCK) here is a **MAJOR** (the false-positive being removed).
 
-### C. Regression — prior matrix BLOCK cases (commit subcommand, unchanged)
+| # | Command | Why |
+|---|---|---|
+| B1 | `git log --author=alice` | read filter |
+| B2 | `git shortlog -sn --author=bob` | read filter |
+| B3 | `git blame -L1,2 f --author x` | read filter (flag-space form) |
+| B4 | `git --no-pager log --author=x` | valueless global then read |
+| B5 | `git blame --author x` | read filter |
+| B6 | `git whatchanged --author=x` | read filter |
+| B7 | `git rev-list --author=x HEAD` | read filter |
+| B8 | `git show --author=x` | read (no recorded identity) |
 
-Each must exit **2** exactly as before this slice:
+### C. Required ALLOW (exit 0) — no override / prior ALLOW regressions
 
-18. `git commit -m "msg" --author='A B <a@b>'` → BLOCK
-19. `git -c user.name="A B" commit -m x` → BLOCK
-20. `GIT_COMMITTER_EMAIL=a@b git commit -m x` → BLOCK
+| # | Command | Why |
+|---|---|---|
+| C1 | `git show --format=%an HEAD` | read, no `--author`, no env/`-c` |
+| C2 | `git diff` | read, no vector |
+| C3 | `git commit -m z` | plain commit, no vector |
+| C4 | `git commit -m "fix --author= handling in docs"` | Stage B strips override text from message |
+| C5 | `git commit -m "set GIT_AUTHOR_NAME in the script"` | text in message (Stage B) |
+| C6 | `git commit -m 'add -c user.email note'` | text in message (Stage B) |
+| C7 | `git commit -m "escaped \"--author\" mention"` | Stage A/B |
+| C8 | `git commit -m "unbalanced quote --author` | Stage C odd-quote fail-open |
+| C9 | `echo --author=foo` | non-git (gate exits first) |
+| C10 | `ls -c user.name=x` | non-git (gate exits first) |
+| C11 | `ls` | non-git |
+| C12 | `cd /tmp && git log --author=alice` | read with shell prefix → still ALLOW (no new FP) |
 
-### D. Regression — prior ALLOW cases (de-quote / message-text / non-git) unchanged
+### D. jq-absent fallback
 
-Each must exit **0**:
-
-21. `git commit -m "fix --author= handling in docs"` → ALLOW (override text is inside
-    a quoted message; Stage B strips it before detection)
-22. `git commit -m "set GIT_AUTHOR_NAME in the script"` → ALLOW (text in message)
-23. `git commit -m 'add -c user.email note'` → ALLOW (text in message)
-24. `git commit -m "escaped \"--author\" mention"` → ALLOW (Stage A/B)
-25. `echo --author=foo` → ALLOW (non-git)
-26. `ls -c user.name=x` → ALLOW (non-git)
-27. `git commit -m "unbalanced quote --author` → ALLOW (Stage C odd-quote fail-open)
-
-### E. Fail-open on undeterminable subcommand
-
-Each must exit **0** (ambiguous parse → allow, per the documented posture):
-
-28. `git --some-unknown-global commit --author=x` → ALLOW (unrecognized global opt →
-    `SUBCMD` cleared → fail open). Record this explicitly to prove the fail-open
-    branch.
-29. `git` (no subcommand) → ALLOW (no bare token found).
-
-### F. jq-absent fallback
-
-30. Re-run a representative BLOCK case (#9) and a representative ALLOW case (#1) with
-    `jq` masked from `PATH` (e.g. invoke with a `PATH` lacking jq, or temporarily
-    shadow it) to exercise the grep/sed extraction branch (lines 27–28). Assert
-    #9 → BLOCK (exit 2) and #1 → ALLOW (exit 0) via the fallback path.
+Re-run, with `jq` masked from `PATH` (curated PATH lacking jq, exercising the
+grep/sed extraction branch, current line 37):
+- D1 = A6 (`git commit --author="x <x@y>" -m z`) → BLOCK (exit 2)
+- D2 = A9 (`GIT_AUTHOR_NAME=foo git commit -m z`) → BLOCK (exit 2)
+- D3 = A7 (`git -c user.email=x@y commit -m z`) → BLOCK (exit 2)
+- D4 = B1 (`git log --author=alice`) → ALLOW (exit 0)
+- D5 = C3 (`git commit -m z`) → ALLOW (exit 0)
 
 ### Gate
 
 This repo has no compiled gate (`CLAUDE.md`). The acceptance gate for this slice is:
-**all 30 checks above pass with the asserted exit codes, recorded in the
-implementation handoff.** Any case A/D/E ALLOW that blocks → FAIL (MAJOR/regression);
-any case B/C BLOCK that allows → FAIL (BLOCKER/false-negative).
+**`sh -n` and `dash -n` clean; mode still `+x`; `git diff --name-only` shows only
+`git-identity-guard.sh` (+ this slice-plan); and every A/B/C/D case above passes with
+the asserted exit code, recorded in the implementation handoff.** Any A or D-BLOCK
+case that ALLOWs → FAIL (BLOCKER). Any B/C/D-ALLOW case that BLOCKs → FAIL
+(MAJOR/regression).
 
 ## Notes
 
-- 2026-06-08 (planner): `tag` and `notes add` are intentionally **excluded** from the
-  commit-creating set. `git tag` records *tagger* identity (not author/committer) and
-  does not honor `--author`; `git notes` does not honor `--author` either. The
-  override vectors this guard blocks (`--author`, `-c user.*`, `GIT_AUTHOR_*`/
-  `GIT_COMMITTER_*`) only alter recorded *author/committer* identity on the seven
-  subcommands listed. If a future slice decides tagger-identity should also be
-  uniform, it can extend the set and the matrix — flagged, not done here.
-- 2026-06-08 (planner): the fail-open-on-ambiguity posture is a deliberate choice
-  (see "The rule …" §4). It is consistent with ADR 0003's binding doc-layer rule and
-  the existing Stage-C fail-open; the hook is best-effort defense-in-depth, never the
-  sole guarantee.
-
-## Implementation gate evidence (2026-06-08, developer)
-
-POSIX syntax: `sh -n` → OK, `dash -n` → OK. `git diff --name-only`: only
-`plugins/loom/hooks/git-identity-guard.sh` (+ this slice-plan).
-
-Full 30-case matrix exit codes (all match expected):
-
-| # | Command | Expected | Actual |
-|---|---|---|---|
-| A1 | `git log --author=alice` | 0 | 0 |
-| A2 | `git shortlog -sn --author=bob` | 0 | 0 |
-| A3 | `git blame --author x` | 0 | 0 |
-| A4 | `git blame -L1,2 file` | 0 | 0 |
-| A5 | `git -c user.email=x@y log` | 0 | 0 |
-| A6 | `GIT_AUTHOR_NAME=foo git log` | 0 | 0 |
-| A7 | `git show --format=%an HEAD` | 0 | 0 |
-| A8 | `git config user.name` | 0 | 0 |
-| B9 | `git commit --author='x <x@y>' -m z` | 2 | 2 |
-| B10 | `git -c user.email=x@y commit -m z` | 2 | 2 |
-| B11 | `git -c user.name=x cherry-pick abc` | 2 | 2 |
-| B12 | `GIT_AUTHOR_NAME=foo git commit -m z` | 2 | 2 |
-| B13 | `git -c GIT_COMMITTER_NAME=x commit -m z` | 2 | 2 |
-| B14 | `git revert --author=x HEAD` | 2 | 2 |
-| B15 | `git rebase -c user.email=x@y main` | 2 | 2 |
-| B16 | `git merge --author=x topic` | 2 | 2 |
-| B17 | `GIT_AUTHOR_EMAIL=x git am file` | 2 | 2 |
-| C18 | `git commit -m msg --author='A B <a@b>'` | 2 | 2 |
-| C19 | `git -c user.name=AB commit -m x` | 2 | 2 |
-| C20 | `GIT_COMMITTER_EMAIL=a@b git commit -m x` | 2 | 2 |
-| D21 | `git commit -m "fix --author= handling in docs"` | 0 | 0 |
-| D22 | `git commit -m "set GIT_AUTHOR_NAME in the script"` | 0 | 0 |
-| D23 | `git commit -m 'add -c user.email note'` | 0 | 0 |
-| D24 | `git commit -m "escaped \"--author\" mention"` | 0 | 0 |
-| D25 | `echo --author=foo` | 0 | 0 |
-| D26 | `ls -c user.name=x` | 0 | 0 |
-| D27 | `git commit -m "unbalanced quote --author` (odd quote) | 0 | 0 |
-| E28 | `git --some-unknown-global commit --author=x` | 0 | 0 |
-| E29 | `git` (bare, no subcommand) | 0 | 0 |
-| F-block | case #9 via grep/sed fallback (PATH without jq, curated symlink dir) | 2 | 2 |
-| F-allow | case #1 via grep/sed fallback (PATH without jq, curated symlink dir) | 0 | 0 |
-
-Additional cases (eval MINOR + plan narrative):
-- `git -c user.email=x@y commit-tree abc` → 2 (BLOCK; commit-tree in set)
-- `git --no-pager log --author=x` → 0 (ALLOW; --no-pager is valueless global)
-- `git -C /p commit --author=x` → 2 (BLOCK; -C skipped, commit found)
-- `GIT_COMMITTER_EMAIL=z@z git cherry-pick -x abc` → 2 (BLOCK)
-- `git -c user.name=x rebase --continue` → 2 (BLOCK)
-
-30/30 match. No false-negative (real commit-time override slips to ALLOW). No
-false-positive (read subcommand with filter flag blocked). Gate: clean.
+- 2026-06-08 (planner): **Redesign after Round-2 code FAIL.** The prior version gated
+  *all* vectors behind a commit-creating-subcommand parser that failed OPEN on any
+  non-env pre-`git` token, which let real overrides through
+  (`export GIT_*=…; git commit`, `env …`, `cd … && git commit --author=`, `true; …`,
+  `sudo …`). The new posture removes subcommand gating from the env/`-c` vectors
+  entirely (they BLOCK unconditionally) and makes the `--author` carve-out
+  fail-CLOSED (BLOCK unless positively a known read). For identity overrides,
+  fail-open = fail-unsafe; this design has no fail-open path that records identity.
+- 2026-06-08 (planner): **Intended new BLOCKs.** `GIT_AUTHOR_NAME=foo git log` and
+  `git -c user.email=x@y log` now BLOCK (they previously also blocked in the *original*
+  shipped guard, before the rejected slice; the rejected slice briefly ALLOWed them).
+  An identity override on a read is pointless, so blocking it costs nothing and keeps
+  the env/`-c` detection prefix-agnostic — which is what eliminates the regression.
+  Documented in the matrix (A20–A22) as required BLOCK.
+- 2026-06-08 (planner): the `--author` read allowlist is
+  `log shortlog blame whatchanged rev-list show`. These are the git read commands that
+  accept `--author` as a filter. If a future read command needs the carve-out it can
+  be added here; until then, fail-closed means an unrecognized subcommand with
+  `--author` BLOCKS — acceptable, since a real read mis-typed/unknown is rare and a
+  real commit override must never slip.
+- 2026-06-08 (planner): the Stage-C odd-quote fail-open (C8) is unchanged and is about
+  *unparseable quoting*, not about identity posture. A normal
+  `git commit --author='A B <a@b>'` has balanced quotes and is never caught by it
+  (Stage B leaves `git commit --author=` in `$STRIPPED`, which the §2 fail-closed
+  check then BLOCKs).
+- 2026-06-08 (planner): `tag` and `notes` are no longer special-cased. They are not in
+  the `--author` read allowlist, so `git tag --author=…` / `git notes … --author=…`
+  would BLOCK — harmless (git does not honor `--author` there; the command is git-
+  invalid), and not a false-negative concern.
