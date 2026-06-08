@@ -1,6 +1,6 @@
 # Initialized init behavior body
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md
 
 ## Context
