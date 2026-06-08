@@ -1,6 +1,6 @@
 # 07 — Command Surface
 
-Status: Draft
+Status: Approved
 
 loom is a Claude Code **plugin**. Plugin components are **namespaced by plugin
 name** — there is no bare `/loom`; commands are `/loom:<name>` and agents are
