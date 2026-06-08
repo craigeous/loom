@@ -7,12 +7,18 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** M2 slice 1 (init-mode detection classifier) landed.
-  Both plan-eval and code-eval ran blind and independently: both PASS.
-  Deliverable: `plugins/loom/skills/loom-playbook/references/init-detection.md` —
-  the single authoritative, executable init-mode classifier. Four call sites
-  (`orchestration.md`, `init.md`, `run.md`, `status.md`) repointed at it;
-  divergent restatements removed. Slice archived at commit 5fef2ed.
+- **Last action:** M2 slice 2 (Greenfield init behavior body) landed.
+  Both plan-eval and code-eval ran blind and independently: both PASS (code-eval
+  Round 2 PASS at commit a58ff7e; one MINOR recorded — spec 06 §1 says seed
+  "empty" status files while `greenfield.md` seeds `progress.md`/`handoff.md` with
+  phase metadata; non-blocking, noted in open/decision index below).
+  Deliverable: `plugins/loom/skills/loom-playbook/references/greenfield.md` —
+  the single authoritative Greenfield behavior body (scaffold + seed + CLAUDE.md +
+  gate). Three call sites (`orchestration.md`, `run.md`, `init.md`) repointed at
+  it; the Greenfield branch wired to the body. Slice archived.
+- **M2 slice 1 (previously landed):** init-mode detection classifier in
+  `plugins/loom/skills/loom-playbook/references/init-detection.md`. Four call
+  sites repointed at it; divergent restatements removed. Archived at commit 5fef2ed.
 - **Evaluator hardening (dogfooding):** a planted-defect battery (plan/spec
   contradiction, green-but-wrong code, misleading tests, scope creep) confirmed
   blind evaluators catch gate-invisible defects — all FAILed for the right reason.
@@ -30,10 +36,11 @@ The status source of truth and decision index for building loom.
 - **First-run finding (fixed, M1):** the code-eval agent committed under a stray
   git identity `loom <loom@localhost>`, violating ADR 0003's uniform-identity rule.
   Fixed the playbook commit-convention: roles must not set/override git `user.*`.
-- **Next:** M2 slice 2 — per-mode behaviors (greenfield scaffold, unaligned
-  alignment + descriptive back-fill, initialized summarize/continue) and gate
-  establishment. The classifier in `init-detection.md` is the input; behavior
-  bodies are the next M2 slice(s).
+- **Next:** M2 slice 3 — Unaligned back-fill: study the repo, scaffold (reusing the
+  Greenfield body in `greenfield.md`), then descriptive `spec/` back-fill mapping
+  what the project currently is (spec `06 §2`). Follow-up slices: Initialized
+  resume menu (spec `06 §3`, "initialized-init-behavior"), and gate-learning for
+  unknown stacks ("gate-learning").
 
 ## Accepted decisions (ADRs)
 
@@ -52,6 +59,14 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 Deferred to later milestones: OQ-A (parallel `.docs/` coordination — M3), OQ-B
 (research-review tier — empirical), OQ-C (finalize-pass owner). See
 [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+
+**Open spec clarification (non-blocking):** code-eval MINOR on greenfield-init-behavior
+— spec `06 §1` says seed "empty" status files, but `greenfield.md` seeds
+`progress.md` and `handoff.md` with phase metadata (Phase: init / Greenfield
+scaffold complete; next step: declare scope and run `/loom:run`). Spec `06` may
+need a clarification distinguishing "empty" (no prior design content) from
+"blank" (zero bytes). Not acted on here; warrants a spec-clarification slice if
+the ambiguity causes a future conflict.
 
 ## Verified at first install (M1)
 

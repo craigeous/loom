@@ -18,11 +18,12 @@ Review → Landed → Archived` (see
 
 ## Active plans
 
-- [greenfield-init-behavior.md](greenfield-init-behavior.md) — `Plan Review` — the
-  Greenfield init behavior body: scaffold `.docs/`, seed `status/`, write project
-  `CLAUDE.md`, establish the gate (second M2 slice).
+_(none — next slice not yet planned)_
 
 ## Archived plans
 
-- [archive/init-mode-detection.md](archive/init-mode-detection.md) — `Landed` — one
-  authoritative, precise init-mode classifier (first M2 slice; landed 5fef2ed).
+- [archive/init-mode-detection.md](archive/init-mode-detection.md) — `Archived` —
+  one authoritative, precise init-mode classifier (first M2 slice; landed 5fef2ed).
+- [archive/greenfield-init-behavior.md](archive/greenfield-init-behavior.md) — `Archived` —
+  Greenfield init behavior body: scaffold `.docs/`, seed `status/`, write project
+  `CLAUDE.md`, establish the gate (second M2 slice; landed a58ff7e).
