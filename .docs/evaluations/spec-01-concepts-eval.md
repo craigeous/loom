@@ -59,3 +59,48 @@ research/evaluations/slices/status-as-dispatcher sections are consistent with AD
 `/loom`, no "skill"-as-product usage, no renamed roles or dirs. The sole blocker is
 the durable/transient section, which encodes the rejected prototype model; once the
 two bullets are corrected this spec should pass.
+
+---
+
+# Evaluation: 01 — Concepts & `.docs/` Layout (Round 2)
+
+Verdict: PASS
+Round: 2
+Reviewed against: ADR 0005 (specs-frozen-after-approval); specs 03-artifact-lifecycle,
+05-blind-evaluation; the revision in commit `017ad8f` and the real `.docs/` tree.
+
+## Disposition of Round 1 findings
+
+- [BLOCKER] (durable/transient contradicts ADR 0005 / specs 03/05) — **RESOLVED.**
+  The Durable bullet (lines 40–45) now reads: an approved spec is **frozen** (ADR
+  0005), changing **only through a planning cycle** (`Draft → Plan Review →
+  Approved`), authored by the planner, **never as a side effect of a slice
+  landing** — exactly ADR 0005 ("approved spec is frozen … changes only by
+  re-entering the planning cycle, authored by the planner") and spec 03 lines
+  47–49. The Transient bullet (lines 47–52) now reads: plans are executed and on
+  landing **archived**, with the **living docs (`status/`) updated** to record what
+  was built, the spec **not** edited at landing, and divergence surfaced as
+  explicit planning work — matching ADR 0005 lines 19–23 and spec 03 lines 64–72.
+  "Folded back into the durable specs" is gone.
+
+- [MINOR] (missing inline ADR traces) — **RESOLVED.** Inline `(ADR 0005)` traces
+  now appear at the freeze claim (line 41), the ADR-immutability claim (line 44),
+  and the living-docs claim (line 49), matching the convention in specs 03 and 05.
+
+## New-contradiction check
+
+No regression introduced. The planning-cycle path `Draft → Plan Review → Approved`
+matches spec 03 line 40; "authored by the planner" matches ADR 0005 line 16; "spec
+wins on conflict" and ADR immutability/supersession are preserved correctly. The
+remainder of the file (artifact-types table, `.docs/` tree, research / evaluations /
+slices / status-as-dispatcher sections) is unchanged and was confirmed correct in
+Round 1.
+
+## Findings
+
+- None.
+
+## Notes
+
+Both Round 1 findings are fully addressed and no new conflict with the authority
+was introduced. Approved.

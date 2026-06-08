@@ -1,6 +1,6 @@
 # 01 — Concepts & `.docs/` Layout
 
-Status: Draft
+Status: Approved
 
 ## The `.docs/` directory
 
