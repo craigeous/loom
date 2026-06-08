@@ -67,3 +67,53 @@ author, license, keywords) modulo the `<owner>` placeholder. The single blocker 
 the agent-frontmatter field list, which is the one place the spec asserts manifest
 facts its own cited authority does not support and the shipped plugin contradicts.
 -->
+
+---
+
+# Evaluation: 10 — Packaging & Distribution (Round 2)
+
+Verdict: PASS
+Round: 2
+Reviewed against: the same authorities as Round 1 (ADRs 0001, 0002, 0006; spec 07;
+the real `plugin.json`, `.claude-plugin/marketplace.json`, the repo tree, all five
+shipped `agents/*.md`, `references/orchestration.md`, README, and the cited
+research note `.docs/research/2026-06-07-claude-code-plugin-mechanics.md`), plus
+`git show a651107` and the current file.
+
+## Round 1 findings — disposition
+
+- [BLOCKER] Agent-frontmatter "verified fields" — **RESOLVED.** The section now
+  states the five shipped agents use "exactly five frontmatter fields:
+  `name`, `description`, `model`, `color`, `tools`," with `color` restored and
+  `name` marked required. This matches the cited authority's agent table
+  (research note lines 73–79: `name/description/model/color` required, `tools`
+  optional) field-for-field, and matches all five shipped agents — verified each
+  of `code-evaluator.md`, `developer.md`, `plan-evaluator.md`, `planner.md`,
+  `researcher.md` carries exactly those five keys (e.g. `researcher.md`:
+  `color: cyan`). The seven previously-asserted unverified fields are removed.
+  The dependent M3 claim is reframed: `isolation: "worktree"`/`background` are now
+  explicitly "**not** part of today's verified manifest" — a "planned M3
+  parallelism mechanism" sourced to `references/orchestration.md`, whose
+  "Parallelism (M3, not yet)" section (lines 68–73) does name exactly
+  `isolation: "worktree"` and `background` agents. The link path (`../../plugins/
+  loom/skills/...`) resolves correctly from `.docs/spec/`. No "verified" label now
+  rests on an unverified field.
+
+- [MINOR] marketplace.json example mismatch — **RESOLVED.** The spec block now
+  carries the top-level `description` and the "with blind evaluation" plugin-entry
+  description, matching the real `.claude-plugin/marketplace.json` line-for-line.
+
+- [MINOR] stale `<owner>` placeholder — **RESOLVED.** `plugin.json` homepage/
+  repository and the install-flow `marketplace add` line now use the concrete
+  lowercase `craigeous/loom`, matching the shipped manifests and README.
+
+## New findings
+
+None. No new contradiction introduced by the revision; the rest of the spec is
+unchanged from Round 1, where it was already accurate against its authorities.
+
+## Verdict
+
+All Round 1 findings (the one blocker and both minors) are resolved with no
+regressions. The spec describes the manifest format accurately against its cited
+authority and the shipped plugin. PASS.

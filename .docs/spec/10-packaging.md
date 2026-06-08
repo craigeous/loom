@@ -1,6 +1,6 @@
 # 10 — Packaging & Distribution
 
-Status: Draft
+Status: Approved
 
 loom is a Claude Code **plugin**, distributed as its own single-plugin
 **marketplace** (ADR 0001, 0006). Mechanics verified against the official
