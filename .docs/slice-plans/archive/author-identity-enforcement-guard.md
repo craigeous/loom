@@ -1,6 +1,6 @@
 # Author-identity enforcement guard (PreToolUse hook + doc hardening)
 
-Status: Landed
+Status: Archived
 Target specs: (none — playbook/plugin hardening; aligns with ADR 0003)
 
 ## Context

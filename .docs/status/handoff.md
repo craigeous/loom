@@ -31,6 +31,15 @@ source of truth; `roadmap.md` is milestone order.
   `init.md`) repointed at it. Both plan and code evals: PASS (blind, independent;
   one MINOR on status file seeding — non-blocking). Deferred follow-up slices:
   unaligned-init-behavior, initialized-init-behavior, gate-learning.
+- **`author-identity-enforcement-guard` landed (a47bf95).** PreToolUse hook
+  (`plugins/loom/hooks/hooks.json` + `git-identity-guard.sh`) and hardened
+  `commit-convention.md` now block all identity-override paths (`--author=`,
+  `-c user.*`, `GIT_AUTHOR_*`/`GIT_COMMITTER_*`). 26-case acceptance matrix
+  passed; jq-absent grep-fallback verified; code-eval Round 4 PASS (independent
+  re-verification). Slice archived. The commit-identity guard gap follow-up is
+  resolved. One new Open item: `--author` detection is not scoped to
+  commit-creating subcommands, so read-only commands like `git log --author=` are
+  also blocked — a usability refinement candidate for a future slice.
 - **`retire-code-review-status-token` landed (a85885f).** The obsolete `Code Review`
   status token removed repo-wide from `SKILL.md`, `status-machine.md`,
   `developer.md`, and the slice-plans README `Lifecycle:` string. All lifecycle
@@ -45,10 +54,13 @@ source of truth; `roadmap.md` is milestone order.
 - Design + decisions stable in `.docs/spec/` (00–10) and `.docs/ADR/` (0001–0006).
 - **Deferred follow-ups from the spec pass** (in `progress.md` Open, for a future
   slice / owner decision): bare `/loom` in ADR 0001 needs a superseding ADR or
-  erratum (ADRs are immutable — no rewrite); the commit-identity guard gap
-  (`--author=` / `GIT_AUTHOR_*` env vars are not blocked) should be closed in
-  `commit-convention.md` / the agent guards. ~~The "Code Review" phase-label string~~
-  is **resolved** (commit a85885f — token retired repo-wide).
+  erratum (ADRs are immutable — no rewrite). ~~The "Code Review" phase-label string~~
+  is **resolved** (commit a85885f — token retired repo-wide). ~~The commit-identity
+  guard gap~~ is **resolved** (commit a47bf95 — hook + doc hardening).
+- **New Open item:** the guard's `--author` pattern is not scoped to
+  commit-creating subcommands, so `git log --author=`, `git shortlog --author`, and
+  `git blame --author` are also blocked. Usability refinement, not a security
+  issue — owner decision on whether to scope or accept current behavior.
 
 ## Immediate next steps
 
@@ -60,7 +72,12 @@ source of truth; `roadmap.md` is milestone order.
 2. **Remaining M2 follow-ups (after Unaligned):** Initialized resume menu (spec
    `06 §3`, slice "initialized-init-behavior") and gate-learning for unknown stacks
    (slice "gate-learning").
-3. **M3 — parallelism:** worktree-per-slice + background agents (research note
+3. **Tooling slice (#4 recommended):** recommended CLI toolkit + mechanical-check
+   rubric (deferred; owner decision on priority).
+4. **Spec-10 line-107 bare-`/loom` fix:** spec 10 contains a bare `/loom` reference
+   at line 107; needs a superseding note or corrective pass (not a spec rewrite —
+   ADRs are immutable but specs can be amended via planning).
+5. **M3 — parallelism:** worktree-per-slice + background agents (research note
    `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A —
    owner guidance: the **planner** owns the `.docs/` coordination design).
 

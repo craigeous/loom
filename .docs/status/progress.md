@@ -7,7 +7,16 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** `retire-code-review-status-token` slice landed (commit a85885f,
+- **Last action:** `author-identity-enforcement-guard` slice landed (commit a47bf95,
+  code-eval Round 4 PASS, independently re-verified). Shipped:
+  `plugins/loom/hooks/hooks.json` (PreToolUse hook config) +
+  `plugins/loom/hooks/git-identity-guard.sh` (POSIX sh guard script, executable) +
+  `plugins/loom/skills/loom-playbook/references/commit-convention.md` hardened to
+  forbid all identity-override paths. 26-case acceptance matrix (6 BLOCK + 20 ALLOW)
+  passed; jq-absent grep-fallback path re-verified. The deferred follow-up tracking
+  the commit-identity guard gap (`--author=` / `GIT_AUTHOR_*` env vars) is now
+  resolved (see Resolved below).
+- **Prior action:** `retire-code-review-status-token` slice landed (commit a85885f,
   code-eval PASS). The obsolete `Code Review` status token has been removed repo-wide
   from `SKILL.md`, `status-machine.md`, `developer.md`, and the slice-plans README
   `Lifecycle:` string. All four lifecycle strings now read
@@ -87,6 +96,9 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
   greenfield-init-behavior): spec `06 §1` was amended and re-approved (commit
   86fa7d1, eval `spec-06-status-seed-clarification-eval.md`) to define "empty" as
   no design content, authorizing the scaffold/phase metadata `greenfield.md` seeds.
+- Commit-identity guard gap (`--author=` / `GIT_AUTHOR_*` env vars not blocked):
+  closed by `author-identity-enforcement-guard` slice (commit a47bf95). The
+  PreToolUse hook + `commit-convention.md` hardening cover all override paths.
 
 ## Open
 
@@ -107,10 +119,19 @@ for a future slice / owner decision):
   (`SKILL.md`, `status-machine.md`, `developer.md`, slice-plans `README.md`) now
   match spec 03: `… → Implemented → (code review) → Landed → Archived`. Only
   legitimate action-phrasing and historical eval/status records remain.
-- **Commit-identity guard gap.** The role guard blocks `git config` and `-c user.*`
-  but **not** `--author=` or `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars — a planner
-  commit slipped through as `loom <loom@localhost>` this run and had to be repaired.
-  `commit-convention.md` / the agent guards should close that hole.
+- ~~**Commit-identity guard gap.**~~ **Resolved (commit a47bf95).** The
+  `author-identity-enforcement-guard` slice closed this: `commit-convention.md` now
+  explicitly forbids `--author=`, `-c user.*`, and `GIT_AUTHOR_*`/`GIT_COMMITTER_*`
+  env vars; the PreToolUse hook (`plugins/loom/hooks/git-identity-guard.sh`) enforces
+  it as best-effort defense-in-depth (26-case matrix, jq-absent fallback verified).
+- **Guard `--author` pattern not scoped to commit-creating subcommands.** The
+  guard's `--author([[:space:]]|=)` ERE fires on any git command containing
+  `--author`, which means read-only commands like `git log --author=foo`,
+  `git shortlog --author=Craig`, and `git blame --author` are also blocked. This is
+  a **usability refinement** (not a security issue — the guard is correctly
+  conservative). Owner decision: scope the `--author` detection to commit-creating
+  subcommands only (`commit`, `commit-tree`, `merge`, `tag`, `notes add`, etc.), or
+  accept the current over-blocking as the safe default. Flagged for a future slice.
 
 ## Verified at first install (M1)
 

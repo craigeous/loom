@@ -17,12 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [author-identity-enforcement-guard.md](author-identity-enforcement-guard.md) — `In Progress` —
-  author-identity enforcement guard: PreToolUse hook (`plugins/loom/hooks/`) +
-  `commit-convention.md` hardening; enforces ADR 0003's uniform commit identity.
+(none)
 
 ## Archived plans
 
+- [archive/author-identity-enforcement-guard.md](archive/author-identity-enforcement-guard.md) — `Archived` —
+  author-identity enforcement guard: PreToolUse hook (`plugins/loom/hooks/`) +
+  `commit-convention.md` hardening; enforces ADR 0003's uniform commit identity
+  (landed a47bf95).
 - [archive/init-mode-detection.md](archive/init-mode-detection.md) — `Archived` —
   one authoritative, precise init-mode classifier (first M2 slice; landed 5fef2ed).
 - [archive/greenfield-init-behavior.md](archive/greenfield-init-behavior.md) — `Archived` —
