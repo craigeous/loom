@@ -17,14 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [shell-gate-plan.md](shell-gate-plan.md) — `Plan Review` —
-  first learned gate: a committed bats suite for git-identity-guard.sh (28 cases)
-  + `gates/shell.md` (Status: Verified, mirrors rust.md) + root CLAUDE.md Gate
-  reconciliation; runs the gate-learning mechanism green on loom's own shell hook
-  (M4 dogfooding; deferred-from-M2).
+_(none)_
 
 ## Archived plans
 
+- [archive/shell-gate-plan.md](archive/shell-gate-plan.md) — `Archived` —
+  first learned gate: committed 28-case bats suite for git-identity-guard.sh +
+  `gates/shell.md` (Status: Verified, mirrors rust.md) + root CLAUDE.md Shell gate
+  section; ran the gate-learning mechanism end-to-end green on loom's own hook
+  (M4 dogfooding; deferred-from-M2; gate green 28/28; landed 34de27c).
 - [archive/parallelism-behavior-body.md](archive/parallelism-behavior-body.md) — `Archived` —
   M3 parallelism behavior body: new `references/parallelism.md` operationalizing
   ADR 0008 (worktree-per-slice create→work→land→cleanup, the `.docs/` coordination

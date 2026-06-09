@@ -53,10 +53,10 @@ override `user.*`). Next: M2 (init modes / gate learning).
 - [x] **Idempotent playbook re-application** — auto-apply clean, recommend for
       conflicts, never clobber; single-sourced in `initialized.md` Step 3 (b0bd3e9).
 
-**M2 complete.** All four items delivered. Deferred follow-up: `gates/shell.md`
-(a first concrete learned gate for shell-stack projects — mechanism is in place;
-`gates/shell.md` should be produced by running the mechanism on a real shell
-project). Next: M3 (parallelism).
+**M2 complete.** All four items delivered. Deferred follow-up: ~~`gates/shell.md`~~
+**DONE** — produced as M4 dogfooding via the gate-learning mechanism on loom's own
+hook (shell-gate slice, commit 34de27c, gate green 28/28; `gates/shell.md`
+Status: Verified). Next: M3 (parallelism).
 
 ## M3 — Parallelism (complete)
 

@@ -16,12 +16,17 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M4 (Dogfooding & hardening) in progress.** First dogfood run landed: **ADR 0008
-  folded into frozen specs 04 + 08** (commit c3cd354, plan-eval PASS, owner-approved)
-  — driven through loom's own loop in strict route-only mode with zero orchestrator
-  intervention into role work. Spec 04's Parallelism section now states ADR 0008's
-  coordination model (no longer open); spec 08 records the slice-plans-index
-  ownership change. M0–M3 all complete.
+- **M4 (Dogfooding & hardening) in progress.** `shell-gate` slice landed (commit
+  34de27c, code-eval PASS Round 3, gate green 28/28): first end-to-end exercise of
+  the gate-learning mechanism on real code. Delivered: 28-case bats suite for
+  `git-identity-guard.sh`, `gates/shell.md` (Status: Verified), root `CLAUDE.md`
+  Shell gate section. Plan-eval caught a real BLOCKER (jq-absent recipe), fixed
+  Round 2. Deferred M2 follow-up `gates/shell.md` is **DONE**. Also landed: ADR
+  0008 folded into frozen specs 04 + 08 (commit c3cd354, plan-eval PASS,
+  owner-approved) — driven through loom's own loop in strict route-only mode with
+  zero orchestrator intervention. Spec 04's Parallelism section now states ADR 0008's
+  coordination model; spec 08 records the slice-plans-index ownership change.
+  M0–M3 all complete.
 - **M3 (Parallelism) is complete**, including the live parallel demonstration.
   `references/parallelism.md` (ADR 0008) is the single authoritative
   worktree-per-slice operational body. The model was proven end-to-end: 2 developer
@@ -120,20 +125,21 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M4 — Dogfooding & hardening:** loom manages its own development end to end;
-   best practices propagated into root/project `CLAUDE.md` automatically; owner
-   approval gates, round limits/escalation polished; resume-after-interruption
-   verified across machines; `claude -p` fallback evaluated if deeper nesting is
-   needed.
+1. **M4 — Dogfooding & hardening:** remaining threads:
+   - **CLAUDE.md auto-propagation:** best practices propagated into root/project
+     `CLAUDE.md` automatically.
+   - **Escalation/round-limit stress-test:** owner approval gates, round
+     limits/escalation polished.
+   - **Resume-across-machines:** resume-after-interruption verified across machines.
+   - **`claude -p` evaluate-and-close:** `claude -p` fallback evaluated if deeper
+     nesting is needed.
 2. **DONE — fold ADR 0008 into spec 04 (and spec 08):** completed as M4 dogfood
    run #1 (commit c3cd354, plan-eval PASS, owner-approved). Both specs re-Approved;
    spec 04's Parallelism section now carries ADR 0008's coordination model and spec
    08 records the slice-plans-index ownership change.
-3. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
-   shell-stack projects (using `shellcheck` as the lint step). The gate-learning
-   mechanism is now in place; this gate should be produced by running the mechanism
-   on a real shell project (run-green-once is part of the lifecycle, not a
-   hand-authored artifact). `shellcheck` is already pointed from `tooling.md`.
+3. **DONE — `gates/shell.md`:** produced as M4 dogfooding via the gate-learning
+   mechanism on loom's own hook (shell-gate slice, commit 34de27c, gate green 28/28).
+   `gates/shell.md` is Status: Verified; 28-case bats suite committed.
 4. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
    reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
    plan-eval, amend via planning — not a direct edit). The mechanical-check rule now

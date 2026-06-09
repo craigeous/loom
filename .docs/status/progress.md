@@ -7,7 +7,19 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **M4 dogfood run #1 — folded ADR 0008 into frozen specs 04 + 08**
+- **Last action:** **`shell-gate` slice landed** (commit 34de27c, code-eval PASS
+  Round 3, gate green 28/28). First end-to-end exercise of the gate-learning
+  mechanism on real code. Delivered: `plugins/loom/hooks/git-identity-guard.bats`
+  (28-case bats suite covering 11 BLOCK / 14 ALLOW / 3 jq-fallback cases),
+  `plugins/loom/skills/loom-playbook/gates/shell.md` (Status: Verified, mirrors
+  rust.md shape), root `CLAUDE.md` Shell gate section (three concrete
+  format/lint/test commands). Gate green: shfmt -i 4 -d exit 0, shellcheck exit 0,
+  bats 28/28 pass. Plan-eval caught a real BLOCKER in Round 1 (jq-absent fallback
+  recipe used a bare `sh` against a jq-free PATH — the interpreter itself would exit
+  127); fixed Round 2 (absolute `/bin/sh` invocation). B10/B11 rows added to prove
+  the documented read over-block explicitly. The deferred M2 follow-up `gates/shell.md`
+  is now **DONE**. Slice archived.
+- **Prior action:** **M4 dogfood run #1 — folded ADR 0008 into frozen specs 04 + 08**
   (commit c3cd354, plan-eval `adr0008-spec-fold-eval.md` PASS Round 1, approved by
   owner). Driven entirely through loom's own loop in **strict route-only** mode: the
   orchestrator only spawned roles and verified commits — the planner authored the
@@ -77,11 +89,9 @@ The status source of truth and decision index for building loom.
   items done — Detection classifier (5fef2ed), Greenfield/Unaligned/Initialized per-
   mode behaviors (a58ff7e/e83e219/b0bd3e9), idempotent re-application (b0bd3e9), gate-
   learning (b2463c4). Slice archived.
-- **Deferred follow-up (M2, non-blocking):** `gates/shell.md` — a first concrete
-  learned gate for shell-stack projects. The gate-learning mechanism is in place;
-  this gate should be produced by running the mechanism on a real shell project, not
-  hand-authored (run-green-once is part of the lifecycle). Retained as an explicit
-  follow-up.
+- ~~**Deferred follow-up (M2, non-blocking):** `gates/shell.md`~~ **DONE** —
+  produced as M4 dogfooding via the gate-learning mechanism on loom's own hook
+  (shell-gate slice, commit 34de27c, gate green 28/28). See Last action above.
 - **Prior action:** `initialized-init-behavior` slice landed (commit b0bd3e9, code-eval
   Round 2 PASS). Shipped: new
   `plugins/loom/skills/loom-playbook/references/initialized.md` — the single
@@ -191,9 +201,7 @@ The status source of truth and decision index for building loom.
 - **Next:** continue M4 — Dogfooding & hardening. Remaining M4 items: best practices
   propagated into root/project `CLAUDE.md` automatically; owner approval gates +
   round-limit/escalation polished; resume-after-interruption verified across
-  machines; `claude -p` deep-nesting fallback evaluated. Deferred follow-up
-  (non-blocking): `gates/shell.md` — first concrete learned gate for shell-stack
-  projects (mechanism in place, needs a real shell-project run-green-once).
+  machines; `claude -p` deep-nesting fallback evaluated.
 
 ## Accepted decisions (ADRs)
 
