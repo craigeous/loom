@@ -1,6 +1,6 @@
 # Gate-learning for unknown stacks
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md (Gate establishment, 2nd + 3rd bullets), 08-playbook.md (Gate learning)
 
 ## Context
