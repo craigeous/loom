@@ -84,6 +84,11 @@ proven end-to-end. Next: M4 (Dogfooding & hardening).
 
 - [ ] loom manages its own development end to end.
 - [ ] Best practices propagated into root/project `CLAUDE.md` automatically.
-- [ ] Owner approval gates, round limits/escalation polished.
+- [x] **Owner approval gates, round limits/escalation polished** — round-limit
+      semantics tightened (FAIL-only counting, one cross-phase counter per artifact,
+      reset rule) + escalation pause+summary contract defined in spec 03 (Cycle 1),
+      playbook brought into conformance so evaluators stop numbering PASSes (Cycle 2),
+      and the machinery verified by a live 5-round stress-test that escalated correctly
+      at the 5th FAIL with a full summary.
 - [ ] Resume-after-interruption verified across machines.
 - [ ] `claude -p` fallback evaluated if deeper nesting is needed.

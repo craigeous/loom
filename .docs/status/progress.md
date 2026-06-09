@@ -7,7 +7,20 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **Playbook conformance landed — Cycle 2 of the M4 escalation
+- **Last action:** **M4 escalation thread COMPLETE — live 5-round stress-test passed.**
+  Roadmap item "owner approval gates, round limits/escalation polished" is now done.
+  The test used a throwaway fixture outside loom's repo (`/Users/craig/git/loom-escalation-test/`,
+  since removed): a slice-plan whose goal (developer edits the frozen spec at landing)
+  inherently violates ADR 0005 / spec 03, with a seeded 3-FAIL history. Two **live blind
+  plan-eval** passes then ran on cosmetic revisions: each FAILed on the same recurring
+  BLOCKER and **continued the counter (3 → 4 → 5, not restarting)** — confirming the
+  Cycle-2 evaluator-prompt fix works in real agents. At the 5th FAIL the orchestrator
+  **halted instead of dispatching a 6th revision** and produced the full spec-03
+  escalation summary (stuck artifact + Draft status; per-round findings history 1..5;
+  **recurring/thrashing** classification; four owner options). End-to-end the corrected
+  machinery fired correctly. This closes Cycles 1 (spec 03 amendment) + 2 (playbook
+  conformance) + the live test.
+- **Prior action:** **Playbook conformance landed — Cycle 2 of the M4 escalation
   thread** (`round-limit-conformance` slice, commit f161fa0, code-eval PASS Round 0).
   The playbook now matches spec 03's amended FAIL-only round-counting rule across all
   five files: `status-machine.md`, `orchestration.md`, the eval template, and — the

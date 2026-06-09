@@ -16,23 +16,26 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M4 escalation thread — Cycles 1 + 2 done.** Cycle 1: spec 03 `## Round limits`
-  amended + Approved (commits 5de67fd → df72df0); `Round:` now counts FAIL cycles
-  only, one cross-phase counter per artifact, escalation pause+summary contract
-  defined. Cycle 2: playbook conformance landed (commit f161fa0, code-eval PASS
-  Round 0) — `status-machine.md`, `orchestration.md`, eval template, and both
-  evaluator prompts now match the amended spec; the key fix is the two evaluator
-  prompts no longer number PASSes as new rounds. Slice `round-limit-conformance`
-  archived. **M4 finding:** planner's first commit in this slice was forged as
-  `loom <loom@localhost>` (M1 identity bug, recurred); corrected via
-  `git commit --amend --reset-author` (→ d008bc3). The identity-guard hook does not
-  protect loom's own dev session (only fires where loom is installed as an active
-  plugin, only catches override flags). Candidate hardening: clarify "author-neutral"
-  in `agents/*.md` + `commit-convention.md` = use configured identity / never invent
-  one; optionally activate the hook in loom's own dev worktree. **Remaining M4
-  threads:** CLAUDE.md auto-propagation; resume-across-machines; `claude -p`
-  deep-nesting fallback. **Next in escalation thread:** live 5-round stress-test
-  against the corrected machinery.
+- **M4 escalation thread — COMPLETE** (roadmap item "owner approval gates, round
+  limits/escalation polished" ✓). Cycle 1: spec 03 `## Round limits` amended + Approved
+  (commits 5de67fd → df72df0); `Round:` counts FAIL cycles only, one cross-phase counter
+  per artifact, escalation pause+summary contract defined. Cycle 2: playbook conformance
+  landed (commit f161fa0, code-eval PASS Round 0) — `status-machine.md`,
+  `orchestration.md`, eval template, and both evaluator prompts match the amended spec
+  (evaluators no longer number PASSes as new rounds). Slice `round-limit-conformance`
+  archived. **Live 5-round stress-test passed** (throwaway fixture, since removed): real
+  blind evals continued the counter 3→4→5 on a recurring BLOCKER, and the orchestrator
+  halted at the 5th FAIL with the full escalation summary (thrashing classification +
+  owner options) instead of dispatching a 6th revision.
+  **M4 finding (open hardening candidate):** the planner's first commit in the conformance
+  slice was forged as `loom <loom@localhost>` (M1 identity bug, recurred); corrected via
+  `git commit --amend --reset-author` (→ d008bc3). The identity-guard hook does not protect
+  loom's own dev session (only fires where loom is installed as an active plugin; only
+  catches override flags). Candidate hardening: clarify "author-neutral" in `agents/*.md` +
+  `commit-convention.md` = use the configured identity / never invent one; optionally
+  activate the hook in loom's own dev worktree. See memory `loom-agents-forge-loom-localhost`.
+  **Remaining M4 threads:** CLAUDE.md auto-propagation; resume-across-machines; `claude -p`
+  deep-nesting fallback; (plus the identity-guard hardening candidate above).
 - **M4 (Dogfooding & hardening) in progress.** `shell-gate` slice landed (commit
   34de27c, code-eval PASS Round 3, gate green 28/28): first end-to-end exercise of
   the gate-learning mechanism on real code. Delivered: 28-case bats suite for
