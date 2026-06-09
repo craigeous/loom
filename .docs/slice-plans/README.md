@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [parallelism-behavior-body.md](parallelism-behavior-body.md) — `Plan Review` —
+- [parallelism-behavior-body.md](parallelism-behavior-body.md) — `In Progress` —
   M3 parallelism behavior body: new `references/parallelism.md` operationalizing
   ADR 0008 (worktree-per-slice create→work→land→cleanup, the `.docs/` coordination
   model, concurrency safety, slicer-independence rule); repoints the

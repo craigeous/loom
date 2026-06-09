@@ -28,9 +28,12 @@ running the command — not one of the roles. Read this plus
   out-of-scope change an evaluator flagged — is a **developer** slice, re-verified by
   the **evaluator**. Committing an agent's *already-produced* output (above) is fine;
   authoring or modifying code is not.
-- **One slice in flight at a time (M1).** Land or revert a slice before starting the
-  next; don't stack unrelated in-flight slices on one branch, or a re-review's
-  diff-against-prior-commit will conflate them and flag the wrong thing.
+- **One slice in flight by default; parallel independent/disjoint slices are
+  allowed** per [`parallelism.md`](parallelism.md) (each on its own branch +
+  worktree, owner opts in). Don't stack unrelated in-flight slices on **one
+  branch** — a re-review's diff-against-prior-commit will conflate them and flag
+  the wrong thing. Parallel slices on separate branches are fine when they are
+  independent (disjoint file sets — see `parallelism.md`).
 - **Ambiguity → ask.** If a role can't proceed without the owner, pause and ask a
   clear question rather than guessing.
 
@@ -67,9 +70,14 @@ At kickoff, confirm with the owner (AskUserQuestion if not already given):
 Track reject→revise rounds per artifact (the `Round:` line in its eval file). After
 **5** rounds, stop and escalate = pause + summary to the owner.
 
-## Parallelism (M3, not yet)
+## Parallelism
 
-M1 is sequential — work on the current branch, one slice at a time. Parallel slices
-(worktree-per-slice via agent `isolation: "worktree"`, `background` agents) come
-later; don't run roles in parallel unless the owner explicitly asks and accepts
-it's unproven.
+Worktree-per-slice parallelism is **active** — orchestrator-spawned background
+agents, each in its own worktree on its own branch, governed by
+[ADR 0008](../../../../../.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md).
+The owner opts in. See [`parallelism.md`](parallelism.md) for the complete
+operational body: create→work→land→cleanup workflow, the `.docs/` coordination
+model (living docs + slice-plans index orchestrator-owned/main-only/serialized;
+slice branches carry only disjoint uniquely-named plan/eval/code), concurrency
+safety (`index.lock` backoff, crash cleanup, one-branch-per-slice), and the
+slicer-independence rule.

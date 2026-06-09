@@ -22,9 +22,9 @@ An artifact's **status** is the dispatcher. Evaluators review work **blind** (no
 author identity, no author reasoning, diffing commits), and no role ever reviews
 work it produced — role separation guarantees no self-approval. Specs are frozen
 after approval and change only via planning. Design decisions are in
-`.docs/spec/` and `.docs/ADR/` (ADRs 0001–0006).
+`.docs/spec/` and `.docs/ADR/`.
 
-## Repo layout (M2 complete; M3 next)
+## Repo layout (M2 complete; M3 in progress)
 
 - The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus
   one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`;
@@ -58,6 +58,12 @@ after approval and change only via planning. Design decisions are in
 - **Recommended tooling + mechanical-check discipline**: `plugins/loom/skills/loom-playbook/references/tooling.md`
   — CLI/LSP toolkit by role (all optional with fallback); verify invariants with `rg -U`/`yq`/`ast-grep`,
   not by eye. Cross-linked from `SKILL.md`, both eval rubrics, and the three agent files.
+- **Parallelism behavior body** (M3): `plugins/loom/skills/loom-playbook/references/parallelism.md`
+  is the single authoritative worktree-per-slice operational body (ADR 0008):
+  create→work→land→cleanup, the `.docs/` coordination model (living docs +
+  slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
+  only disjoint plan/eval/code), concurrency safety, and the slicer-independence
+  rule.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions

@@ -11,6 +11,8 @@ spec-driven loop by spawning cold role agents and routing handoffs through `.doc
 Read first (source of truth):
 - `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/orchestration.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/status-machine.md`
+- `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/parallelism.md`
+  (worktree-per-slice parallelism — available, owner opts in)
 
 Requested scope: `$ARGUMENTS` (if empty, ask).
 
@@ -33,7 +35,9 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
    c. If the transition is an owner-claimed gate → pause, show the artifact + the
       evaluator's verdict, await the owner's decision.
    d. Spawn the dispatched role agent (right tier; focused prompt; blind inputs for
-      evaluators).
+      evaluators). Independent/disjoint slices may run in parallel (worktree-per-slice,
+      owner opts in) — see `parallelism.md` for the create→work→land→cleanup flow
+      and the slicer-independence rule.
    e. On return, verify the author-neutral commit and the new status. On a `Landed`
       code-eval PASS, spawn the developer's **finalize pass** (update `status/`,
       archive the plan).

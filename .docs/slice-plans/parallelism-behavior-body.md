@@ -1,6 +1,6 @@
 # M3 Parallelism behavior body — worktree-per-slice operational guidance
 
-Status: In Progress
+Status: Implemented
 Target specs: ADR 0008 (`.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md`, Accepted) — operationalized into the playbook. (Spec 04's Parallelism fold is the deferred planning-cycle item per ADR 0008 Consequences; this slice does **not** touch frozen `spec/`.)
 
 ## Context
@@ -296,8 +296,59 @@ is **review-against-ADR-0008, mechanical** (`rg`/`grep`, dogfood the rule):
    `gate-learning.md` and their call sites. Confirm `orchestration.md`'s Parallelism
    section is a pointer, not a copy of the body.
 
-## Notes
+## Gate evidence (markdown; no compiled gate)
 
-<none yet>
+Verification: review-against-ADR-0008, mechanical (`rg`/`grep`/`realpath`).
+
+**1. Every ADR 0008 element present in `parallelism.md`** (spot-check):
+```
+rg -n "index.lock|worktree add|worktree remove|disjoint|origin/main|serial" parallelism.md
+```
+Hits: `index.lock` (lines 170, 179, 182, 183, 191), `worktree add` (line 119),
+`worktree remove` (lines 165, 195), `disjoint` (lines 20, 66, 95, 98, 140),
+`origin/main` (lines 104, 119, 122), `serial` (lines 56, 59, 66, 135, 153, 229).
+All ADR 0008 §1–§4 elements mapped:
+- §1 coordination model: living docs + index main-only/serialized; per-slice plan/eval/code
+  branch-local + uniquely named; disjoint-by-construction; fresh-origin/main; cold agents.
+- §2 landing: serial git merge + finalize on main + mandatory cleanup; code-conflict → developer slice.
+- §3 safety: index.lock exponential backoff (~200/400/800ms); crash cleanup
+  (git worktree remove -f / prune); one-branch-per-slice; stateless identity-guard hook.
+- §4 boundaries: orchestrator-only spawner; serial living-doc/index writes; serial planning of
+  shared design memory; slicer-independence rule incl. shared-SOURCE-file → sequence distinction.
+
+**2. Coordination invariant stated correctly** (index = main-only/orchestrator, not on slice branch):
+- `slice-plans/README.md` placed in the orchestrator-owned/main-only/serialized table (line 66).
+- Explicit "Change from the M1 habit" section states planner writes ONLY the uniquely-named plan
+  file, NOT the index; orchestrator maintains Active/Archived on main (lines 82–93).
+- Land section confirms index is NOT on the branch (line 142).
+
+**3. No stale phrasing in touched files:**
+- `rg -ni "M3, not yet" plugins/loom/` → nothing (PASS)
+- `rg -ni "one slice in flight at a time" orchestration.md` → nothing (PASS)
+- `rg -ni "not yet|unproven" run.md` → nothing (PASS)
+- `grep "don't run roles in parallel" orchestration.md` → nothing (PASS)
+
+**4. Cross-links resolve:**
+- `parallelism.md` referenced in: `orchestration.md` (3 hits), `run.md` (2 hits),
+  `SKILL.md` (1 hit), `CLAUDE.md` (1 hit).
+- ADR 0008 relative link `../../../../../.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md`
+  from `references/` resolves via `realpath` to the real file (PASS).
+- `parallelism.md` → `orchestration.md` and `status-machine.md` (same-dir links) resolve.
+
+**5. No spec/ADR touched:**
+- `git diff --name-only HEAD | grep ".docs/(spec|ADR)/"` → nothing (PASS).
+- Changed set: `references/parallelism.md` (new), `references/orchestration.md`,
+  `commands/run.md`, `SKILL.md`, root `CLAUDE.md`, `.docs/slice-plans/README.md`,
+  `.docs/slice-plans/parallelism-behavior-body.md`.
+
+**6. Init-body pattern mirrored:**
+- `orchestration.md` Parallelism section (lines 73–83) is an 11-line pointer to
+  `parallelism.md` — not a copy of the body. Confirmed same shape as the
+  `gate-learning.md` / `greenfield.md` call-site pattern.
+
+**Eval MINORs addressed:**
+- (a) CLAUDE.md heading located by exact quoted text (not line number) — correct.
+- (b) Stale `(ADRs 0001–0006)` removed from CLAUDE.md; replaced with just `.docs/ADR/`.
+- (c) SKILL.md range guide — used as written.
 </content>
 </invoke>
