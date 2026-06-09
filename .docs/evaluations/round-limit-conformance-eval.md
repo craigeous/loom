@@ -76,3 +76,71 @@ Mechanical verification performed (not by eye):
 
 Round 0: first review of this artifact, no prior FAIL recorded in this eval file;
 PASS, so it remains round 0 per spec 03's counting rule.
+
+---
+
+# Evaluation: round-limit-conformance (code review)
+
+Verdict: PASS
+Round: 0
+Reviewed-commit: `f161fa0`
+Reviewed against: `.docs/spec/03-artifact-lifecycle.md` `## Round limits` (Status:
+Approved); slice-plan `round-limit-conformance-plan.md`; rubric
+`references/code-eval-rubric.md` + `references/severity.md`. No fmt/lint/test gate
+applies — all changed files are markdown prose/prompts; acceptance is
+review-against-spec-03. Mechanical checks (`git diff --name-only`, `git show -s`,
+`rg`) re-run, not eyeballed.
+
+## Findings
+
+- [MINOR] None blocking. The plan-eval round-0 record (above) noted a loose
+  attribution in the plan's Step 1 justification; that is a plan-text nit and is
+  not reproduced in the implemented files — the implemented relative link
+  (`../../../../../.docs/spec/03-artifact-lifecycle.md`) is identical in both
+  status-machine.md and orchestration.md and resolves on disk.
+
+## Required changes (for FAIL)
+
+None.
+
+## Verification (mechanical)
+
+- **Scope guard.** `git diff --name-only f161fa0^..f161fa0` lists exactly the 8
+  intended files (6 impl: status-machine.md, orchestration.md, evaluation.md,
+  plan-evaluator.md, code-evaluator.md, run.md; plus the plan and slice-plans
+  README). `… | rg '\.docs/(spec|ADR)/'` returns nothing — no spec/ADR edit.
+- **Author-neutral.** `git show -s --format='%an <%ae>'` = `Craig Pfeiffer
+  <craigeous@gmail.com>` (the configured identity, not `loom@localhost`); no
+  `Co-Authored-By` trailer.
+- **Both evaluator prompts encode FAIL-only counting.** For plan-evaluator.md and
+  code-evaluator.md: FAIL-only increment present (`rg -i 'only on a FAIL'`),
+  PASS-resolving-a-FAIL reuses the number (`resolv`/`same … round`), round-0 fresh
+  rule present, and each points to the authority (`status-machine.md` /
+  spec 03). code-evaluator.md additionally states the single per-artifact counter
+  continues across both phases — it reads the same eval file and continues from the
+  prior `Round:` value (`one per artifact across both phases` + `continue from it`).
+- **status-machine.md + orchestration.md.** `## Round limit` heading intact in
+  both; FAIL-only counting + PASS-shares-number + round-0 + cross-phase scope +
+  threshold 5 all stated; both link spec 03 via a relative path that resolves on
+  disk. The old bare phrasing ("A reject→revise cycle increments `Round:`" /
+  "Track reject→revise rounds") is gone (`rg` returns nothing).
+- **Template.** evaluation.md `Round: <n>` template line (line 4) intact; the
+  FAIL-cycle / round-0 / PASS-repeats guidance folded into the existing
+  `<!-- … -->` comment block with the closing `-->` present, and references spec 03
+  / status-machine.md.
+- **run.md.** Round-limit driver line now reads "5 **FAIL** cycles per artifact"
+  and points to spec 03 `## Round limits` — light touch, consistent.
+- **Single-source discipline.** `rg -i 'recurring-vs-new|recurring vs new|per-round
+  findings'` across `plugins/loom/skills/loom-playbook/`, `plugins/loom/agents/`,
+  and run.md returns nothing — the four-part escalation-summary contract and the
+  owner-reset rule live only in spec 03; the playbook links to it.
+- **Faithful, threshold still 5, no new policy.** Every clause maps to spec 03's
+  Counting rule / Counter scope / Threshold / Escalation contract; no contradiction
+  and no invented rule.
+
+## Round assignment
+
+This artifact has had no prior FAIL (the plan-eval above was a round-0 PASS). Per
+spec 03's counting rule, a resolving/clean PASS does not advance the counter, so
+this code-eval PASS keeps the artifact at **round 0**; only a FAIL would have
+opened round 1.
