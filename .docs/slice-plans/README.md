@@ -17,7 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_(none — M2 complete; M3 not yet started)_
+- [parallelism-behavior-body.md](parallelism-behavior-body.md) — `Plan Review` —
+  M3 parallelism behavior body: new `references/parallelism.md` operationalizing
+  ADR 0008 (worktree-per-slice create→work→land→cleanup, the `.docs/` coordination
+  model, concurrency safety, slicer-independence rule); repoints the
+  `orchestration.md` + `run.md` guards (drops "M3, not yet" / absolute "one slice
+  in flight"); adds it to `SKILL.md` + root `CLAUDE.md` (M3 in progress).
 
 ## Archived plans
 
