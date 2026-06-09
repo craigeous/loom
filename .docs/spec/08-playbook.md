@@ -1,6 +1,6 @@
 # 08 — Playbook
 
-Status: Approved
+Status: Plan Review
 
 The **playbook** is loom's bundled, evolving set of conventions and templates. It
 makes loom opinionated: loom imposes the playbook on the projects it manages
@@ -40,6 +40,18 @@ remains the single source loom applies from.
 - **`CLAUDE.md` template** — the project-level conventions loom writes into managed
   repos, plus guidance for root-level `CLAUDE.md`.
 - **Naming conventions** — artifact ↔ `<artifact>-eval.md`, ADR/spec numbering.
+
+### Slice-plans index ownership under parallelism
+
+Under parallelism the slice-plans index (`slice-plans/README.md`) Active/Archived
+sections are maintained by the **orchestrator on main**, not by the planner or
+developer in a slice branch. This is a change from the M1-sequential habit, where
+the planner wrote the Active-plans entry in the *same plan commit* as the plan file
+and the developer/finalize touched it again when archiving. Once parallelism is on,
+the planner authoring a slice-plan on its branch writes **only** the uniquely-named
+plan file (`<slice>-plan.md`) — never the index; the orchestrator adds the Active
+entry when it creates a slice and moves it to Archived when it lands one. See
+[ADR 0008](../ADR/0008-parallel-docs-coordination-worktree-per-slice.md) for detail.
 
 ## Model tiers
 

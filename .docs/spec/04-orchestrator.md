@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## What the orchestrator is
 
@@ -78,9 +78,26 @@ calls. This gives parallel slices safely:
   `code-evaluator` for each.
 - The orchestrator remains the single hub, keeping the status machine and blind
   routing coherent.
-- **`.docs/` coordination across branches** (status dashboard on the main branch
-  vs. per-slice plan/eval on slice branches) is an open question to settle when
-  parallelism is built — see [09](09-open-questions.md).
+- **`.docs/` coordination across branches** follows the hybrid model decided in
+  [ADR 0008](../ADR/0008-parallel-docs-coordination-worktree-per-slice.md) (the
+  authority for detail):
+  - The three living docs (`roadmap.md`, `progress.md`, `handoff.md`) **and the
+    slice-plans index `slice-plans/README.md`** are **orchestrator-owned,
+    main-only, and serialized** — a slice branch never edits them.
+  - Each slice branch carries only its **uniquely-named** plan file
+    (`<slice>-plan.md`), eval file (`<slice>-eval.md`), and its code. These path
+    sets are disjoint across slices by construction, so `.docs/` merge conflicts
+    cannot arise.
+  - Landing is a **serial merge + finalize on main**: the orchestrator merges one
+    slice (bringing only its disjoint files), runs the finalize pass on main to
+    update the living docs and move the slice's index entry Active → Archived,
+    then merges the next.
+  - **Concurrency safety:** `index.lock` collisions retried with exponential
+    backoff; crashed worktrees reclaimed via `git worktree remove -f` / `git
+    worktree prune`; one checkout per branch (each in-flight slice = one unique
+    branch in one worktree).
+  - **Slicer-independence rule:** only slices that touch **disjoint source files**
+    run in parallel; overlapping or mutually dependent slices are **sequenced**.
 
 **`claude -p` fallback:** a sub-agent with `Bash(claude:*)` can shell out to a
 headless `claude -p` to spawn a peer agent. Kept in reserve for deep nesting;
