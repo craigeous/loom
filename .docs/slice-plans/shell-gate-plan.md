@@ -1,6 +1,6 @@
 # Shell gate (first learned gate: `gates/shell.md`, verified on loom's own hook)
 
-Status: Approved
+Status: In Progress
 Target specs: 06-init-modes.md, 08-playbook.md
 
 ## Context
