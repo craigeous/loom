@@ -132,7 +132,9 @@ indefinitely.
   rather than starting a new one. A PASS never carries a higher round number
   just for being the next eval pass.
 - The **first** evaluation of a fresh artifact (no prior FAIL) is round 0 / not
-  yet counted; only a FAIL moves the count to round 1. Concretely: a slice that
+  yet counted; only a FAIL moves the count to round 1. Round 0 is the
+  initial clean-review state and **carries no FAIL findings**, so the counted
+  rounds — and the escalation summary's per-round findings history — run 1..N. Concretely: a slice that
   is reviewed, FAILs once, is revised, and then PASSes is **1 round** — not
   three eval passes counted separately. (This corrects an earlier de-facto
   practice that numbered every eval pass sequentially, e.g. R1 FAIL → R2 PASS →
@@ -188,9 +190,9 @@ that is sufficient to decide without re-reading the whole history. The summary
 1. **The stuck artifact and its current status** — which artifact, its path, and
    the `Status:` it now holds (e.g. a slice-plan back at `Draft` after a
    plan-review FAIL, or at `In Progress` after a code-review FAIL).
-2. **Per-round findings history** — for each of the rounds, the FAIL's verdict
-   and the substantive findings that drove it (and the phase — plan vs. code —
-   each FAIL occurred in), in order.
+2. **Per-round findings history** — for each of the counted rounds (1..N; round
+   0 carries no findings), the FAIL's verdict and the substantive findings that
+   drove it (and the phase — plan vs. code — each FAIL occurred in), in order.
 3. **A recurring-vs-new classification** — the orchestrator states whether the
    findings are **recurring** (the same defect surviving one or more revisions =
    **thrashing**) or **new each round** (each FAIL raises a different issue =
