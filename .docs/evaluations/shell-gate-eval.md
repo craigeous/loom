@@ -79,3 +79,53 @@ Verified PASSING, recorded so they are not re-litigated on re-review:
   spec/ADR. The slice-plans README Active entry (Step 5) is already in place and
   correct. gates/ currently holds only `rust.md`; no `.bats` exists yet — tree
   state matches the plan's claims.
+
+# Evaluation: shell-gate-plan.md (Round 2)
+
+Verdict: PASS
+Round: 2
+Reviewed against: the Round-1 BLOCKER and the diff `91c11c6..fea83d4` on
+`.docs/slice-plans/shell-gate-plan.md`; `plugins/loom/hooks/git-identity-guard.sh`
+(fallback branch under test); `.docs/spec/06-init-modes.md` (run-green-once);
+plan-eval rubric + severity.md. The corrected jq-absent recipe was run read-only
+against the real hook.
+
+## Findings
+
+- The Round-1 BLOCKER is **resolved**. The fix touches exactly two places, both
+  confirmed in the diff:
+  - **Step 1.4 recipe (now lines 154–168):** the interpreter is now invoked by
+    absolute path — `run env PATH="$stub" /bin/sh "$GUARD"` — and a NOTE explains
+    that a bare `sh` would re-resolve against the jq-free PATH and exit 127. The
+    coreutils-symlink loop and the deliberate jq exclusion are unchanged.
+  - **Notes claim corrected (lines 470–493):** the false "Verified to yield
+    NO_JQ and correct BLOCK/ALLOW while authoring this plan" is gone. The fallback
+    bullet is now labelled "corrected Round 2", explains the earlier 127 defect,
+    and states the F-row codes are **expected** and exercised at run-green-once
+    (Step 3 / V1), "not pre-verified here." The closing "Verified read-only"
+    bullet likewise scopes its pre-verification claim to the B/A rows
+    (default PATH, jq present) and states F1–F3 are "stated as expected, not
+    pre-verified via the recipe."
+- Mechanical confirmation (read-only, real hook
+  `plugins/loom/hooks/git-identity-guard.sh`): built the stub dir per the
+  corrected recipe and ran `env PATH="$stub" /bin/sh "$GUARD"`:
+  - F1 (`git commit --author=evil -m z`) → exit **2** (was 127 with the old
+    bare-`sh` recipe).
+  - F2 (`GIT_AUTHOR_NAME=Foo git commit -m z`) → exit **2**.
+  - F3 (`git commit -m z`) → exit **0**.
+  - Under `PATH="$stub"`, `command -v jq` reports **NO_JQ**, so the hook's
+    grep/sed `else` branch is genuinely exercised (the stub contains only
+    cat/grep/sed/tr/wc/head; no jq). The asserted 2/2/0 hold via the fallback.
+
+## Required changes (for FAIL)
+
+None.
+
+## Notes
+
+The revision is surgical: only Step 1.4 and the two affected Notes bullets
+changed; the 28-row matrix, all V-sections, the `shell.md`/CLAUDE.md/index steps,
+and every other Round-1-PASSing element are byte-unchanged in the diff and were
+not re-litigated. The single Round-1 mechanical defect is fixed and the
+verification language now matches reality (expected-at-run-green rather than
+falsely pre-verified). No BLOCKER, no MAJOR ⇒ PASS.
