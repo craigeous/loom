@@ -1,6 +1,6 @@
 # Identity Verification Hardening
 
-Status: Plan Review
+Status: Approved
 Target specs: 08-playbook.md
 
 ## Context
