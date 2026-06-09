@@ -1,6 +1,6 @@
 # Round-Limit Conformance
 
-Status: Landed
+Status: Archived
 Target specs: 03-artifact-lifecycle.md
 
 ## Context
