@@ -146,24 +146,34 @@ guard() {
    branch (lines 24–29 of the hook take the `jq` path when `command -v jq` succeeds;
    the `else` branch is the fallback). Force the fallback with a stub PATH that
    contains the coreutils the hook needs but **not** `jq`. The robust, environment-
-   independent recipe (verified while authoring this plan — a bare `PATH=/usr/bin`
-   does **not** work on this machine because `/usr/bin/jq` exists):
+   independent recipe below — a bare `PATH=/usr/bin` does **not** work on this
+   machine because `/usr/bin/jq` exists, so a temp stub PATH is required:
 
    ```bash
    # In a setup helper used only by the F-rows:
    guard_no_jq() {
      stub="$(mktemp -d)"
+     # NOTE: the interpreter is invoked by ABSOLUTE path (/bin/sh) below, so it
+     # does NOT need to be on the stubbed PATH. If you instead invoke a bare `sh`,
+     # you MUST also symlink sh into $stub or `env`/the shell re-resolves it
+     # against the jq-free PATH and the recipe exits 127. The hook's fallback
+     # branch uses only these coreutils:
      for t in cat grep sed tr wc head; do
        for d in /usr/bin /bin; do
          [ -x "$d/$t" ] && { ln -s "$d/$t" "$stub/$t"; break; }
        done
      done
-     run env PATH="$stub" sh "$GUARD" <<<"$1"
+     run env PATH="$stub" /bin/sh "$GUARD" <<<"$1"
      rm -rf "$stub"
    }
    ```
 
-   Confirm under that PATH `command -v jq` fails (NO_JQ) so the `else` branch runs.
+   `jq` is deliberately **not** symlinked into `$stub`, so under `PATH="$stub"`
+   the hook's `command -v jq` fails (NO_JQ) and the grep/sed `else` branch runs.
+   The interpreter is `/bin/sh` by absolute path so it resolves regardless of the
+   stubbed PATH. With this form the F-rows are expected to produce F1→2, F2→2,
+   F3→0 (BLOCK/ALLOW survive the fallback); the developer runs them as part of
+   the run-green-once gate (Step 3 / V1) and confirms NO_JQ.
    Use **absolute** `/usr/bin`/`/bin` source paths for the symlinks (a shell `grep`
    function/alias can otherwise shadow `command -v grep` and create a broken
    symlink — observed while authoring this plan).
@@ -457,16 +467,27 @@ Diff the two files' shapes (`rust.md` is the template):
   This plan adds **B10/B11** (the two read over-block rows) so the documented
   limitation is proven explicitly rather than left implicit — final suite is **28**
   `@test` cases. The added rows are additive (transparency), not substitutions.
-- **bats fallback recipe (planner, 2026-06-09):** a bare `PATH=/usr/bin` does **not**
-  knock out jq on the dev machine (a `/usr/bin/jq` exists). The reliable recipe is a
-  temp stub dir symlinking the coreutils the hook needs from their **absolute**
-  `/usr/bin`/`/bin` paths (not via `command -v`, which a shell `grep` function can
-  shadow into a broken link) and excluding jq, then `env PATH="$stub" sh "$GUARD"`.
-  Verified to yield NO_JQ and correct BLOCK/ALLOW while authoring this plan.
+- **bats fallback recipe (planner, 2026-06-09; corrected Round 2):** a bare
+  `PATH=/usr/bin` does **not** knock out jq on the dev machine (a `/usr/bin/jq`
+  exists), so the F-rows use a temp stub dir symlinking the coreutils the hook's
+  fallback branch needs from their **absolute** `/usr/bin`/`/bin` paths (not via
+  `command -v`, which a shell `grep` function can shadow into a broken link) and
+  deliberately excluding jq. **The interpreter is invoked by absolute path
+  (`/bin/sh "$GUARD"`)** so it resolves regardless of the jq-free stubbed PATH —
+  an earlier draft ran a bare `sh` against `PATH="$stub"` (which lacks `sh`),
+  which would exit 127; the corrected recipe in Step 1.4 fixes that (absolute
+  `/bin/sh`, or equivalently add `sh` to the symlink loop). This recipe is the
+  developer's instruction for the F-rows; it is **expected** to report NO_JQ and
+  produce F1→2, F2→2, F3→0, exercised as part of run-green-once (Step 3 / V1) —
+  not pre-verified here.
 - **Sequential index rule (planner, 2026-06-09):** no parallelism is active, so the
   planner writes the `slice-plans/README.md` Active entry in the plan commit (M1
   habit; ADR 0008's index-on-main rule is parallelism-gated, per spec 08).
 - **Verified read-only while authoring (planner, 2026-06-09):** `shfmt` 3.13.1,
   `bats` 1.13.0, `shellcheck` 0.11.0 all present; `shfmt -i 4 -d` and `shellcheck`
-  both exit 0 on the hook; all 28 decoded cases were run against the shipped hook and
-  produced the exit codes recorded in the matrix. No files were modified.
+  both exit 0 on the hook; the B01–B11 / A01–A14 rows were each run against the
+  shipped hook (default PATH, jq present) and produced the exit codes recorded in
+  the matrix. The jq-absent F1–F3 codes (2/2/0) follow from the same hook logic on
+  the corrected `/bin/sh` recipe (Step 1.4) and are exercised at run-green-once
+  (Step 3 / V1); they are stated as expected, not pre-verified via the recipe. No
+  files were modified.
