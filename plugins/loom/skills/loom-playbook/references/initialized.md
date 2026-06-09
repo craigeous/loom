@@ -91,20 +91,20 @@ carry only the per-mode safety invariant and explicitly defer "full idempotent
 re-application" to this body. `initialized.md` is now the full statement; the
 siblings' notes are not restated here.
 
-**Gate re-application:** re-application that would touch the gate still defers
-gate *learning* to the deferred gate-learning slice — re-application only
-re-applies what the current playbook already knows, under the never-clobber
-rule.
+**Gate re-application:** re-application that would touch the gate hands to
+[`gate-learning.md`](gate-learning.md) for unknown stacks — re-application only
+re-applies what the current playbook already knows (verified gates), under the
+never-clobber rule.
 
 ---
 
 ## Idempotence / scope-boundary note
 
-**Gate-learning is out of scope here and remains a forward pointer** (deferred
-*gate-learning* slice, per spec `06` Gate establishment 2nd bullet, as in
-`greenfield.md` Step E / `unaligned.md` Step 2). The Initialized body does not
+**Gate-learning is out of scope for this body.** The Initialized body does not
 establish or learn a gate on its own. An evaluator should not read the
-re-application step above as having absorbed gate-learning — it has not. The
-gate-learning slice is the dedicated follow-up that covers: inspect tooling,
-propose commands, confirm with the owner, run green once, record a new
-`gates/<stack>.md`.
+re-application step above as having absorbed gate-learning — it has not. When
+re-application encounters an unknown stack, it hands to
+[`gate-learning.md`](gate-learning.md) — the single authoritative mechanism for:
+inspect tooling, propose commands, confirm with the owner, run green once, record
+a new `gates/<stack>.md`. See that body (per spec `06` Gate establishment 2nd
+bullet, as in `greenfield.md` Step E / `unaligned.md` Step 2).

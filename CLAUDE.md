@@ -49,8 +49,12 @@ after approval and change only via planning. Design decisions are in
   is the single authoritative body for Initialized init (resume: derive a menu from
   `.docs/` + git state, hand into scope/gates + the `/loom:run` driver loop;
   idempotent playbook re-application — auto-apply clean, recommend for conflicts,
-  never clobber). The per-mode trio (Greenfield + Unaligned + Initialized) is now
-  complete; gate-learning remains a forward pointer (deferred *gate-learning* slice).
+  never clobber).
+- **Gate-learning body** (M2): `plugins/loom/skills/loom-playbook/references/gate-learning.md`
+  is the single authoritative body for the unknown-stack gate-learning mechanism
+  (inspect toolchain → propose → owner-confirm → run-green-once → record
+  `gates/<stack>.md` + project `CLAUDE.md`; UNVERIFIED until green). M2 is now
+  complete.
 - **Recommended tooling + mechanical-check discipline**: `plugins/loom/skills/loom-playbook/references/tooling.md`
   — CLI/LSP toolkit by role (all optional with fallback); verify invariants with `rg -U`/`yq`/`ast-grep`,
   not by eye. Cross-linked from `SKILL.md`, both eval rubrics, and the three agent files.
@@ -69,9 +73,12 @@ after approval and change only via planning. Design decisions are in
 
 The standard loom gate is **format → lint → test**, run in that order before any
 slice is considered `Implemented`. **Rust is the only verified gate**
-(`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`);
-for other stacks, loom identifies and creates the gate during init and records it
-back into the playbook. loom imposes this gate on managed projects and on itself.
+(`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`).
+For other stacks, the unknown-stack path is specified in
+`plugins/loom/skills/loom-playbook/references/gate-learning.md` (inspect toolchain
+→ propose `format → lint → test` → owner-confirm → run-green-once → record
+`gates/<stack>.md` + project `CLAUDE.md`; a gate stays UNVERIFIED until it has run
+green at least once). loom imposes this gate on managed projects and on itself.
 This repo has no compiled code yet, so it has no concrete gate to run.
 
 ## Update this file before committing

@@ -1,6 +1,6 @@
 # Gate-learning for unknown stacks
 
-Status: In Progress
+Status: Implemented
 Target specs: 06-init-modes.md (Gate establishment, 2nd + 3rd bullets), 08-playbook.md (Gate learning)
 
 ## Context
@@ -274,6 +274,26 @@ This repo has no compiled code; the gate is **review-against-spec, mechanical**
 unchanged (gate-learning only replaces the unknown-stack forward pointers); confirm
 `gates/rust.md` and the Rust command tables in `greenfield.md` Step E are
 untouched.
+
+## Gate evidence (recorded on implementation)
+
+All mechanical checks run from `/Users/craig/git/loom`:
+
+1. **spec-06 obligations mapped:** `rg -n -i "inspect|propose|confirm|owner|run green|record|gates/<stack>|CLAUDE\.md" references/gate-learning.md` — all five obligations (inspect, propose, confirm, run-green, record) appear in discrete steps. PASS.
+
+2. **UNVERIFIED → verified lifecycle:** `rg -n -i "unverified|run green|verified" references/gate-learning.md` — state machine `proposed → (owner-confirmed) → UNVERIFIED → (runs green once) → verified/recorded` is explicit in Step 4; non-green gate never recorded; loop-back to Step 2/3 on failure. PASS.
+
+3. **Recorded-gate format references `gates/rust.md`:** `rg -n "gates/rust\.md|Detected by|Status:|format.*lint.*test|re-run" references/gate-learning.md` — cites `../gates/rust.md` as template in Precondition and Step 5; enumerates all required fields (title, `Status:`, `Detected by:`, format/lint/test table, Notes with evaluator re-runs). PASS.
+
+4. **No stale forward pointers:** `rg -n -i "forthcoming|deferred gate-learning|gate-learning slice|not implemented here" greenfield.md unaligned.md initialized.md` — no matches. PASS. `rg -n "gate-learning\.md" greenfield.md unaligned.md initialized.md` — each file links the body (greenfield.md ×2, unaligned.md ×3, initialized.md ×2). PASS.
+
+5. **SKILL.md and root CLAUDE.md reference the body:** `rg -n "gate-learning" SKILL.md CLAUDE.md` — SKILL.md References entry + Gates section update; CLAUDE.md Repo layout bullet + Gate section update. PASS.
+
+6. **All cross-links resolve:** `test -f gates/rust.md`, `test -f references/unaligned.md`, `test -f .docs/spec/06-init-modes.md`, `test -f references/gate-learning.md` — all echo "ok". PASS.
+
+7. **No spec/ADR edited:** `git diff --name-only | rg "\.docs/(spec|ADR)/"` — exit 1 (no matches). Changed files: `gate-learning.md` (new), `greenfield.md`, `unaligned.md`, `initialized.md`, `SKILL.md`, `CLAUDE.md`, slice-plan. PASS.
+
+8. **Regression guard:** Rust command table in `greenfield.md` Step E untouched (only the unknown-stack paragraph was replaced); `gates/rust.md` unchanged. PASS.
 
 ## Notes
 

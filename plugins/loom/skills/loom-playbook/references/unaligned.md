@@ -57,14 +57,16 @@ The Unaligned **deltas** to the Greenfield body are:
   into Greenfield's Step E:
   - A verified Rust toolchain (`Cargo.toml` at repo/workspace root) adopts the
     verified gate in [`../gates/rust.md`](../gates/rust.md).
-  - An **unknown stack** takes the learn-a-new-gate path, which is a **deferred**
-    slice (spec `06` Gate establishment, 2nd bullet — inspect tooling, propose
-    commands, confirm with the owner, run green once, record a new
-    `gates/<stack>.md`). That full inspect/propose/confirm/learn mechanism is
-    **not implemented here** — it is the subject of the forthcoming
-    *gate-learning* slice, exactly as in Greenfield Step E. Until that slice
-    lands, record a marked-unverified placeholder in the project `CLAUDE.md` with
-    an explicit `Status: unverified — gate-learning not yet complete` notice.
+  - An **unknown stack** takes the learn-a-new-gate path specified in
+    [`gate-learning.md`](gate-learning.md) (inspect tooling, propose commands,
+    confirm with the owner, run green once, record a new `gates/<stack>.md`).
+    That body is now the single authoritative source for the full
+    inspect/propose/confirm/learn procedure, exactly as in Greenfield Step E.
+    Record a marked-UNVERIFIED placeholder in the project `CLAUDE.md` with an
+    explicit `Status: UNVERIFIED — gate-learning not yet complete` notice. This
+    placeholder is the UNVERIFIED entry state of the gate-learning lifecycle
+    (see `gate-learning.md` Step 4); gate-learning replaces it once the gate
+    runs green.
 
 - **Status seeds reflect alignment, not greenfield.** Where Greenfield's Step C
   seeds `progress.md` with "Phase: init / Greenfield scaffold complete," the
@@ -146,7 +148,7 @@ state of the surveyed project:
 ## Step 5 — Hand back: ready to resume as Initialized
 
 The goal (spec `06 §2`): the project is now loom-shaped — `.docs/` scaffolded,
-gate established (or placeholder recorded for the gate-learning slice), `spec/`
+gate established (or UNVERIFIED placeholder recorded per `gate-learning.md`), `spec/`
 descriptively back-filled and in the `Draft → Plan Review → Approved` pipeline,
 `status/` seeded with current state and initial roadmap — so the **next** loom
 run detects it as **Initialized** (its `.docs/` is now loom-shaped per

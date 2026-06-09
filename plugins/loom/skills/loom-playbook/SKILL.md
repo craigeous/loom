@@ -52,6 +52,7 @@ archived on landing. On conflict, the spec wins.
 - `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).
 - `unaligned.md` — the Unaligned init behavior body (alignment pass: reuse Greenfield scaffold + gate, then descriptive `spec/` back-fill).
 - `initialized.md` — the Initialized init behavior body (resume: state-derived menu mapped to the dispatch table → scope/gates + driver loop; idempotent playbook re-application).
+- `gate-learning.md` — the unknown-stack gate-learning mechanism (inspect toolchain → propose `format → lint → test` → owner-confirm → run-green-once → record `gates/<stack>.md` + project `CLAUDE.md`; gate stays UNVERIFIED until it runs green once).
 - `tooling.md` — **recommended** CLI/LSP toolkit by role, and the mechanical
   invariant-check discipline (verify with `rg -U`/`yq`/`ast-grep`/LSP, not by eye).
   All tools optional with graceful fallback.
@@ -60,8 +61,9 @@ archived on landing. On conflict, the spec wins.
 
 The gate is `format → lint → test`, run in that order before a slice is
 `Implemented`. **Rust is the only verified gate** (`gates/rust.md`). For an unknown
-stack, init identifies the tooling, creates the gate, confirms with the owner, runs
-it green once, and records a new `gates/<stack>.md`.
+stack, the full learn-a-gate path is specified in `references/gate-learning.md`
+(inspect tooling → propose → owner-confirm → run-green-once → record
+`gates/<stack>.md`). A gate stays UNVERIFIED until it has run green once.
 
 ## Model tiers (ADR 0002)
 

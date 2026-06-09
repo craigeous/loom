@@ -102,18 +102,18 @@ record these commands in the project `CLAUDE.md`:
 | lint   | `cargo clippy --all-targets -- -D warnings`   |
 | test   | `cargo test`                                  |
 
-**Any other / unknown stack:** The gate must be *learned* via the deferred
-gate-learning procedure (spec `06` Gate establishment, 2nd bullet — inspect
-tooling, propose commands, confirm with the owner, run green once, record a new
-`gates/<stack>.md`). That full inspect/propose/confirm/learn mechanism is
-**not implemented here** — it is the subject of the follow-up *gate-learning*
-slice.
+**Any other / unknown stack:** The gate must be *learned* via the mechanism
+specified in [`gate-learning.md`](gate-learning.md) (inspect tooling, propose
+commands, confirm with the owner, run green once, record a new
+`gates/<stack>.md`). That body is now the single authoritative source for the
+full inspect/propose/confirm/learn procedure.
 
-Until the gate-learning slice lands, a non-Rust Greenfield records a
-**marked-unverified placeholder** in the project `CLAUDE.md`: the proposed
-commands are listed with an explicit `Status: unverified — gate-learning not yet
-complete` notice and a follow-up note. This placeholder is never treated as a live
-gate; it is only a starting point for the gate-learning slice to fill in.
+For a non-Rust Greenfield, record a **marked-UNVERIFIED placeholder** in the
+project `CLAUDE.md` before gate-learning runs — list the proposed commands with
+an explicit `Status: UNVERIFIED — gate-learning not yet complete` notice. This
+placeholder is the **UNVERIFIED entry state** of the gate-learning lifecycle
+(see `gate-learning.md` Step 4's state machine); it is never treated as a live
+gate. Gate-learning replaces it once the gate runs green.
 
 The gate runs in `format → lint → test` order before any slice is marked
 `Implemented`, consistent with `SKILL.md` Gates and root `CLAUDE.md`.
