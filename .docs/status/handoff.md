@@ -16,6 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 escalation thread — Cycle 1 done (round-limit spec hardened).** Spec 03
+  `## Round limits` amended + Approved (commits 5de67fd → df72df0; plan-eval PASS +
+  confirming re-review at round 0): `Round:` now counts **reject→revise cycles only**
+  (FAIL increments; a resolving PASS shares the round number), **one cross-phase
+  counter per artifact** (plan + code FAILs → same 5), reset only owner-driven on
+  new direction at escalation, plus a defined escalation pause+summary contract.
+  **Next:** Cycle 2 — playbook-conformance slice (`status-machine.md`,
+  `orchestration.md`, eval template, both rubrics, evaluator agent prompts) to match
+  the amended spec; then a live 5-round stress-test.
 - **M4 (Dogfooding & hardening) in progress.** `shell-gate` slice landed (commit
   34de27c, code-eval PASS Round 3, gate green 28/28): first end-to-end exercise of
   the gate-learning mechanism on real code. Delivered: 28-case bats suite for

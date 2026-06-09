@@ -7,7 +7,24 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **`shell-gate` slice landed** (commit 34de27c, code-eval PASS
+- **Last action:** **Round-limit/escalation spec hardened — Cycle 1 of the M4
+  escalation thread** (spec 03 amendment, plan-eval `spec-03-round-limit-amendment-eval.md`
+  PASS Round 1 + confirming re-review PASS, owner-approved; commits 5de67fd → df72df0
+  → Approved). The `## Round limits` section now defines: **`Round:` counts
+  reject→revise cycles ONLY** (a FAIL increments; a PASS that resolves a FAIL shares
+  that round's number — correcting the prior practice of numbering every eval pass,
+  e.g. shell-gate's R1-FAIL→PASS history is **1 round**, not 3); **one cross-phase
+  counter per artifact** (plan FAILs + code FAILs accumulate toward the same 5);
+  **reset** only owner-driven on materially-new direction at an escalation; and an
+  **escalation pause+summary contract** (stuck artifact+status, per-round findings
+  history, recurring-vs-new/thrashing classification, four owner options:
+  redirect/abandon/override-and-accept/adjust-authority-or-rubric). The new rule got
+  its **first live demonstration** in its own approval: the confirming re-review after
+  the MINOR-fold was recorded at **round 0** (no FAIL ever opened a round). **Next in
+  this thread:** Cycle 2 — a playbook-conformance slice bringing `status-machine.md`,
+  `orchestration.md`, the eval template, both rubrics, and the evaluator agent prompts
+  into line; then a live 5-round stress-test.
+- **Prior action:** **`shell-gate` slice landed** (commit 34de27c, code-eval PASS
   Round 3, gate green 28/28). First end-to-end exercise of the gate-learning
   mechanism on real code. Delivered: `plugins/loom/hooks/git-identity-guard.bats`
   (28-case bats suite covering 11 BLOCK / 14 ALLOW / 3 jq-fallback cases),
