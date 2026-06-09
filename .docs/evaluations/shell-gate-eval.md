@@ -129,3 +129,70 @@ and every other Round-1-PASSing element are byte-unchanged in the diff and were
 not re-litigated. The single Round-1 mechanical defect is fixed and the
 verification language now matches reality (expected-at-run-green rather than
 falsely pre-verified). No BLOCKER, no MAJOR ⇒ PASS.
+
+# Evaluation: shell-gate (Round 3 — code)
+
+Verdict: PASS
+Round: 3
+Reviewed commit: `34de27c` (slice shell-gate: add bats suite, gates/shell.md,
+CLAUDE.md Gate section). Reviewed blind against the slice-plan
+`.docs/slice-plans/shell-gate-plan.md`, specs `06-init-modes.md` (Gate
+establishment / run-green-once) + `08-playbook.md`, `gates/rust.md` (shape
+template), `references/gate-learning.md` Step 5, the real hook
+`plugins/loom/hooks/git-identity-guard.sh`, and the code-eval rubric + severity.md.
+
+## Gate (re-run from repo root, 2026-06-09)
+
+- format: `shfmt -i 4 -d plugins/loom/hooks/git-identity-guard.sh` → exit **0** (no diff)
+- lint:   `shellcheck plugins/loom/hooks/git-identity-guard.sh` → exit **0** (clean)
+- test:   `bats plugins/loom/hooks/git-identity-guard.bats` → exit **0**, **28/28** pass
+  (B01–B11, A01–A14, F1–F3 — every line `ok`).
+
+Gate genuinely green; the commit's recorded evidence matches observed reality.
+
+## Findings
+
+None at BLOCKER/MAJOR. One MINOR note recorded below (no action required).
+
+- [MINOR] Commit author/committer is a concrete personal identity
+  (`Craig Pfeiffer <craigeous@gmail.com>`). This is acceptable: there is **no**
+  `Co-Authored-By:` / AI / role-identity trailer (the no-AI-coauthor requirement
+  is met), and the identity is the configured uniform git identity (ADR 0003),
+  not a role signal. No change required.
+
+## Verification
+
+- **Gate green** — re-ran all three steps myself; numbers above.
+- **Suite proves shipped behavior, not idealized.** 28 `@test` cases (grep
+  `^@test` = 28) cover the full matrix: BLOCK B01–B11 (incl. `--author=`,
+  `--author <space>`, `-c user.*=`, `-c GIT_AUTHOR*=`, inline + exported
+  `GIT_*` env, and the two fail-closed read over-block rows B10/B11 asserting
+  exit 2), ALLOW A01–A14 (message-body false-positive guards, escaped-inner-quote,
+  Stage-C unbalanced fail-open), fallback F1–F3. Spot-checked against the real
+  hook with crafted JSON on stdin: B11 (`git log --author=alice`) → 2, A05
+  (`-m "fix --author= parsing"`) → 0, B09 (`--author=evil -m "say \"hi\""`) → 2,
+  A13 (unbalanced `-m "wip`) → 0 — all match the asserted codes. The B10/B11
+  read over-block correctly encodes the accepted fail-closed limitation
+  (`commit-convention.md`), not the orchestrator's mistaken "ALLOW" framing.
+- **F-rows genuinely exercise the jq-absent branch.** Rebuilt the stub PATH
+  (cat/grep/sed/tr/wc/head only, no jq; interpreter via absolute `/bin/sh`):
+  under `PATH="$stub"`, `command -v jq` reports **NO_JQ**, F1 → 2, F3 → 0. The
+  Round-1 BLOCKER (bare-`sh`→127) is fully resolved — the suite uses the absolute
+  `/bin/sh` recipe.
+- **`gates/shell.md` mirrors `rust.md`.** `# Gate: Shell`, `Status: Verified`,
+  `Detected by:` (shell shebang + no-`Cargo.toml` clause that won't misfire on a
+  Rust repo), run-in-order intro, format/lint/test table (`shfmt -i 4 -d` /
+  `shellcheck` / `bats`), Notes carrying the required "the code evaluator
+  **re-runs** this gate" line + loom's concrete commands + gate-learning Step 5
+  reference. Per spec 06 the `Verified` status is justified by the green run.
+- **CLAUDE.md reconciled accurately.** "no compiled code yet" removed (grep
+  returns nothing); markdown-first framing preserved; names the hook as loom's
+  one executable artifact; Rust-gate paragraph + gate-learning pointer intact;
+  the three concrete shell commands added. Not overstated.
+- **Scope / hygiene.** Commit touches exactly 4 files (the new `.bats`, new
+  `shell.md`, `CLAUDE.md`, the plan's status+Notes). The hook diff
+  (`git diff 34de27c^ 34de27c -- …/git-identity-guard.sh`) is **empty** — the
+  `shfmt -i 4` choice required no hook churn. No edits to `hooks.json`,
+  `commit-convention.md`, specs, or ADRs. Author-neutral (no co-author/role trailer).
+
+No BLOCKER, no MAJOR ⇒ PASS.
