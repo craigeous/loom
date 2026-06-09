@@ -17,7 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_(none)_
+- [round-limit-conformance-plan.md](round-limit-conformance-plan.md) — `Plan Review` —
+  bring the playbook's round-limit text + both evaluator prompts into conformance
+  with the amended spec 03 `## Round limits` FAIL-only counting rule (FAIL
+  increments / PASS-resolving-a-FAIL shares the number / first review is round 0 /
+  one counter per artifact across both phases); point to spec 03 as the single
+  source, no divergent restatement (M4 escalation thread, Cycle 2).
 
 ## Archived plans
 
