@@ -22,3 +22,4 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 ## In Review
 
 - [0007 — Namespaced Command Surface](0007-namespaced-command-surface.md) — supersedes the bare-`/loom` command-naming in 0001
+- [0008 — Parallel `.docs/` Coordination for Worktree-per-Slice](0008-parallel-docs-coordination-worktree-per-slice.md) — resolves OQ-A; builds on ADR 0003/0001
