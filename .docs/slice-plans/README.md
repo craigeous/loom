@@ -17,7 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_(none)_
+- [identity-verification-hardening-plan.md](identity-verification-hardening-plan.md) — `Plan Review` —
+  harden loom against the recurring `loom <loom@localhost>` fallback-identity
+  commit (M1 + M4) that violates ADR 0003 / blind-eval safety. Fix A: a new
+  Greenfield "Ensure a git identity is configured" step (establish-or-stop;
+  Unaligned/Initialized reference it verify-only) makes commit-convention's
+  "init ensures an identity" claim true. Fix B: a single-sourced "Verify after
+  committing" step in `commit-convention.md` (`git show -s --format='%an <%ae>'`
+  + conditional `--amend --reset-author`) that all five agent prompts point at.
+  No spec/ADR/hook edits; no hardcoded identity (target spec 08-playbook.md).
 
 ## Archived plans
 
