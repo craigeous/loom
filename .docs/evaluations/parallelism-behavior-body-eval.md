@@ -93,3 +93,76 @@ Self-consistency of Step 6: editing the README index directly for *this* slice d
 not contradict the invariant the body asserts — ADR 0008 places the index-off-branch
 rule under "once parallelism is on," and this slice is still landing sequentially.
 Justification is correct.
+
+---
+
+# Round 2 (code)
+
+Verdict: PASS
+Round: 2
+Reviewed against: commit `4cc9fa1`, slice-plan `parallelism-behavior-body.md`,
+ADR 0008 (Accepted), ADR 0001, the git-identity-guard hook, and the real tree
+(rg/realpath/cat mechanical checks). No compiled gate — markdown slice; acceptance
+is review-against-ADR-0008 done mechanically.
+
+## Findings
+
+None at BLOCKER/MAJOR/MINOR. The slice faithfully operationalizes ADR 0008 into the
+playbook and satisfies every plan step.
+
+## Mechanical-check results
+
+- **ADR-0008 fidelity (Q1).** Read `parallelism.md` and ADR 0008 in full and traced
+  every element. §1 coordination model (four orchestrator-owned/main-only files incl.
+  the index, with the *why*; slice-branch-local plan/eval/code uniquely named; the
+  M1-habit change moving the index edit off-branch; disjoint-by-construction;
+  fresh-`origin/main` + cold-agent freshness) — present, lines 52–108. §2 landing
+  (`git worktree add … origin/main`; serial `git merge`+finalize on main updating
+  progress/handoff/roadmap + Active→Archived + `git mv` archive; genuine code conflict
+  → developer slice, never hand-edited; mandatory `git worktree remove`/`prune`
+  cleanup) — present, lines 112–171. §3 safety (`index.lock` exponential backoff 3–5
+  attempts ~200/400/800ms; crash cleanup `git worktree remove -f`/`prune`;
+  one-checkout-per-branch, never reuse/`--force`; stateless identity-guard hook) —
+  present, lines 175–219. §4 boundaries (orchestrator-only spawner + sole writer of
+  living docs+index; serialized living-doc/index writes; serial planning of
+  spec/ADR/research; slicer-independence incl. shared-SOURCE `CLAUDE.md`/`SKILL.md` →
+  sequence, kept distinct from the index/living-doc pull-off-branch mechanism) —
+  present, lines 223–239. Nothing weakened relative to the ADR.
+- **CRITICAL invariant (Q2): PASS.** `parallelism.md` places `.docs/slice-plans/README.md`
+  in the *orchestrator-owned, main-only, serialized* table (line 66) alongside the
+  three living docs, with the conflict rationale; states "A slice worktree never edits
+  any of these four files" (line 68); the "Change from the M1 sequential habit" section
+  (lines 81–93) says the planner writes **only** the uniquely-named plan file and the
+  orchestrator maintains Active/Archived on main; the Land section confirms the index
+  is NOT on the branch (line 142). The pre-fix hole (a role writing the index on a
+  slice branch) is NOT reintroduced anywhere.
+- **Guards relaxed correctly (Q3): PASS.** `rg -ni "M3, not yet" plugins/loom/` → none.
+  `rg -ni "one slice in flight at a time" orchestration.md` → none (the one remaining
+  occurrence of that exact phrase is in `parallelism.md` line 82 as descriptive
+  M1-history "Under M1 (one slice in flight at a time)…", not a guard). orchestration.md
+  Core bullet now reads "One slice in flight by default; parallel independent/disjoint
+  slices are allowed … owner opts in" (lines 31–36) and the diff-against-prior-commit
+  caution is **preserved**, scoped to slices stacked on **one branch** (line 34). The
+  `## Parallelism (M3, not yet)` section is replaced by an owner-opts-in pointer
+  (lines 73–83). `rg -ni "not yet|unproven" run.md` → none; run.md adds the read-first
+  reference (line 14) and a driver-loop owner-opts-in note (lines 38–40).
+- **Links / scope (Q4): PASS.** `git show --name-only` = exactly
+  parallelism.md (new) + orchestration.md + run.md + SKILL.md + CLAUDE.md +
+  parallelism-behavior-body.md + slice-plans/README.md (the index, acceptable).
+  No path under `.docs/spec/` or `.docs/ADR/`. The ADR-0008 relative link from
+  `references/` (`../../../../../.docs/ADR/0008-…md`) resolves via `realpath` to the
+  real file; same link in orchestration.md resolves; same-dir links
+  (`orchestration.md`, `status-machine.md`) exist; parallelism.md cross-links back to
+  both (lines 13–14, 160).
+- **No contradiction (Q5): PASS.** parallelism.md reaffirms ADR 0001 orchestrator-only
+  spawning (lines 3–5, 227) and ADR 0003 author-neutral commits. The git-identity-guard
+  hook is genuinely stateless (verified by reading it: reads only stdin
+  `tool_input.command`, exits 0/2, writes no shared file/lock), so the body's
+  parallel-safe claim is accurate.
+- **Init-body pattern mirrored.** Operational detail single-sourced in `references/`;
+  call sites (orchestration.md Parallelism, run.md, SKILL.md, CLAUDE.md) are short
+  pointers — same shape as the M2 bodies.
+
+## Required changes
+
+None — verdict is PASS.
