@@ -39,13 +39,22 @@ override `user.*`). Next: M2 (init modes / gate learning).
 - [x] **Detection classifier** — `init-detection.md` added as the single
       authoritative source; concrete "loom-shaped" and "empty/near-empty"
       definitions; all four call sites repointed (5fef2ed). Detection is done.
-- [ ] Per-mode behaviors: Greenfield scaffold, Unaligned alignment +
-      descriptive back-fill, Initialized summarize/continue. Consume the
-      classifier in `init-detection.md` (behaviors not yet implemented).
-- [ ] Gate establishment: Rust verified; create-and-record for new stacks.
-- [ ] Idempotent playbook re-application (clean-merge + recommend-rest).
+- [x] **Per-mode behaviors** — Greenfield (a58ff7e), Unaligned (e83e219),
+      Initialized (b0bd3e9) behavior bodies all landed; classifier consumed by all
+      three; per-mode trio complete.
+- [x] **Gate establishment** — Rust verified gate in `gates/rust.md`; unknown-stack
+      gate-learning mechanism in `references/gate-learning.md` (inspect → propose →
+      owner-confirm → run-green-once → record `gates/<stack>.md` + project
+      `CLAUDE.md`; UNVERIFIED until green; landed b2463c4).
+- [x] **Idempotent playbook re-application** — auto-apply clean, recommend for
+      conflicts, never clobber; single-sourced in `initialized.md` Step 3 (b0bd3e9).
 
-## M3 — Parallelism
+**M2 complete.** All four items delivered. Deferred follow-up: `gates/shell.md`
+(a first concrete learned gate for shell-stack projects — mechanism is in place;
+`gates/shell.md` should be produced by running the mechanism on a real shell
+project). Next: M3 (parallelism).
+
+## M3 — Parallelism (next)
 
 - [ ] Worktree-per-slice; orchestrator launches parallel background role agents.
 - [ ] Resolve OQ-A (`.docs/` coordination across branches; landing = merge).

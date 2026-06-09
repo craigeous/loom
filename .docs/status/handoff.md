@@ -45,6 +45,17 @@ source of truth; `roadmap.md` is milestone order.
   `developer.md`, and the slice-plans README `Lifecycle:` string. All lifecycle
   strings now match spec 03: `… → Implemented → (code review) → Landed → Archived`.
   Slice archived.
+- **`gate-learning` landed (b2463c4). M2 complete.** Gate-learning for unknown
+  stacks is now single-sourced in
+  `plugins/loom/skills/loom-playbook/references/gate-learning.md` — the authoritative
+  mechanism: inspect toolchain → propose `format → lint → test` → owner-confirm →
+  run-green-once → record `gates/<stack>.md` + project `CLAUDE.md`; UNVERIFIED until
+  green; idempotent for known stacks. The three init bodies had their stale
+  "forthcoming/deferred" forward pointers replaced with live links. `SKILL.md` +
+  root `CLAUDE.md` updated. Code-eval Round 2 PASS (blind, independent). Slice
+  archived. **M2 (Init modes & gate learning) is now complete** — all four items
+  delivered: Detection classifier, per-mode trio (Greenfield/Unaligned/Initialized),
+  idempotent re-application, gate-learning.
 - **`initialized-init-behavior` landed (b0bd3e9).** Initialized init behavior is now
   single-sourced in `plugins/loom/skills/loom-playbook/references/initialized.md` —
   resume: state-derived menu from `.docs/` + git state mapped to the dispatch table
@@ -52,8 +63,7 @@ source of truth; `roadmap.md` is milestone order.
   playbook re-application single-sourced here (auto-apply clean, recommend for
   conflicts, never clobber). Three call sites (`orchestration.md`, `run.md`,
   `init.md`) repointed. Code-eval Round 2 PASS (blind, independent). Slice archived.
-  **The per-mode behavior trio (Greenfield + Unaligned + Initialized) is now
-  complete.** Remaining M2: gate-learning (+ deferred `gates/shell.md`).
+  The per-mode behavior trio (Greenfield + Unaligned + Initialized) is complete.
 - **`unaligned-init-behavior` landed (e83e219).** Unaligned init behavior is now
   single-sourced in `plugins/loom/skills/loom-playbook/references/unaligned.md` —
   alignment pass: study the repo, scaffold + gate (reusing `greenfield.md` Steps
@@ -95,23 +105,20 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M2 slice 5 — gate-learning:** identify and record the gate for a project whose
-   stack loom has not yet seen (slice "gate-learning"). Greenfield + Unaligned +
-   Initialized behavior bodies are all landed; gate-learning is the last remaining
-   M2 slice.
-2. **Deferred M2:** `gates/shell.md` (verified shell gate with `shellcheck` —
-   clean follow-up when a shell-stack project is first encountered; `shellcheck`
-   already pointed from `tooling.md`).
+1. **M3 — Parallelism (next milestone):** worktree-per-slice + orchestrator launches
+   parallel background role agents; resolve OQ-A (`.docs/` coordination across
+   branches; landing = merge). Research note
+   `2026-06-08-git-worktree-parallel-slices.md` is ready input. Owner guidance: the
+   **planner** owns the `.docs/` coordination design.
+2. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
+   shell-stack projects (using `shellcheck` as the lint step). The gate-learning
+   mechanism is now in place; this gate should be produced by running the mechanism
+   on a real shell project (run-green-once is part of the lifecycle, not a
+   hand-authored artifact). `shellcheck` is already pointed from `tooling.md`.
 3. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
    reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
    plan-eval, amend via planning — not a direct edit). The mechanical-check rule now
    in the rubrics ensures this kind of miss is caught earlier in future reviews.
-4. **Deferred follow-up slices:** `gates/shell.md` (verified shell gate with
-   `shellcheck` as the lint step — a clean follow-up when a shell-stack project is
-   first encountered; `shellcheck` already pointed from `tooling.md`).
-5. **M3 — parallelism:** worktree-per-slice + background agents (research note
-   `2026-06-08-git-worktree-parallel-slices.md` is ready input; resolve OQ-A —
-   owner guidance: the **planner** owns the `.docs/` coordination design).
 
 ## Notes for the next agent
 

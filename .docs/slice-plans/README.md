@@ -17,15 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [gate-learning.md](gate-learning.md) — `Plan Review` —
+_(none — M2 complete; M3 not yet started)_
+
+## Archived plans
+
+- [archive/gate-learning.md](archive/gate-learning.md) — `Archived` —
   gate-learning for unknown stacks: new `references/gate-learning.md` defining the
   inspect → propose → owner-confirm → run-green-once → record `gates/<stack>.md` +
   project `CLAUDE.md` lifecycle (UNVERIFIED until green); repoints the
   Greenfield/Unaligned/Initialized forward pointers at it (last M2 behavior;
-  `gates/shell.md` deferred).
-
-## Archived plans
-
+  `gates/shell.md` deferred; completes M2 — landed b2463c4).
 - [archive/initialized-init-behavior.md](archive/initialized-init-behavior.md) — `Archived` —
   Initialized init behavior body: resume from a state-derived menu (mapped to the
   dispatch table) into scope/gates + the driver loop, plus idempotent playbook

@@ -6,8 +6,28 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M2 — Init modes & gate learning. **In progress.**
-- **Last action:** `initialized-init-behavior` slice landed (commit b0bd3e9, code-eval
+- **Phase:** M2 — Init modes & gate learning. **Complete.** M3 (Parallelism) is
+  the next milestone.
+- **Last action:** `gate-learning` slice landed (commit b2463c4, code-eval Round 2
+  PASS). Shipped: new
+  `plugins/loom/skills/loom-playbook/references/gate-learning.md` — the single
+  authoritative body for the unknown-stack gate-learning mechanism (inspect toolchain
+  → propose `format → lint → test` → owner-confirm → run-green-once → record
+  `gates/<stack>.md` + project `CLAUDE.md`; UNVERIFIED until green; idempotent for
+  stacks that already have a recorded gate). The three init bodies
+  (`greenfield.md`, `unaligned.md`, `initialized.md`) had their stale
+  "forthcoming/deferred" forward pointers replaced with live links to
+  `gate-learning.md`. `SKILL.md` References list + Gates section updated; root
+  `CLAUDE.md` Gate section + Repo layout updated. **M2 is now complete**: all four
+  items done — Detection classifier (5fef2ed), Greenfield/Unaligned/Initialized per-
+  mode behaviors (a58ff7e/e83e219/b0bd3e9), idempotent re-application (b0bd3e9), gate-
+  learning (b2463c4). Slice archived.
+- **Deferred follow-up (M2, non-blocking):** `gates/shell.md` — a first concrete
+  learned gate for shell-stack projects. The gate-learning mechanism is in place;
+  this gate should be produced by running the mechanism on a real shell project, not
+  hand-authored (run-green-once is part of the lifecycle). Retained as an explicit
+  follow-up.
+- **Prior action:** `initialized-init-behavior` slice landed (commit b0bd3e9, code-eval
   Round 2 PASS). Shipped: new
   `plugins/loom/skills/loom-playbook/references/initialized.md` — the single
   authoritative Initialized init behavior body (resume: state-derived menu derived
@@ -113,9 +133,10 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M2 slice 5 — gate-learning for unknown stacks (slice "gate-learning"):
-  identify and record the gate for a project whose stack loom has not yet seen.
-  Remaining M2: gate-learning (+ deferred `gates/shell.md`).
+- **Next:** M3 — Parallelism (worktree-per-slice; orchestrator launches parallel
+  background role agents; resolve OQ-A — `.docs/` coordination across branches).
+  Deferred follow-up: `gates/shell.md` (first concrete learned gate; mechanism
+  now in place).
 
 ## Accepted decisions (ADRs)
 

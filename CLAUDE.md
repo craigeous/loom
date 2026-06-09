@@ -24,7 +24,7 @@ work it produced — role separation guarantees no self-approval. Specs are froz
 after approval and change only via planning. Design decisions are in
 `.docs/spec/` and `.docs/ADR/` (ADRs 0001–0006).
 
-## Repo layout (M2 in progress)
+## Repo layout (M2 complete; M3 next)
 
 - The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus
   one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`;
