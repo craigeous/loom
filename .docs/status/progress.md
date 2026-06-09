@@ -7,7 +7,22 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **M4 escalation thread COMPLETE — live 5-round stress-test passed.**
+- **Last action:** **`identity-verification-hardening` slice landed** (commit a816979,
+  code-eval PASS round 0). Closed two structural gaps that allowed agents to commit under
+  a forged/fallback identity: (A) `greenfield.md` now has a new "Ensure a git identity is
+  configured" step (establish-or-stop, renumbered Step F; Unaligned and Initialized resume
+  paths carry verify-only pointer to it) — making `commit-convention.md`'s "init ensures
+  an identity exists before any role commits" claim structurally true; (B) a "Verify after
+  committing" sub-point added to `commit-convention.md` (`git show -s --format='%an <%ae>'`
+  + conditional `--amend --reset-author` as the one sanctioned self-correction; last-line
+  stop if no identity configured) — all five agent prompts (`researcher.md`, `planner.md`,
+  `plan-evaluator.md`, `developer.md`, `code-evaluator.md`) carry a one-line pointer to it.
+  Single-source discipline: full procedure once in each location; no agent re-pastes it.
+  **This addresses the recurring `loom@localhost` M4 finding** — the identity fallback gap
+  is now closed structurally. (The orchestrator also set a repo-local git identity as a
+  separate one-off environment mitigation; that is independent of this slice's code change.)
+  Slice `identity-verification-hardening` archived.
+- **Prior action:** **M4 escalation thread COMPLETE — live 5-round stress-test passed.**
   Roadmap item "owner approval gates, round limits/escalation polished" is now done.
   The test used a throwaway fixture outside loom's repo (`/Users/craig/git/loom-escalation-test/`,
   since removed): a slice-plan whose goal (developer edits the frozen spec at landing)

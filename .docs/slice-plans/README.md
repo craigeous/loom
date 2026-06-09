@@ -17,17 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [identity-verification-hardening-plan.md](identity-verification-hardening-plan.md) — `Plan Review` —
-  harden loom against the recurring `loom <loom@localhost>` fallback-identity
-  commit (M1 + M4) that violates ADR 0003 / blind-eval safety. Fix A: a new
-  Greenfield "Ensure a git identity is configured" step (establish-or-stop;
-  Unaligned/Initialized reference it verify-only) makes commit-convention's
-  "init ensures an identity" claim true. Fix B: a single-sourced "Verify after
-  committing" step in `commit-convention.md` (`git show -s --format='%an <%ae>'`
-  + conditional `--amend --reset-author`) that all five agent prompts point at.
-  No spec/ADR/hook edits; no hardcoded identity (target spec 08-playbook.md).
-
 ## Archived plans
+
+- [archive/identity-verification-hardening-plan.md](archive/identity-verification-hardening-plan.md) — `Archived` —
+  close two structural gaps that let agents commit under a forged/fallback identity: Fix A —
+  Greenfield "Ensure a git identity is configured" step (establish-or-stop; Unaligned/Initialized
+  reference it verify-only) makes commit-convention's "init ensures an identity" claim true;
+  Fix B — single-sourced "Verify after committing" sub-point in `commit-convention.md`
+  (`git show -s --format='%an <%ae>'` + conditional `--amend --reset-author`) pointed at by
+  all five agent prompts. No spec/ADR/hook edits; no hardcoded identity. Addresses the
+  recurring `loom@localhost` M4 finding (code-eval PASS round 0; landed a816979).
 
 - [archive/round-limit-conformance-plan.md](archive/round-limit-conformance-plan.md) — `Archived` —
   bring the playbook's round-limit text + both evaluator prompts into conformance

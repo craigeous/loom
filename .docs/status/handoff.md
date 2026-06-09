@@ -27,15 +27,15 @@ source of truth; `roadmap.md` is milestone order.
   blind evals continued the counter 3→4→5 on a recurring BLOCKER, and the orchestrator
   halted at the 5th FAIL with the full escalation summary (thrashing classification +
   owner options) instead of dispatching a 6th revision.
-  **M4 finding (open hardening candidate):** the planner's first commit in the conformance
-  slice was forged as `loom <loom@localhost>` (M1 identity bug, recurred); corrected via
-  `git commit --amend --reset-author` (→ d008bc3). The identity-guard hook does not protect
-  loom's own dev session (only fires where loom is installed as an active plugin; only
-  catches override flags). Candidate hardening: clarify "author-neutral" in `agents/*.md` +
-  `commit-convention.md` = use the configured identity / never invent one; optionally
-  activate the hook in loom's own dev worktree. See memory `loom-agents-forge-loom-localhost`.
+  **M4 finding (identity-guard gap) — ADDRESSED:** the recurring `loom@localhost` fallback
+  identity issue (M1 + M4, planner commit d008bc3) is now closed structurally by the
+  `identity-verification-hardening` slice (commit a816979, code-eval PASS round 0): init
+  verifies a real identity is configured and stops if absent (Greenfield Step F, pointed at
+  by Unaligned/Initialized); agents verify the commit identity after committing (single-sourced
+  in `commit-convention.md`; all five agent prompts carry a pointer). A separate one-off
+  environment mitigation (repo-local git identity set by orchestrator) is also in place.
   **Remaining M4 threads:** CLAUDE.md auto-propagation; resume-across-machines; `claude -p`
-  deep-nesting fallback; (plus the identity-guard hardening candidate above).
+  deep-nesting fallback.
 - **M4 (Dogfooding & hardening) in progress.** `shell-gate` slice landed (commit
   34de27c, code-eval PASS Round 3, gate green 28/28): first end-to-end exercise of
   the gate-learning mechanism on real code. Delivered: 28-case bats suite for
