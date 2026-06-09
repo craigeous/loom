@@ -18,8 +18,9 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0004 — Blind Evaluation by Controlled Inputs & Role Separation](0004-blind-evaluation-role-separation.md)
 - [0005 — Specs Frozen After Approval; Change Only via Planning](0005-specs-frozen-after-approval.md)
 - [0006 — Distribution as a Single-Plugin Self-Marketplace](0006-distribution-self-marketplace.md)
+- [0007 — Namespaced Command Surface](0007-namespaced-command-surface.md) — supersedes the bare-`/loom` command-naming in 0001
 - [0008 — Parallel `.docs/` Coordination for Worktree-per-Slice](0008-parallel-docs-coordination-worktree-per-slice.md) — resolves OQ-A; builds on ADR 0003/0001
 
 ## In Review
 
-- [0007 — Namespaced Command Surface](0007-namespaced-command-surface.md) — supersedes the bare-`/loom` command-naming in 0001
+_(none)_
