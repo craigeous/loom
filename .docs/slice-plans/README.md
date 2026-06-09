@@ -17,7 +17,11 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_(none)_
+- [shell-gate-plan.md](shell-gate-plan.md) — `Plan Review` —
+  first learned gate: a committed bats suite for git-identity-guard.sh (28 cases)
+  + `gates/shell.md` (Status: Verified, mirrors rust.md) + root CLAUDE.md Gate
+  reconciliation; runs the gate-learning mechanism green on loom's own shell hook
+  (M4 dogfooding; deferred-from-M2).
 
 ## Archived plans
 
