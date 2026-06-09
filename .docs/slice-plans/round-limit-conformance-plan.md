@@ -1,6 +1,6 @@
 # Round-Limit Conformance
 
-Status: Plan Review
+Status: Approved
 Target specs: 03-artifact-lifecycle.md
 
 ## Context
