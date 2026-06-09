@@ -17,7 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None.
+- [gate-learning.md](gate-learning.md) — `Plan Review` —
+  gate-learning for unknown stacks: new `references/gate-learning.md` defining the
+  inspect → propose → owner-confirm → run-green-once → record `gates/<stack>.md` +
+  project `CLAUDE.md` lifecycle (UNVERIFIED until green); repoints the
+  Greenfield/Unaligned/Initialized forward pointers at it (last M2 behavior;
+  `gates/shell.md` deferred).
 
 ## Archived plans
 
