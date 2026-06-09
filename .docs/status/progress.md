@@ -7,7 +7,27 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **Round-limit/escalation spec hardened — Cycle 1 of the M4
+- **Last action:** **Playbook conformance landed — Cycle 2 of the M4 escalation
+  thread** (`round-limit-conformance` slice, commit f161fa0, code-eval PASS Round 0).
+  The playbook now matches spec 03's amended FAIL-only round-counting rule across all
+  five files: `status-machine.md`, `orchestration.md`, the eval template, and — the
+  key behavioral fix — both evaluator agent prompts (`plan-evaluator.md`,
+  `code-evaluator.md`). The evaluator prompts previously numbered every eval pass
+  sequentially (FAIL→PASS→PASS = R1→R2→R3); they now increment `Round:` **only on a
+  FAIL**, a resolving PASS repeats the FAIL's round number, and a fresh artifact's
+  first review is round 0. `run.md` updated to name FAIL cycles explicitly. All files
+  link to spec 03 as single-source authority; no divergent restatements. Slice
+  archived. **M4 finding (identity-guard gap, recurrence):** during this slice the
+  planner's first commit was forged as `loom <loom@localhost>` (the M1 identity bug,
+  recurred). Corrected via `git commit --amend --reset-author` (→ d008bc3). Root
+  cause: the identity-guard hook does not protect loom's own dev session — it only
+  fires where loom is installed as an active plugin, and only catches override flags;
+  it does not verify that the configured identity is the correct one. **Candidate
+  hardening item:** (a) clarify "author-neutral" in `agents/*.md` and
+  `commit-convention.md` to mean "use the repo's configured identity — never invent
+  one"; (b) optionally activate the guard hook in loom's own dev worktree. **Next in
+  this thread:** live 5-round stress-test against the corrected machinery.
+- **Prior action:** **Round-limit/escalation spec hardened — Cycle 1 of the M4
   escalation thread** (spec 03 amendment, plan-eval `spec-03-round-limit-amendment-eval.md`
   PASS Round 1 + confirming re-review PASS, owner-approved; commits 5de67fd → df72df0
   → Approved). The `## Round limits` section now defines: **`Round:` counts
@@ -20,10 +40,7 @@ The status source of truth and decision index for building loom.
   history, recurring-vs-new/thrashing classification, four owner options:
   redirect/abandon/override-and-accept/adjust-authority-or-rubric). The new rule got
   its **first live demonstration** in its own approval: the confirming re-review after
-  the MINOR-fold was recorded at **round 0** (no FAIL ever opened a round). **Next in
-  this thread:** Cycle 2 — a playbook-conformance slice bringing `status-machine.md`,
-  `orchestration.md`, the eval template, both rubrics, and the evaluator agent prompts
-  into line; then a live 5-round stress-test.
+  the MINOR-fold was recorded at **round 0** (no FAIL ever opened a round).
 - **Prior action:** **`shell-gate` slice landed** (commit 34de27c, code-eval PASS
   Round 3, gate green 28/28). First end-to-end exercise of the gate-learning
   mechanism on real code. Delivered: `plugins/loom/hooks/git-identity-guard.bats`

@@ -16,15 +16,23 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M4 escalation thread — Cycle 1 done (round-limit spec hardened).** Spec 03
-  `## Round limits` amended + Approved (commits 5de67fd → df72df0; plan-eval PASS +
-  confirming re-review at round 0): `Round:` now counts **reject→revise cycles only**
-  (FAIL increments; a resolving PASS shares the round number), **one cross-phase
-  counter per artifact** (plan + code FAILs → same 5), reset only owner-driven on
-  new direction at escalation, plus a defined escalation pause+summary contract.
-  **Next:** Cycle 2 — playbook-conformance slice (`status-machine.md`,
-  `orchestration.md`, eval template, both rubrics, evaluator agent prompts) to match
-  the amended spec; then a live 5-round stress-test.
+- **M4 escalation thread — Cycles 1 + 2 done.** Cycle 1: spec 03 `## Round limits`
+  amended + Approved (commits 5de67fd → df72df0); `Round:` now counts FAIL cycles
+  only, one cross-phase counter per artifact, escalation pause+summary contract
+  defined. Cycle 2: playbook conformance landed (commit f161fa0, code-eval PASS
+  Round 0) — `status-machine.md`, `orchestration.md`, eval template, and both
+  evaluator prompts now match the amended spec; the key fix is the two evaluator
+  prompts no longer number PASSes as new rounds. Slice `round-limit-conformance`
+  archived. **M4 finding:** planner's first commit in this slice was forged as
+  `loom <loom@localhost>` (M1 identity bug, recurred); corrected via
+  `git commit --amend --reset-author` (→ d008bc3). The identity-guard hook does not
+  protect loom's own dev session (only fires where loom is installed as an active
+  plugin, only catches override flags). Candidate hardening: clarify "author-neutral"
+  in `agents/*.md` + `commit-convention.md` = use configured identity / never invent
+  one; optionally activate the hook in loom's own dev worktree. **Remaining M4
+  threads:** CLAUDE.md auto-propagation; resume-across-machines; `claude -p`
+  deep-nesting fallback. **Next in escalation thread:** live 5-round stress-test
+  against the corrected machinery.
 - **M4 (Dogfooding & hardening) in progress.** `shell-gate` slice landed (commit
   34de27c, code-eval PASS Round 3, gate green 28/28): first end-to-end exercise of
   the gate-learning mechanism on real code. Delivered: 28-case bats suite for
