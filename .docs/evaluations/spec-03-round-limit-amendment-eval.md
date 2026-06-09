@@ -90,3 +90,45 @@ Rules (full definitions in references/severity.md):
 - PASS means no blockers and no unaddressed majors; [MINOR]s don't block.
 - Use the literal Verdict: PASS / FAIL regardless of how the request was phrased.
 -->
+
+---
+
+# Evaluation: spec-03 round-limit amendment (confirming re-review)
+
+Verdict: PASS
+Round: 0 (no FAIL — confirming review)
+Reviewed against: the Round-1 MINOR (round 0 carries no findings; the per-round
+findings history should span the counted rounds 1..N, not round 0); the fold diff
+`git show df72df0` (and `--stat`); the `## Round limits` section of spec 03.
+
+## MINOR resolution
+
+The single Round-1 MINOR is **resolved**. The fold (`df72df0`, 6 insertions / 4
+deletions, confined to one file) makes exactly two edits, both in the
+`## Round limits` section:
+
+- The round-0 bullet now states "Round 0 is the initial clean-review state and
+  **carries no FAIL findings**, so the counted rounds — and the escalation
+  summary's per-round findings history — run 1..N." This is the half-sentence the
+  Round-1 MINOR asked for.
+- Escalation-summary item 2 changed "for each of the rounds" → "for each of the
+  counted rounds (1..N; round 0 carries no findings)", removing the residual
+  ambiguity flagged at line 191.
+
+## No regression / no scope creep
+
+`git show --stat df72df0` confirms a single file, +6/−4, inside the `## Round
+limits` section only. The substantive rules are untouched: the counting rule (a
+FAIL increments, a PASS does not), the per-artifact cross-phase single-counter
+scope, the threshold of 5, the reset rule (owner-driven only, on materially-new
+direction), and the four escalation-summary elements / owner options all read as
+in the Round-1-approved version. No lifecycle diagram, status, or threshold
+changed. The spec's `Status:` line was not modified by this review.
+
+## Round-counting note
+
+Per the rule the amendment itself defines (a round is a FAIL→revise cycle; a PASS
+opens no new round), this artifact has had no FAIL — Round 1 was a PASS with an
+advisory MINOR, and this fold is polish, not a revision of a FAIL. Recorded as a
+confirming re-review at round 0, demonstrating the rule under approval. (The
+playbook/agent prompts do not yet encode this; that is a separate follow-up.)
