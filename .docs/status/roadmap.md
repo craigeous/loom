@@ -5,14 +5,18 @@ Status: Living
 Milestone order for building loom. "What's next and why"; detailed status in
 `progress.md`, restart context in `handoff.md`.
 
-## M0 — Design (nearly complete)
+## M0 — Design (complete)
 
 - [x] Foundational design conversation with the owner.
 - [x] Scaffold the loom repo and `.docs/`.
 - [x] Draft the spec spine (`.docs/spec/00`–`10`).
 - [x] Research plugin/agent/marketplace mechanics; resolve Q1–Q3, Q14.
 - [x] Promote firm decisions to ADRs 0001–0006.
-- [ ] Owner final review of revised spec + ADRs.
+- [x] Owner final review of revised spec + ADRs — all 10 specs blind-reviewed
+  Draft→Approved (5 fixed for real drift), `09`/`README` set Living; ADRs 0007
+  (namespaced surface) + 0008 (parallel-docs coordination) authored and Accepted.
+
+**M0 complete.** Design spine reviewed and frozen; ADR set through 0008 Accepted.
 
 ## M1 — Minimum loop (hand-built, sequential)
 
