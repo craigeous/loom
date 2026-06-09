@@ -17,15 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [parallelism-behavior-body.md](parallelism-behavior-body.md) — `In Progress` —
+_(none)_
+
+## Archived plans
+
+- [archive/parallelism-behavior-body.md](archive/parallelism-behavior-body.md) — `Archived` —
   M3 parallelism behavior body: new `references/parallelism.md` operationalizing
   ADR 0008 (worktree-per-slice create→work→land→cleanup, the `.docs/` coordination
   model, concurrency safety, slicer-independence rule); repoints the
   `orchestration.md` + `run.md` guards (drops "M3, not yet" / absolute "one slice
-  in flight"); adds it to `SKILL.md` + root `CLAUDE.md` (M3 in progress).
-
-## Archived plans
-
+  in flight"); adds it to `SKILL.md` + root `CLAUDE.md` (M3 in progress; landed c6ec48e).
 - [archive/gate-learning.md](archive/gate-learning.md) — `Archived` —
   gate-learning for unknown stacks: new `references/gate-learning.md` defining the
   inspect → propose → owner-confirm → run-green-once → record `gates/<stack>.md` +

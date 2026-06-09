@@ -54,10 +54,22 @@ override `user.*`). Next: M2 (init modes / gate learning).
 `gates/shell.md` should be produced by running the mechanism on a real shell
 project). Next: M3 (parallelism).
 
-## M3 — Parallelism (next)
+## M3 — Parallelism (in progress)
 
-- [ ] Worktree-per-slice; orchestrator launches parallel background role agents.
-- [ ] Resolve OQ-A (`.docs/` coordination across branches; landing = merge).
+- [x] **OQ-A resolved** — ADR 0008 Accepted: `.docs/` coordination model for
+      worktree-per-slice decided (living docs + slice-plans index orchestrator-owned/
+      main-only/serialized; per-slice plan/eval/code branch-local + uniquely named;
+      serial merge+finalize on main; `index.lock` backoff; stateless identity-guard hook).
+- [x] **Parallelism behavior specified and landed** — `references/parallelism.md`
+      authored (single authoritative operational body per ADR 0008: create→work→land→
+      cleanup workflow, `.docs/` coordination model, concurrency safety, slicer-
+      independence rule); guards in `orchestration.md` + `run.md` relaxed (M1 absolute
+      "one slice in flight" → available/owner-opts-in); `SKILL.md` + root `CLAUDE.md`
+      updated (landed c6ec48e).
+- [ ] **Live demonstration** — run 2+ independent slices in parallel worktrees
+      end-to-end (plan → eval → develop → code-eval → land) to prove the model works
+      in practice. This is M3's closeout proof, analogous to M1's rung-3 first-full-
+      slice end-to-end proof.
 
 ## M4 — Dogfooding & hardening
 

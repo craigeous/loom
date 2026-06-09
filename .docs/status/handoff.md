@@ -16,20 +16,17 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M3 (Parallelism) has started.** **ADR 0008 — Parallel `.docs/` Coordination
-  for Worktree-per-Slice — is Accepted** (resolves OQ-A), setting the coordination
-  model for the milestone. The model: hybrid — the three living docs
-  (`roadmap.md`/`progress.md`/`handoff.md`) **and the slice-plans index
-  (`slice-plans/README.md`)** live on **main only**, written **solely by the
-  orchestrator** and serialized; each slice's uniquely-named plan/eval/code lives
-  on its **slice branch**; landing is serial merge+finalize from the main
-  worktree, so concurrent independent slices write disjoint paths and never
-  conflict on a `.docs/` file. Worktrees are created from fresh `origin/main`;
-  concurrency safety via `index.lock` backoff retry, `git worktree remove -f`/
-  `prune` cleanup, and the stateless identity-guard hook. Builds on ADR 0003/0001.
-  OQ-A is now Resolved in `09-open-questions.md`; the grounding research note
-  `2026-06-08-git-worktree-parallel-slices.md` is `Status: Approved`. **M2 remains
-  complete.**
+- **M3 (Parallelism) behavior is specified and landed.** `references/parallelism.md`
+  is the single authoritative worktree-per-slice operational body (ADR 0008), covering
+  the create→work→land→cleanup workflow, the `.docs/` coordination model (living docs
+  + slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
+  only disjoint plan/eval/code), concurrency safety, and the slicer-independence rule.
+  Guards in `orchestration.md` + `run.md` relaxed; `SKILL.md` + `CLAUDE.md` updated.
+  Slice `parallelism-behavior-body` archived (c6ec48e). **M3 remaining: live
+  demonstration** — run 2+ independent slices in parallel worktrees end-to-end to prove
+  the model in practice (M3's closeout proof, analogous to M1's rung-3 first-full-slice
+  proof). **ADR 0008** (resolves OQ-A) sets the coordination model; OQ-A is Resolved
+  in `09-open-questions.md`. **M2 remains complete.**
 - **M1 is complete.** The loom plugin under `plugins/loom/` is built, installed,
   validated, and **run end-to-end**: command surface is split into namespaced
   `/loom:<name>` commands; agents are `loom:<role>`; the full slice loop works
@@ -119,15 +116,13 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M3 — Parallelism (in progress):** OQ-A is **resolved** by **ADR 0008** — the
-   coordination model is decided. **Next slice: the parallelism playbook /
-   orchestration behavior** — implement ADR 0008 in
-   `plugins/loom/skills/loom-playbook/references/orchestration.md` (Parallelism
-   section, currently "M3, not yet"): worktree create-from-fresh-`origin/main`,
-   serialized merge+finalize on main, orchestrator-owned living-doc + slice-plans-
-   index writes, `index.lock` backoff retry, and crash/`prune` cleanup. The
-   research note `2026-06-08-git-worktree-parallel-slices.md` (now `Status:
-   Approved`) and ADR 0008 are the inputs.
+1. **M3 — Live parallel demonstration (closeout proof):** The parallelism behavior
+   is fully specified in `references/parallelism.md` (ADR 0008). To close M3, run
+   2+ independent/disjoint slices in parallel worktrees end-to-end:
+   `git worktree add -b <slice-branch> <worktree-path> origin/main` per slice;
+   spawn developer agents in each worktree; land serially from the main worktree
+   (serial `git merge <branch>` + finalize pass per slice). This is M3's closeout
+   proof — analogous to M1's rung-3 first-full-slice end-to-end proof.
 2. **Deferred follow-up — fold ADR 0008 into spec 04 (and spec 08):** spec 04's
    Parallelism section is **frozen/Approved** and still leaves "`.docs/`
    coordination across branches" open; ADR 0008 answers it. This is a deliberate

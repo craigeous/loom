@@ -6,10 +6,29 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M3 — Parallelism. **Started.** ADR 0008 is Accepted, setting the
-  coordination model; M2 is complete.
-- **Last action:** **ADR 0008 — Parallel `.docs/` Coordination for
-  Worktree-per-Slice — Accepted** (resolves OQ-A). This kicks off **M3
+- **Phase:** M3 — Parallelism. **In progress.** Behavior specified and landed;
+  live parallel demonstration pending.
+- **Last action:** **`parallelism-behavior-body` slice landed** (commit c6ec48e,
+  code-eval Round 2 PASS). Shipped: new
+  `plugins/loom/skills/loom-playbook/references/parallelism.md` — the single
+  authoritative worktree-per-slice operational body (ADR 0008): create→work→land→
+  cleanup workflow, the `.docs/` coordination model (living docs + slice-plans index
+  orchestrator-owned/main-only/serialized; slice branches carry only disjoint
+  uniquely-named plan/eval/code; disjoint-by-construction invariant; fresh-origin/main
+  freshness at spawn), concurrency safety (`index.lock` exponential-backoff retry,
+  crash cleanup via `git worktree remove -f`/`prune`, one-branch-per-slice, stateless
+  identity-guard hook), and the slicer-independence rule (disjoint source files +
+  disjoint per-slice `.docs/` filenames; shared-source files → sequence, not
+  parallelize). Guards in `orchestration.md` relaxed (M1 absolute "one slice in
+  flight at a time" → owner-opts-in available/parallel per `parallelism.md`);
+  `commands/run.md` updated to reference `parallelism.md`; `SKILL.md` References
+  list entry added; root `CLAUDE.md` Repo layout + heading updated. Slice archived.
+  **Remaining for M3:** live demonstration — run 2+ independent slices in parallel
+  worktrees end-to-end to prove the model. **Deferred follow-ups** (non-blocking):
+  fold ADR 0008 into frozen spec 04/08 (deliberate spec-revision planning cycle);
+  `gates/shell.md` (first concrete learned gate for shell-stack projects).
+- **Prior action:** **ADR 0008 — Parallel `.docs/` Coordination for
+  Worktree-per-Slice — Accepted** (resolves OQ-A). This kicked off **M3
   (Parallelism)**. The decision: a hybrid coordination model — the three living
   docs (`roadmap.md`/`progress.md`/`handoff.md`) **and the slice-plans index
   (`slice-plans/README.md`)** live on **main only**, written **solely by the
@@ -152,12 +171,10 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M3 — Parallelism build. With the coordination model now decided
-  (ADR 0008), the next slice is the **parallelism playbook / orchestration
-  behavior** (`orchestration.md` Parallelism section, currently "M3, not yet"):
-  worktree create-from-fresh-`origin/main`, serialized merge+finalize on main,
-  orchestrator-owned living-doc + slice-plans-index writes, `index.lock` backoff,
-  and crash/`prune` cleanup — all per ADR 0008. Deferred follow-ups:
+- **Next:** M3 live demonstration — run 2+ independent slices in parallel
+  worktrees end-to-end (plan → eval → develop → code-eval → land) to prove the
+  worktree-per-slice model in practice. The behavior is fully specified in
+  `references/parallelism.md` (ADR 0008). Deferred follow-ups (non-blocking):
   `gates/shell.md` (first concrete learned gate; mechanism now in place) and the
   spec-04/08 fold of ADR 0008 (see Open).
 
