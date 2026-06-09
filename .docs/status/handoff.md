@@ -16,6 +16,12 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 (Dogfooding & hardening) in progress.** First dogfood run landed: **ADR 0008
+  folded into frozen specs 04 + 08** (commit c3cd354, plan-eval PASS, owner-approved)
+  — driven through loom's own loop in strict route-only mode with zero orchestrator
+  intervention into role work. Spec 04's Parallelism section now states ADR 0008's
+  coordination model (no longer open); spec 08 records the slice-plans-index
+  ownership change. M0–M3 all complete.
 - **M3 (Parallelism) is complete**, including the live parallel demonstration.
   `references/parallelism.md` (ADR 0008) is the single authoritative
   worktree-per-slice operational body. The model was proven end-to-end: 2 developer
@@ -119,11 +125,10 @@ source of truth; `roadmap.md` is milestone order.
    approval gates, round limits/escalation polished; resume-after-interruption
    verified across machines; `claude -p` fallback evaluated if deeper nesting is
    needed.
-2. **Deferred follow-up — fold ADR 0008 into spec 04 (and spec 08):** spec 04's
-   Parallelism section is **frozen/Approved** and still leaves "`.docs/`
-   coordination across branches" open; ADR 0008 answers it. This is a deliberate
-   **spec-revision planning cycle** (propose amendment → plan-eval → amend per
-   ADR 0005), **not** a direct edit — do NOT touch spec 04 outside that cycle.
+2. **DONE — fold ADR 0008 into spec 04 (and spec 08):** completed as M4 dogfood
+   run #1 (commit c3cd354, plan-eval PASS, owner-approved). Both specs re-Approved;
+   spec 04's Parallelism section now carries ADR 0008's coordination model and spec
+   08 records the slice-plans-index ownership change.
 3. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
    shell-stack projects (using `shellcheck` as the lint step). The gate-learning
    mechanism is now in place; this gate should be produced by running the mechanism

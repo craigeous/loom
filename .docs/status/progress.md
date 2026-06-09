@@ -6,8 +6,19 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M3 complete. **M4 (Dogfooding & hardening) is next.**
-- **Last action:** **M3 live parallel demonstration** — 2 developer agents ran in
+- **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
+- **Last action:** **M4 dogfood run #1 — folded ADR 0008 into frozen specs 04 + 08**
+  (commit c3cd354, plan-eval `adr0008-spec-fold-eval.md` PASS Round 1, approved by
+  owner). Driven entirely through loom's own loop in **strict route-only** mode: the
+  orchestrator only spawned roles and verified commits — the planner authored the
+  amendment, a blind plan-evaluator PASSed it (one non-blocking MINOR: the
+  concurrent-planning-stays-serial boundary is left to ADR 0008 + ADR 0005 rather
+  than restated in spec 04), the owner signed off the frozen-spec change, and the
+  orchestrator flipped both specs Plan Review → Approved and finalized living docs.
+  Spec 04's Parallelism section now carries ADR 0008's coordination model (no longer
+  an open question); spec 08 records the slice-plans-index ownership change. **First
+  end-to-end M4 dogfood pass ran with zero orchestrator intervention into role work.**
+- **Prior action:** **M3 live parallel demonstration** — 2 developer agents ran in
   parallel in separate worktrees (`slice-casing` on branch `slice-casing`,
   `slice-reverse` on branch `slice-reverse`), each isolated to its own disjoint
   module (`src/casing.rs` / `src/reverse.rs`), each running the full cargo gate
@@ -177,17 +188,19 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M4 — Dogfooding & hardening. Deferred follow-ups (non-blocking, carry
-  into M4 planning): fold ADR 0008 into frozen spec 04/08 (spec-revision planning
-  cycle per ADR 0005); `gates/shell.md` (first concrete learned gate for
-  shell-stack projects; mechanism in place, needs a real shell project run).
+- **Next:** continue M4 — Dogfooding & hardening. Remaining M4 items: best practices
+  propagated into root/project `CLAUDE.md` automatically; owner approval gates +
+  round-limit/escalation polished; resume-after-interruption verified across
+  machines; `claude -p` deep-nesting fallback evaluated. Deferred follow-up
+  (non-blocking): `gates/shell.md` — first concrete learned gate for shell-stack
+  projects (mechanism in place, needs a real shell-project run-green-once).
 
 ## Accepted decisions (ADRs)
 
 0001 plugin/orchestrator · 0002 model tiers · 0003 commit-per-handoff · 0004 blind
 eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir layout) ·
+0007 namespaced command surface (supersedes bare `/loom` in 0001) ·
 0008 parallel `.docs/` coordination (worktree-per-slice; resolves OQ-A).
-(0007 namespaced command surface is still In Review.)
 
 ## Resolved build-time questions (M1)
 
@@ -225,17 +238,15 @@ plan/eval/code branch-local, serial merge+finalize). Still deferred: OQ-B
 cold role vs. orchestrator-direct before choosing). Owner guidance is recorded
 inline in [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
 
-Deferred follow-ups discovered while accepting ADR 0008 (for a future planning cycle):
+Deferred follow-ups discovered while accepting ADR 0008:
 
-- **Fold ADR 0008 into the frozen spec 04 Parallelism section** (and add the
-  playbook guidance to spec 08). Spec 04's Parallelism section currently leaves
-  "`.docs/` coordination across branches" open; ADR 0008 now answers it. Specs are
-  frozen (ADR 0005), so this is a deliberate **spec-revision planning cycle**
-  (propose amendment → plan-eval → amend), **not** a landing side effect — do NOT
-  edit spec 04 outside that cycle. The fold should also call out the M1→M3 habit
-  change: the slice-plans-index Active/Archived edit moves *off* the slice branch
-  onto the orchestrator-on-main path (planner/developer no longer touch
-  `slice-plans/README.md` once parallelism is on).
+- ~~**Fold ADR 0008 into the frozen spec 04 Parallelism section** (and spec 08
+  playbook guidance).~~ **DONE (M4 dogfood run #1, commit c3cd354, approved).** The
+  spec-revision planning cycle ran through loom's loop: spec 04's Parallelism section
+  now carries ADR 0008's coordination model (the "`.docs/` coordination across
+  branches" open question is resolved in-text) and spec 08 records the
+  slice-plans-index ownership change (planner/developer no longer touch
+  `slice-plans/README.md` once parallelism is on). Both specs re-Approved.
 
 Deferred follow-ups discovered during the retroactive spec-approval pass (flagged
 for a future slice / owner decision):
