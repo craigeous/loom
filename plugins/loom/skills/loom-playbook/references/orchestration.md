@@ -67,8 +67,15 @@ At kickoff, confirm with the owner (AskUserQuestion if not already given):
 
 ## Round limit
 
-Track reject→revise rounds per artifact (the `Round:` line in its eval file). After
-**5** rounds, stop and escalate = pause + summary to the owner.
+Count **FAIL cycles** per artifact via the `Round:` line in its single eval file — a
+PASS does not advance the count; a resolving PASS shares the FAIL's round number; a
+fresh artifact's first review is round 0. **One** counter per artifact across **both**
+review phases (plan-review FAILs + code-review FAILs accumulate toward the same 5).
+At **5** FAILs the orchestrator **stops and escalates = pause + summary** to the owner.
+
+See [spec 03 `## Round limits`](../../../../../.docs/spec/03-artifact-lifecycle.md)
+— especially the **Escalation contract (pause + summary)** subsection — for what the
+summary must contain and the owner-driven reset rule.
 
 ## Parallelism
 

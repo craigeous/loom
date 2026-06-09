@@ -1,6 +1,6 @@
 # Round-Limit Conformance
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md
 
 ## Context
@@ -226,4 +226,36 @@ these mechanical checks (all from repo root):
 
 ## Notes
 
-<none yet>
+### Verification evidence (implementation pass)
+
+All mechanical checks from the Verification section ran green:
+
+1. **Scope guard** — see commit diff; only the seven listed files are changed, plus
+   README.md status update. No `spec/` or `ADR/` file appears.
+
+2. **Evaluator prompts encode FAIL-only counting.**
+   - `rg -i 'only on a FAIL|FAIL.*increment|increment.*FAIL'` matches both
+     `plan-evaluator.md` and `code-evaluator.md`.
+   - `rg -i 'same.*round|repeat.*round|resolv'` matches both files (PASS reuses
+     the number).
+   - `rg -i 'round 0|round zero|first review'` matches both files.
+   - `rg 'status-machine\.md'` matches both files (points to authority).
+
+3. **Template carries guidance.**
+   - `rg -i 'FAIL.*cycle|round 0|resolv' templates/evaluation.md` matches.
+   - `rg '^Round: <n>' templates/evaluation.md` matches (line intact).
+
+4. **status-machine.md + orchestration.md match spec 03 and link it.**
+   - `## Round limit` heading intact in both.
+   - FAIL-only counting stated; old bare "reject→revise cycle increments" phrasing
+     replaced; PASS-does-not-increment is explicit.
+   - `rg -i 'both.*phase|plan.*code|across.*review'` matches both files.
+   - `rg '03-artifact-lifecycle\.md'` matches both files.
+   - Threshold **5** present in both.
+
+5. **Single-source discipline.**
+   - `rg -i 'recurring-vs-new|recurring vs new|per-round findings'` across the
+     five playbook files returns nothing.
+
+6. **Threshold untouched.** `rg -n 'round'` in status-machine.md, orchestration.md,
+   and run.md all show threshold still **5**; no file raised or lowered it.

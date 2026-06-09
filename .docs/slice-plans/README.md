@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [round-limit-conformance-plan.md](round-limit-conformance-plan.md) — `Plan Review` —
+- [round-limit-conformance-plan.md](round-limit-conformance-plan.md) — `Implemented` —
   bring the playbook's round-limit text + both evaluator prompts into conformance
   with the amended spec 03 `## Round limits` FAIL-only counting rule (FAIL
   increments / PASS-resolving-a-FAIL shares the number / first review is round 0 /

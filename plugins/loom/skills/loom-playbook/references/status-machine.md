@@ -38,9 +38,18 @@ pauses for owner sign-off before proceeding past it.
 
 ## Round limit
 
-A reject→revise cycle increments `Round:` in the eval file. After **5** rounds on
-one artifact, the orchestrator stops and escalates = **pause + summary** to the
-owner.
+- A **FAIL** increments `Round:`; a **PASS does not**. A resolving PASS carries the
+  **same** round number as the FAIL it closes (the round is closed, not advanced).
+- A fresh artifact's first review is **round 0** (not yet counted); the first FAIL
+  moves it to round 1. Counted rounds run **1..N**.
+- **One** counter per artifact in its single eval file
+  (`.docs/evaluations/<artifact-name>-eval.md`), spanning **both** review phases —
+  plan-review FAILs and code-review FAILs accumulate toward the same limit.
+- After **5** rounds (the 5th FAIL) the orchestrator stops and escalates = **pause +
+  summary** to the owner.
+
+See [spec 03 `## Round limits`](../../../../../.docs/spec/03-artifact-lifecycle.md)
+for the full counting rule, the reset rule, and the escalation-summary contract.
 
 ## Lifecycles
 

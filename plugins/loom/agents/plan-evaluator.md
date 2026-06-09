@@ -49,6 +49,12 @@ completeness, feasibility, scope discipline, playbook conformance.
    template at `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/templates/evaluation.md`:
    `Verdict: PASS|FAIL`, `Round: n`, findings tagged `[BLOCKER]/[MAJOR]/[MINOR]`,
    and required changes. **Any `BLOCKER` ⇒ FAIL.**
+   **Counting rule for `Round: n`** (authority: spec 03 `## Round limits` /
+   `references/status-machine.md`):
+   - Increment `Round:` only on a FAIL. A FAIL moves `n` up by one.
+   - A fresh artifact with no prior FAIL in the eval file is round 0.
+   - When the verdict is a PASS that resolves a prior FAIL, write the **same** round
+     number as that FAIL — do not advance the counter.
 3. Set the artifact's status line: `Approved` on PASS, `Draft` on FAIL. Change
    **only** the status line — never edit the artifact's content.
 4. Commit (author-neutral — see the commit-convention reference) and stop.

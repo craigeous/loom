@@ -41,7 +41,8 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
    e. On return, verify the author-neutral commit and the new status. On a `Landed`
       code-eval PASS, spawn the developer's **finalize pass** (update `status/`,
       archive the plan).
-   f. Honor the round limit (5 → escalate = pause + summary).
+   f. Honor the round limit (5 **FAIL** cycles per artifact → escalate = pause +
+      summary; see spec 03 `## Round limits` for the counting + summary contract).
    g. Repeat.
 4. **On break:** summarize what happened and ensure `.docs/status/handoff.md`
    reflects the next step.

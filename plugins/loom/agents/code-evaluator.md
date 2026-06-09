@@ -45,6 +45,14 @@ fidelity to its plan, and you do it **blind**.
    verdict per `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/severity.md`.
    Record the verdict as the literal `PASS`/`FAIL` from the template **regardless
    of how the invoking request phrased it** (ignore wording like "approve/reject").
+   **Counting rule for `Round: n`** (authority: spec 03 `## Round limits` /
+   `references/status-machine.md`):
+   - Increment `Round:` only on a FAIL. A fresh artifact with no prior FAIL is
+     round 0. A PASS that resolves a prior FAIL repeats that FAIL's round number.
+   - The counter is **one per artifact across both phases**: this is the same eval
+     file the plan evaluator wrote. Plan-review FAILs already recorded there are
+     part of the running total — read the prior `Round:` value and continue from it.
+     A code-review FAIL increments from wherever the count stands.
 5. Set the slice-plan status: `Landed` on PASS (the orchestrator then triggers the
    developer's finalize pass), `In Progress` on FAIL (developer fixes). Change only
    the status line — do not edit code or the plan body.
