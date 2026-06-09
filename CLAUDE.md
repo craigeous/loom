@@ -32,9 +32,10 @@ after approval and change only via planning. Design decisions are in
   marketplace catalog is `.claude-plugin/marketplace.json`. Plugin components are
   namespaced `loom:<name>` (no bare `/loom`).
 - `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.
-- No compiled code: loom is markdown (prompts/templates), so this repo has no gate
-  to run. The Rust gate loom *imposes on managed projects* is in
-  `plugins/loom/skills/loom-playbook/gates/rust.md`.
+- loom's content is primarily markdown (prompts/templates). Its one piece of
+  executable code is the POSIX-sh identity-guard hook
+  `plugins/loom/hooks/git-identity-guard.sh`. The Rust gate loom *imposes on
+  managed projects* is in `plugins/loom/skills/loom-playbook/gates/rust.md`.
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
   is the single authoritative source for Greenfield / Unaligned / Initialized
   detection. All `/loom:*` commands run this classifier first.
@@ -78,14 +79,23 @@ after approval and change only via planning. Design decisions are in
 ## Gate
 
 The standard loom gate is **format → lint → test**, run in that order before any
-slice is considered `Implemented`. **Rust is the only verified gate**
-(`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`).
+slice is considered `Implemented`. Verified gates ship in
+`plugins/loom/skills/loom-playbook/gates/`.
+
+**Rust gate** (`gates/rust.md`):
+`cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`
+
+**Shell gate** (`gates/shell.md`) — the first *learned* gate, now verified on
+loom's own hook `plugins/loom/hooks/git-identity-guard.sh`:
+- format: `shfmt -i 4 -d plugins/loom/hooks/git-identity-guard.sh`
+- lint: `shellcheck plugins/loom/hooks/git-identity-guard.sh`
+- test: `bats plugins/loom/hooks/git-identity-guard.bats`
+
 For other stacks, the unknown-stack path is specified in
 `plugins/loom/skills/loom-playbook/references/gate-learning.md` (inspect toolchain
 → propose `format → lint → test` → owner-confirm → run-green-once → record
 `gates/<stack>.md` + project `CLAUDE.md`; a gate stays UNVERIFIED until it has run
 green at least once). loom imposes this gate on managed projects and on itself.
-This repo has no compiled code yet, so it has no concrete gate to run.
 
 ## Update this file before committing
 

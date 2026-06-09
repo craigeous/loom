@@ -1,6 +1,6 @@
 # Shell gate (first learned gate: `gates/shell.md`, verified on loom's own hook)
 
-Status: In Progress
+Status: Implemented
 Target specs: 06-init-modes.md, 08-playbook.md
 
 ## Context
@@ -491,3 +491,11 @@ Diff the two files' shapes (`rust.md` is the template):
   the corrected `/bin/sh` recipe (Step 1.4) and are exercised at run-green-once
   (Step 3 / V1); they are stated as expected, not pre-verified via the recipe. No
   files were modified.
+- **Gate run-green-once evidence (developer, 2026-06-09):** all three gate steps ran
+  green from the repo root on the loom-concrete commands (spec 06, "run green once"):
+  - `shfmt -i 4 -d plugins/loom/hooks/git-identity-guard.sh` → exit **0** (no diff)
+  - `shellcheck plugins/loom/hooks/git-identity-guard.sh` → exit **0** (clean)
+  - `bats plugins/loom/hooks/git-identity-guard.bats` → exit **0** (**28/28 tests
+    pass**: B01–B11, A01–A14, F1–F3; F-rows confirmed NO_JQ via temp stub PATH)
+  Hook is unchanged (shfmt `-i 4 -d` is a no-op on the 4-space-indented hook).
+  This is the spec-06 evidence that justifies `Status: Verified` in `gates/shell.md`.
