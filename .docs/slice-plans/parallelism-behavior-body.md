@@ -1,6 +1,6 @@
 # M3 Parallelism behavior body — worktree-per-slice operational guidance
 
-Status: Plan Review
+Status: Approved
 Target specs: ADR 0008 (`.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md`, Accepted) — operationalized into the playbook. (Spec 04's Parallelism fold is the deferred planning-cycle item per ADR 0008 Consequences; this slice does **not** touch frozen `spec/`.)
 
 ## Context
