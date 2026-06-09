@@ -1,6 +1,6 @@
 # Research: git worktree workflow for parallel slices
 
-Status: Research Review
+Status: Approved
 Date: 2026-06-08
 Topic: How git worktree isolates parallel slice work and the workflow for landing changes back to main; constraints relevant to concurrent agent execution in loom's M3 parallelism milestone.
 

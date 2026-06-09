@@ -16,6 +16,20 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M3 (Parallelism) has started.** **ADR 0008 — Parallel `.docs/` Coordination
+  for Worktree-per-Slice — is Accepted** (resolves OQ-A), setting the coordination
+  model for the milestone. The model: hybrid — the three living docs
+  (`roadmap.md`/`progress.md`/`handoff.md`) **and the slice-plans index
+  (`slice-plans/README.md`)** live on **main only**, written **solely by the
+  orchestrator** and serialized; each slice's uniquely-named plan/eval/code lives
+  on its **slice branch**; landing is serial merge+finalize from the main
+  worktree, so concurrent independent slices write disjoint paths and never
+  conflict on a `.docs/` file. Worktrees are created from fresh `origin/main`;
+  concurrency safety via `index.lock` backoff retry, `git worktree remove -f`/
+  `prune` cleanup, and the stateless identity-guard hook. Builds on ADR 0003/0001.
+  OQ-A is now Resolved in `09-open-questions.md`; the grounding research note
+  `2026-06-08-git-worktree-parallel-slices.md` is `Status: Approved`. **M2 remains
+  complete.**
 - **M1 is complete.** The loom plugin under `plugins/loom/` is built, installed,
   validated, and **run end-to-end**: command surface is split into namespaced
   `/loom:<name>` commands; agents are `loom:<role>`; the full slice loop works
@@ -105,17 +119,29 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M3 — Parallelism (next milestone):** worktree-per-slice + orchestrator launches
-   parallel background role agents; resolve OQ-A (`.docs/` coordination across
-   branches; landing = merge). Research note
-   `2026-06-08-git-worktree-parallel-slices.md` is ready input. Owner guidance: the
-   **planner** owns the `.docs/` coordination design.
-2. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
+1. **M3 — Parallelism (in progress):** OQ-A is **resolved** by **ADR 0008** — the
+   coordination model is decided. **Next slice: the parallelism playbook /
+   orchestration behavior** — implement ADR 0008 in
+   `plugins/loom/skills/loom-playbook/references/orchestration.md` (Parallelism
+   section, currently "M3, not yet"): worktree create-from-fresh-`origin/main`,
+   serialized merge+finalize on main, orchestrator-owned living-doc + slice-plans-
+   index writes, `index.lock` backoff retry, and crash/`prune` cleanup. The
+   research note `2026-06-08-git-worktree-parallel-slices.md` (now `Status:
+   Approved`) and ADR 0008 are the inputs.
+2. **Deferred follow-up — fold ADR 0008 into spec 04 (and spec 08):** spec 04's
+   Parallelism section is **frozen/Approved** and still leaves "`.docs/`
+   coordination across branches" open; ADR 0008 answers it. This is a deliberate
+   **spec-revision planning cycle** (propose amendment → plan-eval → amend per
+   ADR 0005), **not** a direct edit and **not** a landing side effect — do NOT
+   touch spec 04 outside that cycle. The fold should also note the M1→M3 habit
+   change: the slice-plans-index Active/Archived edit moves off the slice branch
+   to the orchestrator-on-main path.
+3. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
    shell-stack projects (using `shellcheck` as the lint step). The gate-learning
    mechanism is now in place; this gate should be produced by running the mechanism
    on a real shell project (run-green-once is part of the lifecycle, not a
    hand-authored artifact). `shellcheck` is already pointed from `tooling.md`.
-3. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
+4. **Spec-10 line-107 bare-`/loom` fix:** spec 10 still contains a bare `/loom`
    reference at line 107. This is a frozen-spec planner cycle (propose an amendment,
    plan-eval, amend via planning — not a direct edit). The mechanical-check rule now
    in the rubrics ensures this kind of miss is caught earlier in future reviews.

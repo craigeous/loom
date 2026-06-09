@@ -38,12 +38,6 @@ Resolved items are kept for traceability; settled ones became ADRs or spec text.
 
 ## Open
 
-- **OQ-A. Parallel `.docs/` coordination.** With worktree-per-slice, where does
-  status live — a cross-slice dashboard on the main branch vs. per-slice
-  plan/eval on slice branches — and how is it reconciled at landing? Settle when
-  parallelism is built (post-M1).
-  - _Owner guidance (M2), to be worked next:_ the **planner** owns this — address it
-    when M3 parallelism is designed.
 - **OQ-B. Research-review tier.** Is the sources-match-claims check cheap enough to
   run on `sonnet`/`haiku` rather than `opus`? Decide empirically.
   - _Owner guidance (M2), to be worked next:_ owner leans **haiku is sufficient** —
@@ -56,6 +50,16 @@ Resolved items are kept for traceability; settled ones became ADRs or spec text.
   - _Owner guidance (M2), to be worked next:_ owner is **undecided** and wants a
     compare-and-contrast of the two options (re-spawned cold role pass vs. the
     orchestrator doing the finalize directly) before choosing.
+- ~~**OQ-A. Parallel `.docs/` coordination.**~~ **RESOLVED (M3):** hybrid model —
+  the three living docs (`roadmap.md`/`progress.md`/`handoff.md`) **and the
+  slice-plans index (`slice-plans/README.md`)** live on **main only**, written
+  **solely by the orchestrator** and serialized; each slice's uniquely-named
+  plan file, eval file, and code live on its **slice branch**; landing is a
+  serial merge+finalize from the main worktree, so concurrent slices write
+  disjoint paths and never conflict on a `.docs/` file. Worktrees are created
+  from fresh `origin/main` (input freshness at spawn); concurrency safety via
+  `index.lock` backoff retry, `git worktree remove -f`/`prune` cleanup, and the
+  stateless identity-guard hook. → ADR 0008.
 - ~~**OQ-D. Command namespacing.**~~ **RESOLVED (M1, empirically):** plugin
   components are namespaced — there is no bare `/loom`. Surface is one file per
   command: `/loom:run` (orchestrator) + one-off `/loom:research|plan|eval-plan|

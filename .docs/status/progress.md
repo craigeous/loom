@@ -6,9 +6,28 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M2 — Init modes & gate learning. **Complete.** M3 (Parallelism) is
-  the next milestone.
-- **Last action:** `gate-learning` slice landed (commit b2463c4, code-eval Round 2
+- **Phase:** M3 — Parallelism. **Started.** ADR 0008 is Accepted, setting the
+  coordination model; M2 is complete.
+- **Last action:** **ADR 0008 — Parallel `.docs/` Coordination for
+  Worktree-per-Slice — Accepted** (resolves OQ-A). This kicks off **M3
+  (Parallelism)**. The decision: a hybrid coordination model — the three living
+  docs (`roadmap.md`/`progress.md`/`handoff.md`) **and the slice-plans index
+  (`slice-plans/README.md`)** live on **main only**, written **solely by the
+  orchestrator** and serialized; each slice's uniquely-named plan file, eval file,
+  and code live on its **slice branch**; landing is a serial merge+finalize from
+  the main worktree, so concurrent independent slices write disjoint paths and
+  cannot conflict on a `.docs/` file. Worktrees are created from fresh
+  `origin/main` (input freshness at spawn — agents are cold and get focused
+  inputs, no mid-flight status polling); concurrency safety via `index.lock`
+  exponential-backoff retry, mandatory `git worktree remove -f`/`prune` cleanup,
+  and the confirmed-stateless identity-guard hook. Builds on ADR 0003
+  (author-neutral uniform identity) and ADR 0001 (orchestrator-only spawning),
+  supersedes neither. OQ-A moved to Resolved in `09-open-questions.md`; grounding
+  research note `2026-06-08-git-worktree-parallel-slices.md` set to
+  `Status: Approved` (validated through the ADR's two review rounds). **Deferred
+  follow-up:** fold this model into the frozen spec 04 Parallelism section (and
+  spec 08 playbook guidance) via a deliberate planning cycle — see Open.
+- **Prior action:** `gate-learning` slice landed (commit b2463c4, code-eval Round 2
   PASS). Shipped: new
   `plugins/loom/skills/loom-playbook/references/gate-learning.md` — the single
   authoritative body for the unknown-stack gate-learning mechanism (inspect toolchain
@@ -133,15 +152,21 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M3 — Parallelism (worktree-per-slice; orchestrator launches parallel
-  background role agents; resolve OQ-A — `.docs/` coordination across branches).
-  Deferred follow-up: `gates/shell.md` (first concrete learned gate; mechanism
-  now in place).
+- **Next:** M3 — Parallelism build. With the coordination model now decided
+  (ADR 0008), the next slice is the **parallelism playbook / orchestration
+  behavior** (`orchestration.md` Parallelism section, currently "M3, not yet"):
+  worktree create-from-fresh-`origin/main`, serialized merge+finalize on main,
+  orchestrator-owned living-doc + slice-plans-index writes, `index.lock` backoff,
+  and crash/`prune` cleanup — all per ADR 0008. Deferred follow-ups:
+  `gates/shell.md` (first concrete learned gate; mechanism now in place) and the
+  spec-04/08 fold of ADR 0008 (see Open).
 
 ## Accepted decisions (ADRs)
 
 0001 plugin/orchestrator · 0002 model tiers · 0003 commit-per-handoff · 0004 blind
-eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir layout).
+eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir layout) ·
+0008 parallel `.docs/` coordination (worktree-per-slice; resolves OQ-A).
+(0007 namespaced command surface is still In Review.)
 
 ## Resolved build-time questions (M1)
 
@@ -171,11 +196,25 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 
 ## Open
 
-Deferred to later milestones: OQ-A (parallel `.docs/` coordination — planner owns,
-M3), OQ-B (research-review tier — owner leans haiku-sufficient, decide empirically),
-OQ-C (finalize-pass owner — owner undecided, wants a compare-and-contrast of
-re-spawned cold role vs. orchestrator-direct before choosing). Owner guidance is
-recorded inline in [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+~~OQ-A (parallel `.docs/` coordination)~~ **RESOLVED by ADR 0008** (hybrid model;
+living docs + slice-plans index main-only/orchestrator-serialized, per-slice
+plan/eval/code branch-local, serial merge+finalize). Still deferred: OQ-B
+(research-review tier — owner leans haiku-sufficient, decide empirically), OQ-C
+(finalize-pass owner — owner undecided, wants a compare-and-contrast of re-spawned
+cold role vs. orchestrator-direct before choosing). Owner guidance is recorded
+inline in [`../spec/09-open-questions.md`](../spec/09-open-questions.md).
+
+Deferred follow-ups discovered while accepting ADR 0008 (for a future planning cycle):
+
+- **Fold ADR 0008 into the frozen spec 04 Parallelism section** (and add the
+  playbook guidance to spec 08). Spec 04's Parallelism section currently leaves
+  "`.docs/` coordination across branches" open; ADR 0008 now answers it. Specs are
+  frozen (ADR 0005), so this is a deliberate **spec-revision planning cycle**
+  (propose amendment → plan-eval → amend), **not** a landing side effect — do NOT
+  edit spec 04 outside that cycle. The fold should also call out the M1→M3 habit
+  change: the slice-plans-index Active/Archived edit moves *off* the slice branch
+  onto the orchestrator-on-main path (planner/developer no longer touch
+  `slice-plans/README.md` once parallelism is on).
 
 Deferred follow-ups discovered during the retroactive spec-approval pass (flagged
 for a future slice / owner decision):
