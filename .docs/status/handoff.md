@@ -16,17 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M3 (Parallelism) behavior is specified and landed.** `references/parallelism.md`
-  is the single authoritative worktree-per-slice operational body (ADR 0008), covering
-  the create→work→land→cleanup workflow, the `.docs/` coordination model (living docs
-  + slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
-  only disjoint plan/eval/code), concurrency safety, and the slicer-independence rule.
-  Guards in `orchestration.md` + `run.md` relaxed; `SKILL.md` + `CLAUDE.md` updated.
-  Slice `parallelism-behavior-body` archived (c6ec48e). **M3 remaining: live
-  demonstration** — run 2+ independent slices in parallel worktrees end-to-end to prove
-  the model in practice (M3's closeout proof, analogous to M1's rung-3 first-full-slice
-  proof). **ADR 0008** (resolves OQ-A) sets the coordination model; OQ-A is Resolved
-  in `09-open-questions.md`. **M2 remains complete.**
+- **M3 (Parallelism) is complete**, including the live parallel demonstration.
+  `references/parallelism.md` (ADR 0008) is the single authoritative
+  worktree-per-slice operational body. The model was proven end-to-end: 2 developer
+  agents ran in parallel worktrees (`slice-casing` / `slice-reverse`), each isolated
+  to a disjoint module, each gate-green independently (commits f66aeca, fb71dad);
+  serial land → master with no conflicts; integrated gate green (21 unit + 2
+  doc-tests); worktrees and branches cleaned up cleanly. ADR 0008's
+  conflict-free-by-construction model is confirmed in practice. **M2 and M3 are
+  both complete.**
 - **M1 is complete.** The loom plugin under `plugins/loom/` is built, installed,
   validated, and **run end-to-end**: command surface is split into namespaced
   `/loom:<name>` commands; agents are `loom:<role>`; the full slice loop works
@@ -116,21 +114,16 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M3 — Live parallel demonstration (closeout proof):** The parallelism behavior
-   is fully specified in `references/parallelism.md` (ADR 0008). To close M3, run
-   2+ independent/disjoint slices in parallel worktrees end-to-end:
-   `git worktree add -b <slice-branch> <worktree-path> origin/main` per slice;
-   spawn developer agents in each worktree; land serially from the main worktree
-   (serial `git merge <branch>` + finalize pass per slice). This is M3's closeout
-   proof — analogous to M1's rung-3 first-full-slice end-to-end proof.
+1. **M4 — Dogfooding & hardening:** loom manages its own development end to end;
+   best practices propagated into root/project `CLAUDE.md` automatically; owner
+   approval gates, round limits/escalation polished; resume-after-interruption
+   verified across machines; `claude -p` fallback evaluated if deeper nesting is
+   needed.
 2. **Deferred follow-up — fold ADR 0008 into spec 04 (and spec 08):** spec 04's
    Parallelism section is **frozen/Approved** and still leaves "`.docs/`
    coordination across branches" open; ADR 0008 answers it. This is a deliberate
    **spec-revision planning cycle** (propose amendment → plan-eval → amend per
-   ADR 0005), **not** a direct edit and **not** a landing side effect — do NOT
-   touch spec 04 outside that cycle. The fold should also note the M1→M3 habit
-   change: the slice-plans-index Active/Archived edit moves off the slice branch
-   to the orchestrator-on-main path.
+   ADR 0005), **not** a direct edit — do NOT touch spec 04 outside that cycle.
 3. **Deferred follow-up — `gates/shell.md`:** a first concrete learned gate for
    shell-stack projects (using `shellcheck` as the lint step). The gate-learning
    mechanism is now in place; this gate should be produced by running the mechanism

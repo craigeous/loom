@@ -6,9 +6,21 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** M3 — Parallelism. **In progress.** Behavior specified and landed;
-  live parallel demonstration pending.
-- **Last action:** **`parallelism-behavior-body` slice landed** (commit c6ec48e,
+- **Phase:** M3 complete. **M4 (Dogfooding & hardening) is next.**
+- **Last action:** **M3 live parallel demonstration** — 2 developer agents ran in
+  parallel in separate worktrees (`slice-casing` on branch `slice-casing`,
+  `slice-reverse` on branch `slice-reverse`), each isolated to its own disjoint
+  module (`src/casing.rs` / `src/reverse.rs`), each running the full cargo gate
+  green independently (slice commits f66aeca, fb71dad). Orchestrator serially
+  landed both branches → master with no merge conflicts (disjoint-file invariant
+  held). Integrated gate green: 21 unit tests + 2 doc-tests. Worktrees and
+  branches cleaned up without stale entries. ADR 0008's conflict-free-by-
+  construction model and the `references/parallelism.md` workflow are confirmed
+  in practice. **M3 is complete.** Deferred follow-ups (non-blocking, carry
+  forward): fold ADR 0008 into frozen spec 04/08 (deliberate spec-revision
+  planning cycle); `gates/shell.md` (first concrete learned gate for
+  shell-stack projects).
+- **Prior action:** **`parallelism-behavior-body` slice landed** (commit c6ec48e,
   code-eval Round 2 PASS). Shipped: new
   `plugins/loom/skills/loom-playbook/references/parallelism.md` — the single
   authoritative worktree-per-slice operational body (ADR 0008): create→work→land→
@@ -19,14 +31,8 @@ The status source of truth and decision index for building loom.
   crash cleanup via `git worktree remove -f`/`prune`, one-branch-per-slice, stateless
   identity-guard hook), and the slicer-independence rule (disjoint source files +
   disjoint per-slice `.docs/` filenames; shared-source files → sequence, not
-  parallelize). Guards in `orchestration.md` relaxed (M1 absolute "one slice in
-  flight at a time" → owner-opts-in available/parallel per `parallelism.md`);
-  `commands/run.md` updated to reference `parallelism.md`; `SKILL.md` References
-  list entry added; root `CLAUDE.md` Repo layout + heading updated. Slice archived.
-  **Remaining for M3:** live demonstration — run 2+ independent slices in parallel
-  worktrees end-to-end to prove the model. **Deferred follow-ups** (non-blocking):
-  fold ADR 0008 into frozen spec 04/08 (deliberate spec-revision planning cycle);
-  `gates/shell.md` (first concrete learned gate for shell-stack projects).
+  parallelize). Guards in `orchestration.md` relaxed; `commands/run.md` updated;
+  `SKILL.md` References list entry added; root `CLAUDE.md` updated. Slice archived.
 - **Prior action:** **ADR 0008 — Parallel `.docs/` Coordination for
   Worktree-per-Slice — Accepted** (resolves OQ-A). This kicked off **M3
   (Parallelism)**. The decision: a hybrid coordination model — the three living
@@ -171,12 +177,10 @@ The status source of truth and decision index for building loom.
   read-filter false-positive (`git log --author=alice` blocked) is an ACCEPTED,
   DOCUMENTED limitation recorded in `commit-convention.md`. Slice archived as
   Abandoned.
-- **Next:** M3 live demonstration — run 2+ independent slices in parallel
-  worktrees end-to-end (plan → eval → develop → code-eval → land) to prove the
-  worktree-per-slice model in practice. The behavior is fully specified in
-  `references/parallelism.md` (ADR 0008). Deferred follow-ups (non-blocking):
-  `gates/shell.md` (first concrete learned gate; mechanism now in place) and the
-  spec-04/08 fold of ADR 0008 (see Open).
+- **Next:** M4 — Dogfooding & hardening. Deferred follow-ups (non-blocking, carry
+  into M4 planning): fold ADR 0008 into frozen spec 04/08 (spec-revision planning
+  cycle per ADR 0005); `gates/shell.md` (first concrete learned gate for
+  shell-stack projects; mechanism in place, needs a real shell project run).
 
 ## Accepted decisions (ADRs)
 

@@ -54,7 +54,7 @@ override `user.*`). Next: M2 (init modes / gate learning).
 `gates/shell.md` should be produced by running the mechanism on a real shell
 project). Next: M3 (parallelism).
 
-## M3 — Parallelism (in progress)
+## M3 — Parallelism (complete)
 
 - [x] **OQ-A resolved** — ADR 0008 Accepted: `.docs/` coordination model for
       worktree-per-slice decided (living docs + slice-plans index orchestrator-owned/
@@ -66,10 +66,15 @@ project). Next: M3 (parallelism).
       independence rule); guards in `orchestration.md` + `run.md` relaxed (M1 absolute
       "one slice in flight" → available/owner-opts-in); `SKILL.md` + root `CLAUDE.md`
       updated (landed c6ec48e).
-- [ ] **Live demonstration** — run 2+ independent slices in parallel worktrees
-      end-to-end (plan → eval → develop → code-eval → land) to prove the model works
-      in practice. This is M3's closeout proof, analogous to M1's rung-3 first-full-
-      slice end-to-end proof.
+- [x] **Live demonstration** — 2 developer agents ran in parallel worktrees
+      (`slice-casing` / `slice-reverse`), each touching a disjoint module, each
+      running the full cargo gate green independently (commits f66aeca, fb71dad);
+      serial land → master with no conflicts; integrated gate green (21 unit +
+      2 doc-tests). Disjoint-file invariant and conflict-free-by-construction model
+      confirmed in practice.
+
+**M3 complete.** ADR 0008 + `references/parallelism.md` worktree-per-slice model
+proven end-to-end. Next: M4 (Dogfooding & hardening).
 
 ## M4 — Dogfooding & hardening
 
