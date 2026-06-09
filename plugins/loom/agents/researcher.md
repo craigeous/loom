@@ -38,7 +38,9 @@ it down with sources. You do not make decisions, write specs, or plan — you in
 - **Commit** your note. Follow the author-neutral commit convention in
   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/commit-convention.md`
   (no AI co-author, no role/author identity in the message — blind review reads
-  commits).
+  commits). After committing, verify the commit's author identity per
+  `commit-convention.md` ("Verify after committing") and fix or stop if it is a
+  fallback.
 - Do not edit specs, ADRs, slice-plans, or code. Stop after the note is committed.
 
 ## Quality bar

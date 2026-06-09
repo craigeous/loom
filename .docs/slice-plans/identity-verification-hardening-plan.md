@@ -1,6 +1,6 @@
 # Identity Verification Hardening
 
-Status: Approved
+Status: Implemented
 Target specs: 08-playbook.md
 
 ## Context
@@ -229,3 +229,38 @@ below. Run each from the repo root.
   know the "correct" identity.
 - Sequential slice: this plan file and the `slice-plans/README.md` Active entry are
   written in the **same** plan commit.
+
+## Verification Evidence
+
+All 9 mechanical checks from the plan passed:
+
+1. `rg -n "Ensure a git identity is configured" references/greenfield.md`
+   → line 123: exactly one heading hit. PASS.
+
+2. `rg -n "user.name|user.email|localhost|STOP|stop and ask" references/greenfield.md`
+   → lines 133-134 (two git config checks), 138-139 (@localhost/.(none) rejection),
+   145 (STOP + ask owner). PASS.
+
+3. `rg -n "^## Step [FG]" references/greenfield.md`
+   → line 123: `## Step F — Ensure a git identity is configured`
+   → line 159: `## Step G — Commit and hand back`. PASS.
+
+4. `rg -n "git identity|Ensure a git identity|commit-convention" unaligned.md initialized.md`
+   → both files show verify-only pointer to Greenfield Step F / commit-convention.md;
+   neither re-pastes the git config procedure. PASS.
+
+5. `rg -n "Verify after committing|git show -s --format|amend --reset-author" commit-convention.md`
+   → lines 45, 48, 56, 57: full verify sub-point with the git show command and
+   conditional --amend --reset-author fix. PASS.
+
+6. `rg -l "Verify after committing" agents/{researcher,planner,plan-evaluator,developer,code-evaluator}.md`
+   → all five files listed. PASS.
+
+7. `rg -n "git show -s --format" agents/*.md`
+   → no hits (rg exit 1). PASS (single-source intact).
+
+8. `git diff --name-only HEAD | grep -E ".docs/(spec|ADR)/|git-identity-guard"`
+   → no hits. Only the 10 expected files changed. PASS.
+
+9. `git diff HEAD | grep -iE "craigeous|@gmail|Craig Pfeiffer"`
+   → no hits. No hardcoded personal identity introduced. PASS.

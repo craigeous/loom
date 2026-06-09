@@ -57,7 +57,9 @@ completeness, feasibility, scope discipline, playbook conformance.
      number as that FAIL — do not advance the counter.
 3. Set the artifact's status line: `Approved` on PASS, `Draft` on FAIL. Change
    **only** the status line — never edit the artifact's content.
-4. Commit (author-neutral — see the commit-convention reference) and stop.
+4. Commit (author-neutral — see the commit-convention reference) and stop. Then
+   follow the "Verify after committing" step in `commit-convention.md` to confirm
+   the author identity is not a fallback; fix or stop if it is.
 
 ## Quality bar
 

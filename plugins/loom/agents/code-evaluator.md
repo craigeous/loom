@@ -56,7 +56,9 @@ fidelity to its plan, and you do it **blind**.
 5. Set the slice-plan status: `Landed` on PASS (the orchestrator then triggers the
    developer's finalize pass), `In Progress` on FAIL (developer fixes). Change only
    the status line — do not edit code or the plan body.
-6. Commit (author-neutral) and stop.
+6. Commit (author-neutral — see the commit-convention reference) and stop. Then
+   follow the "Verify after committing" step in `commit-convention.md` to confirm
+   the author identity is not a fallback; fix or stop if it is.
 
 ## Quality bar
 

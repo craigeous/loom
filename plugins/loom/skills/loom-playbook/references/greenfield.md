@@ -120,7 +120,43 @@ The gate runs in `format → lint → test` order before any slice is marked
 
 ---
 
-## Step F — Commit and hand back
+## Step F — Ensure a git identity is configured
+
+Before committing, verify that the repository's git identity is properly
+configured. This step is what makes `commit-convention.md`'s claim that
+"the orchestrator/`/loom:init` ensures an identity exists before any role
+commits" true.
+
+Run:
+
+```
+git config user.name
+git config user.email
+```
+
+**Acceptance criteria:** both commands return non-empty values, and the email
+is NOT an auto-generated fallback — reject any email ending in `@localhost` (e.g.
+`loom@localhost`) or containing `.(none)` (git's implicit/autodetected host form).
+A real, owner-provided `user.name` and `user.email` must be present in git config.
+
+**If a real identity is present:** proceed to Step G. Make no change to the
+identity — never overwrite an existing identity.
+
+**If absent or a fallback is detected:** STOP. Ask the owner to configure the
+repository's git identity before proceeding:
+
+```
+git config user.name "Your Name"
+git config user.email "you@example.com"
+```
+
+Never auto-invent an identity, never run `git config user.*` on your own
+initiative, and never proceed to commit under a fallback identity. See
+`commit-convention.md` for the rationale (uniform identity, blind evaluation).
+
+---
+
+## Step G — Commit and hand back
 
 Commit the scaffold author-neutral per
 [`commit-convention.md`](commit-convention.md): one commit, no co-author trailers,

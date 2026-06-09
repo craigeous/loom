@@ -64,6 +64,12 @@ After the owner picks a menu item:
    The menu choice simply tells the loop where to start (which artifact(s) are
    in scope).
 
+**Identity pre-flight:** before handing into the driver loop (under which roles
+commit), verify a real git identity is configured per the Greenfield "Ensure a git
+identity is configured" step (`greenfield.md` Step F) and `commit-convention.md`.
+If absent or an `@localhost` fallback, STOP and ask the owner to configure it —
+never invent an identity.
+
 Initialized's Resume half **writes no files itself**. It routes the owner into
 the existing loop, which drives the roles. Each role commits its own work
 author-neutral per [`commit-convention.md`](commit-convention.md).

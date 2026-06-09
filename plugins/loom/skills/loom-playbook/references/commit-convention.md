@@ -41,6 +41,25 @@ metadata must never reveal who produced the work.
   parsing that proved fragile (two code-eval-caught false-negative classes). To
   filter history by author, use `--pretty`/`--format`/`--grep` alternatives, or
   run the query outside a loom-guarded session.
+
+  **Verify after committing:** after every commit, run:
+
+  ```
+  git show -s --format='%an <%ae>'
+  ```
+
+  Confirm the author matches the repository's configured identity and is **NOT**
+  `loom <loom@localhost>`, any `*@localhost` address, or any auto-generated
+  fallback.
+
+  - **If the author is wrong AND a real identity is configured:** fix it in place
+    with `git commit --amend --reset-author --no-edit`, then re-verify. (This is
+    the one sanctioned `--amend --reset-author` use — it resets *to* the configured
+    identity, not away from it, so it does not violate the "must not set or override
+    identity" rule above.)
+  - **If the author is wrong AND no real identity is configured:** do NOT proceed —
+    stop and report. The init "ensure identity" step (`greenfield.md` Step F)
+    should have prevented this; this is the last-line safety net.
 - **One commit per handoff**, scoped to that handoff (a single slice's
   implementation, one evaluation, one planning artifact).
 

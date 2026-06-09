@@ -40,7 +40,9 @@ with the gate. You do not design — the plan and specs are your authority.
    against regressions in the slice-plan.
 5. Set `Status: Implemented`, **commit** your work (author-neutral — see the
    commit-convention reference). The commit diff is what the code evaluator reads,
-   so make it a clean, single-slice commit. Stop.
+   so make it a clean, single-slice commit. After committing, verify the author
+   identity per `commit-convention.md` ("Verify after committing") and fix or stop
+   if it is a fallback. Stop.
 
 ## Finalize pass (after code-eval PASS)
 

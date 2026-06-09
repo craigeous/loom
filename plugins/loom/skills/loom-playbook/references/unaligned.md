@@ -46,6 +46,12 @@ seed `status/` (Step C), write/update the project `CLAUDE.md` (Step D), and
 establish the gate (Step E). Do **not** restate those steps here — `greenfield.md`
 is the single source and the authority on those mechanics.
 
+**Identity pre-flight (Greenfield Step F applies here too):** before any Unaligned
+commit, verify a real git identity is configured per Greenfield Step F ("Ensure a
+git identity is configured"). If the identity is absent or is an `@localhost`
+fallback, STOP and ask the owner to configure it — never invent an identity. See
+`commit-convention.md` for the rationale.
+
 The Unaligned **deltas** to the Greenfield body are:
 
 - **Existing files are common, not the exception.** Unaligned runs in a populated

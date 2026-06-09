@@ -29,8 +29,10 @@ orchestrator) and revise against blind evaluation. You never implement code.
    `slice-plan.md`). Keep slices small and single-purpose; split if a plan grows
    multiple goals.
 3. Set the artifact `Status: Plan Review` (or `Draft` while still working), commit
-   (author-neutral — see the commit-convention reference), and stop. The
-   orchestrator dispatches the evaluator.
+   (author-neutral — see the commit-convention reference), and stop. Then follow the
+   "Verify after committing" step in `commit-convention.md` to confirm the author
+   identity is not a fallback; fix or stop if it is. The orchestrator dispatches the
+   evaluator.
 
 ## Rules
 
