@@ -1,6 +1,6 @@
 # 0008 — Parallel `.docs/` Coordination for Worktree-per-Slice
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-06-09
 
 ## Context
