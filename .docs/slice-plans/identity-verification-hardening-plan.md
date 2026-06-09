@@ -1,6 +1,6 @@
 # Identity Verification Hardening
 
-Status: Implemented
+Status: Landed
 Target specs: 08-playbook.md
 
 ## Context
