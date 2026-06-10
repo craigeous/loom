@@ -6,8 +6,33 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: ADR 0010 (automated `/review` + `/security-review` in the code-review phase) — decision + specs done; playbook slices pending.**
-- **Last action:** **ADR 0010 Accepted + specs 04/02 re-approved** (owner-directed feature:
+- **Phase:** **M0–M4 complete. Post-M4: ADR 0010 (automated `/review` + `/security-review` in the code-review phase) — COMPLETE (decision + specs + playbook, end to end).**
+- **Last action:** **ADR 0010 playbook thread COMPLETE — 3 slices landed via worktree
+  parallelism.** The decision + specs (prior action) are now fully implemented in the
+  playbook, exercised through loom's own loop in `implement` scope, evaluator-driven (no
+  claimed gates). **Slice A** (`review-findings-format`, solo on main, code-eval PASS round 0,
+  commit 13d62c2): new `references/review-findings.md` — the single-source artifact
+  definition (path `.docs/evaluations/<slice>-review-findings.md`, identity-neutral, the
+  four distinguishable status tokens `ran-with-findings`/`ran-clean`/`skipped: docs-only`/
+  `skipped: command-unavailable`, finding-entry fields, adjudication pointer) + a `SKILL.md`
+  References bullet. **Then a parallel wave** (two worktrees branched from main, two developers
+  run concurrently, landed serially): **Slice B** (`orchestration-review-step`, code-eval PASS
+  round 0, landed beaa531) added orchestration.md's "Automated review before a slice lands"
+  step; **Slice C** (`code-eval-adjudication`, landed 5941bea) added the rubric's adjudication
+  procedure + the code-evaluator's artifact input/pointer. **The parallelism caught a real
+  defect:** Slice C's first code-eval FAILed round 1 on a broken ADR-0010 cross-link (5 `../`
+  copied from the rubric's depth into the 3-deep agent file → `test -e` miss); fixed → PASS
+  round 1. Both slices merged `--no-ff` from their worktree branches with **zero conflicts**
+  (ADR 0008 disjoint-by-construction confirmed on real work); worktrees + branches cleaned up.
+  CLAUDE.md curated-digest updated (new "Automated review in the code-review phase" bullet) now
+  that the mechanism is operational. **The ADR 0010 mechanism is now live end to end:** a future
+  `/loom:run` orchestrator runs `/review` + `/security-review` on code-bearing `Implemented`
+  diffs and feeds identity-neutral findings to the blind code-evaluator. **Known cosmetic item:**
+  spec 04 prose says `skipped: command unavailable` (space) while the playbook single-source
+  `review-findings.md` uses the hyphenated `skipped: command-unavailable` — the playbook
+  correctly defers to `review-findings.md`; aligning spec 04's prose is a frozen-spec planner
+  cycle if desired (non-blocking).
+- **Prior action:** **ADR 0010 Accepted + specs 04/02 re-approved** (owner-directed feature:
   insert Claude Code's built-in `/review` + `/security-review` into loom's code-review
   phase). Driven through loom's own loop, `plan` scope, owner-gated on every ADR/spec.
   Sequence: research note `2026-06-10-review-security-review-in-code-eval.md` (haiku

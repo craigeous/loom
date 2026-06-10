@@ -75,6 +75,19 @@ after approval and change only via planning. Design decisions are in
   boundary, the operational preconditions (dirty-tree check, untracked-file handling,
   NUL-delimited lists), status preservation (per spec 06 §2b), and final link
   validation.
+- **Automated review in the code-review phase** (ADR 0010): `plugins/loom/skills/loom-playbook/references/review-findings.md`
+  is the single-source definition of the review-findings artifact (path
+  `.docs/evaluations/<slice>-review-findings.md`; identity-neutral; four distinguishable
+  statuses `ran-with-findings` / `ran-clean` / `skipped: docs-only` /
+  `skipped: command-unavailable`). At `Implemented`, the **orchestrator** (only it may
+  spawn — ADR 0001) runs `/review` + `/security-review` on the diff in **local mode**,
+  writes that artifact, and hands it to the **blind code-evaluator** as **advisory**
+  input (the evaluator adjudicates and owns the verdict via `severity.md`). Runs on
+  code-bearing diffs only (pure-docs slices skip-with-a-note); a **separate review
+  dimension, NOT part of the** `format → lint → test` **gate**. Wired across
+  `references/orchestration.md` (run step), `references/code-eval-rubric.md`
+  (adjudication), and `agents/code-evaluator.md` (inputs); specs 04 §"Automated review
+  before a slice lands" + 02 (Code Evaluator) are the frozen authority.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions
