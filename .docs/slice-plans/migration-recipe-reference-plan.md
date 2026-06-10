@@ -1,6 +1,6 @@
 # migration-recipe-reference
 
-Status: Approved
+Status: Implemented
 Target specs: 06-init-modes.md
 
 ## Context
@@ -358,6 +358,42 @@ git diff --name-only HEAD | rg -n '\.docs/spec/|\.docs/ADR/|references/unaligned
   && echo "FAIL: out-of-scope edit" || echo "OK: scope clean"
 ```
 Expect: `OK: scope clean`.
+
+## Verification Evidence
+
+Gate: loom is markdown-only — no compiled gate. Acceptance is review against spec
+06 §2b + ADR 0009 §5/§7.
+
+All mechanical `rg` checks passed:
+
+- **A** — file present; `Migration Recipe` title on line 1; both authority pointers
+  (`06-init-modes.md` and `0009-unaligned-migrate-sub-mode.md`) present.
+- **B** — dirty-tree/stash language (A.1, lines 27–38); `git ls-files --others`
+  untracked handling (A.2, lines 52–53); `-print0` and `xargs -0` present (lines
+  66–72/193); `$(find …)` named as anti-pattern (line 75/67).
+- **C** — spine/roadmap/progress/handoff all present; `../status/` and `../spec/`
+  rewrite targets both present; two-directional rewrite and numbering-gap language
+  present.
+- **D** — `specific-before-generic` stated as hard requirement (line 123); ordering
+  noted as load-bearing (line 133).
+- **E** — idempotency/re-run/self-match language present; `(?<!\.)` literal present
+  (lines 144/148/219/239); `..docs/` artifact named (lines 140/153/215/223).
+- **F** — path-form, markdown link target, backtick/prose all named; `](X.md)` bare
+  target example present (line 166); "new location" language present (lines
+  114/167).
+- **G** — "historical snapshots" boundary stated (lines 182–183); archive excluded
+  from rewrite file list (lines 190–193); `archive/` subtree exclusion stated.
+- **H** — "retain their prior status" (line 202); "not a re-review" (line 202);
+  explicit pointer to `06-init-modes.md §2b` (line 204) and `ADR 0009 §4` (line
+  206).
+- **I** — "final step" in Step H title (line 211); "last step" stated (line 213).
+- **J** — `migration-recipe.md` entry present in `SKILL.md` References list (line 54).
+- **K** — Active entry in README present; plan Status updated to Implemented.
+- **L** — Scope guard: `OK: scope clean`; only
+  `plugins/loom/skills/loom-playbook/references/migration-recipe.md`,
+  `plugins/loom/skills/loom-playbook/SKILL.md`, and
+  `.docs/slice-plans/migration-recipe-reference-plan.md` modified; no spec/ADR/
+  unaligned/init-detection edits.
 
 ## Notes
 

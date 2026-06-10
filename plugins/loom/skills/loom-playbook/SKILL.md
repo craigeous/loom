@@ -51,6 +51,13 @@ archived on landing. On conflict, the spec wins.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 - `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).
 - `unaligned.md` — the Unaligned init behavior body (alignment pass: reuse Greenfield scaffold + gate, then descriptive `spec/` back-fill).
+- `migration-recipe.md` — the reusable Unaligned-migrate recipe (ADR 0009 §5/§7):
+  ordered, idempotent cross-reference rewrite (specific-before-generic; negative
+  lookbehind against self-match), the numbered-spine → `spec/` + `status/` split
+  with two-directional link rewrite, the three reference forms, the
+  living-rewritten vs archived-snapshot boundary, the operational preconditions
+  (dirty-tree check, untracked-file handling, NUL-delimited lists), status
+  preservation (per spec 06 §2b), and final link validation.
 - `initialized.md` — the Initialized init behavior body (resume: state-derived menu mapped to the dispatch table → scope/gates + driver loop; idempotent playbook re-application).
 - `gate-learning.md` — the unknown-stack gate-learning mechanism (inspect toolchain → propose `format → lint → test` → owner-confirm → run-green-once → record `gates/<stack>.md` + project `CLAUDE.md`; gate stays UNVERIFIED until it runs green once).
 - `tooling.md` — **recommended** CLI/LSP toolkit by role, and the mechanical

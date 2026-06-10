@@ -65,6 +65,15 @@ after approval and change only via planning. Design decisions are in
   slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
   only disjoint plan/eval/code), concurrency safety, and the slicer-independence
   rule.
+- **Migration recipe** (ADR 0009, slice 2 of 3):
+  `plugins/loom/skills/loom-playbook/references/migration-recipe.md` — the
+  reusable, ordered, idempotent Unaligned-migrate recipe: preconditions (dirty-tree
+  check, untracked-file handling, NUL-delimited lists), numbered-spine →
+  `spec/` + `status/` split with two-directional link rewrite,
+  specific-before-generic ordered rules, idempotency via negative lookbehind
+  `(?<!\.)` against the `..docs/` self-match, three reference forms handled
+  separately, living-rewritten vs archived-snapshot boundary, status-preservation
+  pointer (spec 06 §2b / ADR 0009 §4), and final link validation.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions
