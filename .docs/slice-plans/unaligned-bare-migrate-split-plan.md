@@ -51,20 +51,28 @@ the `init-detection.md` sub-classification:
 - `.docs/spec/06-init-modes.md`, `.docs/ADR/0009-unaligned-migrate-sub-mode.md`,
   `migration-recipe.md`, `init-detection.md` — all landed/frozen; this slice only
   points AT them.
-- `CLAUDE.md` and `SKILL.md` are **NOT edited in this implement step.** The
-  `unaligned.md` SKILL.md References entry and any CLAUDE.md curated-digest line
-  describe only the old single back-fill flow and will be stale after this slice;
-  updating them is the **developer's finalize pass** (spec 03 finalize pass step 2;
-  boundary in spec 08 *Evolving the playbook → CLAUDE.md auto-propagation*), NOT the
-  implement commit. The implement commit touches only `unaligned.md` (+ this plan +
-  the slice-plans README). (A prior slice FAILed for editing `CLAUDE.md` at
-  implement — do not repeat that.)
+- `CLAUDE.md` is **NOT edited in this implement step.** Its `unaligned.md`
+  curated-digest line still describes only the old single back-fill flow and will be
+  stale after this slice; updating it is the **developer's finalize pass** (spec 03
+  finalize pass step 2; boundary in spec 08 *Evolving the playbook → CLAUDE.md
+  auto-propagation*). That finalize carve-out names the **curated digest
+  (`CLAUDE.md`) only** — it does NOT cover `SKILL.md`. (A prior slice FAILed for
+  editing `CLAUDE.md` at implement — do not repeat that.)
+- `SKILL.md` **IS edited in this implement step** (see step 8). `SKILL.md` is a
+  **playbook component** shipped inside the plugin
+  (`plugins/loom/skills/loom-playbook/SKILL.md`), not the curated digest, so its
+  `unaligned.md` References description is brought into consistency with the
+  restructured body **at implement**, matching the accepted precedent of sibling
+  slice 2 (`migration-recipe.md`), which edited `SKILL.md`'s References list at its
+  implement step and was blessed by its eval.
 
 ## Steps
 
-All steps edit a single file:
-`plugins/loom/skills/loom-playbook/references/unaligned.md`.
-The plan + README steps (8, 9) are committed together with the `unaligned.md` change.
+Steps 1–7 edit
+`plugins/loom/skills/loom-playbook/references/unaligned.md`; step 8 edits the
+playbook component `plugins/loom/skills/loom-playbook/SKILL.md`. The plan + README
+steps (9, 10) are the planning commit; `unaligned.md` + `SKILL.md` are the
+implement commit.
 
 ### 1. Reframe the intro + authority line (lines 1–14)
 
@@ -201,7 +209,25 @@ Preserve the existing author-neutral commit note (current lines ~163–164) and 
 it reads as applying to both flows' commits (it points at `commit-convention.md`;
 keep that single-source pointer).
 
-### 8. Add the Active-plan entry to the slice-plans README
+### 8. Refresh the `SKILL.md` `unaligned.md` References description (implement)
+
+In [`SKILL.md`](../../plugins/loom/skills/loom-playbook/SKILL.md), the References
+entry for `unaligned.md` (currently line 53) reads:
+
+> `unaligned.md` — the Unaligned init behavior body (alignment pass: reuse
+> Greenfield scaffold + gate, then descriptive `spec/` back-fill).
+
+That describes only the single (now bare) flow and is stale after this split.
+Replace it with a one-line entry — concise, matching the existing References
+style — that names **both** sub-modes: Unaligned-bare (descriptive `spec/`
+back-fill via Greenfield scaffold + gate) **and** Unaligned-migrate (reconcile a
+pre-existing docs spine via the owner gate + the inline `migration-recipe.md`
+recipe). Do not re-derive semantics; one line, both sub-modes named. This is part
+of the **implement** commit (alongside `unaligned.md`), NOT the finalize pass —
+`SKILL.md` is a playbook component, not the curated digest. Leave every other
+References entry untouched.
+
+### 9. Add the Active-plan entry to the slice-plans README
 
 In [`.docs/slice-plans/README.md`](README.md) under `## Active plans`, replace
 `(none)` with an entry pointing at this plan
@@ -209,14 +235,15 @@ In [`.docs/slice-plans/README.md`](README.md) under `## Active plans`, replace
 the ADR-0009 split — restructure `unaligned.md` into the Unaligned-bare flow (existing
 Steps 1–5) + the new Unaligned-migrate flow (owner gate, inline recipe via
 `migration-recipe.md`, status preservation, no role-spawn); points at spec 06 §2a/§2b,
-ADR 0009 §3/§4/§6, `init-detection.md`, `migration-recipe.md`; `unaligned.md` only
-(no spec/ADR/recipe/detection edits). Target spec 06-init-modes.md.
+ADR 0009 §3/§4/§6, `init-detection.md`, `migration-recipe.md`; implement touches `unaligned.md` + `SKILL.md` only
+(no spec/ADR/recipe/detection/CLAUDE.md edits). Target spec 06-init-modes.md.
 
-### 9. Commit (this plan + README + — at implement — `unaligned.md`)
+### 10. Commit (this plan + README + — at implement — `unaligned.md` + `SKILL.md`)
 
 This planning commit lands the plan file (step author) + the README Active entry
 together. The implement commit (separate, by the developer) lands the `unaligned.md`
-restructure. Both are author-neutral per `commit-convention.md`.
+restructure **and** the `SKILL.md` References-line refresh (step 8). Both are
+author-neutral per `commit-convention.md`.
 
 ## Verification
 
@@ -276,6 +303,7 @@ checks below. Run from repo root. `U=plugins/loom/skills/loom-playbook/reference
 commit must show **only**:
 
 - `plugins/loom/skills/loom-playbook/references/unaligned.md`
+- `plugins/loom/skills/loom-playbook/SKILL.md`
 
 and for the planning commit **only**:
 
@@ -289,21 +317,30 @@ It must show **NONE** of:
 - `plugins/loom/skills/loom-playbook/references/migration-recipe.md`
 - `plugins/loom/skills/loom-playbook/references/init-detection.md`
 - `CLAUDE.md`
-- `plugins/loom/skills/loom-playbook/SKILL.md`
 
 Concretely:
 `git diff --name-only HEAD -- .docs/spec .docs/ADR
 plugins/loom/skills/loom-playbook/references/migration-recipe.md
-plugins/loom/skills/loom-playbook/references/init-detection.md CLAUDE.md
-plugins/loom/skills/loom-playbook/SKILL.md` must return **empty**.
+plugins/loom/skills/loom-playbook/references/init-detection.md CLAUDE.md` must
+return **empty**.
+
+Additionally, the `SKILL.md` `unaligned.md` entry must now mention the migrate
+flow: `rg -n 'unaligned\.md' plugins/loom/skills/loom-playbook/SKILL.md` must
+return a description line, and
+`rg -ni 'unaligned\.md.*migrat|migrat' plugins/loom/skills/loom-playbook/SKILL.md`
+must confirm that entry names the migrate/reconcile sub-mode (confirm by review the
+hit is on the `unaligned.md` line and names both bare back-fill and migrate). The
+entry must NOT have been collapsed to a single back-fill-only description.
 
 ### Process note for the developer (carry forward)
 
-- **CLAUDE.md is NOT edited in the implement step.** If a curated-digest update is
-  warranted (the CLAUDE.md unaligned.md line, and the SKILL.md References entry,
-  currently describe only the single back-fill flow), it is done in the **finalize
-  pass** (spec 03 finalize pass step 2; boundary in spec 08), not the implement
-  commit. The implement commit touches only `unaligned.md`.
+- **CLAUDE.md is NOT edited in the implement step.** The CLAUDE.md `unaligned.md`
+  curated-digest line still describes only the single back-fill flow; updating it is
+  done in the **finalize pass** (spec 03 finalize pass step 2; boundary in spec 08
+  *CLAUDE.md auto-propagation*), not the implement commit. That carve-out governs the
+  **curated digest (`CLAUDE.md`) only** — it does NOT cover `SKILL.md`. `SKILL.md` is
+  a playbook component and **is** updated at implement (step 8). The implement commit
+  touches `unaligned.md` + `SKILL.md`.
 - Commits are author-neutral per `commit-convention.md` (no co-author trailers, no
   role/author identity in the message); never `--no-verify`; use the
   already-configured git identity (no `--author` / `-c user.*` / `GIT_AUTHOR_*`).
