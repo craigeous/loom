@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Approved
+Status: Plan Review
 
 Status is loom's dispatcher. Each gated artifact carries a `Status:` line; the
 orchestrator reads it (and git state) to decide which role to spawn next. **Every
@@ -70,12 +70,30 @@ On **code-eval PASS** (the slice is `Landed`), the developer runs a **finalize
 pass** (cold):
 1. Update `status/progress.md` and `status/handoff.md` (and `roadmap.md` if a
    milestone closed).
-2. `git mv` the plan into `slice-plans/archive/`, set status `Archived`, commit.
+2. Update the relevant `CLAUDE.md` **only when the landed slice changed something
+   in the curated-digest scope** — i.e. it introduced or altered a durable
+   convention, a repo-layout fact, a gate definition, or a "read-first" pointer.
+   The change reflected into `CLAUDE.md` is the stable, agent-facing form of what
+   landed; **per-slice history stays in `progress.md`** and the other living docs,
+   never in `CLAUDE.md`. If the slice changed nothing in that scope, **no
+   `CLAUDE.md` edit is made.** This applies to loom's own root `CLAUDE.md` and, in
+   a managed project, to that project's `CLAUDE.md`. The curated-digest boundary is
+   defined authoritatively in [08](08-playbook.md) (*Evolving the playbook*).
+3. `git mv` the plan into `slice-plans/archive/`, set status `Archived`, commit.
 
 **No spec edit happens at landing.** The slice-plan and the living docs record
 what was built; the spec only ever changes through a planning cycle. If
 implementation showed the spec to be wrong, the developer stops and the orchestrator
 opens a planning task instead of patching the spec.
+
+The `CLAUDE.md` update in step 2 does **not** weaken this rule or ADR 0005.
+`CLAUDE.md` is a **derived, non-spec digest** — a curated reflection of conventions
+already decided in the specs and playbook — not an authoritative artifact. Updating
+it at finalize is therefore in the same category as updating the living docs, not in
+the category of spec authorship. The frozen artifacts (`.docs/spec/` and
+`.docs/ADR/`) remain untouched at landing; the developer still **never** edits them.
+On any conflict, the specs win and `CLAUDE.md` is corrected to match — it can never
+become a competing source of truth.
 
 > **Why this differs from the prototype:** ballboy folded slice outcomes back into
 > its specs at landing. loom instead **freezes specs** (ADR 0005) and treats the
