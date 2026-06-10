@@ -16,17 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **Post-M4: ADR 0009 (Unaligned-migrate sub-mode) ACCEPTED.** Driven by a real
-  `/loom:init`-on-ballboy field report (`.docs/research/2026-06-09-unaligned-init-migration-field-report.md`):
-  Unaligned needs a **migrate** sub-mode (reconcile an existing docs spine) distinct from
-  **bare** (back-fill). ADR 0009 records the decisions (split; undotted-spine detection;
-  migrate/thin-pointer/abort owner gate; migrated specs keep status; reusable migration
-  recipe in the playbook; inline `/loom:init` execution). **Follow-on work NOT yet started
-  (next up):** (1) **spec 06 amendment** (bare/migrate split + status-preservation), then
-  (2) **playbook slices** — `init-detection.md` undotted-spine signal, split `unaligned.md`
-  into bare+migrate, and a new migration-recipe reference (with the ordered/idempotent
-  cross-ref rewrite + spine→spec/status split + operational gotchas). These are separate
-  planning cycles per ADR 0005 (spec 06 frozen).
+- **Post-M4: implementing ADR 0009 (Unaligned-migrate), from the ballboy field report.**
+  ADR 0009 Accepted; **spec 06 amended + Approved** (commit 7b2808b) — Detection branches
+  Unaligned → migrate/bare; §2 split into 2a bare (back-fill) + 2b migrate (reconcile: named
+  migrate/thin-pointer/abort gate; status preservation; inline `/loom:init`; recipe deferred).
+  **Remaining: 3 playbook conformance slices** (normal plan→eval→develop→eval→land each):
+  (1) `init-detection.md` undotted-spine signal; (2) new migration-recipe reference
+  (ordered+idempotent cross-ref rewrite, numbered-spine→spec/status split, operational
+  gotchas — git-mv-skips-untracked, NUL-delimited lists, dirty-tree check); (3) split
+  `unaligned.md` into bare+migrate flows pointing at (1) + (2). Do (1)+(2) before (3).
 - **M4 COMPLETE — all M0–M4 milestones done.** Owner-gates/round-limit escalation
   (polished + live-tested) ✓, CLAUDE.md auto-propagation ✓, identity-verification hardening
   (emergent) ✓, `claude -p` evaluated & closed ✓ (reserve in spec 04), resume across

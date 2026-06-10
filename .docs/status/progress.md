@@ -6,8 +6,20 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: acting on real-world dogfooding feedback (ballboy).**
-- **Last action:** **ADR 0009 — Unaligned-migrate sub-mode — Accepted** (commit ea9ca27,
+- **Phase:** **M0–M4 complete. Post-M4: implementing ADR 0009 (Unaligned-migrate), from ballboy feedback.**
+- **Last action:** **Spec 06 amended for the Unaligned bare/migrate split — Approved**
+  (commit 7b2808b, plan-eval `spec-06-unaligned-migrate-amendment-eval.md` PASS round 0,
+  zero findings, owner-approved). Detection now branches Unaligned → migrate (pre-existing
+  docs spine present) vs bare (none); §2 split into 2a Unaligned-bare (back-fill, unchanged)
+  and 2b Unaligned-migrate (reconcile: named migrate/thin-pointer/abort owner gate; status
+  preservation / not a re-review trigger; inline `/loom:init`, no role-spawn; migration recipe
+  deferred to the playbook). Faithful to ADR 0009; recipe correctly deferred. **Next: the 3
+  follow-on playbook slices** (each a normal plan→eval→develop→eval→land cycle):
+  (1) `init-detection.md` undotted-spine signal; (2) a new migration-recipe reference (ordered+
+  idempotent cross-ref rewrite, spine→spec/status split, operational gotchas); (3) split
+  `unaligned.md` into bare+migrate flows (pointing at 1 + 2). Order: referenced files (1, 2)
+  before the unaligned.md split (3) to avoid forward-pointers.
+- **Prior action:** **ADR 0009 — Unaligned-migrate sub-mode — Accepted** (commit ea9ca27,
   plan-eval `adr-0009-unaligned-migrate-eval.md` PASS round 0, MINOR folded d1bacb3,
   owner-approved). Grounded in the real `/loom:init`-on-ballboy field report
   (`.docs/research/2026-06-09-unaligned-init-migration-field-report.md`): loom's Unaligned
