@@ -1,6 +1,6 @@
 # CLAUDE.md auto-propagation — playbook conformance
 
-Status: Approved
+Status: In Progress
 Target specs: 03-artifact-lifecycle.md, 08-playbook.md
 
 ## Context
