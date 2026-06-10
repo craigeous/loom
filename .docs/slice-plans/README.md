@@ -17,7 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [orchestration-review-step-plan.md](orchestration-review-step-plan.md) — `Approved` —
+  Slice B of 3 (ADR 0010 follow-on): amend `references/orchestration.md` with the
+  orchestrator's automated-review step (run `/review` + `/security-review` on the
+  `Implemented` diff, local mode, write the findings artifact, code-diff-only/docs-only
+  skip, not the gate). In-flight in worktree `slice/orchestration-review-step` (parallel
+  with Slice C; disjoint files).
+- [code-eval-adjudication-plan.md](code-eval-adjudication-plan.md) — `Approved` —
+  Slice C of 3 (ADR 0010 follow-on): amend `references/code-eval-rubric.md` (adjudication
+  procedure) + `agents/code-evaluator.md` (review-findings artifact in inputs + pointer).
+  In-flight in worktree `slice/code-eval-adjudication` (parallel with Slice B; disjoint files).
 
 ## Archived plans
 
