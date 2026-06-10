@@ -47,6 +47,10 @@ archived on landing. On conflict, the spec wins.
 - `code-eval-rubric.md` — what the code evaluator checks.
 - `severity.md` — the shared BLOCKER/MAJOR/MINOR taxonomy and the PASS/FAIL rule
   both evaluators apply.
+- `review-findings.md` — the format of the orchestrator-written, identity-neutral
+  per-slice review-findings artifact (`/review` + `/security-review` output) the
+  blind code-evaluator reads (ADR 0010); owns the artifact format, not the run or
+  adjudication procedure.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 - `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).

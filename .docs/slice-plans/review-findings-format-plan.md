@@ -1,6 +1,6 @@
 # Review-findings artifact format reference (ADR 0010 Slice A)
 
-Status: In Progress
+Status: Implemented
 Target specs: 04-orchestrator.md (§ "Automated review before a slice lands"), 02-roles.md (Code Evaluator)
 
 ## Context
@@ -210,4 +210,26 @@ review**, performed mechanically (not by eye) with `rg`-style cross-reference ch
 
 ## Notes
 
-(none)
+### Verification evidence (mechanical checks)
+
+1. **Files changed.** Exactly two files: `references/review-findings.md` (new) and
+   `SKILL.md` (one bullet added). No spec/, ADR/, status/, CLAUDE.md, or other
+   out-of-scope edits.
+
+2. **Four status tokens present.**
+   `rg -n "ran-with-findings|ran-clean|skipped" references/review-findings.md`
+   surfaces all four tokens at lines 77–85 (table) and 124, 127, 142, 145 (skeleton).
+
+3. **Single-source boundary pointers.**
+   `rg -n "severity.md|code-eval-rubric|04-orchestrator" references/review-findings.md`
+   confirms: spec 04 pointer at line 11, `severity.md` + `code-eval-rubric.md`
+   pointers at lines 22, 107, 108. No confirm/reject/discard steps restated; no
+   severity mapping table; no driver-loop run sequence.
+
+4. **All relative links resolve** (verified with `test -e` from `references/`):
+   ADR 0001, 0004, 0008, 0010; spec 02, spec 04; `parallelism.md`,
+   `commit-convention.md`, `severity.md`, `code-eval-rubric.md` — all OK.
+
+5. **SKILL.md bullet present.**
+   `rg -n "review-findings.md" SKILL.md` returns line 50 — new bullet after
+   `severity.md`, matching surrounding entry style.
