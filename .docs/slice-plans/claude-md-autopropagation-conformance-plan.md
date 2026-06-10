@@ -1,6 +1,6 @@
 # CLAUDE.md auto-propagation — playbook conformance
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md, 08-playbook.md
 
 ## Context
@@ -276,3 +276,45 @@ while checks 1–5 prove the new conformance text is present and single-sourced.
   four-category boundary; the developer agent may name the categories tersely as the
   finalize trigger condition (mirroring spec 03 step 2), which is the trigger, not a
   boundary restatement — the single-source check (Verification 4) guards this line.
+
+## Verification results (gate evidence)
+
+Check 1 (developer.md finalize includes CLAUDE.md step + spec 08 pointer): PASS
+  - `rg -n -i "CLAUDE\.md" plugins/loom/agents/developer.md` → finalize step 2
+    at lines 52-61 includes the CLAUDE.md update rule with spec 08 pointer.
+  - `rg -n -i "curated[- ]digest|08-playbook|spec 08" plugins/loom/agents/developer.md`
+    → "curated-digest scope" (line 53) + "spec 08" (line 60): present.
+  - Archive/commit steps renumbered to 3 and 4: confirmed.
+
+Check 2 (per-slice-history exclusion in all five edited files): PASS
+  - All five files contain "per-slice history stays in progress.md" or equivalent.
+
+Check 3 (managed-project CLAUDE.md framed as curated digest): PASS
+  - greenfield.md line 89: "This `CLAUDE.md` is a **curated digest**"
+  - docs-layout.md line 32: "Both root- and project-level `CLAUDE.md` are **curated digests**"
+
+Check 4 (single-source guard — "durable convention" only in spec 08 and developer.md trigger): PASS
+  - `grep -rn "durable convention" plugins/loom/` → no matches in reference docs
+    (parallelism/status-machine/greenfield/docs-layout all use pointer-only).
+  - developer.md line 53: "durable convention" as the one-line trigger condition only.
+  - spec 08 line 83: "Durable conventions" — the authoritative four-sub-bullet definition.
+
+Check 5 (spec 08 pointer in all four reference files): PASS
+  - status-machine.md line 65, parallelism.md line 151, greenfield.md line 92,
+    docs-layout.md line 34 — all point to `../../../../../.docs/spec/08-playbook.md`.
+  - developer.md uses prose "spec 08" reference consistent with the file's convention.
+
+Check 6 (scope guard — no spec/ADR edits): PASS
+  - `git diff --name-only HEAD | grep "^\.docs/(spec|ADR)/"` → scope OK (no match)
+  - Only `.docs/` path in diff: this plan file. All five implementation edits are
+    in `plugins/loom/`.
+
+Check 7 (incidental finalize refs untouched): PASS
+  - `git diff --name-only HEAD | grep ...` → "incidental finalize refs untouched"
+  - run.md, eval-code.md, code-evaluator.md, planner.md unchanged.
+
+Diff name-only: 5 implementation files + 1 plan file (status changes + evidence).
+No spec/ADR files in diff. Parallelism.md wording keeps CLAUDE.md update in the
+orchestrator's serialized finalize-on-main, not attributed to the developer under
+parallelism (per Minor 1 from plan review). Developer.md uses "spec 08" prose
+reference consistent with the file's existing style (per Minor 2 from plan review).

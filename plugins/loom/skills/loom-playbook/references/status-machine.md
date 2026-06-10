@@ -57,4 +57,10 @@ for the full counting rule, the reset rule, and the escalation-summary contract.
 - ADR / Spec: `Draft → Plan Review → Approved` (ADR then immutable; spec frozen).
 - Slice-plan: `Draft → Plan Review → Approved → In Progress → Implemented →
   (code review) → Landed → Archived`, with FAIL edges back to `Draft` (plan) or
-  `In Progress` (code). Archive happens only **after** code-eval PASS.
+  `In Progress` (code). Archive happens only **after** code-eval PASS. The
+  finalize pass that runs after code-eval PASS also updates the relevant
+  `CLAUDE.md` when the landed slice changed something in the curated-digest scope
+  (a derived non-spec digest; per-slice history stays in `progress.md`) — see
+  [spec 03](../../../../../.docs/spec/03-artifact-lifecycle.md) (*finalize pass*)
+  and [spec 08](../../../../../.docs/spec/08-playbook.md) (the curated-digest
+  boundary).

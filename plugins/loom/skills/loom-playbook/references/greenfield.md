@@ -86,6 +86,13 @@ If a `CLAUDE.md` already exists in the (near-empty) repo it is updated, not
 clobbered — add the loom sections without removing existing content. In a true
 Greenfield repo it is created from scratch.
 
+This `CLAUDE.md` is a **curated digest** — a stable, agent-facing map of the
+project, not a changelog. The developer's finalize pass keeps it current as
+slices land (the curated-digest boundary is defined in
+[spec 08](../../../../../.docs/spec/08-playbook.md) — *Evolving the playbook*;
+per-slice history stays in `progress.md`). Greenfield's job is to **establish**
+it, not to dump everything into it.
+
 ---
 
 ## Step E — Establish the gate

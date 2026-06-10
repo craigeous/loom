@@ -146,13 +146,20 @@ After the merge, the orchestrator runs the **finalize pass on main**:
 
 1. Update `.docs/status/progress.md` and `handoff.md`.
 2. Update `.docs/status/roadmap.md` if a milestone closed.
-3. Move the slice's index entry from Active to Archived in `slice-plans/README.md`.
-4. `git mv` the slice-plan into `.docs/slice-plans/archive/`.
-5. Commit.
+3. Update the relevant `CLAUDE.md` if the landed slice changed something in the
+   curated-digest scope (derived non-spec digest; per-slice history stays in
+   `progress.md`; see [spec 08](../../../../../.docs/spec/08-playbook.md) for the
+   boundary). `CLAUDE.md` is a **shared single-instance content file** (see
+   *When to parallelize* above), so its finalize update is serialized on main here
+   alongside the living docs — the slicer-independence rule already sequences any
+   two slices that would both edit it.
+4. Move the slice's index entry from Active to Archived in `slice-plans/README.md`.
+5. `git mv` the slice-plan into `.docs/slice-plans/archive/`.
+6. Commit.
 
-Then merge the next slice. Living-doc and index updates are strictly serialized
-(one merge+finalize at a time). **Never** run two merge+finalize sequences
-concurrently.
+Then merge the next slice. Living-doc, `CLAUDE.md`, and index updates are strictly
+serialized (one merge+finalize at a time). **Never** run two merge+finalize
+sequences concurrently.
 
 **Genuine code conflict** (two slices touched the same source file — a slicing
 defect, not a `.docs/` issue): the orchestrator does **not** hand-edit code. Route

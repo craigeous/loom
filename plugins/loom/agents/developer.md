@@ -49,9 +49,20 @@ with the gate. You do not design — the plan and specs are your authority.
 When invoked to finalize an approved slice:
 1. Update `.docs/status/progress.md` and `.docs/status/handoff.md` (and
    `roadmap.md` if a milestone closed). **Do not edit any spec.**
-2. `git mv` the slice-plan into `.docs/slice-plans/archive/`, set `Status:
+2. Update the relevant `CLAUDE.md` **only if the landed slice changed something
+   in the curated-digest scope** — i.e. it introduced or altered a durable
+   convention, a repo-layout fact, a gate definition, or a "read-first" pointer.
+   **Per-slice history does NOT go into `CLAUDE.md`** — it stays in
+   `progress.md`. If the slice changed nothing in that scope, make **no**
+   `CLAUDE.md` edit. This applies to loom's own root `CLAUDE.md` and, in a
+   managed project, to that project's `CLAUDE.md`. `CLAUDE.md` is a **derived,
+   non-spec digest** — never edit `.docs/spec/` or `.docs/ADR/`; on conflict the
+   specs win and `CLAUDE.md` is corrected to match. See spec 08
+   (*Evolving the playbook → `CLAUDE.md` auto-propagation*) for the
+   authoritative boundary.
+3. `git mv` the slice-plan into `.docs/slice-plans/archive/`, set `Status:
    Archived`, and (for parallel work) land the branch.
-3. Commit.
+4. Commit.
 
 ## Quality bar
 

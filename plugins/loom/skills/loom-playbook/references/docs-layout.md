@@ -29,7 +29,11 @@ What loom scaffolds in a managed project on init. All committed to git.
 Init also writes/updates a project `CLAUDE.md` that points new agents at
 `.docs/spec/README.md`, `.docs/status/handoff.md`, and records the project's gate
 commands (see `../gates/`). Long-term, loom keeps best practices in root- and
-project-level `CLAUDE.md`.
+project-level `CLAUDE.md`. Both root- and project-level `CLAUDE.md` are **curated digests**
+(stable maps, not changelogs); the developer's finalize pass keeps them
+current as slices land — see [spec 08](../../../../../.docs/spec/08-playbook.md)
+(*Evolving the playbook → `CLAUDE.md` auto-propagation*) for the boundary, and
+note per-slice history stays in `status/progress.md`.
 
 ## Conflict rule
 
