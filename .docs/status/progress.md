@@ -7,7 +7,22 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M0–M4 complete. Post-M4: implementing ADR 0009 (Unaligned-migrate), from ballboy feedback.**
-- **Last action:** **`migration-recipe-reference` slice landed** (slice 2 of 3 for
+- **Last action:** **`unaligned-bare-migrate-split` slice landed** (slice 3 of 3 for
+  ADR-0009 Unaligned-migrate; commit 61bc6e9, code-eval PASS round 1). **This
+  COMPLETES the ADR-0009 Unaligned-migrate thread** (all 3 slices: init-detection
+  spine signal, migration recipe, unaligned split — driven by the ballboy field
+  report). `plugins/loom/skills/loom-playbook/references/unaligned.md` now presents
+  **both sub-modes** routed by the slice-1 sub-classification: **Unaligned-bare**
+  (the existing Steps 1–5 scoped to no pre-existing docs spine; bare-only
+  Draft→review rule preserved + explicitly Unaligned-bare-scoped) and
+  **Unaligned-migrate** (owner gate migrate/thin-pointer/abort with consequences;
+  inline `migration-recipe.md` recipe, no restatement; status preservation per spec
+  06 §2b/ADR 0009 §4; no planner/evaluator role-spawn per ADR 0009 §6). Authority
+  line updated to spec 06 §2a/§2b. Identity pre-flight shared (one statement, both
+  flows tied to it). `SKILL.md` References entry updated to name both sub-modes.
+  CLAUDE.md curated-digest unaligned bullet updated in finalize pass (names both
+  Unaligned-bare and Unaligned-migrate sub-modes).
+- **Prior action:** **`migration-recipe-reference` slice landed** (slice 2 of 3 for
   ADR-0009 Unaligned-migrate; commits a34d726, da21d2c, fdbbb60, code-eval PASS round 1).
   `plugins/loom/skills/loom-playbook/references/migration-recipe.md` created — the
   reusable Unaligned-migrate recipe (ADR 0009 §5/§7): ordered, idempotent cross-reference
@@ -23,9 +38,8 @@ The status source of truth and decision index for building loom.
   `migration-recipe.md`, `SKILL.md`, the plan, and README; and CLAUDE.md curated-digest
   maintenance is a finalize-pass step per spec 03 + spec 08, not an implement step) —
   BLOCKER caught by code-eval, CLAUDE.md reverted to pre-slice baseline, PASS on round 1.
-  The CLAUDE.md curated-digest update (migration-recipe bullet) is correctly made in this
-  finalize pass. **Remaining: slice 3** (split `unaligned.md` into bare+migrate flows,
-  pointing at the now-landed detection signal + migration recipe).
+  The CLAUDE.md curated-digest update (migration-recipe bullet) was correctly made in the
+  migration-recipe finalize pass.
 - **Prior action:** **`init-detection-spine-signal` slice landed** (slice 1 of 3 for
   ADR-0009 Unaligned-migrate; commit c96fd90, code-eval PASS round 0).
   `plugins/loom/skills/loom-playbook/references/init-detection.md` now sub-classifies

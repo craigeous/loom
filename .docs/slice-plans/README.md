@@ -17,22 +17,18 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [unaligned-bare-migrate-split-plan.md](unaligned-bare-migrate-split-plan.md) — `Plan Review` —
-  slice 3 of 3 (final) of the ADR-0009 Unaligned bare/migrate split: restructure
-  `references/unaligned.md` into two sub-mode flows routed by the slice-1
-  sub-classification — **Unaligned-bare** (the existing Steps 1–5: study →
-  scaffold+gate via Greenfield → descriptive back-fill → seed status → hand back,
-  scoped to "no pre-existing docs spine"; bare-only Draft→review rule preserved) and
-  the new **Unaligned-migrate** flow (owner gate migrate/thin-pointer/abort with
-  consequences; inline recipe via `migration-recipe.md`; status preservation; no
-  planner/evaluator role-spawn). Authority line updated to spec 06 §2a/§2b; points at
-  ADR 0009 §3/§4/§6, `init-detection.md`, `migration-recipe.md`; recipe mechanics and
-  gate/status policy single-sourced (not restated). Implement touches `unaligned.md`
-  + `SKILL.md` (the References description) — no spec/ADR/recipe/detection or CLAUDE.md
-  edits at implement (CLAUDE.md curated-digest update is finalize-only). Target spec
-  06-init-modes.md.
+(none)
 
 ## Archived plans
+
+- [archive/unaligned-bare-migrate-split-plan.md](archive/unaligned-bare-migrate-split-plan.md) — `Archived` —
+  slice 3 of 3 (final) of the ADR-0009 Unaligned bare/migrate split: restructured
+  `references/unaligned.md` into Unaligned-bare (existing Steps 1–5; bare-only
+  Draft→review rule scoped explicitly) + Unaligned-migrate (owner gate
+  migrate/thin-pointer/abort; inline `migration-recipe.md` recipe; status
+  preservation; no role-spawn); `SKILL.md` References entry updated; CLAUDE.md
+  curated-digest bullet updated in finalize. Completes the ADR-0009 thread.
+  Landed 61bc6e9.
 
 - [archive/migration-recipe-reference-plan.md](archive/migration-recipe-reference-plan.md) — `Archived` —
   slice 2 of 3 of the ADR-0009 Unaligned bare/migrate split: new playbook reference

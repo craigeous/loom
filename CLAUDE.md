@@ -42,10 +42,12 @@ after approval and change only via planning. Design decisions are in
 - **Greenfield behavior body** (M2): `plugins/loom/skills/loom-playbook/references/greenfield.md`
   is the single authoritative body for Greenfield init (scaffold + seed + CLAUDE.md
   + gate).
-- **Unaligned behavior body** (M2): `plugins/loom/skills/loom-playbook/references/unaligned.md`
-  is the single authoritative body for Unaligned init (alignment pass: study repo,
-  scaffold + gate via `greenfield.md`, descriptive `spec/` back-fill, resume as
-  Initialized).
+- **Unaligned behavior body** (M2 + ADR 0009): `plugins/loom/skills/loom-playbook/references/unaligned.md`
+  is the single authoritative body for Unaligned init — covers both sub-modes routed
+  by `init-detection.md`: **Unaligned-bare** (no pre-existing docs spine → descriptive
+  `spec/` back-fill via `greenfield.md` scaffold + gate, resume as Initialized) and
+  **Unaligned-migrate** (pre-existing docs spine → owner gate migrate/thin-pointer/abort,
+  inline `migration-recipe.md` recipe, status preserved, no role-spawn).
 - **Initialized behavior body** (M2): `plugins/loom/skills/loom-playbook/references/initialized.md`
   is the single authoritative body for Initialized init (resume: derive a menu from
   `.docs/` + git state, hand into scope/gates + the `/loom:run` driver loop;
