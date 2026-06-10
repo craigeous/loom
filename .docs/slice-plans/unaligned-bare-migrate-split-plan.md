@@ -1,6 +1,6 @@
 # Unaligned bare/migrate split
 
-Status: Approved
+Status: Implemented
 Target specs: 06-init-modes.md
 
 ## Context
@@ -344,6 +344,49 @@ entry must NOT have been collapsed to a single back-fill-only description.
 - Commits are author-neutral per `commit-convention.md` (no co-author trailers, no
   role/author identity in the message); never `--no-verify`; use the
   already-configured git identity (no `--author` / `-c user.*` / `GIT_AUTHOR_*`).
+
+## Verification evidence
+
+All mechanical checks passed (run from repo root):
+
+1. **Authority line §2a/§2b** — PASS. Line 6 of unaligned.md reads
+   `§2a (Unaligned-bare) and §2b (Unaligned-migrate)`. No bare `§2` in authority.
+
+2. **Both flows present** — PASS. `rg -ni 'unaligned-bare'` hits 10 lines;
+   `rg -ni 'unaligned-migrate'` hits 9 lines. Headings at lines 38 and 201.
+
+3. **Owner gate three options, consequences named** — PASS. `thin-pointer`,
+   `abort`, `migrate` all hit. Each consequence stated: Initialized / re-detect
+   Unaligned / re-detect Unaligned every run.
+
+4. **Status-preservation pointer** — PASS. Lines 237–240 state retains prior
+   status / not a re-review trigger, pointing at spec 06 §2b / ADR 0009 §4.
+
+5. **Inline / no role-spawn** — PASS. Lines 226 and 242–245 state inline execution
+   with no planner/evaluator role-spawn (ADR 0009 §6 cited).
+
+6. **Points at migration-recipe.md and init-detection.md** — PASS. 3 links to
+   migration-recipe.md; 6 links/mentions of init-detection.md.
+
+7. **Recipe NOT restated (single-source guards)** — PASS (all four negative guards
+   returned no match): `print0|xargs -0`, `lookbehind|\(\?<!`, `git mv|git
+   stash|git status --porcelain`, `\.\.docs/`.
+
+8. **Bare-only Draft→review rule preserved + scoped** — PASS. Line 148 reads
+   "This `Draft → review` rule is **Unaligned-bare only**"; migrate flow
+   explicitly states the rule does not apply.
+
+9. **Identity pre-flight present and shared** — PASS. One authoritative statement
+   at lines 30–33 in the Two sub-modes section; bare flow (line 77) and migrate
+   flow (line 257) both reference it.
+
+**SKILL.md entry** — PASS. Line 53 names both Unaligned-bare (descriptive
+`spec/` back-fill) and Unaligned-migrate (owner gate + inline
+`migration-recipe.md` recipe).
+
+**Scope guard** — PASS. `git diff --name-only HEAD -- .docs/spec .docs/ADR
+migration-recipe.md init-detection.md CLAUDE.md` returns empty. Changed files:
+`unaligned.md`, `SKILL.md`, slice-plan only.
 
 ## Notes
 

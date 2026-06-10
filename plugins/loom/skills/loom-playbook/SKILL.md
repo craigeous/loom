@@ -50,7 +50,7 @@ archived on landing. On conflict, the spec wins.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.
 - `init-detection.md` — the single authoritative init-mode classifier (Greenfield / Unaligned / Initialized).
 - `greenfield.md` — the Greenfield init behavior body (scaffold + seed + CLAUDE.md + gate).
-- `unaligned.md` — the Unaligned init behavior body (alignment pass: reuse Greenfield scaffold + gate, then descriptive `spec/` back-fill).
+- `unaligned.md` — the Unaligned init behavior body: **Unaligned-bare** (no pre-existing docs spine → reuse Greenfield scaffold + gate, then descriptive `spec/` back-fill) and **Unaligned-migrate** (pre-existing docs spine present → owner gate migrate/thin-pointer/abort + inline `migration-recipe.md` recipe).
 - `migration-recipe.md` — the reusable Unaligned-migrate recipe (ADR 0009 §5/§7):
   ordered, idempotent cross-reference rewrite (specific-before-generic; negative
   lookbehind against self-match), the numbered-spine → `spec/` + `status/` split
