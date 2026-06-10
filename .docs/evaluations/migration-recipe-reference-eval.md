@@ -69,3 +69,76 @@ landing (`c96fd90`) and its archived plan both exist as the Context claims; the
 SKILL.md References list style (backtick-name + dash-description, no link) matches
 the suggested entry. No compiled gate is correctly declared (markdown repo);
 acceptance is review against authority plus the per-property `rg` checks.
+
+---
+
+# Code Review (slice implemented at `a34d726`)
+
+Verdict: FAIL
+Round: 1
+Reviewed against: commit `a34d726` diff; slice-plan
+`migration-recipe-reference-plan.md` (Steps A–H + scope statement); ADR 0009 §5
+(load-bearing properties) / §7 (operational preconditions); spec 06-init-modes.md
+§2b; spec 03-artifact-lifecycle.md (finalize pass step 2) + spec 08-playbook.md
+(`CLAUDE.md` auto-propagation boundary); code-eval-rubric.md + severity.md. No
+compiled gate (markdown repo); acceptance = review-against-spec.
+
+## Findings
+
+- [BLOCKER] Out-of-scope edit to root `CLAUDE.md`. The plan authorizes exactly
+  four files (the new `migration-recipe.md`, `SKILL.md`, the plan file, and
+  `slice-plans/README.md`); `CLAUDE.md` is not among them, and the plan's
+  out-of-scope section does not name it. Independently, **spec 03 finalize-pass
+  step 2** and **spec 08 (`CLAUDE.md` auto-propagation — "Who and when")** both
+  reserve curated-digest maintenance for the **developer's finalize pass**, which
+  runs *after* code-eval PASS (status `Landed`) — **not** in the implement commit
+  at `Implemented`. Editing `CLAUDE.md` here pre-empts a later, different
+  role-pass step and adds a file the plan did not sanction. Per severity.md an
+  out-of-scope change is a BLOCKER ("A correctness, spec-fidelity, or scope
+  violation is a BLOCKER, not a MAJOR"), regardless of the digest content being
+  correct. The CLAUDE.md block added (commit lines under the parallelism bullet)
+  is accurate and is the very edit the finalize pass would make — so the fix is
+  process, not content: remove it from the implement commit; it lands at finalize.
+
+## Confirmed correct (not blocking)
+
+- **Recipe completeness — PASS.** Every ADR 0009 §5/§7 property and plan Steps
+  A–H are present and faithful (mechanically re-verified with `rg`, not
+  eyeballed):
+  - §7 preconditions: dirty-tree check with `git status --porcelain`/stash
+    (Step A.1); untracked-skip handling via `git ls-files --others
+    --exclude-standard` + separate `mv`+`git add` (A.2); NUL-delimited lists
+    `find … -print0 | xargs -0` with `$(find …)` named as the anti-pattern (A.3).
+  - §5 spine split: living docs → `.docs/status/`, rest → `.docs/spec/`; numbering
+    gaps accepted (B.1–B.2); two-directional rewrite — sibling refs →
+    `../status/`, outbound refs → `../spec/` (B.3); both `../status/` and
+    `../spec/` targets present.
+  - §5 ordered rules: specific-before-generic stated as a hard, load-bearing
+    requirement (Step C).
+  - §5 idempotency: self-match hazard named, `..docs/` artifact named, literal
+    negative lookbehind `(?<!\.)` shown, re-run-is-a-no-op stated (Step D).
+  - §5 three reference forms handled separately, incl. the `](X.md)` bare-target
+    example and "relative to the file's new location" (Step E).
+  - §5 living-vs-archived boundary: archive left as historical snapshot, excluded
+    from the NUL-delimited rewrite list (Step F).
+  - §5/§4 status preservation as a **pointer** to spec 06 §2b / ADR 0009 §4, not
+    re-derived (Step G).
+  - Final link validation with concrete `rg` checks as the last step (Step H).
+- **No over-reach in the recipe — PASS.** It is the mechanical "how" and points
+  to spec 06 §2b / ADR 0009 for the owner gate, status policy, and inline-vs-spawn
+  division rather than restating them.
+- **SKILL.md — PASS.** New `migration-recipe.md` entry added to the References
+  list in the existing backtick-name + dash-description style, grouped with the
+  other init/Unaligned references.
+- **Scope guard (the BLOCKER set) — PASS.** No edits to `.docs/spec/`,
+  `.docs/ADR/`, `references/unaligned.md`, or `references/init-detection.md`.
+- **Hygiene — PASS.** Commit author is `Craig Pfeiffer <craigeous@gmail.com>`
+  (the configured identity), not `loom@localhost`.
+
+## Required changes (for PASS)
+
+1. Remove the `CLAUDE.md` edit from the implement commit. The recipe + SKILL.md
+   entry are correct and stay. The `CLAUDE.md` curated-digest reflection is made
+   by the developer's finalize pass after code-eval PASS (spec 03 step 2 / spec
+   08), not in the `Implemented` commit. (No content change needed — only move it
+   out of this slice's implement commit.)
