@@ -1,12 +1,37 @@
 # Evaluation: code-eval-adjudication-plan (Slice C)
 
-Verdict: FAIL
+Verdict: PASS
 Round: 1
 Reviewed against: spec 02-roles.md (Code Evaluator, Approved/frozen), ADR 0010 §4,
 references/review-findings.md (format authority), references/severity.md (verdict
 authority), references/code-eval-rubric.md.
 
-## Code review (round 1)
+## Code review (round 1 — re-review, PASS)
+
+Commit reviewed: `a66291e` (the fix), diffed against the prior reviewed commit
+`617b828`. Pure-markdown slice — no `format → lint → test` gate applies; an absent
+code gate is not a red gate. Invariants checked mechanically (`rg`, `test -e`).
+
+The round-1 [MAJOR] is **resolved**. `plugins/loom/agents/code-evaluator.md` step 1
+now links the ADR with three `../`
+(`[ADR 0010](../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)`).
+Verified mechanically from `plugins/loom/agents/`: `test -e ../../../.docs/ADR/0010-...md`
+→ EXISTS; the old five-`../` target → MISSING; `rg` for any remaining `../../../../..`
+string in the agent file → none. The link resolves.
+
+No regression. The fix commit `a66291e` touches exactly two files —
+`agents/code-evaluator.md` (the single link line) and the slice-plan
+(status + a verification note). The agent diff since `617b828` is the one-line
+depth correction only. Previously-passed invariants remain intact: rubric section
+order unchanged (Gate → Fidelity → Correctness → **Review-findings adjudication** →
+Hygiene → Re-review); the four-token table is still not reproduced (the lone
+`skipped:`/`ran-clean` hit is the single permitted illustrative informational-note
+line); single-source discipline holds. Commit is author-neutral (`Craig Pfeiffer
+<craigeous@gmail.com>`, not a `*@localhost` fallback).
+
+A PASS resolving the round-1 FAIL repeats Round 1.
+
+## Code review (round 1 — initial FAIL, retained)
 
 Commit reviewed: `617b828` (`HEAD` of `slice/code-eval-adjudication`), diffed against
 its parent. Pure-markdown slice — no `format → lint → test` gate applies; an absent
