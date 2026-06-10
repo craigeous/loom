@@ -1,6 +1,6 @@
 # migration-recipe-reference
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md
 
 ## Context

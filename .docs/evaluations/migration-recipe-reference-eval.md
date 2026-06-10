@@ -142,3 +142,59 @@ compiled gate (markdown repo); acceptance = review-against-spec.
    by the developer's finalize pass after code-eval PASS (spec 03 step 2 / spec
    08), not in the `Implemented` commit. (No content change needed — only move it
    out of this slice's implement commit.)
+
+---
+
+# Code Review — Re-review (round 1 resolving review)
+
+Verdict: PASS
+Round: 1
+Reviewed against: fix commits `da21d2c` (revert CLAUDE.md) + `3d690e9` (status);
+net slice `git diff 448898e..HEAD`; the round-1 FAIL above; slice-plan
+`migration-recipe-reference-plan.md`; ADR 0009 §5/§7; spec 06-init-modes.md §2b;
+spec 03-artifact-lifecycle.md (finalize-pass step 2) + spec 08-playbook.md
+(`CLAUDE.md` auto-propagation boundary); code-eval-rubric.md + severity.md. No
+compiled gate (markdown repo); acceptance = review-against-spec.
+
+**Round assignment:** This is the resolving review of the round-1 FAIL. Per spec
+03 `## Round limits`, a PASS resolving a FAIL shares that FAIL's round number — so
+this is recorded as **Round 1**, not a new round.
+
+## BLOCKER resolution — CONFIRMED
+
+The round-1 BLOCKER (out-of-scope edit to root `CLAUDE.md`) is fully resolved:
+
+- `git diff 448898e HEAD -- CLAUDE.md` is **empty**; `CLAUDE.md` is **absent**
+  from `git diff --name-only 448898e HEAD`; `rg -n "Migration recipe" CLAUDE.md`
+  returns nothing. Commit `da21d2c` restored `CLAUDE.md` to its pre-slice
+  baseline. The curated-digest update will be re-made by the finalize pass after
+  this PASS, per spec 03/08 — the correct step.
+
+## Findings
+
+- None. (The round-1 [MINOR] on verification-check F wording was a plan-eval
+  note, not a defect in the artifact, and does not block.)
+
+## Confirmed correct (re-verified on the net slice)
+
+- **Scope now clean.** The net slice (`448898e..HEAD`) touches exactly:
+  `references/migration-recipe.md`, `SKILL.md`, the plan file, and this eval
+  file. No `.docs/spec/`, `.docs/ADR/`, `references/unaligned.md`, or
+  `references/init-detection.md` edits (scope guard: `OK: scope clean`).
+- **Recipe intact and unchanged.** `git diff a34d726 HEAD --
+  migration-recipe.md SKILL.md` is empty — the fix touched only `CLAUDE.md` (and
+  the plan), leaving the round-1-confirmed content untouched. All ADR 0009 §5/§7
+  properties (Steps A–H: dirty-tree/stash, untracked `git mv`-skip via
+  `git ls-files --others`, NUL-delimited `-print0 | xargs -0` with `$(find …)`
+  named anti-pattern; spine→`spec/`+`status/` split with two-directional rewrite
+  and accepted numbering gaps; specific-before-generic ordering; `(?<!\.)`
+  self-match guard and `..docs/` artifact; three reference forms; living-vs-
+  archived boundary; status-preservation pointer; final link validation) remain
+  present and faithful.
+- **SKILL.md** References entry present (line 54), unchanged.
+- **Author identity.** Both fix commits are `Craig Pfeiffer
+  <craigeous@gmail.com>` (configured identity), not `loom@localhost`.
+
+## Required changes (for FAIL)
+
+None.
