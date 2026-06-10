@@ -1,6 +1,6 @@
 # Research: /review and /security-review in loom's Code Evaluator
 
-Status: Research Review
+Status: Approved
 Date: 2026-06-10
 Topic: Feasibility of invoking Claude Code's `/review` and `/security-review` built-in commands from a blind loom code-evaluator sub-agent.
 
