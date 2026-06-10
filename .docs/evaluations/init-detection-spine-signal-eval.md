@@ -66,3 +66,72 @@ Authority fidelity confirmed mechanically and by reading:
   06-init-modes.md`, README Active entry present.
 
 The two MINORs are non-blocking and recorded for optional follow-up.
+
+---
+
+# Code Review: init-detection-spine-signal
+
+Verdict: PASS
+Round: 0
+Commit reviewed: `c96fd90`
+Reviewed against: `.docs/spec/06-init-modes.md` (Approved, *Detection* + §2a/§2b),
+`.docs/ADR/0009-unaligned-migrate-sub-mode.md` (Accepted, §2), and the
+implemented `plugins/loom/skills/loom-playbook/references/init-detection.md`.
+
+No compiled gate — loom's own repo is markdown; acceptance is review against spec
+06 + ADR 0009. All invariants verified mechanically (`git show`, `rg`, `test -f`),
+not by eye.
+
+## Findings
+
+- [MINOR] Verification Evidence in the plan cites line numbers (e.g. spine heading
+  "line 57", `methodology markers` "line 64") that are off by a couple of lines
+  from the landed file (heading is at line 57 — correct; `methodology markers` is
+  line 64 — correct on recheck). Non-load-bearing; the tokens themselves all
+  resolve. Does not block.
+
+## Required changes (for FAIL)
+
+None — PASS.
+
+## Notes (mechanical verification)
+
+- **Scope clean.** `git show --name-only c96fd90` lists exactly two files:
+  `init-detection.md` and the plan file. No `.docs/spec/`, `.docs/ADR/`,
+  `references/unaligned.md`, or migration-recipe edits (out-of-scope guard prints
+  `OK: scope clean`). The README Active entry was correctly added in the prior
+  plan commit per the sequential-slice rule, not in this implementation commit.
+- **Author identity author-neutral.** `git show -s --format='%an <%ae>'` →
+  `Craig Pfeiffer <craigeous@gmail.com>` (the repo's configured identity; not
+  `loom@localhost`).
+- **Step 1 — input bullet** added to *Inputs to inspect (read-only)* (line 17-18),
+  flagged "used only to sub-classify Unaligned; read-only."
+- **Step 2 — spine definition** present at line 57 as
+  `## Definition — "pre-existing docs spine"`, em-dash matching the two existing
+  definition headings. Concrete and marker-set-shaped: candidate roots `docs/`,
+  `doc/`, `documentation/` (exactly spec 06 line 20 / ADR 0009 §2 line 75); markers
+  (specs grouping, decision records, roadmap/progress/handoff, slice-plans) trace
+  to the ADR field-report description. Includes the "spec 06 wins on any conflict"
+  blockquote mirroring the empty/near-empty definition. "Detect it read-only."
+- **Step 3 — sub-classification** added inside rule 3 of the classification block
+  (lines 98-100): spine present → Unaligned-migrate, else → Unaligned-bare;
+  first-match-wins and rules 1-2 (Initialized/Greenfield) intact. Prose (lines
+  109-115) records the verbatim observation "a non-loom docs spine exists at
+  `<path>`" (matches spec 06 line 24-25 / ADR 0009 §2 line 77), affirms read-only
+  ("it observes the spine and steers; it mutates nothing"), and cites spec 06
+  §2a/§2b + ADR 0009 §2 as authority.
+- **Step 4 — dispatch table** flat `Unaligned` row replaced with two rows
+  (Unaligned-bare → §2a, Unaligned-migrate → §2b); Greenfield/Initialized
+  unchanged. Stale-flat-row guard prints `OK: no flat Unaligned row`.
+- **Step 5 — read-only intact.** Intro (line 7) and Edge-cases (line 125)
+  statements preserved; new spine text adds its own read-only assertions
+  (six total occurrences).
+- **Links resolve.** `../../../../../.docs/spec/06-init-modes.md` and
+  `../../../../../.docs/ADR/0009-unaligned-migrate-sub-mode.md` both resolve
+  (`test -f` OK); §2a/§2b anchors exist in spec 06 (lines 54, 72).
+- **Authority fidelity.** Heuristic is a defensible concrete expansion of spec 06's
+  spine term; spec 06 is named as winning on conflict; no policy beyond ADR 0009
+  §2 (no owner gate, no recipe, no behavior-body change — correctly deferred to
+  slices 2/3). Detection stays read-only throughout.
+
+The single MINOR is non-blocking. No blockers, no unaddressed majors — PASS.

@@ -1,6 +1,6 @@
 # init-detection-spine-signal
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md
 
 ## Context
