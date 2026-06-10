@@ -6,8 +6,35 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: implementing ADR 0009 (Unaligned-migrate), from ballboy feedback.**
-- **Last action:** **`unaligned-bare-migrate-split` slice landed** (slice 3 of 3 for
+- **Phase:** **M0–M4 complete. Post-M4: ADR 0010 (automated `/review` + `/security-review` in the code-review phase) — decision + specs done; playbook slices pending.**
+- **Last action:** **ADR 0010 Accepted + specs 04/02 re-approved** (owner-directed feature:
+  insert Claude Code's built-in `/review` + `/security-review` into loom's code-review
+  phase). Driven through loom's own loop, `plan` scope, owner-gated on every ADR/spec.
+  Sequence: research note `2026-06-10-review-security-review-in-code-eval.md` (haiku
+  researcher; **blind plan-eval FAILed it round 1** — caught a real conflation: the
+  "spawns 5 parallel agents" fact was mis-sourced to the *marketplace* `code-review`
+  plugin, not the *built-in* commands, plus an invented `/review-pr` citation; revised
+  → **PASS round 1**, now `Approved`). **ADR 0010** (`orchestrator-run-automated-review-in-code-eval`,
+  commit 01ff88b) records the decision: **the orchestrator** (only legal spawner per
+  ADR 0001) runs `/review` + `/security-review` on the `Implemented` diff in **local
+  mode only** (no GitHub round-trip → blind contract intact, ADR 0004), captures a
+  committed identity-neutral `.docs/evaluations/<slice>-review-findings.md`, and hands
+  it to the **blind code-evaluator** as **advisory input** (not an oracle/auto-FAIL) —
+  the evaluator confirms/rejects each finding, maps confirmed ones via `severity.md`
+  (still the single verdict authority), and owns the verdict. Runs **only on
+  code-bearing diffs** (pure-docs slices skip-with-a-note); records a **distinguishable
+  status** (ran-with-findings / ran-clean / skipped:docs-only / skipped:unavailable, never
+  silently clean); **not** part of the `format → lint → test` gate. Blind plan-eval PASS
+  round 0 → two MINORs folded → confirming PASS round 0 → owner-accepted. **Specs 04
+  (orchestrator step) + 02 (code-evaluator Reads + adjudication)** amended to match
+  (commit d5623d6, blind plan-eval `adr-0010-spec-amendment-eval.md` PASS round 0 zero
+  findings, owner re-approved → commit 4d9ba2e). Spec 03 correctly untouched (no status
+  change, gate unchanged per ADR 0010 §8). **Why orchestrator not evaluator:** the
+  code-evaluator is a cold sub-agent and sub-agents can't spawn; `/review` fans out to
+  parallel agents, so the evaluator can't run it — execution relocates to the orchestrator,
+  the verdict stays with the evaluator. **Next: 4 playbook follow-on slices** (`implement`
+  scope, not done this session) — see handoff.
+- **Prior action:** **`unaligned-bare-migrate-split` slice landed** (slice 3 of 3 for
   ADR-0009 Unaligned-migrate; commit 61bc6e9, code-eval PASS round 1). **This
   COMPLETES the ADR-0009 Unaligned-migrate thread** (all 3 slices: init-detection
   spine signal, migration recipe, unaligned split — driven by the ballboy field

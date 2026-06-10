@@ -16,6 +16,23 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: ADR 0010 (automated review in the code-review phase) — DECISION + SPECS DONE;
+  PLAYBOOK SLICES PENDING.** Owner-directed feature: insert Claude Code's built-in
+  `/review` + `/security-review` into loom's code-review phase. Driven through loom's
+  own loop in `plan` scope, gated on every ADR/spec. **Landed this session:** research
+  note `2026-06-10-review-security-review-in-code-eval.md` (Approved; blind eval caught
+  + fixed a real mis-sourcing of the spawn claim), **ADR 0010** Accepted (commit 01ff88b),
+  and **specs 04 + 02 re-approved** with the amendment (commit 4d9ba2e). The decision: the
+  **orchestrator** (only legal spawner, ADR 0001) runs the two commands on the `Implemented`
+  diff in **local mode only** (blind contract intact, ADR 0004), writes a committed
+  identity-neutral `.docs/evaluations/<slice>-review-findings.md`, and hands it to the
+  **blind code-evaluator** as **advisory input** (evaluator adjudicates + owns the verdict via
+  `severity.md`). Code-bearing diffs only (docs-only slices skip-with-a-note); four
+  distinguishable statuses; not part of the `format → lint → test` gate.
+  **NOT YET IMPLEMENTED in the playbook** — the mechanism is decided in specs but no
+  playbook body executes it yet, so a future orchestrator does NOT yet run the review.
+  CLAUDE.md is intentionally **not** updated (curated-digest discipline: update when a
+  *landed playbook slice* changes operational conventions — none landed this session).
 - **Post-M4: ADR 0009 (Unaligned-migrate) thread — COMPLETE.** All 3 slices landed
   (ballboy field report → ADR 0009 Accepted → spec 06 amended + Approved → slice 1
   init-detection spine signal c96fd90 → slice 2 migration-recipe a34d726/da21d2c/fdbbb60
@@ -169,7 +186,28 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **M4 — Dogfooding & hardening:** remaining threads:
+1. **ADR 0010 playbook slices (`implement` scope) — the immediate next work.** The
+   decision + specs are done; the playbook must now be made to match the frozen specs
+   (spec 04 + 02). Per ADR 0010 Consequences, sequence these as normal
+   plan→eval→develop→eval→land slices (each disjoint enough to consider parallelizing
+   per `parallelism.md`):
+   - **`references/orchestration.md`** — add the orchestrator's "run `/review` +
+     `/security-review` on the `Implemented` diff (local mode), write the
+     identity-neutral findings artifact, apply the code-diff-only / docs-only-skip /
+     unavailable-skip logic" step to the driver-loop description.
+   - **`agents/code-evaluator.md`** — add the review-findings artifact to its inputs +
+     the adjudication procedure (advisory, confirm/reject, map to `severity.md`, own the
+     verdict).
+   - **`references/code-eval-rubric.md`** — the advisory-adjudication + severity-mapping
+     rubric text.
+   - **Findings-artifact format** — fix the internal layout of
+     `.docs/evaluations/<slice>-review-findings.md`, preserving the four distinguishable
+     statuses (ADR 0010 §2; carried MINOR from the spec eval).
+   When these land, the developer finalize pass updates **CLAUDE.md** (the code-review
+   phase now includes orchestrator-run automated review) — deferred until then by design.
+   Two open questions recorded in ADR 0010 Notes (empirically confirm built-in spawn
+   behavior; whether to tune `/review`'s confidence threshold for loom) — non-blocking.
+2. **M4 — Dogfooding & hardening:** remaining threads:
    - **CLAUDE.md auto-propagation:** best practices propagated into root/project
      `CLAUDE.md` automatically.
    - **Escalation/round-limit stress-test:** owner approval gates, round
