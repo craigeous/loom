@@ -1,6 +1,6 @@
 # 0010 — Orchestrator-Run Automated Review Feeds the Blind Code-Evaluator
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-06-10
 
 ## Context
