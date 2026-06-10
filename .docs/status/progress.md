@@ -7,7 +7,15 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **CLAUDE.md auto-propagation — Cycle 2 (playbook conformance) landed**
+- **Last action:** **`claude -p` deep-nesting item evaluated and CLOSED (owner decision).**
+  Across M1–M4 (sequential + parallel slices, dozens of role spawns) the
+  orchestrator-spawns-all + worktree-per-slice model was sufficient; no role ever needed
+  to spawn a peer, so deep nesting never arose. Decision: `claude -p` is **not needed**
+  and stays a **documented reserve** in spec 04 (no implementation; spec unchanged —
+  04 already frames it as the reserve). Roadmap M4 item checked. Also corrected a stale
+  roadmap box (the CLAUDE.md auto-propagation item is now checked — it landed last action
+  but the CLAUDE.md finalize correctly didn't touch the roadmap since no milestone closed).
+- **Prior action:** **CLAUDE.md auto-propagation — Cycle 2 (playbook conformance) landed**
   (`claude-md-autopropagation-conformance` slice, commit b661f7a, code-eval PASS round 0).
   The developer finalize pass now maintains `CLAUDE.md` as a **curated digest** per
   spec 03 finalize step 2 + spec 08 (*Evolving the playbook → CLAUDE.md auto-propagation*):

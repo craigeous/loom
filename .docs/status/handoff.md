@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 status:** owner-gates/round-limits ✓, identity-guard hardening ✓, CLAUDE.md
+  auto-propagation ✓, **`claude -p` deep-nesting evaluated & closed** (not needed;
+  orchestrator-spawn + worktree model sufficient through M1–M4; stays a documented
+  reserve in spec 04). **Only remaining M4 thread: resume-after-interruption across
+  machines** (then the holistic "loom manages its own development end to end" item).
 - **M4 CLAUDE.md auto-propagation — COMPLETE** (both cycles landed). Cycle 1: specs 03 + 08
   amended + Approved (commit 56e1a8d). Cycle 2: playbook conformance landed (commit b661f7a,
   code-eval PASS round 0) — the developer finalize pass now has an explicit step to maintain

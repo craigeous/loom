@@ -83,7 +83,12 @@ proven end-to-end. Next: M4 (Dogfooding & hardening).
 ## M4 — Dogfooding & hardening
 
 - [ ] loom manages its own development end to end.
-- [ ] Best practices propagated into root/project `CLAUDE.md` automatically.
+- [x] **Best practices propagated into root/project `CLAUDE.md` automatically** —
+      the developer finalize pass now maintains `CLAUDE.md` as a curated digest
+      (spec 03 finalize step + spec 08 boundary: durable conventions / repo-layout /
+      gates / read-first pointers; per-slice history stays in `progress.md`; root +
+      managed-project). Spec amended (Cycle 1) + playbook conformance landed (Cycle 2);
+      the Cycle-2 finalize applied the rule to itself.
 - [x] **Owner approval gates, round limits/escalation polished** — round-limit
       semantics tightened (FAIL-only counting, one cross-phase counter per artifact,
       reset rule) + escalation pause+summary contract defined in spec 03 (Cycle 1),
@@ -91,4 +96,9 @@ proven end-to-end. Next: M4 (Dogfooding & hardening).
       and the machinery verified by a live 5-round stress-test that escalated correctly
       at the 5th FAIL with a full summary.
 - [ ] Resume-after-interruption verified across machines.
-- [ ] `claude -p` fallback evaluated if deeper nesting is needed.
+- [x] **`claude -p` fallback evaluated — not needed; closed.** Across M1–M4
+      (sequential and parallel slices, dozens of role spawns) the
+      orchestrator-spawns-all + worktree-per-slice model was sufficient; no role
+      ever needed to spawn a peer, so deep nesting never arose. `claude -p` remains
+      a **documented reserve** in spec 04 (no implementation built). Revisit only if
+      a concrete role-spawns-peer need emerges.
