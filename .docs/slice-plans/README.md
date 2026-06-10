@@ -17,6 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
+- [claude-md-autopropagation-conformance-plan.md](claude-md-autopropagation-conformance-plan.md) — `Plan Review` —
+  bring the playbook implementation into conformance with the Approved `CLAUDE.md`
+  auto-propagation spec amendment (Cycle 2): add the curated-digest update as a
+  developer finalize step (`developer.md`), add finalize/consistency notes pointing
+  to spec 08 in `status-machine.md`, `parallelism.md`, `greenfield.md`, and
+  `docs-layout.md` (managed-project `CLAUDE.md` framed as a curated digest);
+  single-sourced — spec 08 owns the four-category boundary, the playbook files point
+  to it. No `spec/`/`ADR/` edits (frozen-Approved); doc-only, review-against-spec.
+
 ## Archived plans
 
 - [archive/identity-verification-hardening-plan.md](archive/identity-verification-hardening-plan.md) — `Archived` —
