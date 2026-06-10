@@ -410,3 +410,12 @@ All mechanical `rg` checks passed:
   extraction are the concrete, battle-tested facts that report records.
 - Filename `migration-recipe.md` chosen to match the spec/ADR noun and the
   verb-free, concise style of its sibling `gate-learning.md`.
+- **Round-1 FAIL fix (code-eval):** Root `CLAUDE.md` was edited in the original
+  implement commit (`a34d726`) — out of scope (the plan authorizes only
+  `migration-recipe.md`, `SKILL.md`, the plan, and README) and wrong step (per spec
+  03 finalize-pass step 2 + spec 08, `CLAUDE.md` curated-digest maintenance is done
+  by the developer's finalize pass *after* code-eval PASS, not in the implement
+  commit). `CLAUDE.md` has been restored to its pre-slice baseline (`448898e`).
+  `migration-recipe.md` and the `SKILL.md` References entry are correct and
+  unchanged. The `CLAUDE.md` curated-digest update will be made by the finalize pass
+  after code-eval PASS, per spec 03/08.
