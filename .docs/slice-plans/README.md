@@ -17,7 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [review-findings-format-plan.md](review-findings-format-plan.md) — `Plan Review` —
+  Slice A of 3 (ADR 0010 follow-on): new `references/review-findings.md` single-source
+  definition of the review-findings artifact (path, identity-neutral content rule, the
+  four distinguishable per-command statuses, finding-entry fields, adjudication pointer
+  to `severity.md`/rubric) + a `SKILL.md` References entry. Lands first; Slices B
+  (`orchestration.md`) and C (`code-evaluator.md` + `code-eval-rubric.md`) reference it.
 
 ## Archived plans
 
