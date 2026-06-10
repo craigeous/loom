@@ -17,7 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [init-detection-spine-signal-plan.md](init-detection-spine-signal-plan.md) — `Plan Review` —
+  slice 1 of 3 of the ADR-0009 Unaligned bare/migrate split: add the
+  existing-but-undotted **docs-spine detection signal** to `init-detection.md` —
+  a concrete "pre-existing docs spine" definition, Unaligned sub-classification
+  (spine present → Unaligned-migrate, else Unaligned-bare), an updated dispatch
+  table (§2a/§2b), kept read-only. `init-detection.md` only; no spec/ADR/
+  `unaligned.md`/recipe edits (slices 2 and 3 are separate). Target spec
+  06-init-modes.md.
 
 ## Archived plans
 
