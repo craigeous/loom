@@ -23,4 +23,4 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 
 ## In Review
 
-_(none)_
+- [0009 — Unaligned-migrate Sub-mode](0009-unaligned-migrate-sub-mode.md) — refines spec 06 §2 Unaligned; builds on ADR 0001/0005
