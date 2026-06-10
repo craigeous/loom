@@ -1,6 +1,6 @@
 # Unaligned bare/migrate split
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md
 
 ## Context

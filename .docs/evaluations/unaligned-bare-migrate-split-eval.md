@@ -170,3 +170,101 @@ Round counting (spec 03): the Round-1 FAIL opened round 1; this is the resolving
 review of that same cycle, so it records as **Round 1** (a PASS that resolves a
 prior FAIL repeats that FAIL's round number; it does not advance to round 2). No
 author identity is referenced — this verdict is blind.
+
+---
+
+# Code review (first code review of the implementation)
+
+Verdict: PASS
+Round: 1
+Reviewed against: the implement commit `61bc6e9` (diff of
+`references/unaligned.md` + `SKILL.md`); the slice-plan
+(`unaligned-bare-migrate-split-plan.md`, the body and its mechanical checks); spec
+06-init-modes.md §2a/§2b; ADR 0009 §3 (owner gate) / §4 (status preservation) / §6
+(inline, no role-spawn); the landed siblings `migration-recipe.md` +
+`init-detection.md` (pointed at, not edited); code-eval-rubric.md + severity.md.
+Mechanical checks re-run from repo root (`rg`/`git show`), not trusted from the
+plan's evidence block.
+
+## No compiled gate
+
+loom's own repo is markdown — acceptance is review-against-spec; no fmt/lint/test
+gate exists to re-run and none was invented.
+
+## Findings
+
+All plan steps and authority requirements are satisfied; no BLOCKER, MAJOR, or
+MINOR findings.
+
+- **Both flows present and correctly scoped.** The intro/authority block reframes
+  to §2a/§2b (line 6) and keeps the "spec wins on conflict" + precondition +
+  "alignment/migration pass, not a config interview" framing. A `## Two sub-modes`
+  section (lines 19–34) names both flows with one-sentence semantics + a §2a/§2b
+  pointer, and routes off `init-detection.md`'s sub-classification without
+  restating its heuristics. The existing Steps 1–5 are wrapped under
+  `## Unaligned-bare flow — no pre-existing docs spine` (line 38) with a scope line;
+  internal `§2` citations are updated to `§2a` (lines 112, 142, 173, 185). The
+  no-decisions boundary (lines 124–135) is preserved unchanged.
+
+- **Bare-only Draft→review rule preserved and scoped.** Lines 139–150 keep the
+  `Draft → Plan Review → Approved` lifecycle, cite spec 03, and add an explicit
+  "This `Draft → review` rule is **Unaligned-bare only** … does **not** apply to
+  Unaligned-migrate" (lines 148–150) — matching spec 06 §2a/§2b and ADR 0009 §4.
+  The migrate flow correctly claims no Draft→review pass.
+
+- **Owner gate faithful to ADR §3 / spec §2b.** Lines 209–222 present an explicit,
+  required owner decision before any files move (not the generic "ambiguity → ask"
+  fall-through), with all three options and their consequences named verbatim to
+  the ADR: migrate → Initialized; thin-pointer → re-detect Unaligned; abort →
+  re-detected Unaligned on every run. The canonical semantics are pointed AT (spec
+  06 §2b / ADR 0009 §3), not re-derived.
+
+- **Status preservation, inline/no-role-spawn.** Lines 235–240 state migrated specs
+  retain prior status / migration is not a re-review trigger, pointing at §2b / ADR
+  §4 — no policy re-derivation. Lines 242–266 state the inline `/loom:init` sequence
+  (detection → owner gate → recipe on migrate → seed/reconcile `status/` → hand back
+  Initialized) and that a pure migration authors no specs so there is no
+  planner/evaluator role-spawn (ADR 0009 §6 cited). Both match the ADR's division.
+
+- **Single-source discipline (scrutinized).** All four negative guards re-run on
+  `unaligned.md` return **no matches**: `print0|xargs -0`, `lookbehind|\(\?<!`,
+  `git mv|git stash|git status --porcelain`, `\.\.docs/`. The recipe mechanics are
+  named only as a pointer list (lines 227–233) routed to `migration-recipe.md`; the
+  idempotence note (lines 278–280) points at the recipe's no-op guarantee rather
+  than restating it.
+
+- **Identity pre-flight shared, stated once.** Exactly one authoritative statement
+  (lines 30–34, in `## Two sub-modes`); the bare flow (line 77) and the migrate flow
+  (lines 257–258) both reference it rather than duplicating the prose. The
+  `commit-convention.md` rationale pointer is kept.
+
+- **SKILL.md.** The `unaligned.md` References entry (line 53) now names both
+  sub-modes — Unaligned-bare (back-fill via Greenfield scaffold + gate) and
+  Unaligned-migrate (owner gate + inline `migration-recipe.md` recipe) — and was not
+  collapsed to a back-fill-only line. No other References entry is touched.
+
+- **Scope/hygiene.** `git show --name-only 61bc6e9` shows only the slice-plan,
+  `SKILL.md`, and `unaligned.md`. The forbidden-path filter (`.docs/spec`,
+  `.docs/ADR`, `migration-recipe.md`, `init-detection.md`, `CLAUDE.md`) returns
+  empty — no out-of-scope edits, and notably no implement-step `CLAUDE.md` edit
+  (the boundary a prior slice FAILed for is preserved; the stale curated-digest line
+  is correctly left to the developer's finalize pass). Commit author identity is
+  `Craig Pfeiffer <craigeous@gmail.com>` — author-neutral configured identity, not
+  `loom@localhost`.
+
+- **Links resolve.** `init-detection.md`, `commit-convention.md`,
+  `migration-recipe.md`, `greenfield.md`, and the five-levels-up spec links
+  (`06-init-modes.md`, `03-artifact-lifecycle.md`) all resolve from the
+  `references/` directory.
+
+## Required changes (for FAIL)
+
+None — PASS.
+
+## Notes
+
+Round counting (spec 03, FAIL-only): the prior FAIL was a *plan-eval* FAIL (round 1,
+resolved by the round-1 re-review above). This is the first *code* review of the
+implementation and it PASSes, so it is the resolving review and stays at the
+artifact's current round — **Round 1**. It does not open a new round (a new round is
+opened only by a FAIL). No author identity is referenced — this verdict is blind.
