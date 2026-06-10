@@ -16,6 +16,17 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: ADR 0009 (Unaligned-migrate sub-mode) ACCEPTED.** Driven by a real
+  `/loom:init`-on-ballboy field report (`.docs/research/2026-06-09-unaligned-init-migration-field-report.md`):
+  Unaligned needs a **migrate** sub-mode (reconcile an existing docs spine) distinct from
+  **bare** (back-fill). ADR 0009 records the decisions (split; undotted-spine detection;
+  migrate/thin-pointer/abort owner gate; migrated specs keep status; reusable migration
+  recipe in the playbook; inline `/loom:init` execution). **Follow-on work NOT yet started
+  (next up):** (1) **spec 06 amendment** (bare/migrate split + status-preservation), then
+  (2) **playbook slices** — `init-detection.md` undotted-spine signal, split `unaligned.md`
+  into bare+migrate, and a new migration-recipe reference (with the ordered/idempotent
+  cross-ref rewrite + spine→spec/status split + operational gotchas). These are separate
+  planning cycles per ADR 0005 (spec 06 frozen).
 - **M4 COMPLETE — all M0–M4 milestones done.** Owner-gates/round-limit escalation
   (polished + live-tested) ✓, CLAUDE.md auto-propagation ✓, identity-verification hardening
   (emergent) ✓, `claude -p` evaluated & closed ✓ (reserve in spec 04), resume across

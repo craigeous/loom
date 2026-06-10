@@ -6,8 +6,22 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M4 (Dogfooding & hardening) COMPLETE. M0–M4 all done.**
-- **Last action:** **M4 declared complete (owner sign-off).** All concrete items landed —
+- **Phase:** **M0–M4 complete. Post-M4: acting on real-world dogfooding feedback (ballboy).**
+- **Last action:** **ADR 0009 — Unaligned-migrate sub-mode — Accepted** (commit ea9ca27,
+  plan-eval `adr-0009-unaligned-migrate-eval.md` PASS round 0, MINOR folded d1bacb3,
+  owner-approved). Grounded in the real `/loom:init`-on-ballboy field report
+  (`.docs/research/2026-06-09-unaligned-init-migration-field-report.md`): loom's Unaligned
+  mode assumed "back-fill descriptive specs," but a repo that already has a docs spine needs
+  **migration/reconciliation**. ADR 0009 decides: split Unaligned into **bare** (back-fill)
+  vs **migrate** (reconcile); detect an undotted docs spine; a named migrate/thin-pointer/abort
+  owner gate; migrated specs **retain their status** (not a re-review trigger); a reusable
+  migration recipe belongs in the playbook (ordered+idempotent cross-ref rewrite, spine→
+  spec/status split, operational gotchas); migration runs **inline** in `/loom:init` (no
+  role-spawn). **Follow-on work queued (separate planning cycles, since spec 06 is frozen):**
+  (1) spec 06 amendment for the bare/migrate split + status-preservation; (2) playbook slices —
+  `init-detection.md` spine signal, split `unaligned.md` into bare+migrate, a new
+  migration-recipe reference. ADR README: 0009 moved to Accepted.
+- **Prior action:** **M4 declared complete (owner sign-off).** All concrete items landed —
   owner-gates/round-limit escalation polished + live-tested; CLAUDE.md auto-propagation;
   identity-verification hardening (emergent); `claude -p` evaluated & closed; resume across
   machines verified. The holistic "loom manages its own development end to end" item is

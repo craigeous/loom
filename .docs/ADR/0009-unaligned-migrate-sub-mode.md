@@ -1,6 +1,6 @@
 # 0009 — Unaligned-migrate Sub-mode
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-06-09
 
 ## Context
