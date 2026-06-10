@@ -27,8 +27,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
   consequences; inline recipe via `migration-recipe.md`; status preservation; no
   planner/evaluator role-spawn). Authority line updated to spec 06 §2a/§2b; points at
   ADR 0009 §3/§4/§6, `init-detection.md`, `migration-recipe.md`; recipe mechanics and
-  gate/status policy single-sourced (not restated). `unaligned.md` only — no
-  spec/ADR/recipe/detection (or CLAUDE.md/SKILL.md) edits at implement. Target spec
+  gate/status policy single-sourced (not restated). Implement touches `unaligned.md`
+  + `SKILL.md` (the References description) — no spec/ADR/recipe/detection or CLAUDE.md
+  edits at implement (CLAUDE.md curated-digest update is finalize-only). Target spec
   06-init-modes.md.
 
 ## Archived plans
