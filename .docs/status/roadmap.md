@@ -80,9 +80,16 @@ Status: Verified). Next: M3 (parallelism).
 **M3 complete.** ADR 0008 + `references/parallelism.md` worktree-per-slice model
 proven end-to-end. Next: M4 (Dogfooding & hardening).
 
-## M4 — Dogfooding & hardening
+## M4 — Dogfooding & hardening (complete)
 
-- [ ] loom manages its own development end to end.
+- [x] **loom manages its own development end to end** — demonstrated continuously across
+      this session: every change (ADR-0008 fold into specs 04/08; shell gate; round-limit
+      polish; identity-guard hardening; CLAUDE.md auto-propagation) ran the full blind loop
+      — research/plan → blind plan-eval → develop + gate → blind code-eval → finalize →
+      archive — through the orchestrator. Real defects were caught pre-merge (a planted
+      security regression, an identity-forge, false-claimed verification, recurring spec
+      violations), and the round-limit escalation fired correctly at the cap. The
+      orchestrator only routed + verified; roles did all authoring/evaluation.
 - [x] **Best practices propagated into root/project `CLAUDE.md` automatically** —
       the developer finalize pass now maintains `CLAUDE.md` as a curated digest
       (spec 03 finalize step + spec 08 boundary: durable conventions / repo-layout /
@@ -110,3 +117,12 @@ proven end-to-end. Next: M4 (Dogfooding & hardening).
       ever needed to spawn a peer, so deep nesting never arose. `claude -p` remains
       a **documented reserve** in spec 04 (no implementation built). Revisit only if
       a concrete role-spawns-peer need emerges.
+
+**M4 complete.** loom is dogfooded end-to-end and hardened: it builds and reviews its
+own changes through the blind loop, keeps `CLAUDE.md` current automatically, enforces a
+uniform author-neutral identity, bounds thrashing with a tested escalation, and resumes
+from committed state on a fresh machine. An emergent hardening item also landed this
+milestone — **identity-verification hardening** (init verifies a real git identity;
+agents verify it after committing) — closing the recurring `loom@localhost` fallback.
+All M0–M4 milestones are now complete; the spec spine (00–10) is Approved/Living and the
+ADR set runs through 0008.

@@ -6,8 +6,18 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **Resume-after-interruption across machines — VERIFIED.** Fresh-cloned
+- **Phase:** **M4 (Dogfooding & hardening) COMPLETE. M0–M4 all done.**
+- **Last action:** **M4 declared complete (owner sign-off).** All concrete items landed —
+  owner-gates/round-limit escalation polished + live-tested; CLAUDE.md auto-propagation;
+  identity-verification hardening (emergent); `claude -p` evaluated & closed; resume across
+  machines verified. The holistic "loom manages its own development end to end" item is
+  checked: this session ran every change (ADR-0008 fold, shell gate, round-limit polish,
+  identity hardening, CLAUDE.md auto-propagation) through the full blind loop via the
+  orchestrator, catching real defects pre-merge. Roadmap M4 section marked complete; root
+  `CLAUDE.md` layout heading updated to "M0–M4 complete." **Next:** owner direction — loom's
+  planned milestones are done; future work would be new ADR/spec-driven features or a
+  packaging/release pass.
+- **Prior action:** **Resume-after-interruption across machines — VERIFIED.** Fresh-cloned
   the repo to a throwaway sibling dir (simulating another machine; a clone carries only
   committed state, no local config) and ran the cold-orchestrator resume logic against it:
   init-detection → Initialized; state fully reconstructed from committed `.docs/` + git

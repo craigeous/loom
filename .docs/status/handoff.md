@@ -16,14 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **M4 status:** owner-gates/round-limits ✓, identity-guard hardening ✓, CLAUDE.md
-  auto-propagation ✓, `claude -p` deep-nesting evaluated & closed ✓ (reserve in spec 04),
-  **resume-after-interruption across machines ✓** (fresh clone reconstructs full state from
-  committed `.docs/` + git; the scan caught + fixed a stale archived-plan status —
-  `init-mode-detection.md` was `Landed`, now `Archived`). **All concrete M4 items are done;**
-  only the holistic "loom manages its own development end to end" item remains — and it has
-  effectively been demonstrated continuously this session (every thread ran the full blind
-  loop through the orchestrator).
+- **M4 COMPLETE — all M0–M4 milestones done.** Owner-gates/round-limit escalation
+  (polished + live-tested) ✓, CLAUDE.md auto-propagation ✓, identity-verification hardening
+  (emergent) ✓, `claude -p` evaluated & closed ✓ (reserve in spec 04), resume across
+  machines ✓, and the holistic "loom manages its own development end to end" ✓ (this whole
+  session is the evidence — every change ran the full blind loop via the orchestrator with
+  real defects caught pre-merge). **No planned milestones remain.** Future work is
+  owner-directed: new ADR/spec-driven features or a packaging/release pass. The loom plugin
+  is built, installed, validated, dogfooded end-to-end, and on GitHub (`craigeous/loom`,
+  branch `main`).
 - **M4 CLAUDE.md auto-propagation — COMPLETE** (both cycles landed). Cycle 1: specs 03 + 08
   amended + Approved (commit 56e1a8d). Cycle 2: playbook conformance landed (commit b661f7a,
   code-eval PASS round 0) — the developer finalize pass now has an explicit step to maintain
