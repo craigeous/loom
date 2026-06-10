@@ -1,10 +1,78 @@
 # Evaluation: code-eval-adjudication-plan (Slice C)
 
-Verdict: PASS
-Round: 0
+Verdict: FAIL
+Round: 1
 Reviewed against: spec 02-roles.md (Code Evaluator, Approved/frozen), ADR 0010 §4,
 references/review-findings.md (format authority), references/severity.md (verdict
-authority), references/plan-eval-rubric.md.
+authority), references/code-eval-rubric.md.
+
+## Code review (round 1)
+
+Commit reviewed: `617b828` (`HEAD` of `slice/code-eval-adjudication`), diffed against
+its parent. Pure-markdown slice — no `format → lint → test` gate applies; an absent
+code gate is not a red gate. Invariants checked mechanically (`rg -U`, `test -e`).
+
+### Findings
+
+- [MAJOR] **Broken cross-reference in the agent file** —
+  `plugins/loom/agents/code-evaluator.md` step 1 (new line 30) links the ADR as
+  `[ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)`.
+  The agent file lives at `plugins/loom/agents/`, three directories below the repo
+  root, so a project-root `.docs/` target needs **three** `../` (agents → loom →
+  plugins → root). The link uses **five** `../`, resolving above the repo root.
+  Verified mechanically from the agent's own directory: `test -e
+  ../../../../../.docs/ADR/0010-...md` → FAIL, while `test -e ../../../.docs/ADR/0010-...md`
+  → OK. This same five-`../` string is correct in the rubric (which sits five levels
+  deep) and was evidently copied into the agent file without re-rooting. The plan's
+  task (Step 2a) directs the agent to point to ADR 0010, and Verification requires
+  cross-refs to resolve; as written the reader following this pointer hits a dead
+  link. A real defect introduced by the slice → MAJOR; an unaddressed MAJOR is a
+  FAIL per `severity.md`.
+
+### What passed (recorded so the fix stays narrow)
+
+- **Scope is disjoint and correct.** `git show --stat` / `git diff --name-only
+  HEAD~1..HEAD`: exactly `code-eval-rubric.md`, `code-evaluator.md`, and the
+  slice-plan changed. No `orchestration.md` (Slice B), no `review-findings.md`
+  (Slice A), no `SKILL.md`, no `spec/`/`ADR/`, no index, no living docs, no
+  `CLAUDE.md`.
+- **Rubric section present and in order.** `rg -n "^## "` →
+  Gate → Fidelity → Correctness → **Review-findings adjudication** → Hygiene →
+  Re-review. Exactly as the plan specifies (after Correctness, before Hygiene).
+- **Single-source discipline holds.** The rubric owns the procedure; the agent step 3
+  points to it by exact section name ("Review-findings adjudication") and does not
+  restate the confirm/reject/map/discard body. Both files point to
+  `review-findings.md` and `severity.md` rather than restating. Negative check:
+  `rg "ran-with-findings|ran-clean|skipped: command-unavailable|skipped: docs-only"`
+  returns **nothing** in either the rubric or the agent — the four-token table is not
+  reproduced. The lone illustrative `skipped:`/`ran-clean` mention in the rubric's
+  informational note is the single permitted usage.
+- **Spec 02 / ADR 0010 §4 fidelity.** Spec 02 (lines 107–123) carries the amended
+  Reads (review-findings artifact) and the "Adjudicates the review findings (ADR
+  0010)" behavior; the rubric's four beats (advisory not auto-FAIL; confirm/reject;
+  map confirmed to severity; discard false positives with a recorded reason; own the
+  verdict) and the skip-is-not-clean note match ADR 0010 §4 with no contradiction.
+- **Other links resolve.** `review-findings.md`, `severity.md`, and the rubric ADR
+  link all resolve (`test -e`). The agent's rubric/`severity.md` references use the
+  `${CLAUDE_PLUGIN_ROOT}/...` idiom correctly. Only the agent's ADR markdown link is
+  broken.
+- **Commit is author-neutral and single-slice** — `Craig Pfeiffer
+  <craigeous@gmail.com>`, not a `*@localhost` fallback.
+
+### Required changes
+
+1. In `plugins/loom/agents/code-evaluator.md`, fix the ADR 0010 link depth: change
+   `../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md`
+   to `../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md`
+   (three `../`, not five), so it resolves from the agent file's location. (Confirm
+   with `test -e` from `plugins/loom/agents/`.) Alternatively, if the agent's
+   established idiom for cross-file pointers is preferred, render it as a non-link
+   project-relative mention (`.docs/ADR/0010-...md`) consistent with how the agent
+   already names `.docs/...` paths elsewhere.
+
+---
+
+## Plan review (round 0 — PASS, retained)
 
 ## Findings
 
