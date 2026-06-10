@@ -17,15 +17,13 @@ source of truth; `roadmap.md` is milestone order.
 ## Where things stand
 
 - **Post-M4: implementing ADR 0009 (Unaligned-migrate), from the ballboy field report.**
-  ADR 0009 Accepted; **spec 06 amended + Approved** (commit 7b2808b). **Slice 1 landed**
-  (commit c96fd90): `init-detection.md` now sub-classifies Unaligned into bare vs migrate via
-  the pre-existing-docs-spine signal (concrete definition + branching procedure + updated
-  dispatch table with §2a/§2b citations; read-only invariant intact). **Remaining 2 slices**
-  (normal plan→eval→develop→eval→land each):
-  (2) new migration-recipe reference (ordered+idempotent cross-ref rewrite,
-  numbered-spine→spec/status split, operational gotchas — git-mv-skips-untracked,
-  NUL-delimited lists, dirty-tree check); (3) split `unaligned.md` into bare+migrate flows
-  pointing at (1) + (2). Do (2) before (3) to avoid forward-pointers.
+  ADR 0009 Accepted; **spec 06 amended + Approved** (commit 7b2808b). **Slices 1 and 2
+  landed:** slice 1 (commit c96fd90) — `init-detection.md` sub-classifies Unaligned into
+  bare vs migrate via the pre-existing-docs-spine signal; slice 2 (commits a34d726,
+  da21d2c, fdbbb60) — new `references/migration-recipe.md` + SKILL.md References entry.
+  **Remaining: slice 3** (normal plan→eval→develop→eval→land):
+  (3) split `unaligned.md` into bare+migrate flows pointing at the now-landed detection
+  signal (`init-detection.md`) and migration recipe (`migration-recipe.md`).
 - **M4 COMPLETE — all M0–M4 milestones done.** Owner-gates/round-limit escalation
   (polished + live-tested) ✓, CLAUDE.md auto-propagation ✓, identity-verification hardening
   (emergent) ✓, `claude -p` evaluated & closed ✓ (reserve in spec 04), resume across

@@ -7,7 +7,26 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M0–M4 complete. Post-M4: implementing ADR 0009 (Unaligned-migrate), from ballboy feedback.**
-- **Last action:** **`init-detection-spine-signal` slice landed** (slice 1 of 3 for
+- **Last action:** **`migration-recipe-reference` slice landed** (slice 2 of 3 for
+  ADR-0009 Unaligned-migrate; commits a34d726, da21d2c, fdbbb60, code-eval PASS round 1).
+  `plugins/loom/skills/loom-playbook/references/migration-recipe.md` created — the
+  reusable Unaligned-migrate recipe (ADR 0009 §5/§7): ordered, idempotent cross-reference
+  rewrite (specific-before-generic; negative lookbehind `(?<!\.)` against `..docs/`
+  self-match), the numbered-spine → `spec/` + `status/` split with two-directional link
+  rewrite, all three reference forms handled separately, the living-rewritten vs
+  archived-snapshot boundary (archive excluded from rewrite passes), the operational
+  preconditions (dirty-tree check + stash, untracked-file handling via `git ls-files
+  --others`, NUL-delimited lists with `-print0 | xargs -0`), a status-preservation
+  pointer to spec 06 §2b / ADR 0009 §4 (not re-derived), and final link validation via
+  `rg` checks. `SKILL.md` References entry added. **Code-eval round 1:** root `CLAUDE.md`
+  was edited in the implement commit (out of scope — the plan authorizes only
+  `migration-recipe.md`, `SKILL.md`, the plan, and README; and CLAUDE.md curated-digest
+  maintenance is a finalize-pass step per spec 03 + spec 08, not an implement step) —
+  BLOCKER caught by code-eval, CLAUDE.md reverted to pre-slice baseline, PASS on round 1.
+  The CLAUDE.md curated-digest update (migration-recipe bullet) is correctly made in this
+  finalize pass. **Remaining: slice 3** (split `unaligned.md` into bare+migrate flows,
+  pointing at the now-landed detection signal + migration recipe).
+- **Prior action:** **`init-detection-spine-signal` slice landed** (slice 1 of 3 for
   ADR-0009 Unaligned-migrate; commit c96fd90, code-eval PASS round 0).
   `plugins/loom/skills/loom-playbook/references/init-detection.md` now sub-classifies
   Unaligned into **Unaligned-bare** vs **Unaligned-migrate** via a concrete
@@ -15,9 +34,7 @@ The status source of truth and decision index for building loom.
   with methodology markers — spec grouping, ADR grouping, roadmap/progress/handoff docs,
   or slice-plan grouping). Classification procedure updated (rule 3 branches to 3a/3b);
   dispatch table updated (§2a/§2b cites); read-only invariant preserved. Spec 06 and ADR
-  0009 §2 are cited as authority throughout. **Remaining: slice 2** (migration-recipe
-  reference) **and slice 3** (split `unaligned.md` into bare+migrate flows). Do (2) before
-  (3) to avoid forward pointers.
+  0009 §2 are cited as authority throughout.
 - **Prior action:** **Spec 06 amended for the Unaligned bare/migrate split — Approved**
   (commit 7b2808b, plan-eval `spec-06-unaligned-migrate-amendment-eval.md` PASS round 0,
   zero findings, owner-approved). Detection now branches Unaligned → migrate (pre-existing

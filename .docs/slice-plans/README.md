@@ -17,20 +17,20 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [migration-recipe-reference-plan.md](migration-recipe-reference-plan.md) — `Plan Review` —
-  slice 2 of 3 of the ADR-0009 Unaligned bare/migrate split: new playbook reference
-  `references/migration-recipe.md` — the reusable, ordered, idempotent
-  Unaligned-migrate recipe (ADR 0009 §5/§7): preconditions (dirty-tree check,
-  untracked-file handling, NUL-delimited lists), the numbered-spine → `spec/` +
-  `status/` split with two-directional link rewrite, specific-before-generic ordered
-  rules, idempotency via negative lookbehind `(?<!\.)` against the `..docs/`
-  self-match, the three reference forms handled separately, the living-rewritten vs
-  archived-snapshot boundary, a status-preservation pointer (spec 06 §2b / ADR 0009
-  §4), and final link validation; plus a `SKILL.md` References entry. New reference +
-  `SKILL.md` only; NO spec/ADR/`unaligned.md`/`init-detection.md` edits. Target spec
-  06-init-modes.md.
+(none)
 
 ## Archived plans
+
+- [archive/migration-recipe-reference-plan.md](archive/migration-recipe-reference-plan.md) — `Archived` —
+  slice 2 of 3 of the ADR-0009 Unaligned bare/migrate split: new playbook reference
+  `references/migration-recipe.md` — the reusable, ordered, idempotent Unaligned-migrate
+  recipe (ADR 0009 §5/§7): preconditions (dirty-tree check, untracked-file handling,
+  NUL-delimited lists), the numbered-spine → `spec/` + `status/` split with
+  two-directional link rewrite, specific-before-generic ordering, idempotency via
+  negative lookbehind `(?<!\.)` against the `..docs/` self-match, the three reference
+  forms handled separately, the living-rewritten vs archived-snapshot boundary,
+  status-preservation pointer (spec 06 §2b / ADR 0009 §4), and final link validation;
+  plus a `SKILL.md` References entry. Landed a34d726/da21d2c/fdbbb60.
 
 - [archive/init-detection-spine-signal-plan.md](archive/init-detection-spine-signal-plan.md) — `Archived` —
   slice 1 of 3 of the ADR-0009 Unaligned bare/migrate split: added the
