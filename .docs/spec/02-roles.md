@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Plan Review
+Status: Approved
 
 Five roles. Each is spawned as a **cold agent** on a chosen model **tier**, reads
 only the files (and prompt) it is given, does one job, writes files, **commits**,
