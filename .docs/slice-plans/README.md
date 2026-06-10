@@ -17,7 +17,19 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [unaligned-bare-migrate-split-plan.md](unaligned-bare-migrate-split-plan.md) — `Plan Review` —
+  slice 3 of 3 (final) of the ADR-0009 Unaligned bare/migrate split: restructure
+  `references/unaligned.md` into two sub-mode flows routed by the slice-1
+  sub-classification — **Unaligned-bare** (the existing Steps 1–5: study →
+  scaffold+gate via Greenfield → descriptive back-fill → seed status → hand back,
+  scoped to "no pre-existing docs spine"; bare-only Draft→review rule preserved) and
+  the new **Unaligned-migrate** flow (owner gate migrate/thin-pointer/abort with
+  consequences; inline recipe via `migration-recipe.md`; status preservation; no
+  planner/evaluator role-spawn). Authority line updated to spec 06 §2a/§2b; points at
+  ADR 0009 §3/§4/§6, `init-detection.md`, `migration-recipe.md`; recipe mechanics and
+  gate/status policy single-sourced (not restated). `unaligned.md` only — no
+  spec/ADR/recipe/detection (or CLAUDE.md/SKILL.md) edits at implement. Target spec
+  06-init-modes.md.
 
 ## Archived plans
 
