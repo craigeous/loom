@@ -17,12 +17,18 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [code-eval-adjudication-plan.md](code-eval-adjudication-plan.md) — `Approved` —
-  Slice C of 3 (ADR 0010 follow-on): amend `references/code-eval-rubric.md` (adjudication
-  procedure) + `agents/code-evaluator.md` (review-findings artifact in inputs + pointer).
-  In-flight in worktree `slice/code-eval-adjudication` (parallel with Slice B; disjoint files).
+(none)
 
 ## Archived plans
+
+- [archive/code-eval-adjudication-plan.md](archive/code-eval-adjudication-plan.md) — `Archived` —
+  Slice C of 3 (ADR 0010 follow-on): amended `references/code-eval-rubric.md` with a
+  "Review-findings adjudication" section (advisory not auto-FAIL; confirm/reject each
+  finding; map confirmed to `severity.md`; discard false positives with a reason;
+  evaluator owns the verdict) + `agents/code-evaluator.md` (review-findings artifact in
+  its inputs + pointer to the rubric procedure). Built in parallel worktree
+  `slice/code-eval-adjudication`; **code-eval caught a real broken-link MAJOR (round 1),
+  fixed → PASS**. Landed 5941bea (merged --no-ff). Completes the ADR 0010 playbook thread.
 
 - [archive/orchestration-review-step-plan.md](archive/orchestration-review-step-plan.md) — `Archived` —
   Slice B of 3 (ADR 0010 follow-on): amended `references/orchestration.md` with a new
