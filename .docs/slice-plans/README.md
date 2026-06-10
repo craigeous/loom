@@ -17,16 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [claude-md-autopropagation-conformance-plan.md](claude-md-autopropagation-conformance-plan.md) — `Plan Review` —
-  bring the playbook implementation into conformance with the Approved `CLAUDE.md`
-  auto-propagation spec amendment (Cycle 2): add the curated-digest update as a
-  developer finalize step (`developer.md`), add finalize/consistency notes pointing
-  to spec 08 in `status-machine.md`, `parallelism.md`, `greenfield.md`, and
-  `docs-layout.md` (managed-project `CLAUDE.md` framed as a curated digest);
-  single-sourced — spec 08 owns the four-category boundary, the playbook files point
-  to it. No `spec/`/`ADR/` edits (frozen-Approved); doc-only, review-against-spec.
+(none)
 
 ## Archived plans
+
+- [archive/claude-md-autopropagation-conformance-plan.md](archive/claude-md-autopropagation-conformance-plan.md) — `Archived` —
+  bring the playbook implementation into conformance with the Approved `CLAUDE.md`
+  auto-propagation spec amendment (Cycle 2): developer finalize pass now maintains
+  `CLAUDE.md` as a curated digest (spec 03 step 2; boundary in spec 08); five playbook
+  files updated to point to spec 08; single-sourced boundary. Completes the CLAUDE.md
+  auto-propagation thread (Cycle 1: spec; Cycle 2: playbook). Landed b661f7a.
 
 - [archive/identity-verification-hardening-plan.md](archive/identity-verification-hardening-plan.md) — `Archived` —
   close two structural gaps that let agents commit under a forged/fallback identity: Fix A —

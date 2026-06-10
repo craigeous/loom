@@ -7,7 +7,19 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **CLAUDE.md auto-propagation — Cycle 1 (spec) Approved** (specs 03 + 08
+- **Last action:** **CLAUDE.md auto-propagation — Cycle 2 (playbook conformance) landed**
+  (`claude-md-autopropagation-conformance` slice, commit b661f7a, code-eval PASS round 0).
+  The developer finalize pass now maintains `CLAUDE.md` as a **curated digest** per
+  spec 03 finalize step 2 + spec 08 (*Evolving the playbook → CLAUDE.md auto-propagation*):
+  update the relevant `CLAUDE.md` only when the landed slice changed a durable convention,
+  repo-layout fact, gate definition, or read-first pointer; per-slice history stays in
+  `progress.md`; applies to loom's own root `CLAUDE.md` and, in a managed project, to that
+  project's `CLAUDE.md`. Five playbook files updated to point to spec 08: `developer.md`
+  (new finalize step 2), `status-machine.md`, `parallelism.md`, `greenfield.md`,
+  `docs-layout.md`. Single-source discipline: spec 08 owns the four-category boundary;
+  all playbook files pointer-only. This completes the CLAUDE.md auto-propagation thread
+  (Cycle 1: spec; Cycle 2: playbook implementation). Slice archived.
+- **Prior action:** **CLAUDE.md auto-propagation — Cycle 1 (spec) Approved** (specs 03 + 08
   amended, commit 56e1a8d, plan-eval `claude-md-autopropagation-amendment-eval.md` PASS
   round 0, owner-approved). Spec 03's finalize pass now includes a step where the developer
   updates the relevant `CLAUDE.md` **only when the landed slice changed something in the
@@ -16,8 +28,7 @@ The status source of truth and decision index for building loom.
   landing" rule + ADR 0005 stay intact. Spec 08 defines the curated-digest boundary
   (incl. per-slice history stays in `progress.md`; covers root + managed-project CLAUDE.md;
   specs win on conflict). One non-blocking MINOR recorded (spec 08 template bullet lacks a
-  forward-link to the new subsection). **Next:** Cycle 2 — playbook-conformance slice
-  (developer.md finalize step + Greenfield managed-project CLAUDE.md guidance).
+  forward-link to the new subsection).
 - **Prior action:** **`identity-verification-hardening` slice landed** (commit a816979,
   code-eval PASS round 0). Closed two structural gaps that allowed agents to commit under
   a forged/fallback identity: (A) `greenfield.md` now has a new "Ensure a git identity is
