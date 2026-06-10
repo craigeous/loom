@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Approved
+Status: Plan Review
 
 Five roles. Each is spawned as a **cold agent** on a chosen model **tier**, reads
 only the files (and prompt) it is given, does one job, writes files, **commits**,
@@ -105,13 +105,21 @@ collaborating with the owner.
 **Purpose:** blind, critical review of implemented code against its plan and specs.
 
 - **Reads:** *only* the **commit diff** for the slice, the slice-plan it was meant
-  to satisfy, the relevant specs, and the gate evidence. **Never** receives author
-  identity or the developer's reasoning beyond the artifacts.
+  to satisfy, the relevant specs, the gate evidence, and the orchestrator's
+  **review-findings artifact** (`evaluations/<name>-review-findings.md`, from
+  `/review` + `/security-review` — ADR 0010). **Never** receives author identity
+  or the developer's reasoning beyond the artifacts.
 - **Writes:** a structured verdict to `evaluations/<name>-eval.md`; sets status;
   commits.
 - **Checks:** does the diff satisfy the plan and specs; correctness; the gate
   genuinely passed; tests prove new behavior and that regressions didn't slip;
   scope discipline; playbook conformance.
+- **Adjudicates the review findings (ADR 0010).** The review-findings artifact is
+  **advisory input, not an oracle or auto-FAIL**. The evaluator confirms or
+  rejects each reported finding against the diff, plan, and specs; maps each
+  confirmed finding to severity per `references/severity.md`; and discards false
+  positives with a recorded one-line reason. The evaluator **still owns the
+  verdict** — `references/severity.md` remains the single verdict authority.
 - **Loop:** read diff + plan + specs → PASS/FAIL with severity findings → on PASS,
   the orchestrator triggers the developer's finalize pass; on FAIL, status returns
   to `In Progress` with the eval notes.

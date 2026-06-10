@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## What the orchestrator is
 
@@ -43,6 +43,33 @@ Key properties:
 - **Files and commits are truth.** The orchestrator re-scans after every agent, so
   an interrupted loop resumes from the last commit.
 - **Right tier per role** (see [02](02-roles.md)).
+
+## Automated review before a slice lands
+
+When a slice reaches **`Implemented`**, before (or while) dispatching the
+code-evaluator and **before the slice can land**, the orchestrator runs Claude
+Code's built-in **`/review`** and **`/security-review`** on the slice's commit
+**diff** ([ADR 0010](../ADR/0010-orchestrator-run-automated-review-in-code-eval.md)).
+The orchestrator runs them — never the code-evaluator — because only the
+orchestrator may spawn and a sub-agent cannot safely run a command that may spawn
+([ADR 0001](../ADR/0001-plugin-architecture-and-orchestrator.md)).
+
+- **Local diff mode only.** Never PR / `--comment` / `--fix` mode — no GitHub
+  round-trip, no PR metadata, no working-tree mutation — so the input stays
+  identity-neutral and network-silent and the blind contract holds
+  ([ADR 0004](../ADR/0004-blind-evaluation-role-separation.md)).
+- **Findings artifact.** The orchestrator captures the output into a committed,
+  author-neutral, identity-scrubbed, per-slice file
+  `.docs/evaluations/<slice-name>-review-findings.md` (companion to the slice's
+  `-eval.md`) and hands it to the blind code-evaluator as an additional input.
+- **Applicability.** Run only when the slice's diff touches at least one code
+  (non-docs) file; a pure-docs slice **skips with a note**.
+- **Explicit status.** The artifact records a distinguishable status —
+  ran-with-findings / ran-clean / skipped: docs-only / skipped: command
+  unavailable. A skip is never confusable with a clean review; if a command is
+  unavailable the orchestrator skips and records it, never silently claiming clean.
+- **Not the gate.** This is a new, separate review dimension — **not** part of the
+  `format → lint → test` gate, which is unchanged.
 
 ## Scope (declared by the owner at kickoff)
 
