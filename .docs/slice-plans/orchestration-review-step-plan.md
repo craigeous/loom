@@ -1,6 +1,6 @@
 # Orchestration automated-review step (ADR 0010 Slice B)
 
-Status: Implemented
+Status: Landed
 Target specs: 04-orchestrator.md (§ "Automated review before a slice lands")
 
 ## Context
