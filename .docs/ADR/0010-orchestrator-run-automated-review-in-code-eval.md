@@ -84,15 +84,25 @@ code-evaluator as an **additional input**, alongside the existing inputs (the co
 diff, the slice-plan, the specs, and the gate evidence — spec
 [02](../spec/02-roles.md)).
 
-- **Location/convention.** The artifact lives under the evaluations area as a
-  review-findings companion to the slice's eval file — proposed path
+- **Location/convention.** This ADR **fixes** that the findings live in a committed,
+  evaluator-readable, identity-neutral, **per-slice** file in the evaluations
+  namespace, named as a **companion to the slice's eval file** — consistent with
+  loom's files-and-git handoff model
+  ([ADR 0003](0003-cold-handoffs-commit-per-handoff.md)) and the `.docs/` layout, and
+  distinct from the evaluator's own verdict file. The **decided convention** is
   `.docs/evaluations/<slice-name>-review-findings.md` (the eval file is already
-  `.docs/evaluations/<slice-name>-eval.md`). It is a per-slice input the evaluator
-  reads, distinct from the evaluator's own verdict file. The exact filename
-  convention and internal format are playbook detail fixed by the follow-on slice;
-  this ADR fixes only that the findings live in a committed, evaluator-readable,
-  identity-neutral file consistent with loom's files-and-git handoff model
-  ([ADR 0003](0003-cold-handoffs-commit-per-handoff.md)) and the `.docs/` layout.
+  `.docs/evaluations/<slice-name>-eval.md`). Only the artifact's **internal
+  format/content layout** is left to the follow-on slice; the location, naming
+  convention, and the committed-identity-neutral-per-slice properties are decided
+  here and are not reopened.
+- **Explicit, distinguishable status.** The findings artifact **records an explicit
+  status** that the evaluator (and any tooling) can always tell apart, covering at
+  least these distinct states: **ran-with-findings**, **ran-clean (no findings)**,
+  **skipped: docs-only** (§5), and **skipped: command unavailable** (§7). A skip is
+  **never** confusable with a clean review, and the two skip reasons are
+  distinguishable from each other. This ADR fixes the **requirement** that these
+  states are explicitly distinguishable; the exact field/format that encodes them is
+  deferred to the follow-on format slice.
 - **Committed author-neutral.** Like every loom handoff, the orchestrator commits
   the findings artifact under the uniform git identity, with an author-neutral
   message, per [`references/commit-convention.md`](../../plugins/loom/skills/loom-playbook/references/commit-convention.md).
@@ -158,8 +168,8 @@ therefore runs **only when the slice's diff contains code**:
   detail fixed by the follow-on slice; this ADR fixes that the trigger is
   **presence of a code change in the diff**.
 - **Skip-with-a-note.** For a pure-docs slice, the orchestrator **skips** the review
-  and still writes the findings artifact, recording explicitly that the review was
-  **skipped because the diff is docs-only** (not that it ran clean). The evaluator
+  and still writes the findings artifact, recording the **skipped: docs-only** status
+  per §2's distinguishable-status requirement (not that it ran clean). The evaluator
   thus always receives an explicit, truthful record of whether the review ran.
 
 ### 6. Cost is acknowledged and deliberately accepted
@@ -176,10 +186,12 @@ code-bearing slices; it is not free and is not hidden.
 
 `/review` and `/security-review` are Claude Code **built-ins**, available wherever
 loom runs. If a command is **unavailable** in a given environment, the mechanism
-**degrades gracefully**: the orchestrator **skips it and records in the findings
-artifact that it was skipped because unavailable** — it must **never silently claim a
-clean review**. The evaluator distinguishes "ran, no findings" from "skipped
-(unavailable / docs-only)" because the artifact says which. For managed projects,
+**degrades gracefully**: the orchestrator **skips it and records the
+skipped: command unavailable status** per §2's distinguishable-status requirement
+— it must **never silently claim a clean review**. Because §2 fixes that
+ran-with-findings, ran-clean, skipped-docs-only, and skipped-unavailable are explicitly
+distinguishable, the evaluator can always tell "ran, no findings" from either skip
+reason, and the two skip reasons from each other. For managed projects,
 loom **imposes this review the same way it imposes the gate** — it is part of the
 code-review phase loom runs on the projects it manages, not loom-repo-only.
 
