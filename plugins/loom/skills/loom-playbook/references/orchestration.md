@@ -56,6 +56,40 @@ Re-running init re-applies the current playbook idempotently — see
 [`initialized.md`](initialized.md) for the merge strategy (auto-apply clean,
 recommend for conflicts, never clobber).
 
+## Automated review before a slice lands
+
+Authority: spec [04](../../../../../.docs/spec/04-orchestrator.md) § "Automated
+review before a slice lands" (the run step) and
+[ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)
+§1.
+
+- **When.** When a slice reaches `Implemented`, and before the slice can land,
+  run Claude Code's built-in `/review` and `/security-review` on the slice's
+  commit diff — before (or while) dispatching the code-evaluator.
+- **Who runs it.** Only the orchestrator may spawn, and a sub-agent cannot safely
+  run a command that may spawn; therefore the orchestrator runs these commands —
+  never the code-evaluator
+  ([ADR 0001](../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md)).
+  This is consistent with the "You spawn; roles never spawn" rule above.
+- **Local diff mode only.** Run the commands on the slice's commit diff in local
+  diff mode only — never PR / `--comment` / `--fix` mode (no GitHub round-trip,
+  no PR metadata, no posting, no working-tree mutation), keeping the input
+  identity-neutral and network-silent so the blind contract holds (ADR 0010 §1/§3).
+- **Capture and hand off.** Capture output into the committed, identity-neutral,
+  per-slice findings artifact per [`review-findings.md`](review-findings.md) — see
+  that file for path, format, and the four status tokens. Commit the artifact
+  author-neutral per [`commit-convention.md`](commit-convention.md) and hand it to
+  the blind code-evaluator as an **additional input** alongside the commit diff,
+  slice-plan, specs, and gate evidence.
+- **Applicability.** Run the review only when the slice's diff touches at least
+  one code (non-docs) file. A pure-docs slice skips with a note, recording the
+  `skipped: docs-only` status in the artifact — never "ran clean" (ADR 0010 §5).
+- **Degradation.** If a command is unavailable in the environment, skip it and
+  record `skipped: command-unavailable` in the artifact — never silently claim a
+  clean review (ADR 0010 §7).
+- **Not the gate.** This is a new, separate review dimension — **not** part of
+  the `format → lint → test` gate, which is unchanged (ADR 0010 §8).
+
 ## Scope & claimed gates (for `/loom:run`)
 
 At kickoff, confirm with the owner (AskUserQuestion if not already given):

@@ -1,6 +1,6 @@
 # Orchestration automated-review step (ADR 0010 Slice B)
 
-Status: Approved
+Status: Landed
 Target specs: 04-orchestrator.md (§ "Automated review before a slice lands")
 
 ## Context
@@ -201,5 +201,37 @@ review**, performed **mechanically** (not by eye) with `rg`-style cross-referenc
 
 ## Notes
 
-<Clarification requests between roles, dated. Resolutions are marked, not deleted.
-Formal verdicts live in evaluations/, not here.>
+### Gate evidence (pure-markdown slice; 2026-06-10)
+
+Gate: `format → lint → test` does not apply (pure-markdown slice per plan § Verification).
+Mechanical checks run per plan § Verification:
+
+1. **One file changed.**
+   `git diff --name-only HEAD` → `plugins/loom/skills/loom-playbook/references/orchestration.md` only.
+   No `agents/code-evaluator.md`, `references/code-eval-rubric.md`, `review-findings.md`,
+   `SKILL.md`, `commands/run.md`, `status-machine.md`, spec/, ADR/, slice-plans/README.md,
+   status/, or CLAUDE.md edits.
+
+2. **Section heading present.**
+   `rg -n "## Automated review before a slice lands" orchestration.md` → line 59. PASS.
+
+3. **Canonical status tokens verbatim.**
+   `rg -n "skipped: docs-only|skipped: command-unavailable" orchestration.md` → lines 86, 88. PASS.
+   `rg -n "skipped: command unavailable|skipped-docs-only|skipped-command" orchestration.md` → no output. PASS.
+
+4. **Fidelity elements present.**
+   `rg -n "/review|/security-review|local diff|Implemented|format → lint → test|diff" orchestration.md`
+   → `/review` + `/security-review` (line 67), `local diff` (line 74), `Implemented` (line 66),
+   `format → lint → test` (line 91), `diff` (lines 19, 34, 67, 68, 74, 75, 82, 84). PASS.
+
+5. **Single-source boundary held.**
+   `rg -n "04-orchestrator|review-findings.md" orchestration.md` → lines 61, 79. PASS.
+   `rg -n "confirm/reject|severity mapping|finding entry|source command" orchestration.md` → no output. PASS.
+
+6. **Links resolve.**
+   All five relative links verified with `test -e` from `references/`:
+   - `../../../../../.docs/spec/04-orchestrator.md` — OK
+   - `../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md` — OK
+   - `../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md` — OK
+   - `review-findings.md` — OK
+   - `commit-convention.md` — OK

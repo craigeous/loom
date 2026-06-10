@@ -73,3 +73,68 @@ anchors that both exist in the live file; a six-point mechanical Verification
 section; correctly notes the `format → lint → test` gate does not apply to a
 pure-markdown slice and names the blind code-evaluator's mechanical fidelity review
 as the acceptance check.
+
+---
+
+# Code review
+
+Verdict: PASS
+Round: 0
+Reviewed against: commit beaa531 diff; spec 04-orchestrator.md § "Automated review before a slice lands"; ADR 0010; references/review-findings.md; code-eval-rubric.md; severity.md
+
+## Findings
+
+None — no BLOCKER, MAJOR, or MINOR findings.
+
+## Required changes (for FAIL)
+
+None — PASS.
+
+## Notes
+
+Gate — pure-markdown slice; `format → lint → test` does not apply. An absent code
+gate is not a red gate. The plan's six mechanical Verification checks were re-run
+independently (not trusted from the plan's notes) and all pass.
+
+Scope (mechanical) — `git show HEAD --name-only` lists exactly two files:
+`plugins/loom/skills/loom-playbook/references/orchestration.md` and the slice-plan
+`.docs/slice-plans/orchestration-review-step-plan.md`. The slice-plan diff is the
+status line (`In Progress` → `Implemented`) plus appended gate-evidence in Notes —
+developer-owned plan evidence, in scope. No edits to `agents/code-evaluator.md` or
+`references/code-eval-rubric.md` (concurrent Slice C — disjoint file sets held),
+nor `review-findings.md`, `SKILL.md`, `commands/run.md`, `status-machine.md`, any
+spec/ADR, the slice-plans index, `status/` living docs, or `CLAUDE.md`.
+
+Fidelity to spec 04 / ADR 0010 — the new `## Automated review before a slice lands`
+section in `orchestration.md` is placed cleanly between `## Init-mode detection`
+and `## Scope & claimed gates (for /loom:run)` (no interleaving). All seven required
+elements present and faithful: when (`Implemented`, before land, before/while
+dispatching the code-evaluator, `/review` + `/security-review` on the commit diff);
+who-runs-it (orchestrator-only because only it spawns, cites ADR 0001, explicitly
+consistent with the file's existing "You spawn; roles never spawn" core rule — no
+contradiction); local diff mode only, never PR/`--comment`/`--fix` (ADR 0010 §1/§3);
+capture into the findings artifact pointing to `review-findings.md`, committed
+author-neutral per `commit-convention.md`, handed to the blind evaluator as an
+additional input alongside diff/plan/specs/gate evidence; code-diff applicability
+with `skipped: docs-only` (ADR 0010 §5); command-unavailable degradation with
+`skipped: command-unavailable`, never silently clean (ADR 0010 §7); not the
+`format → lint → test` gate, a separate dimension (ADR 0010 §8).
+
+Single-source discipline held — the section points to spec 04 (run authority) and
+`review-findings.md` (artifact format/path/tokens) and restates neither.
+`rg` for `confirm/reject|severity mapping|finding entry|source command|
+ran-with-findings|ran-clean` in the section returns nothing — the artifact format
+table and the evaluator adjudication procedure (Slice C's home) are not copied in.
+
+Token spelling — the verbatim hyphenated `skipped: command-unavailable` and
+`skipped: docs-only` are used, matching `review-findings.md` (the designated
+artifact-format single source). Variant spellings (`skipped: command unavailable`,
+`skipped-docs-only`, `skipped-command`, `skipped:docs-only`) return nothing. This
+correctly follows `review-findings.md` over spec 04's prose form (spec 04 line 68
+writes the non-hyphenated `skipped: command unavailable`), since the brief and plan
+designate `review-findings.md` as the token authority.
+
+Links resolve — all five relative targets verified with `test -e` from
+`references/`: spec 04, ADR 0010, ADR 0001, `review-findings.md`,
+`commit-convention.md`. The `.docs/` depth (`../../../../../.docs/...`) and bare
+sibling `name.md` form match the file's existing convention.
