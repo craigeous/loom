@@ -17,14 +17,20 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [review-findings-format-plan.md](review-findings-format-plan.md) — `Plan Review` —
-  Slice A of 3 (ADR 0010 follow-on): new `references/review-findings.md` single-source
-  definition of the review-findings artifact (path, identity-neutral content rule, the
-  four distinguishable per-command statuses, finding-entry fields, adjudication pointer
-  to `severity.md`/rubric) + a `SKILL.md` References entry. Lands first; Slices B
-  (`orchestration.md`) and C (`code-evaluator.md` + `code-eval-rubric.md`) reference it.
+(none)
 
 ## Archived plans
+
+- [archive/review-findings-format-plan.md](archive/review-findings-format-plan.md) — `Archived` —
+  Slice A of 3 (ADR 0010 follow-on): new `references/review-findings.md` — the single-source
+  playbook definition of the review-findings artifact (decided path
+  `.docs/evaluations/<slice>-review-findings.md`; identity-neutral invariant; the four
+  distinguishable per-command status tokens `ran-with-findings` / `ran-clean` /
+  `skipped: docs-only` / `skipped: command-unavailable`; finding-entry fields; adjudication
+  pointer to `severity.md` + `code-eval-rubric.md`, format-vs-procedure single-source
+  boundary) + a `SKILL.md` References entry. Pure-markdown (no gate); code-eval PASS round 0.
+  Landed 13d62c2. Slices B (`orchestration.md`) + C (`code-evaluator.md` + `code-eval-rubric.md`)
+  reference it.
 
 - [archive/unaligned-bare-migrate-split-plan.md](archive/unaligned-bare-migrate-split-plan.md) — `Archived` —
   slice 3 of 3 (final) of the ADR-0009 Unaligned bare/migrate split: restructured

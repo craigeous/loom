@@ -1,6 +1,6 @@
 # Review-findings artifact format reference (ADR 0010 Slice A)
 
-Status: Landed
+Status: Archived
 Target specs: 04-orchestrator.md (§ "Automated review before a slice lands"), 02-roles.md (Code Evaluator)
 
 ## Context
