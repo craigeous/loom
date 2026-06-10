@@ -2,88 +2,67 @@
 
 Verdict: PASS
 Round: 0
-Reviewed against: `.docs/research/2026-06-10-review-security-review-in-code-eval.md` (Approved); ADR 0001 (orchestrator-only spawning), ADR 0004 (blind contract), ADR 0002 (tiers/cost), ADR 0003 (committed author-neutral handoffs), ADR 0008 (per-slice coordination files); spec 03 (`Implemented → code review → Landed`); spec 02 (roles — code-evaluator inputs); spec 04 (orchestrator driver loop); `references/plan-eval-rubric.md`; `references/severity.md`.
+Reviewed against: `.docs/research/2026-06-10-review-security-review-in-code-eval.md` (Approved); ADR 0001 (orchestrator-only spawning), ADR 0004 (blind contract), ADR 0002 (tiers/cost), ADR 0003 (committed author-neutral handoffs), ADR 0008 (per-slice coordination files); spec 03 (`Implemented → code review → Landed`); spec 02 (roles — code-evaluator inputs); spec 04 (orchestrator driver loop); `references/plan-eval-rubric.md`; `references/severity.md`. Confirming re-review of the diff `e9b89ea..281fd4e` against the prior PASS (round 0) and its two MINOR findings.
 
 ## Findings
 
-- [MINOR] §2 fixes the findings-artifact path as a *proposed* convention
-  (`.docs/evaluations/<slice-name>-review-findings.md`) while also delegating the
-  exact filename to the follow-on slice. This is internally consistent (the ADR
-  fixes only "committed, evaluator-readable, identity-neutral, per-slice file") but
-  the word "proposed" on a path that sits in the same evaluations namespace as the
-  eval file could read as half-decided. Non-load-bearing; the binding decision
-  (committed identity-neutral input artifact) is unambiguous.
-- [MINOR] §5 and §7 both have the orchestrator write a findings artifact recording a
-  *skip* (docs-only vs unavailable), and §7 says the evaluator "distinguishes" the
-  two reasons — but the ADR does not fix that the skip-reason field is machine- or
-  evaluator-distinguishable beyond "the artifact says which." This is correctly
-  deferred to the follow-on format slice; flagged only so the follow-on planner
-  preserves the two distinct skip reasons explicitly.
+None. Both prior MINORs are resolved; no BLOCKER, MAJOR, or new MINOR introduced.
+
+- Prior [MINOR] on §2 ("proposed" half-decided path) — **resolved**. The diff
+  rewrites §2's Location/convention bullet to state that the ADR **fixes** the
+  findings artifact's location, naming convention, and committed-identity-neutral-
+  per-slice properties, and adopts `.docs/evaluations/<slice-name>-review-findings.md`
+  as the **decided convention** "not reopened"; only the internal format/content
+  layout is left to the follow-on slice. The word "proposed" no longer appears
+  anywhere in the ADR (verified `rg`). The decision content is unchanged — the path
+  named in the prior version is now the binding one, with no new directive added.
+- Prior [MINOR] on §5/§7 (skip-reason distinguishability) — **resolved**. The diff
+  adds a new §2 "Explicit, distinguishable status" bullet binding the artifact to
+  record an explicit status across at least four distinct states —
+  **ran-with-findings**, **ran-clean (no findings)**, **skipped: docs-only**, and
+  **skipped: command unavailable** — such that a skip is never confusable with a
+  clean review and the two skip reasons are distinguishable from each other; §5 and
+  §7 are rewired to reference that §2 requirement by name. The exact encoding field
+  is correctly deferred to the follow-on format slice, matching the requested
+  framing (requirement decided here, format deferred).
 
 ## Required changes (for FAIL)
 
-None. No BLOCKER or MAJOR findings.
+None.
 
 ## Notes
 
-Checked the points the review specifically required, against the cited authorities:
+This is a confirming re-review; the substance was already PASS in round 0. I checked
+only that the two MINORs were genuinely folded, that no decision changed, and that no
+new defect was introduced.
 
-- **Traceable / decisive (rubric "ADRs").** The ADR cites the Approved research note
-  and the owner problem, and every in-scope design point is actually decided: who
-  runs the commands (orchestrator, §1), when (`Implemented`, before land, §1), the
-  handoff path (committed identity-neutral findings artifact as an additional
-  evaluator input, §2), blindness invariant (§3), advisory-not-auto-FAIL with the
-  evaluator owning the verdict (§4), the docs-only skip-with-a-note (§5), cost (§6),
-  degradation on unavailability (§7), and the gate relationship (§8, gate unchanged).
-  A reader could implement it; the only deferred items are explicitly named as
-  playbook/spec follow-ons.
+- **Diff is confined to the two MINORs.** `git diff e9b89ea..281fd4e` touches three
+  hunks only: §2 (Location/convention + new distinguishable-status bullet), §5
+  (Skip-with-a-note wording → "skipped: docs-only" per §2), and §7 (degradation
+  wording → "skipped: command unavailable" per §2). No hunk touches §1, §3, §4, §6,
+  §8, Alternatives, Consequences, or Notes (verified via hunk headers at lines 84,
+  168, 186). 26 insertions / 14 deletions, all in those three sections.
 
-- **One-spawner invariant (ADR 0001).** Confirmed not weakened. The decision keeps
-  spawning with the orchestrator and explicitly forbids the code-evaluator (a
-  sub-agent) from running the commands (§1, lines 64-69; Alternatives §1; Consequences
-  "Builds on"). The reasoning matches ADR 0001 (only the main session spawns) and the
-  research note's "nested-spawn blocker" (§"The nested-spawn blocker"). The
-  code-evaluator is never asked to run a spawning command.
+- **No decision changed.** Mechanically confirmed the load-bearing invariants are
+  intact and untouched: the §3 blind invariant ("the automated-review input is
+  identity-neutral and network-silent"), §4 advisory-not-auto-FAIL ("not an oracle
+  and not an auto-FAIL"), §4 `severity.md` as the "single source of verdict
+  authority," and §1 one-spawner reasoning ("the orchestrator — the only actor
+  permitted to spawn"). The local-diff-only mode, no-GitHub-round-trip, and
+  evaluator-owns-the-verdict commitments are all unchanged.
 
-- **Blind contract (ADR 0004).** Soundly preserved. The mechanism is local-diff-mode
-  only, never PR/`--comment`/`--fix` (§1, §3), on a diff that is already author-neutral
-  (ADR 0003/0004), with an identity-scrubbed findings artifact and no GitHub
-  round-trip. This matches the research note's blind-contract section (PR mode leaks
-  identity; local mode does not) and ADR 0004's controlled-inputs rule. I found no
-  path where author identity could leak into the evaluator.
+- **No new defect.** The four status states are named identically across §2, §5, and
+  §7; §5 records `skipped: docs-only` and §7 records `skipped: command unavailable`,
+  each pointing back to the §2 requirement — internally consistent, no contradiction
+  introduced. The newly-decided path sits in the same evaluations namespace as the
+  eval file (`<slice-name>-eval.md`) and is distinct from it, consistent with ADR
+  0003 and ADR 0008's per-slice unique-naming, so it does not collide across
+  worktree branches. Scope discipline holds: the edits still defer spec/playbook
+  amendments and the artifact's internal format to follow-on planning (ADR 0005).
 
-- **Verdict authority (spec 03 / severity.md).** §4 states the findings are advisory
-  input the evaluator must adjudicate (confirm/reject, map confirmed findings to
-  `severity.md`, discard false positives with a recorded reason), and that
-  `severity.md` remains the single source of verdict authority — not an oracle or
-  auto-FAIL. Consistent with spec 03's `Implemented → (code review) → Landed` phase
-  and with the existing code-evaluator loop in spec 02 (lines 107-117). No new
-  `Status:` value is introduced (Consequences), so it fits the existing lifecycle.
+- **Round counting.** No FAIL has ever opened a round for this artifact (the prior
+  verdict was a PASS at round 0), so this confirming PASS stays **Round 0**.
 
-- **Honesty about the UNVERIFIED point.** Verified against the research note's
-  labeling: the note marks the built-ins' internal spawn behavior UNVERIFIED
-  (§"Do these commands spawn sub-agents?", Open questions) and says the recommendation
-  does not depend on resolving it. The ADR matches exactly (Context constraint 1,
-  §1 lines 66-69, Alternatives §1, "Honest note", Notes) — it never claims the
-  built-ins spawn and states the decision is safe regardless. No overclaim.
-
-- **Scope discipline.** The ADR edits no spec and no index; spec 04/02 amendments and
-  the playbook bodies are listed as Consequences/Out-of-scope, deferred to follow-on
-  planning per ADR 0005 (Context "Out of scope", Consequences). It correctly states
-  it builds on ADR 0001/0004/0002/0003/0008 and supersedes no ADR.
-
-- **Alternatives recorded.** All three research-note paths are present with
-  chosen/rejected rationale: (1) orchestrator-run — CHOSEN with why-it-wins;
-  (2) loom-native non-spawning — rejected (narrower, duplicate maintenance);
-  (3) amend ADR 0001 — rejected (erodes one-spawner invariant). Matches the research
-  note's three viable paths and "Not recommended" labeling for path (3).
-
-Mechanical checks: confirmed no prior eval file for this ADR (fresh → Round 0);
-confirmed spec 02 = roles (code-evaluator Reads list, lines 107-109) and spec 04 =
-orchestrator, matching the ADR's citations; confirmed the code-evaluator frontmatter
-is `tools: Read, Grep, Glob, Bash, Write, Edit` (no `Agent` tool), exactly as the ADR
-and research note state; confirmed spec 03 defines `Implemented → (code review) →
-Landed` as a phase, not a new status, matching the ADR's "no status-machine change."
-
-Status left at `Plan Review` — this is an owner-gated ADR; the verdict is advisory to
-the owner's sign-off, not a status flip by the evaluator.
+Status left at `Plan Review` — per the request, the orchestrator flips it to Accepted
+after this confirming pass and the owner's contingent sign-off; the evaluator does not
+flip an owner-gated ADR's status.
