@@ -7,7 +7,20 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **`claude -p` deep-nesting item evaluated and CLOSED (owner decision).**
+- **Last action:** **Resume-after-interruption across machines — VERIFIED.** Fresh-cloned
+  the repo to a throwaway sibling dir (simulating another machine; a clone carries only
+  committed state, no local config) and ran the cold-orchestrator resume logic against it:
+  init-detection → Initialized; state fully reconstructed from committed `.docs/` + git
+  (handoff/progress/roadmap + statuses + git log); clean tree, no active slice-plans →
+  clean resume point; git identity correctly falls back to global in a fresh clone (and the
+  new init identity-verify step would guard a config-less machine). **The scan caught a real
+  latent bug:** the M2-slice-1 archived plan `archive/init-mode-detection.md` was left at
+  `Status: Landed` instead of `Archived` (an early finalize that didn't update the status on
+  archive — same bug class as the R100 finalize issue) — a naive resume scanning for
+  `Status: Landed` could have mistaken it for in-flight work. Fixed (→ Archived). Audited all
+  archived plans: only that one was stale (the `Abandoned` one is correctly terminal).
+  Roadmap M4 item checked. Throwaway clone removed.
+- **Prior action:** **`claude -p` deep-nesting item evaluated and CLOSED (owner decision).**
   Across M1–M4 (sequential + parallel slices, dozens of role spawns) the
   orchestrator-spawns-all + worktree-per-slice model was sufficient; no role ever needed
   to spawn a peer, so deep nesting never arose. Decision: `claude -p` is **not needed**

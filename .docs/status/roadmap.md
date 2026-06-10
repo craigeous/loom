@@ -95,7 +95,15 @@ proven end-to-end. Next: M4 (Dogfooding & hardening).
       playbook brought into conformance so evaluators stop numbering PASSes (Cycle 2),
       and the machinery verified by a live 5-round stress-test that escalated correctly
       at the 5th FAIL with a full summary.
-- [ ] Resume-after-interruption verified across machines.
+- [x] **Resume-after-interruption verified across machines** — fresh clone (no local
+      state) reconstructs full project state purely from committed `.docs/` + git:
+      init-detection → Initialized; `handoff.md`/`progress.md`/`roadmap.md` give
+      current status + next step; git log + clean tree + no active slice-plans = a
+      clean resume point; git identity correctly falls back to global in a fresh clone
+      (and the new init identity-verify step guards a config-less machine). The scan
+      surfaced + fixed one latent finalize bug (an archived plan left at `Status:
+      Landed` instead of `Archived` — a naive resume could have mistaken it for
+      in-flight work).
 - [x] **`claude -p` fallback evaluated — not needed; closed.** Across M1–M4
       (sequential and parallel slices, dozens of role spawns) the
       orchestrator-spawns-all + worktree-per-slice model was sufficient; no role
