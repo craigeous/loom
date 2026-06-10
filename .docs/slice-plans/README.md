@@ -17,16 +17,17 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [init-detection-spine-signal-plan.md](init-detection-spine-signal-plan.md) — `Plan Review` —
-  slice 1 of 3 of the ADR-0009 Unaligned bare/migrate split: add the
-  existing-but-undotted **docs-spine detection signal** to `init-detection.md` —
-  a concrete "pre-existing docs spine" definition, Unaligned sub-classification
-  (spine present → Unaligned-migrate, else Unaligned-bare), an updated dispatch
-  table (§2a/§2b), kept read-only. `init-detection.md` only; no spec/ADR/
-  `unaligned.md`/recipe edits (slices 2 and 3 are separate). Target spec
-  06-init-modes.md.
+(none)
 
 ## Archived plans
+
+- [archive/init-detection-spine-signal-plan.md](archive/init-detection-spine-signal-plan.md) — `Archived` —
+  slice 1 of 3 of the ADR-0009 Unaligned bare/migrate split: added the
+  existing-but-undotted **docs-spine detection signal** to `init-detection.md` —
+  concrete "pre-existing docs spine" definition, Unaligned sub-classification
+  (spine present → Unaligned-migrate, else Unaligned-bare), updated dispatch table
+  (§2a/§2b), read-only invariant preserved. `init-detection.md` only; no spec/ADR/
+  `unaligned.md`/recipe edits. Target spec 06-init-modes.md. Landed c96fd90.
 
 - [archive/claude-md-autopropagation-conformance-plan.md](archive/claude-md-autopropagation-conformance-plan.md) — `Archived` —
   bring the playbook implementation into conformance with the Approved `CLAUDE.md`

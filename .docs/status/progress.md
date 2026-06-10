@@ -7,7 +7,18 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M0–M4 complete. Post-M4: implementing ADR 0009 (Unaligned-migrate), from ballboy feedback.**
-- **Last action:** **Spec 06 amended for the Unaligned bare/migrate split — Approved**
+- **Last action:** **`init-detection-spine-signal` slice landed** (slice 1 of 3 for
+  ADR-0009 Unaligned-migrate; commit c96fd90, code-eval PASS round 0).
+  `plugins/loom/skills/loom-playbook/references/init-detection.md` now sub-classifies
+  Unaligned into **Unaligned-bare** vs **Unaligned-migrate** via a concrete
+  "pre-existing docs spine" definition (candidate root dirs `docs/`/`doc/`/`documentation/`
+  with methodology markers — spec grouping, ADR grouping, roadmap/progress/handoff docs,
+  or slice-plan grouping). Classification procedure updated (rule 3 branches to 3a/3b);
+  dispatch table updated (§2a/§2b cites); read-only invariant preserved. Spec 06 and ADR
+  0009 §2 are cited as authority throughout. **Remaining: slice 2** (migration-recipe
+  reference) **and slice 3** (split `unaligned.md` into bare+migrate flows). Do (2) before
+  (3) to avoid forward pointers.
+- **Prior action:** **Spec 06 amended for the Unaligned bare/migrate split — Approved**
   (commit 7b2808b, plan-eval `spec-06-unaligned-migrate-amendment-eval.md` PASS round 0,
   zero findings, owner-approved). Detection now branches Unaligned → migrate (pre-existing
   docs spine present) vs bare (none); §2 split into 2a Unaligned-bare (back-fill, unchanged)
