@@ -44,7 +44,7 @@ the decision that a reusable migration recipe must exist with named load-bearing
 properties. **Out of scope (deferred to follow-on planning per ADR 0005):** the
 amended spec 06 text, the classifier change in `init-detection.md`, the split of
 `unaligned.md`, and the migration-recipe reference body itself. This ADR **refines**
-spec 06's Unaligned mode and **builds on** ADR 0001 (only the orchestrator spawns)
+spec 06's Unaligned mode and **builds on** [ADR 0001](0001-plugin-architecture-and-orchestrator.md) (only the orchestrator spawns)
 and [ADR 0005](0005-specs-frozen-after-approval.md) (specs frozen; ADRs immutable);
 it supersedes no existing ADR.
 
