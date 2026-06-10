@@ -1,6 +1,6 @@
 # init-detection-spine-signal
 
-Status: Approved
+Status: Implemented
 Target specs: 06-init-modes.md
 
 ## Context
@@ -231,6 +231,32 @@ git diff --name-only HEAD | rg -n '\.docs/spec/|\.docs/ADR/|references/unaligned
   && echo "FAIL: out-of-scope edit" || echo "OK: scope clean"
 ```
 Expect: `OK: scope clean`.
+
+## Verification Evidence
+
+Mechanical checks run against
+`plugins/loom/skills/loom-playbook/references/init-detection.md` (literal-token
+`rg` per plan):
+
+- **A (spine definition):** `Definition — "pre-existing docs spine"` heading
+  present at line 57; `methodology markers` language present at line 64.
+- **B (sub-classification tokens):** `Unaligned-migrate` at lines 99, 112, 135;
+  `Unaligned-bare` at lines 100, 134. Both appear in the classification block,
+  prose, and dispatch table.
+- **C (dispatch table):** `| Unaligned-bare |` at line 134 with `§2a` citation;
+  `| Unaligned-migrate |` at line 135 with `§2b` citation. Guard: `OK: no flat
+  Unaligned row`.
+- **D (read-only):** Six occurrences: intro (line 7), inputs heading (line 12),
+  new input bullet (line 18), spine definition "Detect it read-only" (line 60),
+  new sub-classification prose "mutates nothing" (line 113), Edge cases (line
+  125).
+- **E (spec-06 / ADR 0009 pointers):** `06-init-modes.md` cited throughout
+  including §2a/§2b in the dispatch table; `ADR 0009 §2` in the classification
+  prose; `0009-unaligned-migrate-sub-mode.md` linked at line 115.
+- **F (scope guard):** Only two files modified —
+  `plugins/loom/skills/loom-playbook/references/init-detection.md` and
+  `.docs/slice-plans/init-detection-spine-signal-plan.md`. No spec/, ADR/,
+  `unaligned.md`, or migration-recipe edits. Guard: `OK: scope clean`.
 
 ## Notes
 
