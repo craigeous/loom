@@ -16,6 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 CLAUDE.md auto-propagation — Cycle 1 (spec) Approved; Cycle 2 next.** Specs 03 + 08
+  amended + Approved (commit 56e1a8d, plan-eval PASS round 0): the developer finalize pass
+  now maintains `CLAUDE.md` as a **curated digest** (durable conventions, repo-layout facts,
+  gate definitions, read-first pointers; per-slice history stays in `progress.md`), for both
+  root and managed-project CLAUDE.md, framed as a derived non-spec digest (specs win;
+  ADR 0005 intact). **Next:** Cycle 2 playbook-conformance slice — `developer.md` finalize
+  step gains the CLAUDE.md update; Greenfield managed-project CLAUDE.md guidance reflects the
+  boundary. (Non-blocking MINOR carried: add a forward-link from spec 08's CLAUDE.md-template
+  bullet to the new subsection — can fold into Cycle 2.)
 - **M4 escalation thread — COMPLETE** (roadmap item "owner approval gates, round
   limits/escalation polished" ✓). Cycle 1: spec 03 `## Round limits` amended + Approved
   (commits 5de67fd → df72df0); `Round:` counts FAIL cycles only, one cross-phase counter

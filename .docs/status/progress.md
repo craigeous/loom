@@ -7,7 +7,18 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M4 (Dogfooding & hardening) in progress.** M0–M3 complete.
-- **Last action:** **`identity-verification-hardening` slice landed** (commit a816979,
+- **Last action:** **CLAUDE.md auto-propagation — Cycle 1 (spec) Approved** (specs 03 + 08
+  amended, commit 56e1a8d, plan-eval `claude-md-autopropagation-amendment-eval.md` PASS
+  round 0, owner-approved). Spec 03's finalize pass now includes a step where the developer
+  updates the relevant `CLAUDE.md` **only when the landed slice changed something in the
+  curated-digest scope** (durable conventions, repo-layout facts, gate definitions,
+  read-first pointers) — explicitly a derived non-spec digest, so the "no spec edit at
+  landing" rule + ADR 0005 stay intact. Spec 08 defines the curated-digest boundary
+  (incl. per-slice history stays in `progress.md`; covers root + managed-project CLAUDE.md;
+  specs win on conflict). One non-blocking MINOR recorded (spec 08 template bullet lacks a
+  forward-link to the new subsection). **Next:** Cycle 2 — playbook-conformance slice
+  (developer.md finalize step + Greenfield managed-project CLAUDE.md guidance).
+- **Prior action:** **`identity-verification-hardening` slice landed** (commit a816979,
   code-eval PASS round 0). Closed two structural gaps that allowed agents to commit under
   a forged/fallback identity: (A) `greenfield.md` now has a new "Ensure a git identity is
   configured" step (establish-or-stop, renumbered Step F; Unaligned and Initialized resume

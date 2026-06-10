@@ -1,6 +1,6 @@
 # 08 — Playbook
 
-Status: Plan Review
+Status: Approved
 
 The **playbook** is loom's bundled, evolving set of conventions and templates. It
 makes loom opinionated: loom imposes the playbook on the projects it manages
