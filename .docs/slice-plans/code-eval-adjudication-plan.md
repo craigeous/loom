@@ -1,6 +1,6 @@
 # Code-Evaluator Adjudicates Advisory Review Findings (Slice C)
 
-Status: In Progress
+Status: Implemented
 Target specs: 02-roles.md (Code Evaluator), 04-orchestrator.md (context only)
 
 ## Context
@@ -243,5 +243,6 @@ Mechanical checks run and passed:
 
 6. **Links resolve.**
    - `test -e` on `code-eval-rubric.md`, `review-findings.md`, `severity.md` → all present.
+   - ADR 0010 link in `code-evaluator.md` step 1: fixed from `../../../../../.docs/ADR/...` (five `../`, broke above repo root) to `../../../.docs/ADR/...` (three `../`, correct for `plugins/loom/agents/` → repo root). Verified mechanically from `plugins/loom/agents/`: `test -e ../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md` → EXISTS.
 
 7. **Commit is author-neutral** — confirmed via `git show -s --format='%an <%ae>'`.

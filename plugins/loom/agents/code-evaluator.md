@@ -27,7 +27,7 @@ fidelity to its plan, and you do it **blind**.
 1. Identify the slice's commit(s). Read the **diff** (`git diff`/`git show`), the
    slice-plan, the target specs, and the **review-findings artifact**
    (`.docs/evaluations/<slice-name>-review-findings.md`) produced by the orchestrator
-   per [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md).
+   per [ADR 0010](../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md).
    For a **re-review**, also read the prior `evaluations/<name>-eval.md` and diff since
    the prior reviewed commit. Check text/config/symbol invariants mechanically
    (`rg -U`/`yq`/`ast-grep`/LSP), not by eye — see
