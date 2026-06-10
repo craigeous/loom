@@ -110,3 +110,63 @@ The sole reason for FAIL is the SKILL.md-deferral misclassification (the MAJOR).
 The fix is small and local: move one description line into the implement scope and
 correct the authority citation. No author identity is referenced — this verdict is
 blind.
+
+---
+
+# Re-review (resolving review of round 1)
+
+Verdict: PASS
+Round: 1
+Reviewed against: the Round-1 MAJOR above; the plan revision (`d393ffe`) and the
+slice-plans README index fix (`c93e51e`); spec 03-artifact-lifecycle §finalize-pass
++ spec 08-playbook §"CLAUDE.md auto-propagation" (the carve-out the MAJOR turned
+on); the landed sibling slice 2 precedent (SKILL.md edited at implement); current
+`SKILL.md` line 53 (still the stale single-flow entry, confirming the work is real).
+
+## Findings
+
+- The Round-1 [MAJOR] is **resolved**. The plan no longer defers the `SKILL.md`
+  `unaligned.md` description to the finalize pass. All five required points land:
+  1. New **step 8** (plan lines 212–228) refreshes the `SKILL.md` `unaligned.md`
+     References line to name **both** sub-modes (Unaligned-bare back-fill +
+     Unaligned-migrate reconcile-via-recipe) and states explicitly it is "part of
+     the **implement** commit (alongside `unaligned.md`), NOT the finalize pass."
+  2. `plugins/loom/skills/loom-playbook/SKILL.md` is now in the implement
+     allowed-paths (line 306) and **removed** from the EXCLUDED list; `CLAUDE.md`
+     remains excluded (line 319) and finalize-only — the part that had to stay
+     correct is intact. (A prior slice FAILed for an implement-step `CLAUDE.md`
+     edit; that boundary is preserved.)
+  3. The authority citation is corrected in both Out-of-scope (lines 54–67) and the
+     process note (lines 337–343): the spec 03/08 finalize carve-out now governs
+     "the **curated digest (`CLAUDE.md`) only** — it does NOT cover `SKILL.md`,"
+     matching the authority (neither spec names SKILL.md) and the sibling precedent.
+  4. The Verification scope guard allows `unaligned.md` + `SKILL.md` (+ plan +
+     README), still hard-fails on `.docs/spec/`, `.docs/ADR/`, `CLAUDE.md`,
+     `migration-recipe.md`, `init-detection.md` (lines 313–325), and adds an `rg`
+     check (lines 327–333) asserting the `SKILL.md` `unaligned.md` entry now names
+     the migrate/reconcile sub-mode and was not collapsed to back-fill-only.
+  5. The slice-plans README index entry (`c93e51e`) is consistent: "Implement
+     touches `unaligned.md` + `SKILL.md` … no … CLAUDE.md edits at implement
+     (CLAUDE.md curated-digest update is finalize-only)." The disputed
+     "no … SKILL.md edits" claim is gone.
+
+- **No regression.** The bare/migrate split steps the Round-1 review approved
+  (steps 1–7) are unchanged; single-source discipline is intact — the recipe is
+  still not restated (step 5.3 + the negative `rg` guards in check 7), and the
+  gate-option/status policy is still pointed AT (spec 06 §2b / ADR 0009 §3–§4)
+  rather than re-derived. Step renumbering (former 8/9 → 9/10) is purely
+  consequential to inserting the new step 8.
+
+- The two Round-1 [MINOR]s were advisory (no change required) and remain
+  non-blocking; nothing in the revision disturbs them.
+
+## Required changes (for FAIL)
+
+None — PASS.
+
+## Notes
+
+Round counting (spec 03): the Round-1 FAIL opened round 1; this is the resolving
+review of that same cycle, so it records as **Round 1** (a PASS that resolves a
+prior FAIL repeats that FAIL's round number; it does not advance to round 2). No
+author identity is referenced — this verdict is blind.
