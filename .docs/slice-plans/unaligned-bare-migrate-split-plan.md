@@ -1,6 +1,6 @@
 # Unaligned bare/migrate split
 
-Status: Plan Review
+Status: Approved
 Target specs: 06-init-modes.md
 
 ## Context
