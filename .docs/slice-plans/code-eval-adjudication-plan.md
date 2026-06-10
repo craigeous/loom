@@ -1,6 +1,6 @@
 # Code-Evaluator Adjudicates Advisory Review Findings (Slice C)
 
-Status: In Progress
+Status: Implemented
 Target specs: 02-roles.md (Code Evaluator), 04-orchestrator.md (context only)
 
 ## Context
@@ -218,4 +218,30 @@ respect the single-source boundary. Concretely:
 
 ## Notes
 
-(none)
+### Gate evidence (pure-markdown; no format/lint/test gate)
+
+Mechanical checks run and passed:
+
+1. **Only two in-scope files changed** — confirmed below.
+
+2. **Rubric has the adjudication section, in order.**
+   - `rg -n "## Review-findings adjudication" ...code-eval-rubric.md` → line 37 (one match).
+   - Section order: Gate (7) → Fidelity (13) → Correctness (23) → Review-findings adjudication (37) → Hygiene (59) → Re-review (64). Correct.
+
+3. **Rubric points, doesn't restate.**
+   - All four procedure beats present: advisory framing, confirm/reject, false positive, own the verdict.
+   - Both pointers (`review-findings.md`, `severity.md`) present.
+   - Negative check: `rg -n "ran-with-findings|skipped: command-unavailable" ...code-eval-rubric.md` → no output (four-token table not reproduced).
+
+4. **Agent inputs include the artifact.**
+   - `rg -n "review-findings" ...code-evaluator.md` → match at lines 28–29 (step 1 inputs area).
+   - `rg -n "adjudicat" ...code-evaluator.md` → match at lines 43–44 (step 3 pointer).
+
+5. **Agent points, doesn't restate.**
+   - Agent's adjudication mention is two lines deferring to the rubric section by name; procedure body lives only in the rubric.
+   - `rg -n "code-eval-rubric.md" ...code-evaluator.md` → line 40 (uses `${CLAUDE_PLUGIN_ROOT}/...` idiom).
+
+6. **Links resolve.**
+   - `test -e` on `code-eval-rubric.md`, `review-findings.md`, `severity.md` → all present.
+
+7. **Commit is author-neutral** — confirmed via `git show -s --format='%an <%ae>'`.

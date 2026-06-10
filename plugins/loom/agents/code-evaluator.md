@@ -25,10 +25,12 @@ fidelity to its plan, and you do it **blind**.
 ## How you work
 
 1. Identify the slice's commit(s). Read the **diff** (`git diff`/`git show`), the
-   slice-plan, and the target specs. For a **re-review**, also read the prior
-   `evaluations/<name>-eval.md` and diff since the prior reviewed commit. Check
-   text/config/symbol invariants mechanically (`rg -U`/`yq`/`ast-grep`/LSP), not
-   by eye — see
+   slice-plan, the target specs, and the **review-findings artifact**
+   (`.docs/evaluations/<slice-name>-review-findings.md`) produced by the orchestrator
+   per [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md).
+   For a **re-review**, also read the prior `evaluations/<name>-eval.md` and diff since
+   the prior reviewed commit. Check text/config/symbol invariants mechanically
+   (`rg -U`/`yq`/`ast-grep`/LSP), not by eye — see
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/tooling.md`; all optional
    with fallback.
 2. **Verify the gate actually passed** — re-run it (Rust: `cargo fmt --check` →
@@ -38,7 +40,12 @@ fidelity to its plan, and you do it **blind**.
    `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/code-eval-rubric.md`:
    does the diff satisfy the plan and specs; correctness and edge cases; tests
    prove new behavior and guard regressions; scope discipline (nothing outside the
-   slice); playbook conformance.
+   slice); playbook conformance. Also adjudicate the review-findings artifact per the
+   rubric's **Review-findings adjudication** section (confirm/reject each finding,
+   map confirmed ones to severity per
+   `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/severity.md`, discard false
+   positives with a recorded reason) — you still own the verdict; `severity.md` is the
+   single verdict authority.
 4. Write the verdict to `.docs/evaluations/<slice-name>-eval.md` using the
    evaluation template: `Verdict: PASS|FAIL`, `Round: n`, findings tagged
    `[BLOCKER]/[MAJOR]/[MINOR]`, required changes. Tag severity and derive the
