@@ -1,6 +1,6 @@
 # Code-Evaluator Adjudicates Advisory Review Findings (Slice C)
 
-Status: Approved
+Status: In Progress
 Target specs: 02-roles.md (Code Evaluator), 04-orchestrator.md (context only)
 
 ## Context
