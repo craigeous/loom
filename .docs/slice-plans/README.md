@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [adr-0011-playbook-conformance-plan.md](adr-0011-playbook-conformance-plan.md) — `Plan Review` —
+  Playbook conformance for ADR 0011: swap `/review` → `/code-review` (leave `/security-review`)
+  across `orchestration.md`, `code-eval-rubric.md`, `review-findings.md`, and add the
+  commit-range invocation detail to `orchestration.md`. Solo on main; pure-markdown.
 
 ## Archived plans
 
