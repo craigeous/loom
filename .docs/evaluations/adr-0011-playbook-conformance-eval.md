@@ -1,6 +1,6 @@
 # Evaluation: adr-0011-playbook-conformance-plan
 
-Verdict: FAIL
+Verdict: PASS
 Round: 1
 Reviewed against: ADR 0011 (Accepted), spec 04-orchestrator.md § "Automated review
 before a slice lands" (re-approved), spec 02-roles.md Code Evaluator, the current
@@ -8,75 +8,54 @@ plugin tree (`rg -n '/review\b' plugins/loom/`), plan-eval-rubric.md, severity.m
 
 ## Findings
 
-- [BLOCKER] Scope claim is mechanically false; the plan misses a fourth bare
-  `/review` and excludes it on a false premise — Context (lines 26–28) asserts
-  "every bare `/review` hit lives in the three files below" and the Out-of-scope
-  block (line 34) lists `SKILL.md` among files to "not touch." A fresh
-  `rg -n '/review\b' plugins/loom/` returns **four** files with bare `/review`:
-  `orchestration.md`, `review-findings.md`, `code-eval-rubric.md`, **and
-  `plugins/loom/skills/loom-playbook/SKILL.md:51`**. The SKILL.md hit is the same
-  PR-bound `/review` that ADR 0011 declares factually wrong — it describes the
-  review-findings artifact as carrying "(`/review` + `/security-review` output)",
-  i.e. the identical automated-review command being corrected. The plan's stated
-  goal (lines 19–20) is to "bring the **playbook references** into line with …
-  ADR 0011"; SKILL.md is a playbook reference. Leaving it ships a stale,
-  factually-wrong `/review` in the playbook's own entry file and produces an
-  incompletely-conformant result. Per severity.md (scope / spec-fidelity violation
-  ⇒ BLOCKER) and the rubric's "Invariants verified mechanically" item — the plan
-  asserts an `rg`-checkable invariant that does not hold.
+The Round 1 BLOCKER is resolved. The plan's scope claim is now mechanically true
+and the missed fourth occurrence is brought in.
 
-  Note: ADR 0011 §Consequences "Playbook follow-up" enumerates orchestration.md,
-  review-findings.md, code-eval-rubric.md, and agents/code-evaluator.md and does not
-  name SKILL.md. That could support a deliberate exclusion — but the plan does not
-  rely on that rationale; it instead asserts (falsely) that no other occurrence
-  exists. The plan must either (preferred) include the SKILL.md `/review`
-  occurrence, or truthfully scope it out with the ADR-§Consequences rationale and
-  correct the false "every bare `/review` … in the three files" claim and the
-  verification checks that depend on it.
+- [RESOLVED — was BLOCKER] The plan now includes
+  `plugins/loom/skills/loom-playbook/SKILL.md` in scope as Step 4: swap the bare
+  `/review` at line 51 → `/code-review`, leaving `/security-review` as-is. The
+  Context pre-state is corrected to the accurate **four**-file list with per-file
+  counts (SKILL.md 1, orchestration.md 1, code-eval-rubric.md 2,
+  review-findings.md 6), and the Out-of-scope block no longer (falsely) lists
+  SKILL.md. Verified mechanically: `rg -n '/review\b' plugins/loom/` returns exactly
+  those four files, and `agents/code-evaluator.md` returns no hits (exit 1).
+
+No BLOCKER, MAJOR, or MINOR findings remain.
 
 ## Required changes (for FAIL)
 
-1. Resolve the `SKILL.md:51` bare `/review`. Either (a) add a step swapping
-   `SKILL.md:51` `/review` → `/code-review` (leaving `/security-review`) and update
-   the file list, Context invariant, and Verification accordingly; or (b) if it is
-   to remain out of scope per ADR 0011 §Consequences, state that explicitly as the
-   rationale and remove/correct the false claim that "every bare `/review` hit lives
-   in the three files below."
-2. Correct the pre-state mechanical claim in Context (lines 26–28) so it matches the
-   actual `rg -n '/review\b' plugins/loom/` output (four files, not three), and make
-   Verification step (a) cover whichever files end up in scope.
+None — PASS.
 
 ## Notes
 
-Everything else in the plan checks out and is strong; the only defect is the missed
-fourth occurrence / inaccurate invariant.
+Re-review confirms the fix and no regression in the previously-passed parts
+(diff `6df874c..4225b62`, the only change to the plan since the Round 1 FAIL):
 
-- ADR-conformance of the core swap is correct: `/review` → `/code-review` leaving
-  `/security-review`, plus the commit-range targeting bullet, both match ADR 0011 §1
-  and §2 and the re-approved spec 04 (verified: spec 04 lines 51–53 name
-  `/code-review`; lines 62–67 carry the "Target the slice's commit range" bullet
-  citing ADR 0011 §2).
-- Per-file steps are accurate against the real tree: orchestration.md authority
-  (~63), run step (line 67), and the "Local diff mode only" bullet (~74–77) exist as
-  described; code-eval-rubric.md hits at lines 40 and 51 are correct; the six
-  review-findings.md sites (lines 4, 69, 94, 98, and the two `## /review` skeleton
-  headings at 123 and 141) all verified.
-- Safe-replacement reasoning is sound and confirmed: `/review` is not a substring of
-  `/security-review` (no bare `/review` inside it), and `rg -n '/code-review'
-  plugins/loom/` returns no pre-existing hits — a targeted swap cannot corrupt
-  `/security-review`.
-- `/security-review` baseline counts confirmed: orchestration.md=1,
-  code-eval-rubric.md=1, review-findings.md=6 — matching the plan's stated post-swap
-  invariant.
-- `agents/code-evaluator.md` correctly excluded: `rg -n '/review\b'` on it returns
-  no hits (exit 1), so omitting it is correct, not an omission.
-- Pure-markdown / no `format → lint → test` gate observation is correct; the named
-  mechanical verification checks (b)–(e) are appropriate. The lookaround caveat in
-  check (a) (ripgrep here lacks PCRE2) is accurate; the count cross-check workaround
-  is sound.
-- No edits to specs/ADRs/index/living docs are proposed — scope discipline is
-  otherwise respected.
+- The corrected invariant holds mechanically: `rg -n '/review\b' plugins/loom/`
+  returns exactly the four in-scope files (SKILL.md:51; orchestration.md:67;
+  code-eval-rubric.md:40,51; review-findings.md:4,69,94,98,123,141) and nothing
+  else. `agents/code-evaluator.md` confirmed clean (exit 1) — correctly excluded.
+- Step 4 is accurate against the tree: SKILL.md:51 reads
+  "(`/review` + `/security-review` output)" and line 52 cites ADR 0010 for the
+  artifact, so check (e)'s note that the SKILL.md swap adds no new citation is
+  correct.
+- Verification checks now cover all four files: (a) tree-wide `rg -n '/review\b'`
+  with the count cross-check and the four-file enumeration; (b) `/security-review`
+  baselines updated to include SKILL.md=1; (c) `/code-review` post-counts include
+  SKILL.md=1; (d) out-of-scope `agents/code-evaluator.md` and the
+  specs/ADRs/index/living-docs exclusion (SKILL.md correctly removed from the
+  "do-not-touch" list). The lookaround caveat (ripgrep here lacks PCRE2) remains
+  accurate.
+- The previously-passed substance is intact: the core `/review` → `/code-review`
+  swap leaving `/security-review`; the orchestration.md commit-range targeting
+  bullet (Step 1c) mirroring spec 04's "Target the slice's commit range" and citing
+  ADR 0011 §2; ADR 0011 citations alongside ADR 0010 where the command/invocation is
+  authored; and the pure-markdown / no `format → lint → test` gate observation.
+- Safe-replacement reasoning still holds: `/review` is not a substring of
+  `/security-review`, and `rg -n '/code-review'` returns no pre-existing hits, so the
+  targeted swap cannot corrupt `/security-review`.
 
 <!--
-Round 1: fresh artifact, first review is a FAIL ⇒ round advances 0 → 1.
+Round 1: fresh artifact, first review was a FAIL ⇒ round advanced 0 → 1.
+This PASS resolves that Round 1 FAIL ⇒ round repeats at 1 (not advanced).
 -->

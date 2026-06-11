@@ -1,6 +1,6 @@
 # ADR 0011 playbook conformance: `/review` → `/code-review`
 
-Status: Plan Review
+Status: Approved
 Target specs: 04-orchestrator.md, 02-roles.md
 
 ## Context
