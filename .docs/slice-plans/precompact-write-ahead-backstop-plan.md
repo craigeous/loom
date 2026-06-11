@@ -1,6 +1,6 @@
 # PreCompact Write-Ahead Backstop Hook
 
-Status: Approved
+Status: In Progress
 Target specs: 04-orchestrator.md (Thin-orchestrator invariant), ADR 0013 §Decision 5
 
 ## Context
