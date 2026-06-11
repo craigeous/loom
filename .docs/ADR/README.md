@@ -21,7 +21,8 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0007 — Namespaced Command Surface](0007-namespaced-command-surface.md) — supersedes the bare-`/loom` command-naming in 0001
 - [0008 — Parallel `.docs/` Coordination for Worktree-per-Slice](0008-parallel-docs-coordination-worktree-per-slice.md) — resolves OQ-A; builds on ADR 0003/0001
 - [0009 — Unaligned-migrate Sub-mode](0009-unaligned-migrate-sub-mode.md) — refines spec 06 §2 Unaligned; builds on ADR 0001/0005
-- [0010 — Orchestrator-Run Automated Review Feeds the Blind Code-Evaluator](0010-orchestrator-run-automated-review-in-code-eval.md) — adds `/review` + `/security-review` to the code-review phase; builds on ADR 0001/0004/0002/0003/0008
+- [0010 — Orchestrator-Run Automated Review Feeds the Blind Code-Evaluator](0010-orchestrator-run-automated-review-in-code-eval.md) — adds automated review to the code-review phase; builds on ADR 0001/0004/0002/0003/0008 — **command identification corrected by 0011** (`/review` → `/code-review`)
+- [0011 — Correct the Automated-Review Command to `/code-review`](0011-correct-automated-review-command-to-code-review.md) — supersedes ADR 0010 **only** on the command (`/review` is PR-bound → use the local-diff `/code-review`) and adds the commit-range invocation detail; rest of 0010 stands
 
 ## In Review
 
