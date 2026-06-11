@@ -31,7 +31,97 @@ existing-hook pattern (git-identity-guard.sh / .bats / hooks.json).
 
 (none — PASS)
 
-## Notes
+---
+
+# Code Review
+
+Verdict: PASS
+Round: 0
+Reviewed against: ADR 0013 (§Decision 5 table, §Context hard safety constraint),
+spec 04 (Thin-orchestrator invariant / cold-restart), gates/shell.md, and the
+review-findings artifact (advisory). Commit range `origin/HEAD..HEAD`; code in
+`347e0d3`.
+
+## Gate (re-run, not trusted)
+
+- format: `shfmt -i 4 -d precompact-write-ahead-backstop.sh` — PASS
+- lint: `shellcheck precompact-write-ahead-backstop.sh` — PASS
+- test: `bats precompact-write-ahead-backstop.bats` — 11/11 green
+- regression: `bats git-identity-guard.bats` — 28/28 green (unchanged)
+- `jq . hooks.json` — valid JSON; `PreToolUse` (Bash → git-identity-guard) intact,
+  `PreCompact` added alongside (no matcher → both triggers), description extended.
+
+Gate is green; gate is necessary not sufficient — logic and tests traced below.
+
+## Decision-table fidelity (ADR 0013 §Decision 5) — verified line-by-line
+
+- manual + no-progress → exit 2 + stderr remediation, marker NOT advanced
+  (sh:102-111; proven T2, T5 pass-2, T9 fallback).
+- auto + no-progress → exit 0 + appended log line, marker NOT advanced
+  (sh:112-117; proven T3).
+- empty/unknown trigger → coerced to `auto` → exit 0 (sh:33-35, 112-117; T6).
+- progress advanced → update marker + exit 0 (sh:96-99; T1a/T1b, T5 pass-3).
+- first-run (marker absent/unreadable) → record SHA + exit 0 (sh:89-93; T4, T5 pass-1).
+- not-a-repo → exit 0 fail-open (sh:62-65; T7). no-.docs-history → exit 0 (sh:83-86).
+  empty stdin → empty trigger → auto → exit 0 (T8).
+- **Hard safety constraint honored:** the only `exit 2` path is `manual`+no-progress;
+  `auto`/empty/unknown never hard-block, so a near-full session is never wedged.
+
+## Correctness + edge cases
+
+- POSIX-sh throughout; `shfmt`/`shellcheck` clean.
+- cwd→repo-root resolution: extracts `cwd` from JSON, `cd`s in, resolves via
+  `git rev-parse --show-toplevel`; git-dir made absolute (sh:47-75). Cwd-independence
+  proven by T10 (run from unrelated dir still resolves REPO). This resolves the
+  plan-eval MINOR #1.
+- Marker not advanced on block confirmed by T5 pass-2 and re-verified.
+- jq + grep/sed fallback for trigger, session_id, and cwd (sh:25-55); fallback
+  block-path proven by T9.
+- Edge: empty-but-present marker (`PREV=""`) takes the advanced branch → records SHA
+  + exit 0 (manually verified). Fail-open / safe direction; consistent with plan
+  intent ("unreadable → record and allow"). Not a defect.
+- Tests isolate in temp git repos — loom's real `.git/loom/` is never written.
+
+## Scope discipline
+
+Purely additive plugin code: one hook, one bats suite, one additive `hooks.json`
+`PreCompact` key + description extension. README.md / plan / artifacts are the
+expected index + evaluation files. No `spec/` or `ADR/` text changed.
+
+## Review-findings adjudication (advisory; verdict owned here)
+
+- **Finding 1** (manual-block remediation option 2 "re-run if spurious" is
+  non-functional; hook is deterministic and only a `.docs/` commit clears it) —
+  **CONFIRMED factually, severity MINOR.** The behavior is exactly what ADR 0013's
+  open question and the plan's "Accepted coarseness" prescribe (block once,
+  recoverable by checkpoint); the never-wedge property holds (`auto` never blocked).
+  Only the remediation wording is mildly misleading — a wording nit, not a
+  correctness/safety/spec defect. Does not block landing.
+- **Finding 2** (session_id with embedded tab/newline could corrupt the log line) —
+  **CONFIRMED possible, severity MINOR.** Harness-supplied semi-trusted input, log-
+  shape only; security-review excluded it. Optional hardening. Non-blocking.
+- **Finding 3** (append-only log unbounded over a long-lived checkout) —
+  **CONFIRMED, severity MINOR/informational.** One short line per no-progress `auto`
+  event; DoS-class, out of scope. Non-blocking.
+
+No finding maps to BLOCKER or MAJOR.
+
+## Findings
+
+- [MINOR] Manual-block remediation option 2 ("re-run /compact if spurious") does not
+  actually bypass the deterministic re-block; only committing a `.docs/` checkpoint
+  clears it. Consider rewording to avoid implying a re-run escape (review Finding 1).
+- [MINOR] `session_id` logged via `printf '%s'` without control-char stripping
+  (review Finding 2).
+- [MINOR] `precompact.log` is unbounded/no rotation (review Finding 3).
+
+## Required changes (for FAIL)
+
+(none — PASS; no BLOCKER, no MAJOR; MINORs recorded for optional follow-up)
+
+---
+
+# Plan Review (prior)
 
 The slice satisfies the four rubric-critical checks:
 
