@@ -1,6 +1,6 @@
 # PreCompact Write-Ahead Backstop Hook
 
-Status: In Progress
+Status: Implemented
 Target specs: 04-orchestrator.md (Thin-orchestrator invariant), ADR 0013 §Decision 5
 
 ## Context
@@ -181,4 +181,14 @@ with the `PreToolUse` entry intact.
 
 ## Notes
 
-(none)
+Gate evidence (shell gate, run in order):
+- format: `shfmt -i 4 -d precompact-write-ahead-backstop.sh` — PASS
+- lint: `shellcheck precompact-write-ahead-backstop.sh` — PASS
+- test: `bats precompact-write-ahead-backstop.bats` — 11/11 green (T1a, T1b, T2, T3, T4, T5, T6, T7, T8, T9, T10)
+- Regression: `bats git-identity-guard.bats` — 28/28 green (unchanged)
+- `jq . hooks.json` — valid JSON, PreToolUse entry intact
+
+MINOR #1 fix: hook extracts `cwd` from stdin JSON (jq with grep/sed fallback) and
+`cd`s into it before `git rev-parse --show-toplevel`, so repo resolution is
+cwd-independent. Covered by T10 (run from unrelated dir, resolves via JSON cwd).
+T7 (not a git repo) passes a non-git dir as cwd, exercises fail-open path.

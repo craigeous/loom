@@ -1,5 +1,5 @@
 {
-  "description": "Block git commands that override the uniform commit identity (ADR 0003).",
+  "description": "Block git identity overrides (ADR 0003) and enforce the write-ahead compaction invariant (ADR 0013).",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +8,16 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/git-identity-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/precompact-write-ahead-backstop.sh\""
           }
         ]
       }
