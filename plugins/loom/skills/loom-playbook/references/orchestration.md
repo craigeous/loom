@@ -77,6 +77,41 @@ execute in your window because sub-agents can't spawn. Treat it as
 **write-and-forget** — capture → write the `-review-findings.md` artifact → drop it;
 do not reason over or branch on the findings.
 
+### Restart safely — never starve the loop (ADR 0012)
+
+A cold restart is only safe if durable state was written **before** the window
+cleared. If you do something big and blow your budget (or hit the harness's hard
+auto-compact) before recording progress, the restart re-bootstraps from a stale
+`handoff.md`, re-derives the **same** next action, does the same big thing, clears
+again — an infinite **starvation loop**. Four rules prevent it (classic write-ahead
+discipline; roles already commit their own output, so these mainly bite around
+*orchestrator-side* work and the in-window `/code-review` step):
+
+- **Write-ahead checkpoint — checkpoint before the act, not after.** Keep
+  `status/handoff.md` recording the **next intended action**, committed, **before**
+  you undertake anything large or in-window (spawning a heavy role, running
+  `/code-review`). The checkpoint *leads* the work — so any clear resumes from an
+  accurate, **advancing** anchor. Updating `handoff.md` only on break is too late.
+- **Restart before a big op when near budget.** A single operation can jump you from
+  ~55% to context-full in one step. If you're near the margin and about to do
+  something big, **restart first** so it runs in a fresh window — never begin a large
+  op you can't finish *and record* within budget. (Staying thin is what gives you
+  this headroom.)
+- **Forward-progress guard.** On restart, if the re-derived next action is the
+  **same** one that triggered the prior restart **and no new commit landed since**,
+  that is a no-progress loop — **escalate (pause + summary to the owner)** via the
+  round-limit contract; do **not** re-attempt. This turns an infinite loop into one
+  escalation.
+- **Lossless beats lossy — keep 60% below the harness threshold.** Your 60%
+  self-restart is **lossless** (re-bootstrap from files); the harness's auto-compact
+  (high default, ~80%) is **lossy** (it summarizes). Keep your trigger below the
+  harness threshold so the lossless path wins; auto-compact is only a backstop for
+  when you failed to restart in time. **Do not** lower the harness threshold to 60%
+  (e.g. via `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) — that collapses the gap and lets the
+  lossy path race the lossless one. The ~20% gap is the headroom the "restart before
+  a big op" rule needs. (An owner wanting a tighter seatbelt can set the override to
+  ~70 in their **own** environment — never shipped in the plugin.)
+
 ## Init-mode detection (run at the start of `/loom:run` and `/loom:init`)
 
 Run the classifier in [`init-detection.md`](init-detection.md) first; it returns

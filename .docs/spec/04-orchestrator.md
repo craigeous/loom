@@ -75,7 +75,15 @@ regardless of the backing tier. Four rules hold the line:
   orchestrator self-triggers the restart at a budget threshold — operational default
   **~60%**, set in the playbook — rather than waiting for a numeric auto-compact
   threshold to fire. Raising the orchestrator's budget (or running it on `opus`) is
-  an owner lever, not the primary answer.
+  an owner lever, not the primary answer. The restart is only safe if progress was
+  recorded **before** the window cleared, so the orchestrator uses **write-ahead
+  checkpointing** (commit the next intended action to `handoff.md` *before* a large
+  or in-window operation; restart *before* a big op when near budget) and a
+  **forward-progress guard** (a restart that re-derives the same action with no new
+  commit since is a starvation loop → escalate, never re-attempt). The 60% self-
+  restart is **lossless** and stays *below* the harness's lossy auto-compact, which
+  is only a backstop. See the playbook (`orchestration.md` → *Restart safely*) for
+  the operative rules.
 
 ## Automated review before a slice lands
 

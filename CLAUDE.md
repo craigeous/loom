@@ -112,7 +112,13 @@ after approval and change only via planning. Design decisions are in
   loom's answer to context pressure in place of a numeric auto-compact threshold.
   Sonnet 4.6 is **context-aware** (it gets a running `Token usage … remaining` signal
   after each tool call), so the orchestrator self-triggers the restart at **~60%** of
-  budget (operational default). The
+  budget (operational default). Restart safety is **write-ahead**: commit the next
+  intended action to `handoff.md` *before* a large/in-window op and restart *before*
+  such an op when near budget; a restart that re-derives the same action with no new
+  commit since is a **starvation loop** → escalate, never re-attempt. The 60%
+  lossless self-restart stays *below* the harness's lossy auto-compact (~80% default),
+  which is only a backstop — don't lower it to 60% (`orchestration.md` → *Restart
+  safely*). The
   automated-review run step is the one in-window exception and is **write-and-forget**.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 

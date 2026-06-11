@@ -37,6 +37,12 @@ discipline (thin orchestrator)*. Sonnet 4.6 is **context-aware** — you receive
 `Token usage: X/Y; Z remaining` after each tool call; at **~60%** of budget,
 checkpoint to `handoff.md` and cold-restart from the status digest rather than
 degrading (the restart is lossless — all durable state is in `.docs/` + git).
+**Write-ahead so a restart never loops:** commit the next intended action to
+`handoff.md` *before* any large or in-window op (a heavy spawn, `/code-review`), and
+restart *before* such an op when near budget — never start one you can't finish and
+record within budget. If a restart re-derives the *same* action with no new commit
+since, that's a starvation loop → **escalate** (pause + summary), don't re-attempt.
+See orchestration.md → *Restart safely*.
 
 3. **Driver loop:**
    a. Scan `.docs/` **`Status:` lines + git** (the `/loom:status` digest, **not**
