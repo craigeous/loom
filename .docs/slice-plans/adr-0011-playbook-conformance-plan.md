@@ -1,6 +1,6 @@
 # ADR 0011 playbook conformance: `/review` → `/code-review`
 
-Status: Draft
+Status: Plan Review
 Target specs: 04-orchestrator.md, 02-roles.md
 
 ## Context
@@ -23,16 +23,22 @@ slice, sequenced after the spec amendments (now done).
 **The change is mechanical and safe.** `/review` (with leading slash) is *not* a
 substring of `/security-review` (which has no bare `/review`), and no `/code-review`
 exists in these files yet, so a targeted bare-`/review` → `/code-review` swap cannot
-corrupt `/security-review`. Verified pre-state (`rg -n '/review\b'`): every bare
-`/review` hit lives in the three files below; `/security-review` counts are
+corrupt `/security-review`. Verified pre-state (`rg -n '/review\b' plugins/loom/`):
+bare `/review` appears in **four** files, all in scope below — per-file occurrences:
+- `SKILL.md` — 1 hit (line 51);
+- `references/orchestration.md` — 1 hit (line 67);
+- `references/code-eval-rubric.md` — 2 hits (lines 40, 51);
+- `references/review-findings.md` — 6 hits (lines 4, 69, 94, 98, 123, 141).
+
+`/security-review` baseline counts (`rg -c '/security-review'`): SKILL.md=1,
 orchestration.md=1, code-eval-rubric.md=1, review-findings.md=6.
 
 **Out of scope (do not touch):**
-- `plugins/loom/agents/code-evaluator.md` — confirmed by `rg` to contain **no**
-  `/review` mention (it points to the rubric generically). Leave untouched; the plan
-  re-confirms this in Verification.
-- Specs, ADRs, `SKILL.md`, the slice-plans `README.md` index, and the
-  `.docs/status/` living docs. None are edited by this slice.
+- `plugins/loom/agents/code-evaluator.md` — confirmed by `rg -n '/review\b'` to
+  contain **no** `/review` mention (exit 1; it points to the rubric generically).
+  Leave untouched; the plan re-confirms this in Verification.
+- Specs, ADRs, the slice-plans `README.md` index, and the `.docs/status/` living
+  docs. None are edited by this slice.
 
 ## Steps
 
@@ -96,6 +102,15 @@ orchestration.md=1, code-eval-rubric.md=1, review-findings.md=6.
    headings stay. (The skeletons are illustrative structure, not a schema — only the
    command name changes.)
 
+4. **`plugins/loom/skills/loom-playbook/SKILL.md`** — the reading-order entry that
+   describes `review-findings.md` (line ~51). It reads:
+   ```
+   per-slice review-findings artifact (`/review` + `/security-review` output) the
+   ```
+   Change the bare `/review` → `/code-review`; leave `/security-review` exactly
+   as-is. This is the same PR-bound `/review` ADR 0011 corrects, in the playbook's
+   own entry file — it must name the local-diff command. No other edit to SKILL.md.
+
 ## Verification
 
 This is a **pure-markdown** slice — there is **no** `format → lint → test` gate to
@@ -103,37 +118,38 @@ run. The substantive check is the blind code-evaluator's fidelity/consistency re
 against ADR 0011 and re-approved specs 04/02. The developer must run the following
 mechanical checks and record the results:
 
-- **(a) Zero bare `/review` remain in the three files.** ripgrep in this environment
-  lacks PCRE2/look-around, so a negative-lookahead pattern is not available. Instead
-  run:
+- **(a) Zero bare `/review` remain across all four files.** ripgrep in this
+  environment lacks PCRE2/look-around, so a negative-lookahead pattern is not
+  available. Instead run the same tree-wide command used to derive the pre-state:
   ```
-  rg -n '/review\b' plugins/loom/skills/loom-playbook/references/orchestration.md \
-    plugins/loom/skills/loom-playbook/references/code-eval-rubric.md \
-    plugins/loom/skills/loom-playbook/references/review-findings.md
+  rg -n '/review\b' plugins/loom/
   ```
   and **eyeball that every remaining hit is part of `/code-review` or
   `/security-review`** (i.e. each match is immediately preceded by `code` or
   `security-`). Equivalently, cross-check with
   `rg -n '/code-review|/security-review'` and confirm the hit counts add up to the
-  total `/review\b` hits (no orphan bare `/review`).
+  total `/review\b` hits (no orphan bare `/review`). The four in-scope files are
+  SKILL.md, orchestration.md, code-eval-rubric.md, and review-findings.md.
 
 - **(b) `/security-review` count unchanged.** `rg -c '/security-review'` on each file
-  must still report orchestration.md=1, code-eval-rubric.md=1, review-findings.md=6.
+  must still report SKILL.md=1, orchestration.md=1, code-eval-rubric.md=1,
+  review-findings.md=6.
 
 - **(c) Every former `/review` is now `/code-review`.** Confirm `rg -c '/code-review'`
-  reports at least: orchestration.md ≥ 1 (run step + any in the new commit-range
-  bullet), code-eval-rubric.md = 2 (lines ~40 and ~51), review-findings.md = 6
-  (the six former bare-`/review` sites: ~4, ~69, ~94, ~98, and the two `## ` skeleton
-  headings).
+  reports at least: SKILL.md = 1 (line ~51), orchestration.md ≥ 1 (run step + any in
+  the new commit-range bullet), code-eval-rubric.md = 2 (lines ~40 and ~51),
+  review-findings.md = 6 (the six former bare-`/review` sites: ~4, ~69, ~94, ~98, and
+  the two `## ` skeleton headings).
 
 - **(d) Out-of-scope file untouched.**
   `rg -n '/review\b' plugins/loom/agents/code-evaluator.md` must return **no hits**
   (the file was never to be edited and contains no `/review` mention to begin with).
-  No edits to specs, ADRs, `SKILL.md`, the slice-plans `README.md`, or `.docs/status/`.
+  No edits to specs, ADRs, the slice-plans `README.md`, or `.docs/status/`.
 
 - **(e) ADR 0011 cited** wherever ADR 0010 is cited for the command/invocation in the
-  three edited files (orchestration.md authority + commit-range bullet;
-  code-eval-rubric.md ~41). New links resolve to
+  edited files (orchestration.md authority + commit-range bullet;
+  code-eval-rubric.md ~41). The SKILL.md swap is a bare command-name fix and adds no
+  new citation (SKILL.md already cites ADR 0010 on that line for the artifact). New links resolve to
   `0011-correct-automated-review-command-to-code-review.md` at the correct
   relative-path depth (mirror the adjacent ADR 0010 link's depth in each file).
 
