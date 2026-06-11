@@ -6,8 +6,24 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: automated review in the code-review phase (ADR 0010, command corrected by ADR 0011) — COMPLETE end to end and command-correct.**
-- **Last action:** **ADR 0011 correction COMPLETE — `/review` → `/code-review`.** After
+- **Phase:** **M0–M4 complete. Post-M4: PreCompact write-ahead backstop hook (ADR 0013 §Decision 5) — LANDED.**
+- **Last action:** **`precompact-write-ahead-backstop` slice landed** (commit 347e0d3,
+  code-eval PASS round 0; shell gate green 11/11 tests + 28/28 bats regression). This
+  is loom's **2nd executable hook** — `plugins/loom/hooks/precompact-write-ahead-backstop.sh`
+  (POSIX-sh, registered in `hooks.json` as a `PreCompact` event; mirrors
+  `git-identity-guard.sh` in style and test discipline). Before each compaction it checks
+  whether `.docs/` has advanced since a marker persisted at `.git/loom/precompact-marker`.
+  Safety design: `manual`+no-progress → block (exit 2) + remediation text;
+  `auto`+no-progress → never-wedge (exit 0) + logged observation;
+  advanced/first-run/tooling-failure → fail-open allow. Implements ADR 0013 §Decision 5
+  (rules 1–4 were already wired at the prompt/spec level).
+  **Three non-blocking MINOR follow-ups carried from reviews/eval:**
+  (a) the `manual`-block remediation text offers "re-run /compact if spurious" but
+  re-running blocks identically — the only real escape is committing a `.docs/` change;
+  correct the wording or add a real override mechanism;
+  (b) unsanitized `session_id` in the log line (low severity, but worth hardening);
+  (c) `precompact.log` is unbounded — a rotation or size cap should be added.
+- **Prior action:** **ADR 0011 correction COMPLETE — `/review` → `/code-review`.** After
   the ADR 0010 thread landed, the owner caught that the built-in **`/review` is PR-bound**
   ("Review a pull request"), not local — so ADR 0010's "local diff mode" premise was wrong
   for that command. **Empirically verified** the fix: ran the built-in `/code-review` on a

@@ -32,10 +32,14 @@ after approval and change only via planning. Design decisions are in
   marketplace catalog is `.claude-plugin/marketplace.json`. Plugin components are
   namespaced `loom:<name>` (no bare `/loom`).
 - `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.
-- loom's content is primarily markdown (prompts/templates). Its one piece of
-  executable code is the POSIX-sh identity-guard hook
-  `plugins/loom/hooks/git-identity-guard.sh`. The Rust gate loom *imposes on
-  managed projects* is in `plugins/loom/skills/loom-playbook/gates/rust.md`.
+- loom's content is primarily markdown (prompts/templates). Its two pieces of
+  executable code are both POSIX-sh hooks in `plugins/loom/hooks/`, auto-discovered
+  via `hooks/hooks.json`: `git-identity-guard.sh` (PreToolUse identity guard,
+  ADR 0003) and `precompact-write-ahead-backstop.sh` (PreCompact write-ahead backstop,
+  ADR 0013 §Decision 5 — blocks `manual` compaction when `.docs/` has not advanced
+  since the last compaction marker; never-wedge on `auto`). Both are shell-gated
+  (`shfmt` → `shellcheck` → `bats`). The Rust gate loom *imposes on managed projects*
+  is in `plugins/loom/skills/loom-playbook/gates/rust.md`.
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
   is the single authoritative source for Greenfield / Unaligned / Initialized
   detection. All `/loom:*` commands run this classifier first.
