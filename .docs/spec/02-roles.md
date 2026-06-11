@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Approved
+Status: Plan Review
 
 Five roles. Each is spawned as a **cold agent** on a chosen model **tier**, reads
 only the files (and prompt) it is given, does one job, writes files, **commits**,
@@ -107,7 +107,7 @@ collaborating with the owner.
 - **Reads:** *only* the **commit diff** for the slice, the slice-plan it was meant
   to satisfy, the relevant specs, the gate evidence, and the orchestrator's
   **review-findings artifact** (`evaluations/<name>-review-findings.md`, from
-  `/review` + `/security-review` — ADR 0010). **Never** receives author identity
+  `/code-review` + `/security-review` — ADR 0010, ADR 0011). **Never** receives author identity
   or the developer's reasoning beyond the artifacts.
 - **Writes:** a structured verdict to `evaluations/<name>-eval.md`; sets status;
   commits.

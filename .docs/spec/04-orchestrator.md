@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## What the orchestrator is
 
@@ -48,8 +48,9 @@ Key properties:
 
 When a slice reaches **`Implemented`**, before (or while) dispatching the
 code-evaluator and **before the slice can land**, the orchestrator runs Claude
-Code's built-in **`/review`** and **`/security-review`** on the slice's commit
-**diff** ([ADR 0010](../ADR/0010-orchestrator-run-automated-review-in-code-eval.md)).
+Code's built-in **`/code-review`** and **`/security-review`** on the slice's commit
+**diff** ([ADR 0010](../ADR/0010-orchestrator-run-automated-review-in-code-eval.md),
+[ADR 0011](../ADR/0011-correct-automated-review-command-to-code-review.md)).
 The orchestrator runs them — never the code-evaluator — because only the
 orchestrator may spawn and a sub-agent cannot safely run a command that may spawn
 ([ADR 0001](../ADR/0001-plugin-architecture-and-orchestrator.md)).
@@ -58,6 +59,12 @@ orchestrator may spawn and a sub-agent cannot safely run a command that may spaw
   round-trip, no PR metadata, no working-tree mutation — so the input stays
   identity-neutral and network-silent and the blind contract holds
   ([ADR 0004](../ADR/0004-blind-evaluation-role-separation.md)).
+- **Target the slice's commit range.** At `Implemented` the slice is already
+  committed, so the working tree is empty; the orchestrator targets the slice's
+  **commit range / branch** when running `/code-review` (e.g. `git diff
+  <base>...<slice-HEAD>` or passing the slice branch/range as the command's
+  target), never the empty working tree
+  ([ADR 0011](../ADR/0011-correct-automated-review-command-to-code-review.md) §2).
 - **Findings artifact.** The orchestrator captures the output into a committed,
   author-neutral, identity-scrubbed, per-slice file
   `.docs/evaluations/<slice-name>-review-findings.md` (companion to the slice's
