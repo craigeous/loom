@@ -17,7 +17,17 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [precompact-write-ahead-backstop-plan.md](precompact-write-ahead-backstop-plan.md) — `Plan Review` —
+  ADR 0013 §Decision 5 (rule 5 only; rules 1–4 already wired): loom's second piece of
+  executable code, a **PreCompact hook**
+  (`plugins/loom/hooks/precompact-write-ahead-backstop.sh` + `hooks.json` `PreCompact`
+  entry + `.bats` suite) making the write-ahead invariant observable. Detects "no
+  `.docs/` progress since the last compaction" by comparing the last `.docs/`-touching
+  commit SHA against a marker persisted at `.git/loom/precompact-marker`. Safety
+  design: `manual`+no-progress → **block (exit 2) + remediation**; `auto`+no-progress
+  → **never-wedge (exit 0) + logged observation**; advanced/first-run/tooling-failure
+  → fail-open allow. POSIX-sh, identity-neutral, mirrors `git-identity-guard.sh`;
+  shell-gated (`shfmt` → `shellcheck` → `bats`).
 
 ## Archived plans
 
