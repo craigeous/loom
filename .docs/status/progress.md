@@ -6,8 +6,29 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: ADR 0010 (automated `/review` + `/security-review` in the code-review phase) — COMPLETE (decision + specs + playbook, end to end).**
-- **Last action:** **ADR 0010 playbook thread COMPLETE — 3 slices landed via worktree
+- **Phase:** **M0–M4 complete. Post-M4: automated review in the code-review phase (ADR 0010, command corrected by ADR 0011) — COMPLETE end to end and command-correct.**
+- **Last action:** **ADR 0011 correction COMPLETE — `/review` → `/code-review`.** After
+  the ADR 0010 thread landed, the owner caught that the built-in **`/review` is PR-bound**
+  ("Review a pull request"), not local — so ADR 0010's "local diff mode" premise was wrong
+  for that command. **Empirically verified** the fix: ran the built-in `/code-review` on a
+  local staged diff (throwaway file, 3 planted defects) — it ran with no PR, default mode
+  (no `--comment`/`--fix`, no GitHub round-trip), from the orchestrator session, and flagged
+  all three (SQL injection, off-by-one, div-by-zero). So `/code-review` is the correct
+  local-diff command. Drove the correction through loom (`implement` scope, evaluator-driven):
+  **ADR 0011** Accepted (supersedes ADR 0010 *only* on the command identification + adds the
+  commit-range invocation detail; ADR 0010 otherwise stands) → **specs 04/02 re-approved**
+  with `/code-review` + the commit-range bullet → **playbook conformance slice** landed
+  (63e6d01) swapping `/review` → `/code-review` across **four** files (`SKILL.md`,
+  `orchestration.md`, `code-eval-rubric.md`, `review-findings.md`) + the commit-range detail
+  in `orchestration.md`. **Blind plan-eval caught a real scope miss** (a 4th `/review` in
+  `SKILL.md` the plan first excluded and falsely claimed didn't exist) — FAIL round 1 → fixed
+  → PASS. CLAUDE.md digest bullet corrected to `/code-review` + commit-range + ADR 0011.
+  `rg '/review\b' plugins/loom/` now returns **zero**. **Net:** the automated-review mechanism
+  is now both operational AND command-correct — orchestrator runs `/code-review` +
+  `/security-review` locally on the slice commit range, feeds the blind evaluator.
+  **Key invocation note for the first live run:** target the slice's committed range
+  (`git diff <base>...<slice-HEAD>`), since the working tree is clean at `Implemented`.
+- **Prior action:** **ADR 0010 playbook thread COMPLETE — 3 slices landed via worktree
   parallelism.** The decision + specs (prior action) are now fully implemented in the
   playbook, exercised through loom's own loop in `implement` scope, evaluator-driven (no
   claimed gates). **Slice A** (`review-findings-format`, solo on main, code-eval PASS round 0,

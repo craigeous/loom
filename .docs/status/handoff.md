@@ -32,10 +32,26 @@ source of truth; `roadmap.md` is milestone order.
   writes a committed identity-neutral `.docs/evaluations/<slice>-review-findings.md`, and hands
   it to the **blind code-evaluator** as **advisory input** (it adjudicates + owns the verdict
   via `severity.md`); pure-docs slices skip-with-a-note; not part of the `format → lint → test`
-  gate. **Two open follow-ups (non-blocking):** (a) spec 04 prose `skipped: command unavailable`
-  vs the playbook's hyphenated `skipped: command-unavailable` — a frozen-spec planner cycle to
-  align if desired; (b) ADR 0010 Notes' open questions (empirically confirm built-in spawn
-  behavior; whether to tune `/review`'s confidence threshold for loom).
+  gate.
+- **Post-M4: ADR 0011 — command corrected `/review` → `/code-review` — COMPLETE.** The owner
+  caught that ADR 0010 named the wrong command: the built-in **`/review` is PR-bound** ("Review
+  a pull request"), so its "local diff mode" premise was false. **Empirically verified** the fix
+  — ran `/code-review` on a local staged diff (throwaway, 3 planted bugs); it ran with no PR,
+  no GitHub round-trip, from the orchestrator session, and caught all three. Drove the correction
+  (`implement` scope, evaluator-driven): **ADR 0011** Accepted (supersedes 0010 *only* on the
+  command + adds the commit-range invocation detail; rest of 0010 stands) → **specs 04/02
+  re-approved** → **playbook conformance slice** (63e6d01) swapped `/review` → `/code-review`
+  across 4 files (`SKILL.md`, `orchestration.md`, `code-eval-rubric.md`, `review-findings.md`)
+  + commit-range detail; CLAUDE.md digest corrected. Blind plan-eval caught a real 4th-file scope
+  miss (FAIL r1 → fixed → PASS). `rg '/review\b' plugins/loom/` = zero. **Net mechanism (current):**
+  orchestrator runs **`/code-review` + `/security-review`** locally on the slice's **commit range**
+  (`git diff <base>...<slice-HEAD>`) at `Implemented`, feeds identity-neutral findings to the blind
+  evaluator. **Remaining non-blocking follow-ups:** (a) spec 04 prose `skipped: command unavailable`
+  (space) vs the playbook's hyphenated `skipped: command-unavailable` — frozen-spec planner cycle to
+  align if desired; (b) ADR 0010 Notes' open questions (empirically confirm built-in spawn behavior;
+  whether to tune `/code-review`'s confidence threshold for loom); (c) **the step still hasn't fired
+  on a real code-bearing slice** — the next one will be its first live run (target the commit range,
+  not the empty working tree).
 - **Post-M4: ADR 0009 (Unaligned-migrate) thread — COMPLETE.** All 3 slices landed
   (ballboy field report → ADR 0009 Accepted → spec 06 amended + Approved → slice 1
   init-detection spine signal c96fd90 → slice 2 migration-recipe a34d726/da21d2c/fdbbb60
@@ -189,16 +205,19 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-1. **DONE — ADR 0010 playbook slices (`implement` scope).** All three landed via worktree
-   parallelism (Slice A `review-findings.md` 13d62c2; Slice B `orchestration.md` beaa531 ∥
-   Slice C `code-eval-rubric.md` + `code-evaluator.md` 5941bea), CLAUDE.md digest updated.
-   The mechanism is live end to end. Remaining non-blocking follow-ups: (a) align spec 04's
-   `skipped: command unavailable` prose with the playbook's hyphenated token (frozen-spec
-   planner cycle); (b) the two ADR 0010 Notes open questions (empirically confirm built-in
-   spawn behavior; tune `/review` confidence threshold). **Worth doing on the very next
-   code-bearing slice:** exercise the new review step live (the orchestrator actually runs
-   `/review` + `/security-review`) — this session's slices were all pure-docs, so the step
-   has not yet fired in anger.
+1. **DONE — automated review in the code-review phase (ADR 0010 + ADR 0011 correction).** The
+   ADR 0010 playbook slices landed via worktree parallelism (Slice A `review-findings.md`
+   13d62c2; Slice B `orchestration.md` beaa531 ∥ Slice C `code-eval-rubric.md` +
+   `code-evaluator.md` 5941bea); then **ADR 0011** corrected the command `/review` → `/code-review`
+   (PR-bound → local-diff, empirically verified) across ADR + specs 04/02 + a 4-file playbook
+   conformance slice (63e6d01). CLAUDE.md digest current. Remaining non-blocking follow-ups:
+   (a) align spec 04's `skipped: command unavailable` prose with the playbook's hyphenated
+   token (frozen-spec planner cycle); (b) ADR 0010 Notes open questions (empirically confirm
+   built-in spawn behavior; tune `/code-review` confidence threshold). **Worth doing on the very
+   next code-bearing slice:** exercise the new step live (the orchestrator actually runs
+   `/code-review` + `/security-review` on the slice's **commit range** `git diff
+   <base>...<slice-HEAD>`) — every slice so far has been pure-docs, so it has only taken the
+   docs-only skip path and never fired in anger.
 2. **M4 — Dogfooding & hardening:** remaining threads:
    - **CLAUDE.md auto-propagation:** best practices propagated into root/project
      `CLAUDE.md` automatically.

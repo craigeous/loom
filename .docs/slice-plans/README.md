@@ -17,12 +17,18 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [adr-0011-playbook-conformance-plan.md](adr-0011-playbook-conformance-plan.md) — `Plan Review` —
-  Playbook conformance for ADR 0011: swap `/review` → `/code-review` (leave `/security-review`)
-  across `orchestration.md`, `code-eval-rubric.md`, `review-findings.md`, and add the
-  commit-range invocation detail to `orchestration.md`. Solo on main; pure-markdown.
+(none)
 
 ## Archived plans
+
+- [archive/adr-0011-playbook-conformance-plan.md](archive/adr-0011-playbook-conformance-plan.md) — `Archived` —
+  Playbook conformance for ADR 0011 (`/review` → `/code-review`): swapped the PR-bound
+  `/review` for the local-diff `/code-review` (left `/security-review`) across **four**
+  files — `SKILL.md`, `references/orchestration.md`, `references/code-eval-rubric.md`,
+  `references/review-findings.md` — and added the commit-range invocation detail to
+  `orchestration.md` (target `git diff <base>...<slice-HEAD>`, not the empty working tree).
+  Pure-markdown. **Plan-eval caught a real scope miss** (a 4th `/review` in `SKILL.md` the
+  plan first excluded) — FAIL round 1 → fixed → PASS; code-eval PASS round 1. Landed 63e6d01.
 
 - [archive/code-eval-adjudication-plan.md](archive/code-eval-adjudication-plan.md) — `Archived` —
   Slice C of 3 (ADR 0010 follow-on): amended `references/code-eval-rubric.md` with a
