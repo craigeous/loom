@@ -63,6 +63,27 @@ Authority: [ADR 0004](../../../../../.docs/ADR/0004-blind-evaluation-role-separa
 
 ---
 
+## Findings come from real command output — a hard invariant
+
+**Every finding in this artifact is a transcription of the actual `/code-review`
+and `/security-review` output.** The orchestrator produces the artifact by
+*invoking those commands as real tool calls* (Skill tool / slash command) and
+copying what they emit — it does **not** read the diff and write findings of its
+own. An artifact populated from the orchestrator's own code reading instead of the
+command's output is invalid, regardless of how plausible its contents look: it
+defeats the whole point of an independent review and silently misleads the blind
+evaluator downstream.
+
+The only honest outcomes are therefore: the command ran and you transcribed its
+result (`ran-with-findings` / `ran-clean`), or the command did not run
+(`skipped: docs-only` / `skipped: command-unavailable`). There is no legitimate
+state in which findings exist but no command was invoked. See
+[`orchestration.md`](orchestration.md) § "Automated review before a slice lands"
+(the *Actually invoke the command — never simulate it* rule) for the run-side
+obligation.
+
+---
+
 ## Required status field — per command
 
 The artifact records an **explicit, machine- and human-distinguishable status for

@@ -38,6 +38,14 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
       evaluators). Independent/disjoint slices may run in parallel (worktree-per-slice,
       owner opts in) — see `parallelism.md` for the create→work→land→cleanup flow
       and the slicer-independence rule.
+   d2. **When a slice reaches `Implemented`, before dispatching the code-evaluator,
+      run the automated review** (orchestration.md → "Automated review before a slice
+      lands"). This means a **real tool call**: actually invoke the `code-review` and
+      `security-review` skills/commands and transcribe their output into the
+      `-review-findings.md` artifact — **never** write the findings from your own
+      reading of the diff (that is a hard violation). Skip only for a pure-docs diff
+      (`skipped: docs-only`) or a genuinely unavailable command
+      (`skipped: command-unavailable`).
    e. On return, verify the author-neutral commit and the new status. On a `Landed`
       code-eval PASS, spawn the developer's **finalize pass** (update `status/`,
       archive the plan).

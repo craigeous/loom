@@ -86,7 +86,13 @@ after approval and change only via planning. Design decisions are in
   since the slice is already committed, target its **commit range / branch**
   (`git diff <base>...<slice-HEAD>`), not the empty working tree. It writes that
   artifact and hands it to the **blind code-evaluator** as **advisory** input (the
-  evaluator adjudicates and owns the verdict via `severity.md`). Runs on code-bearing
+  evaluator adjudicates and owns the verdict via `severity.md`). **"Run" means a real
+  tool call** — the orchestrator must actually invoke the `code-review` /
+  `security-review` skills (Skill tool / slash command) and transcribe their emitted
+  output; authoring findings from its own reading of the diff is a hard violation, and
+  the only honest non-run outcomes are the two `skipped:` tokens (the
+  *Actually invoke — never simulate* rule in `orchestration.md` + the faithfulness
+  invariant in `review-findings.md`). Runs on code-bearing
   diffs only (pure-docs slices skip-with-a-note); a **separate review dimension, NOT
   part of the** `format → lint → test` **gate**. Wired across
   `references/orchestration.md` (run step), `references/code-eval-rubric.md`

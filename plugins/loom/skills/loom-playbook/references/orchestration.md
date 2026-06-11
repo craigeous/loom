@@ -72,6 +72,20 @@ review before a slice lands" (the run step),
   never the code-evaluator
   ([ADR 0001](../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md)).
   This is consistent with the "You spawn; roles never spawn" rule above.
+- **Actually invoke the command — never simulate it.** "Run `/code-review`" means
+  issue a **real tool call** that executes the actual command: invoke the
+  `code-review` and `security-review` skills via the **Skill tool** (equivalently,
+  the `/code-review` and `/security-review` slash commands), and transcribe **their
+  emitted output** into the findings artifact. It is a **hard violation** to author
+  the findings yourself by reading the diff and writing what you *think* the command
+  would say — the entire value of this step is the independent reviewer's analysis,
+  which you must not impersonate. Concretely: before you write the findings
+  artifact, your transcript MUST contain a Skill-tool (or slash-command) invocation
+  of `code-review` and one of `security-review`; if it does not, you have not run
+  the step. If you ever find yourself analysing the code to produce findings, stop —
+  that is the failure mode. If the command genuinely cannot be invoked, record
+  `skipped: command-unavailable` (below) — never substitute your own review and
+  never claim `ran-clean`.
 - **Local diff mode only.** Run the commands on the slice's commit diff in local
   diff mode only — never PR / `--comment` / `--fix` mode (no GitHub round-trip,
   no PR metadata, no posting, no working-tree mutation), keeping the input
