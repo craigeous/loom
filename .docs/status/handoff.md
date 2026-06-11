@@ -70,9 +70,14 @@ source of truth; `roadmap.md` is milestone order.
   evaluator. **Remaining non-blocking follow-ups:** (a) spec 04 prose `skipped: command unavailable`
   (space) vs the playbook's hyphenated `skipped: command-unavailable` — frozen-spec planner cycle to
   align if desired; (b) ADR 0010 Notes' open questions (empirically confirm built-in spawn behavior;
-  whether to tune `/code-review`'s confidence threshold for loom); (c) **the step still hasn't fired
-  on a real code-bearing slice** — the next one will be its first live run (target the commit range,
-  not the empty working tree).
+  whether to tune `/code-review`'s confidence threshold for loom); (c) **FIRED LIVE for the first
+  time** on the `precompact-write-ahead-backstop` code slice (this session): `/code-review`
+  ran-with-findings on the committed diff; `/security-review` ran-clean. Operational finding:
+  `/security-review` resolves its base from `origin/HEAD` (reviews branch changes vs the default
+  branch — **no PR needed**), and a clone with `origin/HEAD` unset errors resolving it because loom
+  commits directly on `main`. Fix is a one-time `git remote set-head origin -a` — now documented in
+  `orchestration.md` ("Ensure `origin/HEAD` is set"). With the slice unpushed, `origin/HEAD..HEAD`
+  is exactly the slice.
 - **Post-M4: ADR 0009 (Unaligned-migrate) thread — COMPLETE.** All 3 slices landed
   (ballboy field report → ADR 0009 Accepted → spec 06 amended + Approved → slice 1
   init-detection spine signal c96fd90 → slice 2 migration-recipe a34d726/da21d2c/fdbbb60

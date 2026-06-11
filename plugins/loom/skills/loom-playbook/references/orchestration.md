@@ -172,6 +172,15 @@ review before a slice lands" (the run step),
   argument — never the empty working tree
   ([ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md)
   §2).
+- **Ensure `origin/HEAD` is set (for `/security-review`).** `/security-review`
+  auto-resolves its base from `origin/HEAD` (it reviews the branch's changes vs the
+  default branch — no PR needed). loom commits **directly on `main`**, and a clone
+  may have `origin/HEAD` unset, so the command can error resolving its base. Run
+  `git remote set-head origin -a` once (or set it locally:
+  `git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`) — then, with
+  the slice's commits **unpushed**, `origin/HEAD..HEAD` is exactly the slice and
+  `/security-review` reviews it. This is a one-time environment fix, not per-slice
+  plumbing.
 - **Capture and hand off.** Capture output into the committed, identity-neutral,
   per-slice findings artifact per [`review-findings.md`](review-findings.md) — see
   that file for path, format, and the four status tokens. Commit the artifact
