@@ -1,6 +1,6 @@
 # 0011 — Correct the Automated-Review Command to `/code-review`
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-06-10
 
 ## Context
