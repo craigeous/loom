@@ -16,6 +16,24 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: Thin orchestrator + context management (ADR 0012 + ADR 0013) — DECISIONS
+  COMPLETE; one follow-on code slice pending.** Owner-directed: make `sonnet` the default
+  orchestrator and keep its context flat so it drives long sessions without filling up.
+  **ADR 0012** Accepted (orchestrator → `sonnet` tier via `model:` on `/loom:run`; thin-
+  orchestrator invariant: pass references-not-bodies + bounded role-return contract + route
+  on the signal; compaction = lossless **cold self-restart at ~60%** of Sonnet 4.6's
+  context-awareness budget, not a lossy summary; the `/code-review` step is write-and-forget).
+  **ADR 0013** Accepted (starvation-loop guards on the cold-restart: **write-ahead checkpoint**
+  — commit next intended action to `handoff.md` *before* a big/in-window op; **restart-before-
+  big-op** when near budget; **forward-progress guard** — a restart re-deriving the same action
+  with no new commit → escalate, never loop; **lossless beats lossy** — 60% self-restart stays
+  below the harness's ~80% auto-compact backstop). Both wired into specs 02/04 + playbook
+  (`orchestration.md`, `run.md`, all 5 agents, `SKILL.md`) + root `CLAUDE.md`. Done directly
+  (owner-directed), not via the full role loop. **PENDING follow-on slice (ADR 0013 §Decision 5):**
+  a **PreCompact mechanical-backstop hook** that makes write-ahead observable (block/warn when
+  `.docs/` hasn't advanced since the last compaction) — loom's 2nd executable hook; the
+  block-vs-warn / `manual`-vs-`auto` safety question (a blocked auto-compact on a full window
+  can wedge the session) is deferred to the slice-plan; shell-gated (`shfmt`/`shellcheck`/`bats`).
 - **Post-M4: ADR 0010 (automated review in the code-review phase) — COMPLETE end to end
   (decision + specs + playbook).** Owner-directed feature: insert Claude Code's built-in
   `/review` + `/security-review` into loom's code-review phase. **Decision/specs** (earlier):
@@ -205,6 +223,14 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
+1. **NEXT (owner-directed) — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).**
+   Implement the PreCompact hook that makes the write-ahead invariant observable (signal/block
+   when `.docs/` has not advanced — no new commit — since the last compaction marker). Run it
+   through the normal loop: plan (settle the block-vs-warn + `manual`-vs-`auto` safety behavior
+   so a full-window auto-compact can't be wedged; choose the hook event; pick where the
+   last-checkpoint marker persists, e.g. under `.git/`) → plan-eval → develop → code-eval.
+   Identity-neutral, POSIX-sh like `git-identity-guard.sh`; **shell gate** (`shfmt` →
+   `shellcheck` → `bats`). This is loom's 2nd executable hook.
 1. **DONE — automated review in the code-review phase (ADR 0010 + ADR 0011 correction).** The
    ADR 0010 playbook slices landed via worktree parallelism (Slice A `review-findings.md`
    13d62c2; Slice B `orchestration.md` beaa531 ∥ Slice C `code-eval-rubric.md` +

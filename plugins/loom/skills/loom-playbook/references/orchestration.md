@@ -77,7 +77,7 @@ execute in your window because sub-agents can't spawn. Treat it as
 **write-and-forget** — capture → write the `-review-findings.md` artifact → drop it;
 do not reason over or branch on the findings.
 
-### Restart safely — never starve the loop (ADR 0012)
+### Restart safely — never starve the loop (ADR 0013)
 
 A cold restart is only safe if durable state was written **before** the window
 cleared. If you do something big and blow your budget (or hit the harness's hard

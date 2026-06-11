@@ -24,6 +24,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0010 — Orchestrator-Run Automated Review Feeds the Blind Code-Evaluator](0010-orchestrator-run-automated-review-in-code-eval.md) — adds automated review to the code-review phase; builds on ADR 0001/0004/0002/0003/0008 — **command identification corrected by 0011** (`/review` → `/code-review`)
 - [0011 — Correct the Automated-Review Command to `/code-review`](0011-correct-automated-review-command-to-code-review.md) — supersedes ADR 0010 **only** on the command (`/review` is PR-bound → use the local-diff `/code-review`) and adds the commit-range invocation detail; rest of 0010 stands
 - [0012 — Thin Orchestrator: `sonnet` Default + Bounded Role-Return Contract](0012-thin-orchestrator-sonnet-default-bounded-return.md) — **extends** ADR 0002 (adds the orchestrator tier row) and builds on ADR 0001/0003/0004/0010/0011; keeps the orchestrator's context flat via pass-references-not-bodies + a bounded return contract
+- [0013 — Starvation-Loop Guards for the Orchestrator Cold-Restart](0013-starvation-loop-guards-cold-restart.md) — builds on ADR 0012/0003/0010/0011; write-ahead checkpoint + restart-before-big-op + forward-progress escalation + lossless-beats-lossy, plus a follow-on PreCompact mechanical-backstop slice
 
 ## In Review
 
