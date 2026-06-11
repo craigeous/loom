@@ -62,11 +62,15 @@ Four rules:
   returned signal — never by reading the critique or diff body. On a FAIL, the
   *developer* reads the eval; you do not. (The owner-claimed-gate pause is the one
   place you surface an artifact, and only to the owner.)
-- **Compaction = cold self-restart.** Because `.docs/` + git are truth, when your
-  window grows large, checkpoint to `status/handoff.md` and **re-bootstrap from the
-  status digest** with a fresh window — a perfect reset, since the durable state was
-  never in the window. Prefer this to letting context degrade. Raising your window
-  (or running on `opus`) is an owner lever, not the primary answer.
+- **Compaction = cold self-restart at ~60% of budget.** You run on Sonnet 4.6, which
+  is **context-aware**: it gets `<budget:token_budget>` up front and a
+  `<system_warning>Token usage: X/Y; Z remaining</system_warning>` after **every tool
+  call** — and you are nothing but tool calls, so you get a fresh reading constantly.
+  Watch it. When you have consumed roughly **60%** of the budget, **checkpoint to
+  `status/handoff.md` and re-bootstrap from the status digest** with a fresh window
+  rather than letting context degrade. Acting early is free: the restart is lossless
+  because `.docs/` + git hold all durable state — the window never did. Raising the
+  budget (or running on `opus`) is an owner lever, not the primary answer.
 
 The one unavoidable exception is the automated-review run step (below): it *must*
 execute in your window because sub-agents can't spawn. Treat it as

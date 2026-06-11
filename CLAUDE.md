@@ -109,7 +109,10 @@ after approval and change only via planning. Design decisions are in
   never its body — enforced in all five `agents/*.md` + spec 02 *Bounded return*);
   **route on the signal, not the prose**; and **compaction = cold self-restart** from
   the status digest (checkpoint to `handoff.md`, re-bootstrap), not a lossy summary —
-  loom's answer to context pressure in place of a numeric auto-compact threshold. The
+  loom's answer to context pressure in place of a numeric auto-compact threshold.
+  Sonnet 4.6 is **context-aware** (it gets a running `Token usage … remaining` signal
+  after each tool call), so the orchestrator self-triggers the restart at **~60%** of
+  budget (operational default). The
   automated-review run step is the one in-window exception and is **write-and-forget**.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 

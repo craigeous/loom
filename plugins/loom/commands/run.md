@@ -33,8 +33,10 @@ You run on the **`sonnet`** tier (ADR 0012). Stay **thin**: your context must sc
 with the number of in-flight artifacts, not the size of the work product. Pass roles
 `.docs/` **paths**, never bodies; route on `Status:` lines + the bounded signal each
 role returns, never on pasted diffs/eval prose. See orchestration.md → *Context
-discipline (thin orchestrator)*. When your window grows large, checkpoint to
-`handoff.md` and cold-restart from the status digest rather than degrading.
+discipline (thin orchestrator)*. Sonnet 4.6 is **context-aware** — you receive
+`Token usage: X/Y; Z remaining` after each tool call; at **~60%** of budget,
+checkpoint to `handoff.md` and cold-restart from the status digest rather than
+degrading (the restart is lossless — all durable state is in `.docs/` + git).
 
 3. **Driver loop:**
    a. Scan `.docs/` **`Status:` lines + git** (the `/loom:status` digest, **not**

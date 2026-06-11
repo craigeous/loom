@@ -68,13 +68,14 @@ regardless of the backing tier. Four rules hold the line:
   from the pointer and the verdict. (The owner-claimed-gate pause below is the one
   place an artifact is surfaced, and only to the owner.)
 - **Compaction is a cold self-restart, not a lossy summary.** Because `.docs/` + git
-  are truth, when the window grows large the orchestrator checkpoints to
-  `status/handoff.md` and **re-bootstraps from the status digest**, continuing with
-  a fresh window — a perfect reset, since the durable state was never in the window.
-  This is loom's answer to context pressure in place of any numeric auto-compact
-  threshold; `sonnet`'s context-awareness lets it trigger before degrading. Raising
-  the orchestrator's window (or running it on `opus`) is an owner lever, not the
-  primary answer.
+  are truth, the orchestrator checkpoints to `status/handoff.md` and **re-bootstraps
+  from the status digest**, continuing with a fresh window — a perfect reset, since
+  the durable state was never in the window. Sonnet 4.6 is **context-aware** (it
+  receives a running `Token usage … remaining` signal after each tool call), so the
+  orchestrator self-triggers the restart at a budget threshold — operational default
+  **~60%**, set in the playbook — rather than waiting for a numeric auto-compact
+  threshold to fire. Raising the orchestrator's budget (or running it on `opus`) is
+  an owner lever, not the primary answer.
 
 ## Automated review before a slice lands
 
