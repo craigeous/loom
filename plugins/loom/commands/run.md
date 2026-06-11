@@ -1,6 +1,7 @@
 ---
 description: Run the loom dev loop — detect state, take scope/gates, drive the roles
 argument-hint: [scope]   e.g. /loom:run slice  ·  /loom:run plan
+model: sonnet
 ---
 
 # /loom:run — orchestrator
@@ -28,16 +29,27 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
    (derive menu from `.docs/` + git state, then scope/gates + driver loop).
 2. **Confirm scope and claimed gates** with the owner (orchestration.md → Scope &
    claimed gates). Use `$ARGUMENTS` as the scope if given.
+You run on the **`sonnet`** tier (ADR 0012). Stay **thin**: your context must scale
+with the number of in-flight artifacts, not the size of the work product. Pass roles
+`.docs/` **paths**, never bodies; route on `Status:` lines + the bounded signal each
+role returns, never on pasted diffs/eval prose. See orchestration.md → *Context
+discipline (thin orchestrator)*. When your window grows large, checkpoint to
+`handoff.md` and cold-restart from the status digest rather than degrading.
+
 3. **Driver loop:**
-   a. Scan `.docs/` statuses + git → current state.
+   a. Scan `.docs/` **`Status:` lines + git** (the `/loom:status` digest, **not**
+      artifact bodies) → current state.
    b. Pick the next action from the dispatch table (status-machine.md). If none, or
       the next action is outside scope → **break**.
    c. If the transition is an owner-claimed gate → pause, show the artifact + the
       evaluator's verdict, await the owner's decision.
-   d. Spawn the dispatched role agent (right tier; focused prompt; blind inputs for
-      evaluators). Independent/disjoint slices may run in parallel (worktree-per-slice,
-      owner opts in) — see `parallelism.md` for the create→work→land→cleanup flow
-      and the slicer-independence rule.
+   d. Spawn the dispatched role agent (right tier; focused prompt that hands
+      `.docs/` **paths, not bodies**; blind inputs for evaluators). Tell the role to
+      return only the **bounded contract** — `{Status:, path(s), ≤~150-token summary,
+      the one branch signal}`, no echoed body (orchestration.md → *Context
+      discipline*). Independent/disjoint slices may run in parallel
+      (worktree-per-slice, owner opts in) — see `parallelism.md` for the
+      create→work→land→cleanup flow and the slicer-independence rule.
    d2. **When a slice reaches `Implemented`, before dispatching the code-evaluator,
       run the automated review** (orchestration.md → "Automated review before a slice
       lands"). This means a **real tool call**: actually invoke the `code-review` and
@@ -45,7 +57,10 @@ Requested scope: `$ARGUMENTS` (if empty, ask).
       `-review-findings.md` artifact — **never** write the findings from your own
       reading of the diff (that is a hard violation). Skip only for a pure-docs diff
       (`skipped: docs-only`) or a genuinely unavailable command
-      (`skipped: command-unavailable`).
+      (`skipped: command-unavailable`). This is the one step that runs review output
+      through your window; **write-and-forget** — capture → write the artifact →
+      drop it; do not reason over or branch on the findings (the blind code-evaluator
+      adjudicates them from the file — ADR 0012).
    e. On return, verify the author-neutral commit and the new status. On a `Landed`
       code-eval PASS, spawn the developer's **finalize pass** (update `status/`,
       archive the plan).

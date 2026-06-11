@@ -14,7 +14,20 @@ author for approval. Because agents are cold and anonymous, this separation — 
 willpower — is what prevents rubber-stamping (ADR 0004).
 
 **Model tiers** are pinnable only as `haiku` / `sonnet` / `opus` / `inherit`;
-exact versions track the user's environment (ADR 0002).
+exact versions track the user's environment (ADR 0002). The **orchestrator**
+defaults to the `sonnet` tier (ADR 0012); `opus` is reserved for the planner and
+both evaluators.
+
+**Bounded return to the orchestrator (ADR 0012).** A role's real output is the
+files it writes and commits; its **final message to the orchestrator** is a small,
+fixed schema only — the new `Status:`, the artifact **path(s)** it wrote, a
+**≤~150-token summary**, and the **one branch-relevant signal** the orchestrator
+routes on (verdict / gate result / blocker / clarification question). A role
+**never echoes its body back up** — no pasted diffs, eval prose, research bodies,
+or file dumps. The body stays in `.docs/` for the next cold role to read directly.
+This is what keeps the orchestrator's context flat across the loop (spec
+[04](04-orchestrator.md) — *thin-orchestrator invariant*); a role that dumps its
+output is a defect, not a style nit.
 
 ---
 

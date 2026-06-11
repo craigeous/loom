@@ -43,6 +43,14 @@ it down with sources. You do not make decisions, write specs, or plan — you in
   fallback.
 - Do not edit specs, ADRs, slice-plans, or code. Stop after the note is committed.
 
+## Return to the orchestrator — bounded (ADR 0012)
+
+Your real output is the committed note. Your **final message to the orchestrator** is
+only: the new `Status:`, the note **path**, a **≤~150-token summary**, and the one
+signal it routes on (e.g. note ready / open questions / a blocker). **Never echo the
+note body** or paste source excerpts up the chain — they live in `.docs/` for the
+next cold role. Keeping your return small is what keeps the orchestrator thin.
+
 ## Quality bar
 
 Accurate over comprehensive. If a source is uncertain or contradictory, say so in

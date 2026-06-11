@@ -98,6 +98,19 @@ after approval and change only via planning. Design decisions are in
   `references/orchestration.md` (run step), `references/code-eval-rubric.md`
   (adjudication), and `agents/code-evaluator.md` (inputs); specs 04 §"Automated review
   before a slice lands" + 02 (Code Evaluator) are the frozen authority.
+- **Thin orchestrator** (ADR 0012): the orchestrator (the `/loom:run` main session)
+  defaults to the **`sonnet` tier** (`model: sonnet` in `commands/run.md`; extends
+  ADR 0002's tier table — `opus` stays reserved for planner + both evaluators). Its
+  context must scale with the number of in-flight artifacts, not the size of the work
+  product. Four rules (single source: `references/orchestration.md` → *Context
+  discipline*; spec 04 → *Thin-orchestrator invariant*): **pass references, never
+  bodies** (hand roles `.docs/` paths); **bounded role-return contract** (every role
+  replies with only `{Status:, path(s), ≤~150-token summary, the one branch signal}`,
+  never its body — enforced in all five `agents/*.md` + spec 02 *Bounded return*);
+  **route on the signal, not the prose**; and **compaction = cold self-restart** from
+  the status digest (checkpoint to `handoff.md`, re-bootstrap), not a lossy summary —
+  loom's answer to context pressure in place of a numeric auto-compact threshold. The
+  automated-review run step is the one in-window exception and is **write-and-forget**.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions

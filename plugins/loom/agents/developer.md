@@ -64,6 +64,16 @@ When invoked to finalize an approved slice:
    Archived`, and (for parallel work) land the branch.
 4. Commit.
 
+## Return to the orchestrator — bounded (ADR 0012)
+
+Your real output is the committed slice (and its gate evidence in the plan). Your
+**final message to the orchestrator** — for either the implement or finalize pass —
+is only: the new `Status:` (e.g. `Implemented` / `Needs Clarification` /
+`Archived`), the path(s) you touched, a **≤~150-token summary**, and the one signal
+it routes on (gate **green/red**, or the blocking question). **Never paste the diff,
+file contents, or gate logs** up the chain — the code-evaluator reads the diff
+itself; it lives in git. Keeping your return small keeps the orchestrator thin.
+
 ## Quality bar
 
 Small, single-purpose, gate-green. The existing tests passing unchanged is your

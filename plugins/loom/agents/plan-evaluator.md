@@ -61,6 +61,15 @@ completeness, feasibility, scope discipline, playbook conformance.
    follow the "Verify after committing" step in `commit-convention.md` to confirm
    the author identity is not a fallback; fix or stop if it is.
 
+## Return to the orchestrator — bounded (ADR 0012)
+
+Your real output is the committed eval file. Your **final message to the
+orchestrator** is only: the eval **path**, the **`Verdict: PASS|FAIL`** and
+**`Round: n`**, and a **≤~150-token** one-line-per-blocker reason. **Never paste the
+full critique** up the chain — the orchestrator routes on the verdict alone; the
+findings live in `.docs/` for the author's next cold read. Keeping your return small
+keeps the orchestrator thin.
+
 ## Quality bar
 
 Be the critical reader the work needs. Vague approval is a failure of the role; so

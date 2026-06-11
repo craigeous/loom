@@ -9,8 +9,12 @@ running the command — not one of the roles. Read this plus
 - **You spawn; roles never spawn.** Sub-agents can't spawn sub-agents, so every
   handoff is mediated by you: a role finishes + commits + sets a status; you read
   the new status and spawn the next role.
-- **Files + git are truth.** Re-scan `.docs/` and `git status`/`git log` after
-  every agent. Never rely on in-memory beliefs across a handoff.
+- **Files + git are truth.** Re-scan `.docs/` `Status:` lines + `git
+  status`/`git log` after every agent — the `/loom:status` digest, **not artifact
+  bodies**. Never rely on in-memory beliefs across a handoff.
+- **Stay thin (ADR 0012).** You default to the `sonnet` tier. Your context must
+  scale with the number of in-flight artifacts, not the size of the work product.
+  See *Context discipline* below — it is not optional.
 - **Spawn the right tier** via the Task tool (`subagent_type`):
   `loom:researcher` (haiku), `loom:planner` (opus), `loom:plan-evaluator` (opus),
   `loom:developer` (sonnet), `loom:code-evaluator` (opus). Give each a focused
@@ -36,6 +40,38 @@ running the command — not one of the roles. Read this plus
   independent (disjoint file sets — see `parallelism.md`).
 - **Ambiguity → ask.** If a role can't proceed without the owner, pause and ask a
   clear question rather than guessing.
+
+## Context discipline (thin orchestrator — ADR 0012)
+
+You run on the `sonnet` tier; a correctly-thin orchestrator stays roughly flat in
+context across loop iterations regardless of tier, because the heavy material lives
+in sub-agents and in `.docs/`. If your context grows with the *size of the work*
+rather than the *number of in-flight artifacts*, that is the bug — not the model.
+Four rules:
+
+- **Pass references, never bodies.** Hand each role `.docs/` **paths**; the cold
+  role reads the artifact in its own isolated window. Never inline a plan, diff,
+  research note, or eval **body** into your own context. This is the single biggest
+  lever.
+- **Demand the bounded return contract.** Instruct every spawned role to reply with
+  only `{Status:, artifact path(s), a ≤~150-token summary, the one branch-relevant
+  signal (verdict / gate result / blocker / clarification)}` — and to **not echo its
+  body** (no pasted diffs, eval prose, research bodies, file dumps). The body is in
+  `.docs/` for the next cold role; you route from the pointer + the signal.
+- **Route on the signal, not the prose.** Branch off the `Status:` line + the
+  returned signal — never by reading the critique or diff body. On a FAIL, the
+  *developer* reads the eval; you do not. (The owner-claimed-gate pause is the one
+  place you surface an artifact, and only to the owner.)
+- **Compaction = cold self-restart.** Because `.docs/` + git are truth, when your
+  window grows large, checkpoint to `status/handoff.md` and **re-bootstrap from the
+  status digest** with a fresh window — a perfect reset, since the durable state was
+  never in the window. Prefer this to letting context degrade. Raising your window
+  (or running on `opus`) is an owner lever, not the primary answer.
+
+The one unavoidable exception is the automated-review run step (below): it *must*
+execute in your window because sub-agents can't spawn. Treat it as
+**write-and-forget** — capture → write the `-review-findings.md` artifact → drop it;
+do not reason over or branch on the findings.
 
 ## Init-mode detection (run at the start of `/loom:run` and `/loom:init`)
 
@@ -102,7 +138,9 @@ review before a slice lands" (the run step),
   that file for path, format, and the four status tokens. Commit the artifact
   author-neutral per [`commit-convention.md`](commit-convention.md) and hand it to
   the blind code-evaluator as an **additional input** alongside the commit diff,
-  slice-plan, specs, and gate evidence.
+  slice-plan, specs, and gate evidence. **Write-and-forget** (ADR 0012): once the
+  artifact is written, drop the review output — do not reason over or branch on the
+  findings; the blind code-evaluator adjudicates them from the file.
 - **Applicability.** Run the review only when the slice's diff touches at least
   one code (non-docs) file. A pure-docs slice skips with a note, recording the
   `skipped: docs-only` status in the artifact — never "ran clean" (ADR 0010 §5).

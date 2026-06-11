@@ -81,10 +81,11 @@ stack, the full learn-a-gate path is specified in `references/gate-learning.md`
 (inspect tooling → propose → owner-confirm → run-green-once → record
 `gates/<stack>.md`). A gate stays UNVERIFIED until it has run green once.
 
-## Model tiers (ADR 0002)
+## Model tiers (ADR 0002, 0012)
 
 researcher `haiku` · developer `sonnet` · planner + plan-evaluator + code-evaluator
-`opus`. Only tiers are pinnable; exact versions track the environment.
+`opus` · **orchestrator `sonnet`** (ADR 0012). Only tiers are pinnable; exact
+versions track the environment.
 
 ## Roles (ADR 0001, 0004)
 
@@ -92,3 +93,14 @@ The orchestrator (the main `/loom:run` session) spawns five cold role agents; th
 hand off through `.docs/` files and a commit per handoff. Evaluators review blind; no
 role approves its own work. Plugin commands are namespaced `/loom:<name>`; agents are
 `loom:<role>`.
+
+## Thin orchestrator (ADR 0012)
+
+The orchestrator runs on `sonnet` and stays thin: its context scales with the number
+of in-flight artifacts, not the size of the work product. It passes roles `.docs/`
+**paths, never bodies**; every role returns only a **bounded contract** (`Status:` +
+path(s) + ≤~150-token summary + the one branch signal), never its body; the
+orchestrator routes on the signal, not the prose; and it answers context pressure
+with a **cold self-restart** from the status digest, not a lossy summary. See
+[`references/orchestration.md`](references/orchestration.md) → *Context discipline*
+and spec 04 → *Thin-orchestrator invariant*.

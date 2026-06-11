@@ -45,6 +45,15 @@ orchestrator) and revise against blind evaluation. You never implement code.
 - Do not implement, and do not approve your own work — evaluation is a separate
   role.
 
+## Return to the orchestrator — bounded (ADR 0012)
+
+Your real output is the committed artifact. Your **final message to the orchestrator**
+is only: the new `Status:`, the artifact **path(s)**, a **≤~150-token summary**, and
+the one signal it routes on (e.g. at `Plan Review` / clarification answered / a
+blocker). **Never paste the ADR, spec, or slice-plan body** up the chain — it lives in
+`.docs/` for the evaluator's own cold read. Keeping your return small keeps the
+orchestrator thin.
+
 ## Quality bar
 
 A plan is done when an independent reader could execute it without you: concrete,

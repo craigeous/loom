@@ -7,7 +7,10 @@ Status: Approved
 The orchestrator is **the main, interactive Claude Code session that runs when you
 invoke `/loom:run`.** The `commands/run.md` body is its operating instructions. It is
 not a sixth role and not a sub-agent — it is the session you are talking to, and it
-is the only actor that holds the Task tool and can **spawn role sub-agents**.
+is the only actor that holds the Task tool and can **spawn role sub-agents**. It
+defaults to the **`sonnet`** tier (ADR 0012) — orchestration is instruction-
+following, role/tool selection, and status routing, not the judgment-heavy work
+that reserves `opus` for the planner and evaluators.
 
 This resolves the "agents can't call agents" constraint: that limit only applies to
 *sub-agents*. The orchestrator (main session) spawns every role. So:
@@ -41,8 +44,37 @@ Key properties:
 - **Cold every time.** Each role is a fresh agent given only the files/prompt it
   needs. Between calls, the only state is `.docs/` + the repo + git history.
 - **Files and commits are truth.** The orchestrator re-scans after every agent, so
-  an interrupted loop resumes from the last commit.
+  an interrupted loop resumes from the last commit. The re-scan reads `Status:`
+  lines + git (the `/loom:status` digest) — **not artifact bodies**.
 - **Right tier per role** (see [02](02-roles.md)).
+
+## Thin-orchestrator invariant (ADR 0012)
+
+The orchestrator's context must scale with the **number of in-flight artifacts**,
+not the **size of the work product** — roughly flat across loop iterations,
+regardless of the backing tier. Four rules hold the line:
+
+- **Pass references, never bodies.** Hand each role `.docs/` **paths**; the cold
+  role reads the artifact in its own isolated window. The orchestrator never inlines
+  a plan, diff, research note, or eval **body** into its own context. This is the
+  single biggest lever — it is the difference between context scaling with the work
+  product and scaling with the number of steps.
+- **Honor the bounded return contract.** A role replies with only `{Status:,
+  artifact path(s), ≤~150-token summary, the one branch signal}` — never its body
+  (spec [02](02-roles.md) — *Bounded return*).
+- **Route on the signal, not the prose.** Branch off the `Status:` line + the
+  returned verdict/gate/blocker — never by reading the critique or diff body. The
+  full eval text stays in `.docs/` for the next cold role; the orchestrator routes
+  from the pointer and the verdict. (The owner-claimed-gate pause below is the one
+  place an artifact is surfaced, and only to the owner.)
+- **Compaction is a cold self-restart, not a lossy summary.** Because `.docs/` + git
+  are truth, when the window grows large the orchestrator checkpoints to
+  `status/handoff.md` and **re-bootstraps from the status digest**, continuing with
+  a fresh window — a perfect reset, since the durable state was never in the window.
+  This is loom's answer to context pressure in place of any numeric auto-compact
+  threshold; `sonnet`'s context-awareness lets it trigger before degrading. Raising
+  the orchestrator's window (or running it on `opus`) is an owner lever, not the
+  primary answer.
 
 ## Automated review before a slice lands
 
@@ -65,10 +97,14 @@ orchestrator may spawn and a sub-agent cannot safely run a command that may spaw
   <base>...<slice-HEAD>` or passing the slice branch/range as the command's
   target), never the empty working tree
   ([ADR 0011](../ADR/0011-correct-automated-review-command-to-code-review.md) §2).
-- **Findings artifact.** The orchestrator captures the output into a committed,
-  author-neutral, identity-scrubbed, per-slice file
+- **Findings artifact (write-and-forget).** This is the one step that *must* run in
+  the orchestrator's own window (sub-agents can't spawn — ADR 0001), so it is the
+  one place review output enters that window. The orchestrator captures the output
+  into a committed, author-neutral, identity-scrubbed, per-slice file
   `.docs/evaluations/<slice-name>-review-findings.md` (companion to the slice's
-  `-eval.md`) and hands it to the blind code-evaluator as an additional input.
+  `-eval.md`), hands it to the blind code-evaluator as an additional input, and then
+  **drops it** — it does not reason over, re-summarize, or branch on the findings
+  text; the blind code-evaluator adjudicates them from the file (ADR 0012).
 - **Applicability.** Run only when the slice's diff touches at least one code
   (non-docs) file; a pure-docs slice **skips with a note**.
 - **Explicit status.** The artifact records a distinguishable status —

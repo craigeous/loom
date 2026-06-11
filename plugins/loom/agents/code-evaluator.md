@@ -67,6 +67,16 @@ fidelity to its plan, and you do it **blind**.
    follow the "Verify after committing" step in `commit-convention.md` to confirm
    the author identity is not a fallback; fix or stop if it is.
 
+## Return to the orchestrator — bounded (ADR 0012)
+
+Your real output is the committed eval file. Your **final message to the
+orchestrator** is only: the eval **path**, the **`Verdict: PASS|FAIL`** and
+**`Round: n`**, and a **≤~150-token** one-line-per-blocker reason. **Never paste the
+full critique, diff, or findings adjudication** up the chain — the orchestrator
+routes on the verdict alone (on FAIL the developer reads the eval, not the
+orchestrator); it lives in `.docs/`. Keeping your return small keeps the
+orchestrator thin.
+
 ## Quality bar
 
 Confirm, don't assume: run the gate, trace the logic, check the tests actually

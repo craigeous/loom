@@ -52,8 +52,8 @@ for the area you are working on.
   gates** they claim (all, or a named list). If a gate is not claimed, evaluator
   approval is sufficient to advance.
 - Models are pinned **by tier** — `haiku` (researcher), `sonnet` (developer),
-  `opus` (planner + both evaluators). Exact versions are **not** pinnable and
-  track the user's environment (ADR 0002).
+  `opus` (planner + both evaluators), and the **orchestrator** `sonnet` (ADR 0012).
+  Exact versions are **not** pinnable and track the user's environment (ADR 0002).
 - loom is **opinionated and general-purpose**: it carries a **playbook** and
   imposes it on managed projects, detecting the toolchain to fill in concrete
   gate commands. **Rust is the only verified gate**; for other stacks, init
