@@ -48,7 +48,7 @@ archived on landing. On conflict, the spec wins.
 - `severity.md` — the shared BLOCKER/MAJOR/MINOR taxonomy and the PASS/FAIL rule
   both evaluators apply.
 - `review-findings.md` — the format of the orchestrator-written, identity-neutral
-  per-slice review-findings artifact (`/review` + `/security-review` output) the
+  per-slice review-findings artifact (`/code-review` + `/security-review` output) the
   blind code-evaluator reads (ADR 0010); owns the artifact format, not the run or
   adjudication procedure.
 - `docs-layout.md` — the `.docs/` layout loom scaffolds, with seed contents.

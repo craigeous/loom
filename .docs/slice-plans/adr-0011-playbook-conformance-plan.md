@@ -1,6 +1,6 @@
 # ADR 0011 playbook conformance: `/review` → `/code-review`
 
-Status: Approved
+Status: Implemented
 Target specs: 04-orchestrator.md, 02-roles.md
 
 ## Context
@@ -155,4 +155,32 @@ mechanical checks and record the results:
 
 ## Notes
 
-<none>
+## Gate evidence
+
+Pure-markdown slice — no format/lint/test gate.
+
+**(a) Zero bare `/review` remain.**
+`rg -n '/review\b' plugins/loom/` → no output (zero hits). Every former bare
+`/review` is now `/code-review` or part of `/security-review`.
+
+**(b) `/security-review` counts unchanged.**
+- SKILL.md = 1
+- orchestration.md = 1
+- code-eval-rubric.md = 1
+- review-findings.md = 6
+
+**(c) `/code-review` counts (all former bare-`/review` sites converted).**
+- SKILL.md = 1 (line ~51)
+- orchestration.md = 2 (run step + commit-range bullet)
+- code-eval-rubric.md = 2 (lines ~40 and ~51)
+- review-findings.md = 6 (lines ~4, ~69, ~94, ~98, and two skeleton headings ~123, ~141)
+
+**(d) Out-of-scope file untouched.**
+`rg -n '/review\b' plugins/loom/agents/code-evaluator.md` → exit 1, no hits.
+
+**(e) ADR 0011 cited.**
+- orchestration.md: authority line + commit-range bullet both cite ADR 0011
+  via `../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md`
+  (same relative depth as the adjacent ADR 0010 link).
+- code-eval-rubric.md: the parenthetical on line ~40–41 cites both ADR 0010 and ADR 0011.
+- ADR 0011 file resolves: `.docs/ADR/0011-correct-automated-review-command-to-code-review.md` EXISTS.

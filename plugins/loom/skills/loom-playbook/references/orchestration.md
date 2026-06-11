@@ -59,12 +59,13 @@ recommend for conflicts, never clobber).
 ## Automated review before a slice lands
 
 Authority: spec [04](../../../../../.docs/spec/04-orchestrator.md) § "Automated
-review before a slice lands" (the run step) and
+review before a slice lands" (the run step),
 [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)
-§1.
+§1, and
+[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md).
 
 - **When.** When a slice reaches `Implemented`, and before the slice can land,
-  run Claude Code's built-in `/review` and `/security-review` on the slice's
+  run Claude Code's built-in `/code-review` and `/security-review` on the slice's
   commit diff — before (or while) dispatching the code-evaluator.
 - **Who runs it.** Only the orchestrator may spawn, and a sub-agent cannot safely
   run a command that may spawn; therefore the orchestrator runs these commands —
@@ -75,6 +76,13 @@ review before a slice lands" (the run step) and
   diff mode only — never PR / `--comment` / `--fix` mode (no GitHub round-trip,
   no PR metadata, no posting, no working-tree mutation), keeping the input
   identity-neutral and network-silent so the blind contract holds (ADR 0010 §1/§3).
+- **Target the slice's commit range.** At `Implemented` the slice is already
+  committed, so the working tree is empty. The orchestrator targets the slice's
+  commit range or branch when running `/code-review` — e.g. `git diff
+  <base>...<slice-HEAD>` or passing the slice branch/range as the command's target
+  argument — never the empty working tree
+  ([ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md)
+  §2).
 - **Capture and hand off.** Capture output into the committed, identity-neutral,
   per-slice findings artifact per [`review-findings.md`](review-findings.md) — see
   that file for path, format, and the four status tokens. Commit the artifact

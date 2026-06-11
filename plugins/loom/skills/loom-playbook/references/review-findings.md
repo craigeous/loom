@@ -1,7 +1,7 @@
 # Review-Findings Artifact Format
 
 The review-findings artifact is the single, committed, identity-neutral record
-that carries `/review` and `/security-review` output **from the orchestrator to
+that carries `/code-review` and `/security-review` output **from the orchestrator to
 the blind code-evaluator**, as an additional input alongside the commit diff,
 slice-plan, specs, and gate evidence.
 
@@ -66,7 +66,7 @@ Authority: [ADR 0004](../../../../../.docs/ADR/0004-blind-evaluation-role-separa
 ## Required status field — per command
 
 The artifact records an **explicit, machine- and human-distinguishable status for
-each command**. `/review` and `/security-review` run independently and may have
+each command**. `/code-review` and `/security-review` run independently and may have
 different outcomes.
 
 The status uses a literal `Status:` line per command with exactly these tokens
@@ -91,11 +91,11 @@ tokens (`skipped: docs-only` vs `skipped: command-unavailable`).
 Each finding entry is terse and advisory — it is input the evaluator adjudicates,
 not a verdict. A single entry contains:
 
-- **source command** — `/review` or `/security-review`;
+- **source command** — `/code-review` or `/security-review`;
 - **location** — file path and line range, drawn from the slice diff;
 - **description** — a short statement of the issue;
 - **confidence signal** — the command's confidence score or label **if the command
-  emits one** (e.g. `/review` scores confidence and explicitly expects false
+  emits one** (e.g. `/code-review` scores confidence and explicitly expects false
   positives — ADR 0010 §4); omit if the command emits none.
 
 ---
@@ -120,7 +120,7 @@ not a full schema.
 ```markdown
 # Review findings — <slice-name>
 
-## /review
+## /code-review
 Status: ran-clean
 
 ## /security-review
@@ -138,7 +138,7 @@ Alternatively, for a pure-docs slice both commands carry the same skip status:
 ```markdown
 # Review findings — <slice-name>
 
-## /review
+## /code-review
 Status: skipped: docs-only
 
 ## /security-review

@@ -37,8 +37,10 @@ commit **diff**. Tag findings and derive the verdict per
 ## Review-findings adjudication
 
 The orchestrator hands you a **review-findings artifact**
-(`.docs/evaluations/<slice-name>-review-findings.md`, produced by running `/review`
-and `/security-review` on the slice diff — [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md))
+(`.docs/evaluations/<slice-name>-review-findings.md`, produced by running `/code-review`
+and `/security-review` on the slice diff —
+[ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md),
+[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md))
 as an additional input. It is **advisory input, not an oracle and not an auto-FAIL.**
 See [`review-findings.md`](review-findings.md) for the artifact's shape and per-command
 status tokens — do not restate them here.
@@ -48,7 +50,7 @@ status tokens — do not restate them here.
   the verdict then follows from your own severity-tagged findings, exactly as for any
   other finding.
 - **Discard false positives** with a one-line reason recorded in the eval file
-  (`/review` scores confidence and explicitly expects false positives — an unadjudicated
+  (`/code-review` scores confidence and explicitly expects false positives — an unadjudicated
   finding must not decide a landing).
 - You **still own the verdict** — [`severity.md`](severity.md) is the single verdict
   authority; the findings add a review dimension, not a verdict path.
