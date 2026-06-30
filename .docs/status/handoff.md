@@ -370,6 +370,20 @@ source of truth; `roadmap.md` is milestone order.
    certainly FAIL `Round: 3` (the fix regressed) → developer round-3 fix. **META-WATCH:** fix-introduced-
    regressions = the thrashing pattern the 5-FAIL round limit guards; at round 5 escalate (pause+summary,
    incl. whether hand-rolled POSIX-sh concurrency is the right mechanism). Currently round 2→3 of 5.
+   **Code-eval FAILed `Round: 3`** (7 CONFIRMED, 0 rejected, all reproduced; round-2 F1/F2/F7 held; new
+   negatives NEG-F3/F4/F6 MASK the regressions). Gate re-verified 37/37 green but insufficient. Confirmed:
+   **4 BLOCKER** (R1 remove cleanup recovery-override — ephemeral `$$` pid reaps LIVE worktrees, violates
+   session-id-primary; R2 anchor the worktree-list match at BOTH boundaries, literal segment; R4 age-gate
+   the holderless reclaim + reverify ownership in `stamp_holder`; R5 apply R4 fix to `session-bootstrap`
+   too), **2 MAJOR** (R3 match `$sid` literally not via unescaped ERE; R6 awk handles spaced worktree
+   paths), **1 MINOR** (R7 empty-sid guard). Slice `In Progress`. **NEXT ACTION:** developer round-3 fix
+   per the eval, with 3 force-multipliers: (1) **parse `git worktree list --porcelain` records properly
+   and compare the path/branch field by EXACT string equality** — stop substring/regex-grepping session-ids
+   (root cause of R2/R3/R6); (2) **red-green tests** — each negative must FAIL before the fix, PASS after
+   (the masking ones don't); (3) incremental-Edit + terse-return (avoid the 32k-output crash). Re-gate →
+   `Implemented` → re-run automated review → code-eval (resolving PASS carries Round 3; FAIL → Round 4;
+   escalate at 5). **META: 2 fix attempts left before the 5-FAIL escalation** (which would surface the
+   mechanism question: hand-rolled POSIX-sh liveness is the recurring fault line).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
