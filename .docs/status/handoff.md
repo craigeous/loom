@@ -304,11 +304,19 @@ source of truth; `roadmap.md` is milestone order.
    pin registry↔README write-ordering/fail-closed + state the W precondition that worktree paths embed
    the session-id. Plan otherwise faithful/thorough (lock-TTL≠lease-TTL kept distinct; key negatives
    tested; fails-closed correct; ADR 0003 untouched; scope clean).
-   **NEXT ACTION:** planner **revises slice-plan H (round 1)** — replace `rm -rf`+`mkdir` force-clear with
-   an atomic rename-capture/CAS so exactly one contender wins a stale-lock takeover; add the mutual-
-   exclusion bats negative (2 contenders/1 dead holder → one winner); add `lock-verify --session`; fix
-   the MINOR. Re-emit `Plan Review` → blind plan-eval re-review → developer + shell gate → real
-   `/code-review`+`/security-review` → blind code-eval → land → finalize. Then slice-plan W.
+   **Slice-plan H revised (round 1)** — racy force-clear replaced with atomic **rename-capture CAS**
+   (`mkdir` the sole ownership gate; ABA-guarded; invariants: single-valued holder + re-assert
+   holder==self before every locked act incl. land `git merge`); real 2-contender concurrency bats case;
+   `lock-verify --session` land precondition; MINORs fixed. **Blind plan-eval re-review PASS `Round: 1`
+   → slice-plan H APPROVED** (`multi-session-lock-helper-eval.md`). 3 residual advisory MINORs (orphaned
+   `$CAP` not swept by `cleanup`; `$CAP` same-second name-collision edge; the irreducible
+   `lock-verify`→raw-`git merge` TOCTOU = W's unmediated-land scope) — non-blocking; fold the `$CAP`
+   sweep into `cleanup` if cheap.
+   **NEXT ACTION:** developer implements slice H — `plugins/loom/lib/loom-coord.sh` + `loom-coord.bats`
+   per the Approved plan; run the **shell gate** (`shfmt -i 4 -d` → `shellcheck` → `bats`) GREEN; commit
+   author-neutral → `Implemented`. Then orchestrator runs **real `/code-review` + `/security-review`** on
+   the slice commit range (first live run on actual loom code) → blind code-eval → land → finalize.
+   Then slice-plan W (playbook wiring) against the landed helper CLI.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
