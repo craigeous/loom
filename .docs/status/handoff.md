@@ -347,6 +347,16 @@ source of truth; `roadmap.md` is milestone order.
    no edits landed — verified) — a mechanical output-limit failure, NOT a starvation loop (work hadn't
    started; round counter unchanged at 2). Re-spawning the developer with **incremental-Edit + terse-return**
    discipline (no full-file Writes, never paste file bodies/gate logs) to avoid recurrence.
+   **Retry SUCCEEDED — fix landed `692bb14`** (slice `Implemented`, tree clean): F1 unanchored grep→exact
+   `awk -F'\t' '$1==slice'`; F2 claims sweep guarded behind `got_lock`; F3 holderless lock dir reclaimable
+   via `clear_and_own`; F4 `is_alive` anchored `grep -qE "${sid}(/|$)"`; F6 awk→`/^worktree /{print $2}`
+   + pid+TTL on-disk-stale handling; F7 `session-end` guards `rm -rf`; F8/F9 done. Gate green
+   **bats 37/37** (30+7 new negatives), shfmt/shellcheck clean, hooks 39/39. New slice diff range
+   `8f28b59..692bb14` (fix commit `692bb14`). **NEXT ACTION:** orchestrator **re-runs `/code-review` +
+   `/security-review`** on the fixed helper (slice reached `Implemented` again → ADR 0010/0011), refreshes
+   the identity-neutral review-findings artifact, then blind code-eval (resolving PASS closes Round 2;
+   new FAIL → Round 3; escalate at 5). Watch the fix's new constructs (F4 `grep -E` with interpolated
+   `$sid`; F6 awk; F3 reclaim) — the blind code-eval adjudicates, orchestrator does not pre-judge.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
