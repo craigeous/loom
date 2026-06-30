@@ -327,10 +327,22 @@ source of truth; `roadmap.md` is milestone order.
    (dead code); F7 session-end `rm -rf` when `got_lock=0` orphans claims; F8/F9 cleanups). **`/security-review`
    = ran-clean** (all sinks quoted + trusted-caller-fed; no untrusted flow). **The gate (30/30) + blind
    plan-eval did NOT catch these — this is the automated-review dimension earning its place.**
-   **NEXT ACTION:** spawn the **blind code-evaluator** with the diff + slice-plan + specs + gate evidence +
-   the review-findings artifact (advisory). It adjudicates each finding → severity (`severity.md`) → owns the
-   PASS/FAIL verdict. Likely FAIL on F1-F4 → developer fixes (In Progress) → re-gate → re-review → re-code-eval.
-   Then land → finalize → slice-plan W. (Write-and-forget: orchestrator does NOT pre-judge the findings.)
+   **Blind code-eval FAILed `Round: 2`** (`multi-session-lock-helper-eval.md`). Gate independently
+   re-verified green (shfmt/shellcheck/bats 30/30) **but happy-path-only — safety negatives untested**.
+   Adjudicated the 9 `/code-review` findings → **8 CONFIRMED, 1 REJECTED** (F5 by-design session-id-primary,
+   a documented W precondition); F1/F2/F3/F6 reproduced empirically. **BLOCKERs:** F1 unanchored
+   `grep -F "${slice}\t"` deletes sibling rows (`v2` drops `auth-v2`) → double-grant; F2 `cleanup` rewrites
+   `claims` off the `got_lock` guard → lost claim under contention; F3 holderless lock dir (crash between
+   `mkdir LOCK_DIR` and `stamp_holder`) is permanently un-reclaimable incl. by `cleanup` → deadlock; F6
+   orphan-worktree awk is dead code → `worktree remove -f` never fires (CU1 masks it). **MAJORs:** F4
+   substring `is_alive` probe; F7 `session-end` `rm -rf` without releasing claims when `got_lock=0`.
+   **MINORs:** F8 dead `SUBCOMMAND` dance, F9 redundant `worktree list`. Slice-plan set `In Progress`.
+   **NEXT ACTION:** developer fixes F1-F4, F6, F7 (+ F8/F9 while there) per the eval AND **adds the missing
+   negative bats cases** proving each safety fix (sibling-row preserved; cleanup-under-contention no clobber;
+   holderless-lock reclaimed; orphan worktree actually removed; substring-collision liveness; session-end
+   releases before rm) — green tests that don't exercise the path are not acceptable. Re-run shell gate GREEN
+   → `Implemented`. Then orchestrator **re-runs automated review** on the new diff → blind code-eval
+   (resolving PASS closes Round 2; another FAIL → Round 3; escalation at 5). Then land → finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
