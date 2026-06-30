@@ -1,7 +1,136 @@
-# Evaluation: multi-session-lock-helper-plan.md
+# Evaluation: multi-session-lock-helper
 
-Verdict: PASS
-Round: 1
+Verdict: FAIL
+Round: 2
+Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); spec 04 → "Multi-session
+coordination (ADR 0014)" (the three locked main writes — claim / lease-renew / land —
+and the session-id-primary liveness rule); the Approved slice-plan (CLI contract,
+lock/claim/clear-and-own invariants, fail-closed); `gates/shell.md`; the advisory
+review-findings artifact. Code-review phase: diff `4bb64b9..8f28b59`
+(`plugins/loom/lib/loom-coord.sh` + `.bats`) walked, gate re-run, findings adjudicated.
+
+## Code review — Round 2 (FAIL)
+
+### Gate re-verification (independently re-run)
+
+- `shfmt -i 4 -d` on both files → CLEAN.
+- `shellcheck plugins/loom/lib/loom-coord.sh` → CLEAN (SC3043 suppressed file-wide).
+- `bats plugins/loom/lib/loom-coord.bats` → 30/30 pass.
+
+The gate is genuinely green, **but green is necessary, not sufficient**: the suite
+exercises only happy paths and one sanitized cleanup case. The safety-critical
+negatives (concurrent cleanup without the lock, holderless-lock recovery, orphan
+worktree removal, substring claim collisions, `got_lock=0` paths) are **not** tested,
+and four confirmed correctness bugs survive a green gate.
+
+### Findings adjudication (advisory review-findings + independent verification)
+
+Of 9 `/code-review` findings: **8 CONFIRMED, 1 REJECTED**. `/security-review`
+ran-clean (informational, no findings to adjudicate). Findings 1/2/3/6 reproduced
+empirically against the real helper in throwaway repos.
+
+- [BLOCKER] **Finding 1 — unanchored `grep -F "${slice}\t"` claim matching
+  (`read_claim`/`write_claim`/`remove_claim`, sh:190/200/216).** `grep -F` is an
+  unanchored substring match, so `claim v2` matches an existing `auth-v2` line, and
+  `write_claim`/`remove_claim`'s `grep -vF "v2\t"` **deletes `auth-v2`'s registry
+  row**. Reproduced: seeding `auth-v2\t…` then filtering `v2\t` drops the line → a
+  third session sees `auth-v2` free and claims it → **double-grant of a slice against
+  main** — the exact safety property the helper exists to uphold. Defeats ADR 0014's
+  no-double-grant guarantee.
+- [BLOCKER] **Finding 2 — `cleanup` mutates `CLAIMS` without holding the lock
+  (sh:824–849).** The claims-sweep read→filter→`mv` block is **outside** the
+  `got_lock` guard. Reproduced: with a live peer holding the lock (so `got_lock=0`),
+  `cleanup` still rewrote `claims` and dropped a row. A concurrent `claim` under the
+  real lock holder, appended after `cleanup` snapshots `CLAIMS`, is clobbered by the
+  `mv` → lost claim → re-claim → double-grant. Violates the mutual-exclusion invariant
+  on the shared store and the plan's "live claims untouched" contract.
+- [BLOCKER] **Finding 3 — holderless lock dir is permanently un-reclaimable
+  (sh:357, also cleanup sh:803 / `clear_and_own` sh:274).** A crash between
+  `mkdir "$LOCK_DIR"` and `stamp_holder` leaves a lock dir with no `holder` file. The
+  stale-reclaim branch is gated on `[ -f "$HOLDER_FILE" ]` and `clear_and_own` returns
+  1 when `holder` is empty. Reproduced: `lock-acquire` against a holderless dir → exit
+  3 after every retry; **`cleanup` cannot clear it either** (lock dir still present
+  after cleanup). All sessions deadlock on main until manual `rm`. A deadlock with no
+  recovery path defeats the coordination helper.
+- [BLOCKER] **Finding 6 — orphan-worktree path extraction is dead code
+  (sh:563–566 / 835–838).** The `awk '… /^/{if(p&&b) print p; p="";b=""}'` catch-all
+  `/^/` matches every line and resets `p`/`b` before they ever coexist. Reproduced
+  against real porcelain output: prints **nothing**, so the `git worktree remove -f`
+  branch in both `reclaim` and `cleanup` never fires. Consequence is not cosmetic: a
+  crashed session that left its worktree **dir on disk** keeps its session-id in
+  `git worktree list` → `is_alive` returns true → `reclaim`→exit 6 and `cleanup` skips
+  it as live → its claim is **never reclaimable**. The plan's mandated crash-recovery
+  ("`git worktree remove -f` the orphan worktree") is non-functional. Test CU1 masks
+  this by `rm -rf`-ing the dead worktree dir *before* `cleanup`, so `git worktree
+  prune` removes the ref and the dead `remove -f` path is never needed.
+- [MAJOR] **Finding 4 — `is_alive` primary probe is an unanchored substring
+  (`grep -qF "$sid"`, sh:125).** With caller-supplied `--session` tokens, a dead
+  session whose id is a substring of any live worktree path/branch is read as alive →
+  its lock/claims are never reclaimed (coordination wedge). Same root cause as
+  Finding 1; both need exact-field matching.
+- [MAJOR] **Finding 7 — `session-end` destroys `held-claims` without releasing the
+  registry when `got_lock=0` (sh:740–776).** The lock-acquire loop has no
+  stale-handling, and `rm -rf "$sess_dir"` (sh:776) runs unconditionally even when the
+  lock was never acquired and claims were never released → orphaned registry rows with
+  no held-claims backref. Violates the planned "release then remove" ordering and
+  leaves inconsistent shared state that relies on the (also-buggy) `cleanup` to heal.
+- [MINOR] **Finding 8 — dead `ORIG_SUBCOMMAND`/`SUBCOMMAND="lock-acquire"` dance in
+  `session-bootstrap` (sh:663–700).** The inline function never reads `SUBCOMMAND`;
+  pure noise. (The whole inline re-implementation of `lock-acquire` also duplicates
+  `cmd_lock_acquire`; consider extracting a shared no-exit acquire helper.)
+- [MINOR] **Finding 9 — `cleanup` re-runs `git worktree list` per dead claim while
+  `is_alive` already ran it (sh:830/836).** ~2× redundant invocations over a
+  constant-for-the-sweep list; hoist once.
+- REJECTED — **Finding 5 (PLAUSIBLE)** "holder liveness relies solely on session-id in
+  the worktree list; an active holder without a sid-bearing worktree is judged dead."
+  This is the spec's own **session-id-primary** rule and is explicitly carried as
+  slice W's documented precondition (plan lines 108–116: every session must name its
+  worktree path to embed its session-id). The helper correctly depends on, and
+  documents, that precondition; it is by-design and out of this code-only slice's
+  scope — not a defect in the diff under review.
+
+### Independent observations
+
+- The four BLOCKERs share two root causes — (a) substring matching where exact-field
+  (`awk -F'\t' '$1==s'`) matching is required (Findings 1, 4), and (b) shared-state
+  mutation / `rm -rf` performed off the `got_lock` guard (Findings 2, 7). Fixing the
+  pattern, not just the call sites, is the durable repair.
+- Scope, identity, and structure are otherwise sound: code-only, no `hooks.json`
+  entry (REG1 asserts it), no commits / no git-identity writes (ADR 0003 untouched),
+  state under `<git-dir>/loom/`, fail-closed exit 10 on no-repo (FC1/FC1b prove ≠ 0).
+  The rename-capture CAS mutual-exclusion core (the round-1 BLOCKER) holds and L5
+  proves it under a real race. These are not regressed; the defects above are new
+  correctness gaps in the surrounding claim/cleanup/liveness machinery.
+
+### Required changes (for FAIL)
+
+1. Replace every unanchored `grep -F "${slice}\t"` / `grep -vF "${slice}\t"` claim
+   lookup and edit (`read_claim`, `write_claim`, `remove_claim`) with an exact
+   first-field match (e.g. `awk -F'\t' -v s="$slice" '$1==s'` for select and
+   `$1!=s` for delete). Add a bats case proving `claim v2` does not touch an
+   `auth-v2` row (and vice-versa).
+2. Gate all `CLAIMS` mutation in `cmd_cleanup` behind `got_lock=1` — when the lock
+   cannot be acquired, sweep nothing and exit non-zero (fail-closed). Add a bats case
+   that runs `cleanup` while a live peer holds the lock and asserts `claims` is
+   unchanged.
+3. Make a holderless lock dir recoverable: treat `lock` dir present with absent/empty
+   `holder` past TTL as stale in both `lock-acquire` and `cleanup` (and let
+   `clear_and_own` capture-and-clear it). Add a bats case seeding a holderless
+   `main.lock/` and asserting recovery (not a permanent exit 3).
+4. Fix the orphan-worktree path extraction so `git worktree remove -f` actually fires
+   in `reclaim` and `cleanup` (correct the awk so a worktree path prints with its
+   branch). Add a bats case where the dead session's worktree **dir still exists** on
+   disk (do not pre-`rm` it) and assert the orphan is removed and the claim reclaimed.
+5. Anchor the `is_alive` worktree probe to a session-id-token boundary rather than a
+   bare substring (Finding 4).
+6. In `session-end`, do not `rm -rf` the session dir when the lock was not acquired
+   and claims were not released; add stale-lock handling to its acquire loop or defer
+   removal. Add a `got_lock=0` bats case.
+7. (MINOR, may bundle) Remove the dead `SUBCOMMAND` dance in `session-bootstrap`
+   (Finding 8); hoist the redundant `git worktree list` in `cleanup` (Finding 9).
+
+## Plan review — Round 1 (PASS, history)
+
 Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); spec 04 → "Multi-session
 coordination (ADR 0014)" (the three locked main writes — claim / lease-renew / land —
 and the session-id-primary liveness rule); `gates/shell.md`; existing hook style in
