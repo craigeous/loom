@@ -292,11 +292,23 @@ source of truth; `roadmap.md` is milestone order.
    loom code); **Slice W (docs)** = wire `parallelism.md` + `orchestration.md` + `run.md` against H's
    landed CLI (pure-docs → auto-review skip). MINOR (c) session-end `.git/loom-session-<id>/` cleanup
    lands in H (helper + crash-cleanup/`git worktree prune`).
-   **NEXT ACTION:** planner authors slice-plan **H** `.docs/slice-plans/multi-session-lock-helper-plan.md`
-   — nail the helper CLI + behavior (mkdir-lock w/ lock-TTL + liveness-gated force-clear; claim
-   check-then-act under lock; lease renew; per-session `.git/loom-session-<id>/` state; session-end +
-   crash cleanup) → blind plan-eval → developer + shell gate → real automated review → blind code-eval
-   → land → finalize. Then slice-plan W against the landed helper.
+   **Slice-plan H authored** (`multi-session-lock-helper-plan.md`): helper `plugins/loom/lib/loom-coord.sh`
+   (+ `loom-coord.bats`), a CLI (not a hook), state under `<git-dir>/loom/`, fails-closed.
+   **Blind plan-eval FAILed `Round: 1`** (`multi-session-lock-helper-eval.md`): **2 BLOCKERs** — (1) the
+   stale-lock force-clear is `rm -rf`+re-`mkdir`, which is racy: two contenders seeing one dead holder
+   can BOTH acquire (B clears+owns, C's `rm -rf` then deletes B's fresh lock + C owns) → needs **atomic
+   clear-and-own (rename-capture/CAS)**; compounded because land is a raw `git merge` with no holder
+   re-check (reopens race point 4); (2) **no bats case proves mutual exclusion under concurrent stale
+   reclaim** (2 contenders, 1 dead holder → exactly one winner). **MAJOR** — add a `lock-verify --session`
+   holder-assertion primitive so W's land write can re-check ownership before the raw merge. **MINOR** —
+   pin registry↔README write-ordering/fail-closed + state the W precondition that worktree paths embed
+   the session-id. Plan otherwise faithful/thorough (lock-TTL≠lease-TTL kept distinct; key negatives
+   tested; fails-closed correct; ADR 0003 untouched; scope clean).
+   **NEXT ACTION:** planner **revises slice-plan H (round 1)** — replace `rm -rf`+`mkdir` force-clear with
+   an atomic rename-capture/CAS so exactly one contender wins a stale-lock takeover; add the mutual-
+   exclusion bats negative (2 contenders/1 dead holder → one winner); add `lock-verify --session`; fix
+   the MINOR. Re-emit `Plan Review` → blind plan-eval re-review → developer + shell gate → real
+   `/code-review`+`/security-review` → blind code-eval → land → finalize. Then slice-plan W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
