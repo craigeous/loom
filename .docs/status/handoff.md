@@ -270,11 +270,21 @@ source of truth; `roadmap.md` is milestone order.
    wrongly-reclaimed lease; needs durable `{session-id, held-claims}` persistence the restart re-reads
    to renew; **MINOR** — pin the under-lock authoritative read to shared **local `main`** (loom commits
    directly to local main), not `origin/main` which can lag.
-   **NEXT ACTION:** planner **revises** ADR 0014 (round 1) to close the BLOCKER + MAJOR + MINOR — likely
-   per-session checkpoint state (not a shared `handoff.md`) brought under/into the coordination model +
-   durable per-session claim persistence across cold restart — re-emits at `Plan Review` → blind
-   plan-eval re-review. Then spec 04 amendment → playbook slices (`parallelism.md` / `orchestration.md`
-   / `run.md` + a POSIX-sh lock/claim helper, shell-gated) → blind code-eval → land.
+   Round-1 revision (`0cbcdf9`) relocated the write-ahead anchor off `main` to per-session
+   `.git/loom-session-<id>/` state (every shared-`main` write — claim, renew, land — now under the §2
+   lock; a restart reads only its own anchor; shared human-facing `handoff.md` written only at land
+   under lock) + durable session-id-keyed claim persistence (re-adopt/renew across cold restart).
+   **Blind plan-eval re-review PASS `Round: 1`** (`7f36196`) → **ADR 0014 APPROVED** (Accepted/immutable;
+   README moved In Review → Accepted). **3 non-blocking MINORs CARRIED** to fix in the *living* layer
+   (spec 04 amendment + playbook/helper-contract, since the ADR is now immutable): (a) "exactly two
+   shared-`main` writes" undercounts — it's **three** locked writes (claim / lease-renew / land);
+   (b) reconcile the liveness wording ("and/or" vs "session-id-primary"); (c) add **session-end cleanup
+   of `.git/loom-session-<id>/`** to the helper contract + crash-cleanup (`git worktree prune` path).
+   **NEXT ACTION:** planner authors the **spec 04 amendment** (frozen-spec planning pass — ADR 0005)
+   folding ADR 0014's multi-session model into `.docs/spec/04-orchestrator.md` (Parallelism section)
+   and correcting MINORs (a)/(b) in the living prose → blind plan-eval. Then playbook slices
+   (`parallelism.md` / `orchestration.md` / `run.md` + a POSIX-sh lock/claim helper carrying MINOR (c),
+   shell-gated) → blind code-eval → land.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable

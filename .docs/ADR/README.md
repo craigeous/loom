@@ -25,7 +25,8 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0011 — Correct the Automated-Review Command to `/code-review`](0011-correct-automated-review-command-to-code-review.md) — supersedes ADR 0010 **only** on the command (`/review` is PR-bound → use the local-diff `/code-review`) and adds the commit-range invocation detail; rest of 0010 stands
 - [0012 — Thin Orchestrator: `sonnet` Default + Bounded Role-Return Contract](0012-thin-orchestrator-sonnet-default-bounded-return.md) — **extends** ADR 0002 (adds the orchestrator tier row) and builds on ADR 0001/0003/0004/0010/0011; keeps the orchestrator's context flat via pass-references-not-bodies + a bounded return contract
 - [0013 — Starvation-Loop Guards for the Orchestrator Cold-Restart](0013-starvation-loop-guards-cold-restart.md) — builds on ADR 0012/0003/0010/0011; write-ahead checkpoint + restart-before-big-op + forward-progress escalation + lossless-beats-lossy, plus a follow-on PreCompact mechanical-backstop slice
+- [0014 — Multi-Session Worktree Coordination](0014-multi-session-worktree-coordination.md) — **extends** ADR 0008 (single-orchestrator "serialized on main" → cross-session lock + slice-lease for N concurrent `/loom:run` sessions); builds on ADR 0001/0003/0012/0013 (relocates ADR 0013's write-ahead cold-restart anchor to off-`main` per-session state)
 
 ## In Review
 
-- [0014 — Multi-Session Worktree Coordination](0014-multi-session-worktree-coordination.md) — **extends** ADR 0008 (single-orchestrator "serialized on main" → cross-session lock + slice-lease for N concurrent `/loom:run` sessions); builds on ADR 0001/0003/0012/0013 (relocates ADR 0013's write-ahead cold-restart anchor to off-`main` per-session state)
+_(none)_
