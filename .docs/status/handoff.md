@@ -312,11 +312,16 @@ source of truth; `roadmap.md` is milestone order.
    `$CAP` not swept by `cleanup`; `$CAP` same-second name-collision edge; the irreducible
    `lock-verify`→raw-`git merge` TOCTOU = W's unmediated-land scope) — non-blocking; fold the `$CAP`
    sweep into `cleanup` if cheap.
-   **NEXT ACTION:** developer implements slice H — `plugins/loom/lib/loom-coord.sh` + `loom-coord.bats`
-   per the Approved plan; run the **shell gate** (`shfmt -i 4 -d` → `shellcheck` → `bats`) GREEN; commit
-   author-neutral → `Implemented`. Then orchestrator runs **real `/code-review` + `/security-review`** on
-   the slice commit range (first live run on actual loom code) → blind code-eval → land → finalize.
-   Then slice-plan W (playbook wiring) against the landed helper CLI.
+   **Slice H IMPLEMENTED** — `plugins/loom/lib/loom-coord.sh` + `loom-coord.bats` (commit `8f28b59`),
+   shell gate GREEN (shfmt clean / shellcheck clean / **bats 30/30** incl. L5 concurrent 10× race;
+   hooks regression 39/39). Slice H code = the single commit `8f28b59` (base `4bb64b9`); diff range
+   **`4bb64b9..8f28b59`**, sole code = the helper (+ bats); all else unpushed is `.docs/` markdown.
+   `origin/HEAD`→`origin/main` set; HEAD is 19 ahead of `origin/main` (thread unpushed — do NOT push).
+   **NEXT ACTION (in-window, write-and-forget — ADR 0010/0011/0012):** orchestrator runs the **real**
+   `/code-review` + `/security-review` (actual Skill calls, never simulated) covering slice H's code,
+   transcribes output into identity-neutral `.docs/evaluations/multi-session-lock-helper-review-findings.md`
+   (4-status token), commits author-neutral, hands it as **advisory** input to the **blind code-evaluator**
+   (which owns the verdict). Then code-eval → land → finalize. Then slice-plan W against the landed CLI.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
