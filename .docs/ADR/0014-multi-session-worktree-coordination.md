@@ -1,0 +1,221 @@
+# 0014 — Multi-Session Worktree Coordination
+
+Status: Plan Review
+Date: 2026-06-29
+
+## Context
+
+[ADR 0008](0008-parallel-docs-coordination-worktree-per-slice.md) makes a **single**
+orchestrator's sub-agent worktrees conflict-free **by construction**: each in-flight
+slice is a disjoint, uniquely-named file set on its own branch+worktree, and the three
+living docs + the `slice-plans/README.md` index are "main-only, owned by the
+orchestrator, **serialized**." That serialization is real only because ADR 0008 assumes
+exactly **one** orchestrator session writing main.
+
+The owner runs **multiple independent top-level `/loom:run` sessions** against the same
+repository at once (each is its own thin orchestrator — [ADR 0012](0012-thin-orchestrator-sonnet-default-bounded-return.md) —
+that cold-restarts independently — [ADR 0013](0013-starvation-loop-guards-cold-restart.md)).
+With N sessions, ADR 0008's "serialized on main" is **false**: nothing serializes one
+session's main writes against another's. The sessions race at **four** points:
+
+1. **Shared `main` working tree.** Every session mutates the same physical checkout —
+   concurrent file writes clobber each other and concurrent git writes collide on the
+   shared `.git/` `index.lock` (ADR 0008 §3 / research gotcha 1, but now *across*
+   sessions, where there is no single serializing writer).
+2. **Driver-loop dispatch.** Both sessions scan the same `Status:` lines
+   ([status-machine.md](../../plugins/loom/skills/loom-playbook/references/status-machine.md))
+   and independently pick the **same** next action → the **same** slice is implemented
+   twice, wasting work and producing two divergent branches for one slice.
+3. **Main living-doc + `slice-plans/README.md` writes.** ADR 0008 routes these through
+   "the orchestrator on main, serialized." With N orchestrators there is no
+   cross-session serialization — concurrent writers race the index and clobber each
+   other's living-doc edits.
+4. **Concurrent merge+finalize on `main`.** Two sessions landing a slice at the same
+   moment corrupt the index / leave a half-merged tree (ADR 0008's land sequence
+   assumes a single serial lander).
+
+ADR 0008's *intra-session* guarantee is sound and unchanged: disjoint slice files
+**cannot** collide, so they need no lock. What is missing is a model for the
+**irreducibly-shared** resource — the one `main` checkout and the single-instance
+coordination files on it — when more than one session contends for it. That resource
+**cannot** be made conflict-free by construction the way disjoint slice files can; it
+needs real mutual exclusion.
+
+**Foundation preserved.** [ADR 0001](0001-plugin-architecture-and-orchestrator.md) (only
+the orchestrator/session spawns) and [ADR 0003](0003-cold-handoffs-commit-per-handoff.md)
+(uniform author-neutral identity across all roles and worktrees) are prerequisites this
+ADR relies on and does **not** change. ADR 0003 is what keeps cross-session commits
+blind-eval-safe: a slice landed by session A is indistinguishable in author/committer
+metadata from one landed by session B, so the blind code-evaluator still sees one
+uniform identity. The worktree mechanics are the prior art in
+`.docs/research/2026-06-08-git-worktree-parallel-slices.md` (Approved) — reused here, not
+re-derived.
+
+**In scope:** the multi-session coordination model — session-owned slice worktrees, the
+cross-session lock on `main`'s critical section and its backoff, the slice claim/lease
+protocol with stale-claim reclaim, and which ADR 0008 invariants are preserved vs
+extended. **Out of scope:** the concrete lock/claim *mechanism* implementation (a
+POSIX-sh helper — record the contract, not the code; a playbook build item, exactly as
+ADR 0008 deferred its `background`-spawn wiring); any change to the status state machine
+(spec [03](../spec/03-artifact-lifecycle.md), unchanged); and spec
+[04](../spec/04-orchestrator.md)'s Parallelism amendment, which is a deliberate later
+planning pass (specs frozen — [ADR 0005](0005-specs-frozen-after-approval.md)), not part
+of this ADR.
+
+## Decision
+
+Extend ADR 0008 from "one orchestrator's sub-agents in worktrees" to "**N independent
+sessions**, each owning its slice worktrees, coordinating on the one shared `main`
+through a cross-session lock and a slice-lease protocol." Three parts.
+
+### 1. Session-owned slice worktrees
+
+A top-level `/loom:run` session **never does slice work in the shared `main` checkout.**
+When a session picks up a slice it creates **its own** worktree off a **fresh
+`origin/main`** and runs all of that slice's roles there:
+
+```
+git worktree add -b <slice-branch> <session-owned-path> origin/main
+```
+
+This is ADR 0008 §1's `git worktree add` rule, **extended one level**: where ADR 0008
+isolated *one orchestrator's sub-agents* into per-slice worktrees, ADR 0014 isolates
+*each session's* slice work the same way. The disjoint-files-by-construction guarantee
+(ADR 0008 §2) therefore carries over unchanged at the slice level — two sessions building
+two independent slices still write disjoint, uniquely-named path sets and cannot collide
+on any slice file.
+
+The shared `main` checkout is touched at exactly **two** moments, both inside the lock of
+§2: **claim** (mark the slice taken, §3) and **land** (merge+finalize, ADR 0008 §2). At
+all other times a session operates only in its own slice worktree(s). This removes race
+points 1 (no concurrent free-for-all on the `main` working tree) and is the precondition
+for closing 2–4.
+
+### 2. A cross-session lock on `main`'s critical section
+
+The critical section is **`{claim-a-slice, merge+finalize}`** — the only operations that
+touch the shared `main` checkout and its single-instance coordination files (the three
+living docs + `slice-plans/README.md`). Guard it with a **cross-session mutex**:
+
+- **Atomic acquire/release primitive.** Use an OS-atomic primitive — a `mkdir`-based lock
+  directory under `.git/` (e.g. `.git/loom-main.lock/`; `mkdir` is atomic and fails if it
+  exists) **or** a git-ref compare-and-swap. It must live **outside** the tracked worktree
+  (under `.git/`, like ADR 0013 §5's checkpoint marker) so it is never itself a tracked,
+  mergeable file, and it must be **per-repository** (shared across all sessions/worktrees,
+  since `.git/` is shared).
+- **Backoff on contention — reuse ADR 0008 §3.** A session that cannot acquire the lock
+  retries with the **exponential backoff ADR 0008 §3 already defines** for `index.lock`
+  (3–5 attempts at ~200ms, 400ms, 800ms, …). This is the **same** mechanism applied to a
+  **coarser** resource: ADR 0008 §3 backs off on the transient `.git/index.lock`; ADR 0014
+  backs off on the explicit `main`-critical-section lock. The transient-`index.lock`
+  backoff of ADR 0008 §3 still applies **underneath** for the individual git writes inside
+  the section.
+- **Hold the lock only for the critical section, never across role spawns.** The lock
+  brackets a **short, bounded** main-side operation (claim, or merge+finalize); a session
+  does **not** hold it while a role works in a slice worktree. This keeps the serialized
+  resource contended for milliseconds-to-seconds, not for the duration of a slice.
+
+This makes ADR 0008's "serialized on main" true **across** sessions, not merely within
+one — closing race points 3 and 4. It applies **only** to the irreducibly-shared `main`
+critical section; it does **not** weaken ADR 0008's conflict-free-by-construction
+guarantee for disjoint slice files, which remain lock-free.
+
+### 3. Slice claiming / leasing
+
+Two sessions must not pick the **same** next action (race point 2). A **lease** in the
+`slice-plans/README.md` Active region, written under the §2 lock, prevents it:
+
+- **Claim (under the lock).** To take a slice, a session acquires the §2 lock, records a
+  **claim** on that slice in the `slice-plans/README.md` **Active** region — a
+  `{session-id, lease-timestamp}` marker (session-id is a per-session identifier, e.g. a
+  uuid; **not** the author identity — ADR 0003's uniform identity is untouched) — commits
+  that index update on `main`, then releases the lock. Only **then** does it create the
+  slice worktree (§1) and dispatch roles.
+- **Skip live claims.** When deriving the next action, a session **skips** any slice whose
+  Active entry carries a **live** (non-expired) claim by another session. This makes the
+  driver-loop dispatch session-aware: two sessions scanning the same `Status:` lines now
+  diverge on which slice they take.
+- **Stale-claim reclaim (TTL).** A crashed session leaves a stale lease and an orphaned
+  worktree. A claim whose `lease-timestamp` is older than a **TTL** is **stale** and may be
+  reclaimed: under the §2 lock, a reclaiming session runs `git worktree prune` +
+  `git worktree remove -f` for the orphan (ADR 0008 §3 crash cleanup), clears or overwrites
+  the expired Active entry, and may then claim the slice itself. A session holding a slice
+  longer than the TTL must **renew** its lease (refresh the timestamp under the lock) so a
+  legitimately long-running slice is not reclaimed out from under it. (The concrete TTL
+  value and the renew cadence are a slice-plan parameter, not fixed here.)
+- **Land clears the claim.** Landing a slice (the merge+finalize already inside the §2
+  lock, ADR 0008 §2) moves its entry Active → Archived in the same locked section, which
+  **is** the claim release. No separate unclaim step.
+
+This makes the lease the single source of "who is doing what" across sessions, written on
+`main` under the one lock that already serializes the index.
+
+### 4. What ADR 0008 invariants are preserved vs extended
+
+- **Preserved unchanged:** disjoint slice files are conflict-free **by construction** and
+  remain **lock-free** (ADR 0008 §1/§2); the orchestrator/session is the only spawner
+  (ADR 0001); uniform author-neutral identity across all worktrees and sessions
+  (ADR 0003) — sessions are distinguished by an out-of-band `session-id` in the lease,
+  **never** by commit metadata, so blind eval is unaffected; the per-worktree
+  `git-identity-guard.sh` hook stays stateless and parallel-safe (ADR 0008 §3), which now
+  also means **cross-session**-safe; planning of shared design memory
+  (`spec/`/`ADR/`/`research/`) stays a non-parallel serial pass (ADR 0008 §4 / ADR 0005).
+- **Extended:** ADR 0008's "main-only, serialized" coordination — previously guaranteed by
+  there being a single orchestrator — is now guaranteed by the §2 cross-session lock; the
+  `git worktree add` isolation extends from one orchestrator's sub-agents to each session's
+  slice work; ADR 0008 §3's exponential backoff extends from the transient `index.lock` to
+  the explicit `main`-critical-section lock; and the `slice-plans/README.md` Active region
+  gains a **lease** dimension (`session-id` + `lease-timestamp`) on top of the
+  Active/Archived bookkeeping ADR 0008 already put there.
+
+## Consequences
+
+- **ADR 0008's single-orchestrator assumption is lifted.** "Serialized on main" becomes a
+  cross-session property, so the owner may safely run multiple `/loom:run` sessions on one
+  repo. This **builds on and extends** ADR 0008 (the way ADR 0012 extends ADR 0002); it
+  **supersedes nothing** — ADR 0008 remains Accepted and immutable, and every one of its
+  intra-session guarantees still holds.
+- **Builds on, does not change, ADR 0001 and ADR 0003.** Only-the-session-spawns and
+  uniform author-neutral identity are prerequisites; the `session-id` lives in the lease,
+  out of band, so cross-session commits stay indistinguishable to the blind evaluator.
+- **Spec 04's Parallelism section needs a multi-session amendment.** Spec 04 currently
+  states ADR 0008's single-orchestrator coordination model; it must be amended to fold in
+  this multi-session model (session-owned worktrees, the main-critical-section lock, the
+  lease protocol). The spec is frozen (ADR 0005), so on approval that is a **deliberate
+  later planning pass**, **not** a landing side effect — and **not** part of this ADR. (Spec
+  08 playbook guidance and `09-open-questions.md`, if it tracks a related OQ, are folded in
+  the same pass.)
+- **New playbook build item (the mechanism, deferred — like ADR 0008's spawn wiring).**
+  The concrete lock + claim/lease helper is loom's **third** piece of executable code
+  (after `git-identity-guard.sh` and `precompact-write-ahead-backstop.sh`): a **POSIX-sh**
+  helper alongside the existing two hooks, **identity-neutral**, persisting its lock/marker
+  **outside** the tracked worktree (under `.git/`), gated by the **shell gate**
+  (`shfmt` → `shellcheck` → `bats`) and code-eval. This ADR records the **contract** (atomic
+  acquire/release, backoff, lease format, TTL/reclaim semantics); the implementation runs
+  through the normal loop (plan → plan-eval → develop → code-eval). The TTL value, the
+  renew cadence, and the lock primitive choice (`mkdir`-dir vs ref-CAS) are **slice-plan
+  parameters**.
+- **Playbook bodies to update at the fold:** `parallelism.md` (the operational
+  worktree-per-slice body — add the multi-session layer), `orchestration.md` (the
+  claim/land critical-section + lock steps), and `run.md` (each session claims before it
+  works). These are wired only **after** the spec-04 amendment is approved, per ADR 0005.
+- **Easier:** multiple owner-driven sessions on one repo without clobbering `main`,
+  double-implementing a slice, or corrupting a concurrent merge; crashed sessions
+  self-heal via TTL reclaim + `git worktree prune`.
+- **Harder / new obligations on each session:** it must create session-owned worktrees off
+  fresh `origin/main`, acquire/release the main-critical-section lock around claim and
+  land, write+renew a lease, skip live-claimed slices, and run stale-claim reclaim. These
+  are the playbook build items above.
+- **No new status tokens.** The state machine in spec 03 is unchanged; the lease is
+  bookkeeping in the `slice-plans/README.md` Active region (ADR 0008's bucket), **not** a
+  new `Status:` value. This ADR adds *cross-session coordination*, not a new lifecycle
+  state.
+
+## Notes
+
+- Open for the slice-plan / spec-04 pass: the concrete TTL value and lease-renew cadence;
+  the lock primitive choice (`mkdir` lock-dir vs git-ref CAS) and its exact failure
+  semantics; whether the lease marker is a structured line in `slice-plans/README.md` or a
+  sidecar under `.git/`; and how a reclaiming session distinguishes a crashed holder from a
+  slow-but-live one beyond the TTL (e.g. liveness via `git worktree list` + PID, if
+  available).
