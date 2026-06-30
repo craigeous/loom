@@ -260,10 +260,21 @@ source of truth; `roadmap.md` is milestone order.
    sessions can both see slice X free and both proceed. After acquiring the lock the session must
    **re-read the lease and abort/re-select if X was claimed in between** (explicit check-then-act);
    the lock currently serializes the write, not the decision.
-   **NEXT ACTION:** planner **revises** ADR 0014 to close gaps (i)-(iii), re-emits at `Plan Review`
-   → blind plan-eval on the corrected ADR (opus classifier was briefly unavailable — retry).
-   Then spec 04 amendment → playbook slices (`parallelism.md` / `orchestration.md` / `run.md`
-   + a POSIX-sh lock/claim helper, shell-gated) → blind code-eval → land.
+   Owner gaps (i)-(iii) RESOLVED by planner + confirmed sound by blind plan-eval. **Blind plan-eval
+   then FAILed `Round: 1`** (`.docs/evaluations/0014-multi-session-worktree-coordination-eval.md`)
+   with 3 new findings: **BLOCKER** — the ADR-0013 write-ahead `handoff.md` checkpoint is a `main`
+   write that recurs OUTSIDE the `{claim, merge+finalize}` lock (a 3rd unguarded main-write moment),
+   and a **shared** `handoff.md` lets a restart resume *another* session's action → "two moments /
+   four races closed" is false; **MAJOR** — cold-restart lease recovery unspecified: a restarted
+   session is a new process (new pid), so its old `{session-id,pid}` claim looks dead → stranded/
+   wrongly-reclaimed lease; needs durable `{session-id, held-claims}` persistence the restart re-reads
+   to renew; **MINOR** — pin the under-lock authoritative read to shared **local `main`** (loom commits
+   directly to local main), not `origin/main` which can lag.
+   **NEXT ACTION:** planner **revises** ADR 0014 (round 1) to close the BLOCKER + MAJOR + MINOR — likely
+   per-session checkpoint state (not a shared `handoff.md`) brought under/into the coordination model +
+   durable per-session claim persistence across cold restart — re-emits at `Plan Review` → blind
+   plan-eval re-review. Then spec 04 amendment → playbook slices (`parallelism.md` / `orchestration.md`
+   / `run.md` + a POSIX-sh lock/claim helper, shell-gated) → blind code-eval → land.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
