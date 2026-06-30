@@ -1,6 +1,6 @@
 # Multi-Session Lock / Claim Coordination Helper
 
-Status: Draft
+Status: Plan Review
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014)"; ADR 0014 §1/§2/§3 + §Consequences (the helper contract)
 
@@ -53,7 +53,7 @@ cleanup, which create no commits) — so ADR 0003 is untouched within the helper
 
 | Parameter | Decision | Override |
 |---|---|---|
-| Lock primitive | `mkdir` lock dir (atomic, fails if exists) | — |
+| Lock primitive | `mkdir` lock dir (atomic, fails if exists); stale reclaim via **atomic clear-and-own / rename-capture CAS** (never a bare `rm -rf`+re-`mkdir`) — see "Lock ownership invariants + atomic clear-and-own" | — |
 | Lock dir | `<git-dir>/loom/main.lock/` with `holder` file inside | — |
 | Claims registry | `<git-dir>/loom/claims` (TSV, per-repo, untracked) | — |
 | Per-session state | `<git-dir>/loom/session-<id>/` (`checkpoint`, `held-claims`) | — |
@@ -86,6 +86,35 @@ helper provides** (`lock-acquire` … `claim` … *W renders+commits README* …
 - **landed-in-the-interim** (Active→Archived in README) → re-read **by W** under the
   same held lock before/around the `claim` call (W's wiring, noted not built here).
 
+**Cross-store write-ordering + fail-closed (MINOR — a precondition W must honor).**
+Because the helper's `claim` exit 0 means "no live peer claim **in the registry**"
+(not "not already landed"), the two stores must be written in an order that fails
+**closed** under a partial failure. The mandated ordering, **both inside the same
+held lock**: (1) `claim <slice>` writes the operational registry entry → (2) W renders
+the `{session-id, pid, lease-timestamp}` lease into `slice-plans/README.md`'s Active
+region and **commits** it on `main`. **The registry write must precede the README
+commit.** Rationale: the dangerous direction is *README-claimed but registry-free* —
+a peer's `claim` would re-read the registry, see the slice free, and **double-grant**.
+Registry-first eliminates it: a registry entry always exists at least as long as the
+committed README claim. The fail-closed obligation on W: **if the README render/commit
+fails, W must `release-claim <slice>` to roll the registry back before releasing the
+lock** — never leave a registry claim without its durable README lease. A crash
+between the two writes leaves a registry entry owned by a now-dead session, which the
+stale-claim liveness reclaim (below) and `cleanup` clear safely; the authoritative
+README never shows a claim that was not durably the session's. Peers never observe the
+intermediate state because both writes happen under the one held lock and a peer
+acquires that lock only after this session releases it.
+
+**W precondition — worktree paths embed the session-id (MINOR).** The session-id-primary
+liveness probe is sound **only if** every session names its slice worktree(s) with a
+path that contains its `session-id` token (so a live holder's id appears in
+`git worktree list --porcelain`). This is derivable from spec 04's session-id-primary
+rule, but the helper's correctness rests on it: if W ever creates a worktree whose path
+omits the session-id, the probe reads a live holder as **dead** and the helper would
+force-clear live locks/leases (catastrophic). **W (the next slice) MUST name slice
+worktrees so the path embeds the session-id** — stated here as an explicit precondition
+the helper documents and depends on; the helper itself only reads `git worktree list`.
+
 ## CLI contract
 
 `loom-coord.sh <subcommand> [args]`. Global: `--session <id>` (or `LOOM_SESSION_ID`)
@@ -108,9 +137,66 @@ machine-parseable (one line); human detail and errors go to **stderr**.
 
 | Subcommand | Requires | stdout | Behavior |
 |---|---|---|---|
-| `lock-acquire` | `--session` | `acquired` | `mkdir` the lock dir atomically; on success stamp `holder` = `<session-id>\t<pid>\t<epoch>`, exit 0. On `mkdir` failure (held): exponential backoff (table above). **Past `lock-TTL`:** read `holder`, run the liveness probe — if the holder is **dead** (session-id absent), force-clear (`rm -rf` the lock dir) and re-acquire (re-stamp); if **alive**, keep backing off (never clear a live-but-slow holder). On exhausted retries → exit 3. Any state ambiguity → exit 10. |
+| `lock-acquire` | `--session` | `acquired` | `mkdir` the lock dir atomically; on success stamp `holder` = `<session-id>\t<pid>\t<epoch>`, **re-read `holder` and confirm its session-id == self** (INV-1), then exit 0. On `mkdir` failure (held): exponential backoff (table above). **Past `lock-TTL`**, and **only after** the liveness probe shows the holder **dead** (session-id absent — never on the TTL alone, never a live-but-slow holder → keep backing off): run the **atomic clear-and-own** sequence below (a rename-capture CAS, **not** a bare `rm -rf` + re-`mkdir`). On exhausted retries → exit 3. Any state ambiguity → exit 10. |
 | `lock-release` | `--session` | — | Verify `holder`'s session-id == self; remove the lock dir; exit 0. Held by another / not held → exit 5 (lock left intact). |
 | `lock-holder` | — | `<id>\t<pid>\t<epoch>` or empty | Diagnostics/tests: print the current holder stamp. |
+| `lock-verify` | `--session` | `held` | **Holder-assertion primitive (MAJOR).** Atomic single read of `holder`: exit **0** iff its session-id field == self (caller currently holds the lock); exit **5** if held by another / not held; exit **10** on state ambiguity (deny). Makes no change. **This is the mandated land precondition:** W's land wiring MUST call `lock-verify --session <self>` immediately **before** the raw `git merge` and abort fail-closed (non-zero) if it does not hold — so the highest-stakes main write (race point 4) re-asserts ownership and cannot run on a stale "I acquired" belief (INV-2). |
+
+### Lock ownership invariants + atomic clear-and-own (closes BLOCKER 1)
+
+Two invariants make the lock a true mutex, and a third (the rename-capture
+sequence) makes stale-reclaim safe. Everything below is the authority for the
+`lock-acquire` stale path and the land precondition.
+
+- **INV-1 — single-valued holder.** Ownership is defined as *"the lock dir exists
+  and its `holder` file names you."* The only atomic gate that writes a fresh
+  `holder` is `mkdir "$LOCK_DIR"` succeeding (it fails if the dir exists). At any
+  instant `holder` can name **at most one** session. `lock-acquire` confirms its own
+  stamp by re-reading `holder`==self before returning `acquired`.
+- **INV-2 — re-assert before every locked act.** Every operation performed *under*
+  the lock re-reads `holder`==self **immediately before its effect** and fails closed
+  (exit 5) otherwise. `claim`/`renew`/`release-claim`/`reclaim` already do this; the
+  **land** path (W's raw `git merge`, which the helper does not mediate) does it via
+  the new **`lock-verify --session`** precondition. Consequently a session that lost
+  the lock to a concurrent clear-and-own can **never** perform a `main` write on a
+  stale "I acquired" belief — even if two `lock-acquire` calls ever both returned
+  `acquired`, `holder` names exactly one, so at most one passes the re-assert and
+  acts. This is what keeps ADR 0014 race point 4 (concurrent merge) closed.
+
+**Atomic clear-and-own (rename-capture CAS).** A bare `rm -rf "$LOCK_DIR"` is
+unconditional on the *directory*, so two contenders that both observed the same dead
+holder could each `rm -rf` + `mkdir` and the second would delete the first's
+freshly-won lock — both told `acquired`. The fix replaces it with a per-contender
+**atomic capture**, because a POSIX directory `rename(2)` of a given source can
+succeed for **exactly one** caller (the loser gets `ENOENT` — the source is gone):
+
+1. Read and record the **exact** observed holder stamp `H_obs` from
+   `"$LOCK_DIR/holder"`. (Reached only when the probe already showed it **dead** and
+   past `lock-TTL`.)
+2. `mv "$LOCK_DIR" "$CAP"` where `CAP="$STATE_DIR/.main.lock.reclaiming.<session-id>.<pid>.<epoch>"`
+   is **unique per contender**. *Race-free because:* directory rename is atomic and
+   only one concurrent `mv` of `"$LOCK_DIR"` can win; the **loser**'s `mv` fails
+   (source already moved away) → it does **not** clear anything, returns to the
+   backoff loop, and re-reads from scratch.
+3. The **winner** verifies the capture: re-read `"$CAP/holder"` and require it ==
+   `H_obs` **and** still-dead by the liveness probe.
+   - **Match** (it really captured the stale dir it observed): `rm -rf "$CAP"`, then
+     `mkdir "$LOCK_DIR"` — the **single atomic ownership gate** (INV-1). On success →
+     stamp `holder`=self, confirm `holder`==self, return `acquired`. On failure (a
+     peer re-created it first) → do **not** force; read `holder` and treat as a normal
+     contended lock (live → back off; dead+stale → loop the sequence again).
+   - **Mismatch** (an ABA: a live peer reclaimed in the interim, so `CAP` holds a
+     *different / live* stamp): the winner did **not** capture a stale lock and must
+     **not** install ownership. Best-effort restore — `mv "$CAP" "$LOCK_DIR"` if
+     `"$LOCK_DIR"` is absent, else `rm -rf "$CAP"` — then return to the backoff loop.
+     Either outcome is **safe**: ownership is *never* installed on a mismatch, and any
+     peer whose dir was momentarily displaced re-asserts `holder`==self before its
+     next locked act (INV-2) and aborts fail-closed rather than acting blindly.
+4. **Ownership is always decided by `mkdir "$LOCK_DIR"` + the single-valued `holder`
+   stamp, never by the rename alone.** The rename only guarantees the stale dir is
+   detached-and-removed **exactly once**, so no `rm -rf` can ever destroy a
+   freshly-won (live) lock. Combined with INV-1/INV-2, exactly one contender can take
+   over a stale lock; the loser exits 3.
 
 ### Claim / lease subcommands (all assert the caller holds the lock → else exit 5)
 
@@ -158,8 +244,14 @@ machine-parseable (one line); human detail and errors go to **stderr**.
      (read `holder`, compare session-id); `read_claim <slice>` / `write_claim` /
      `remove_claim` (TSV line ops on `$CLAIMS`, e.g. `grep`/`awk` filter to a temp
      then `mv` — atomic replace); `backoff_sleep <attempt>` (fractional `sleep` with
-     integer fallback). Keep all `shellcheck`-clean (quote everything; `mkdir -p`
-     state dir before any write).
+     integer fallback); `clear_and_own` (the rename-capture CAS of "Lock ownership
+     invariants + atomic clear-and-own": `mv "$LOCK_DIR" "$CAP"`, verify captured
+     stamp == observed-dead `H_obs`, `rm -rf "$CAP"`, `mkdir "$LOCK_DIR"` as the
+     ownership gate, stamp+confirm `holder`==self; restore-or-discard on mismatch;
+     **never** a bare `rm -rf "$LOCK_DIR"`). Keep all `shellcheck`-clean (quote
+     everything; `mkdir -p` state dir before any write).
+   - `lock-verify` is the side-effect-free atomic single read of `holder` (exit 0/5/10
+     per the table) — the holder-assertion primitive W's land calls before `git merge`.
    - Implement every subcommand per the CLI-contract tables above. Lock/claim
      subcommands fail **closed** (non-zero) on any ambiguity.
    - Identity-neutral: `session-id`/`pid` are out-of-band liveness only; **no** git
@@ -171,8 +263,11 @@ machine-parseable (one line); human detail and errors go to **stderr**.
    the helper with a `--session`, (b) fabricate a **live** holder/claimant — a real
    `git worktree add` whose path contains a session-id token so the liveness probe
    reports *alive* — and (c) fabricate a **dead** holder — a session-id with no
-   worktree and a guaranteed-dead pid). All state writes land in the temp repo's
-   `.git/`, never loom's real `.git/`. Cases in the acceptance plan.
+   worktree and a guaranteed-dead pid — and (d) a **race harness** that launches two
+   real `lock-acquire` invocations as **concurrent background subshells** (`&`),
+   `wait`s for both, and captures each one's exit code + the resulting `holder`
+   stamp (a true concurrency test, not a prose assertion). All state writes land in
+   the temp repo's `.git/`, never loom's real `.git/`. Cases in the acceptance plan.
 
 3. **Run the shell gate green and record the evidence** in `## Notes` (see
    Verification).
@@ -212,6 +307,23 @@ Record the pass count (e.g. "N/N green") in the slice progress note.
 - **Lock — live holder NOT cleared (negative).** Holder is **alive** (session-id in
   `git worktree list`) and past `lock-TTL` → contender → **exit 3**; assert holder
   unchanged (the live-but-slow holder is never force-cleared).
+- **Lock — mutual exclusion under concurrent stale reclaim (BLOCKER 2, the
+  safety-critical case).** Seed a single **dead** holder D's stale lock (session-id
+  absent, epoch past `LOOM_LOCK_TTL=0`). Launch **two** contenders A and B racing
+  `lock-acquire` as concurrent background subshells via the race harness; `wait` both.
+  Assert **exactly one** exits 0 and the other exits **3** (non-zero) — never two
+  zeros; and assert `main.lock/holder`'s session-id == the **single** winner (the
+  loser's id is never in `holder`). This proves the rename-capture clear-and-own hands
+  "acquired" to exactly one session. Run it under a small repeat loop (e.g. 10×) to
+  exercise the interleaving, since a single pass can miss a race.
+- **Lock — a second `acquired` is never observable while a first is held.** With A
+  holding the lock (fresh stamp), a second `lock-acquire --session B` (short
+  `LOOM_LOCK_RETRIES`) → **exit 3**, and `lock-verify --session A` → exit 0 while
+  `lock-verify --session B` → exit 5 throughout (the holder is single-valued).
+- **Lock — `lock-verify` holder-assertion (MAJOR).** While A holds: `lock-verify
+  --session A` → **exit 0** (stdout `held`); `lock-verify --session B` → **exit 5**;
+  with no lock present → **exit 5**; with git unavailable / outside a repo → **exit
+  10** (deny). Assert `lock-verify` makes **no** change to `holder`.
 - **Lock — release by non-holder.** `lock-release --session <other>` → exit 5; lock
   intact.
 - **Claim — free slice.** Under a self-held lock, `claim X` → exit 0; assert the
