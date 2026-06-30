@@ -1,13 +1,187 @@
 # Evaluation: multi-session-lock-helper
 
 Verdict: FAIL
-Round: 2
+Round: 3
 Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); spec 04 → "Multi-session
 coordination (ADR 0014)" (the three locked main writes — claim / lease-renew / land —
 and the session-id-primary liveness rule); the Approved slice-plan (CLI contract,
 lock/claim/clear-and-own invariants, fail-closed); `gates/shell.md`; the advisory
 review-findings artifact. Code-review phase: diff `4bb64b9..8f28b59`
 (`plugins/loom/lib/loom-coord.sh` + `.bats`) walked, gate re-run, findings adjudicated.
+
+## Code review — Round 3 (FAIL)
+
+Re-review of the fix commit `692bb14` (delta `8f28b59..692bb14`; full slice
+`4bb64b9..HEAD -- plugins/loom/lib/`). The round-2 FAIL's 4 BLOCKERs + 2 MAJORs +
+2 MINORs were addressed, **but the fix pass introduced new regressions** clustered on
+the three reworked areas (is_alive liveness matching, holderless-lock reclaim, cleanup's
+new recovery override). Adjudicated the refreshed review-findings artifact
+(`/code-review` ran-with-findings R1–R7; `/security-review` ran-clean) plus independent
+verification.
+
+### Gate re-verification (independently re-run)
+
+- `shfmt -i 4 -d` on both files → CLEAN.
+- `shellcheck plugins/loom/lib/loom-coord.sh` → CLEAN (SC3043 suppressed file-wide).
+- `bats plugins/loom/lib/loom-coord.bats` → **37/37 pass** (30 original + 7 new
+  negatives). Existing hook suites untouched.
+
+The gate is genuinely green, **but green is not sufficient**: the 7 new negatives
+prove the F1/F2/F7 fixes (exact-field claim match, lock-gated cleanup mutation,
+session-end ordering) — those are sound and not regressed. But NEG-F3/F4/F6 test only
+the narrow happy variant of the reworked paths and **mask** the new regressions:
+NEG-F3 reclaims a *static* holderless dir with no racing peer (never exercises the
+mkdir→stamp race of R4); NEG-F4 covers only the *trailing* substring `ses-foo` vs
+`ses-foo-bar` (not the *leading* boundary of R2/R3); NEG-F6 fabricates a dead pid
+(99999999) and so encodes the unsafe recovery override (R1) as *expected* behavior
+while never testing a real live session whose stored pid is the ephemeral claim-time
+`$$`. All four new BLOCKER-class defects survive a green gate.
+
+### Round-2 carry-over (resolved — cited against the delta)
+
+- **R2-Finding 1 (BLOCKER, RESOLVED)** — `read_claim`/`write_claim`/`remove_claim`
+  now use `awk -F'\t' -v s="$slice" '$1==s'` / `$1!=s` (sh:193/203/219). Exact
+  first-field match; NEG-F1/F1b prove `v2` ops do not touch `auth-v2`. Fixed.
+- **R2-Finding 2 (BLOCKER, RESOLVED)** — all `CLAIMS` mutation in `cmd_cleanup` is
+  now inside `if [ "$got_lock" -eq 1 ]` (sh:871); lock-less cleanup exits 3
+  fail-closed (sh:920-928). NEG-F2 proves it. Fixed.
+- **R2-Findings 3/6 (BLOCKER) "fixed" but the fixes are unsafe** — see R4/R5 (holderless)
+  and R1/R6 (orphan-worktree override) below; the round-2 deadlock/dead-code is gone
+  but replaced by new safety breaks.
+- **R2-Findings 4/7/8/9** — F4 added only the *trailing* anchor (R2/R3 remain);
+  F7 session-end ordering is correctly fixed (NEG-F7 proves got_lock=0 preserves
+  state); F8/F9 cleanup applied (dead `SUBCOMMAND` dance removed, worktree-list hoisted).
+
+### Findings adjudication (advisory review-findings + independent verification)
+
+`/code-review` R1–R7: **7 CONFIRMED, 0 rejected** (all reproduced empirically against
+the helper). `/security-review` ran-clean (informational — no vuln to adjudicate; its
+note that the unescaped `grep -qE "${sid}"` is a *correctness* not *security* defect is
+correct, and is adjudicated as R3 below).
+
+- [BLOCKER] **R1 — cleanup's recovery override destroys LIVE worktrees + double-grants
+  (sh:886-897).** The new override sweeps a claim whose session-id IS present in
+  `git worktree list` when `lease-age ≥ LOOM_LEASE_TTL` AND `! kill -0 "$pid"`. But the
+  stored `pid` is the **ephemeral claim-time `$$`** of the short-lived loom-coord
+  process (written at sh:478/510/586); that process has long exited, so `kill -0`
+  is ~always false → the guard collapses to a **pure lease-age test**. A live
+  `/loom:run` session holding a slice for >`LOOM_LEASE_TTL` (default 3600s) without an
+  intervening `renew` (a long dev/eval pass — plausible) has its still-active worktree
+  `git worktree remove -f`'d (**uncommitted work destroyed**) and its claim row deleted
+  → a peer claims the same slice → **double-grant against main**. Directly violates the
+  session-id-primary rule (plan line 65, ADR 0014: "Force-clear requires session-id
+  **absent**") and the cleanup contract ("**Live** sessions/claims/locks are
+  untouched", plan line 225). Empirically confirmed the ephemeral-pid premise; NEG-F6
+  encodes this very removal as "correct" using a fabricated dead pid.
+- [BLOCKER] **R2 — worktree-list match unanchored at the LEADING boundary
+  (`grep -qE "${sid}(/|$)"`, sh:127 is_alive, sh:887/906 cleanup).** Only the trailing
+  side is anchored. Reproduced: dead `bar` matches live `worktree /home/u/wt-foo-bar`.
+  In `is_alive` this is a false-**alive** (reclaim wedge); in cleanup it makes the R1
+  override fire on the **live `foo-bar`** worktree and extract *its* path for
+  `worktree remove -f` → live-worktree destruction. The round-2 F4 fix added the
+  trailing anchor but left the leading boundary open. Must match the session-id as a
+  full path segment at both boundaries.
+- [BLOCKER] **R4 — holderless-lock reclaim double-owns the main lock (sh:379, dup
+  sh:782 session-end / sh:856 cleanup).** The new `elif [ -d "$LOCK_DIR" ]` branch
+  treats ANY holderless dir as reclaimable **with no age gate** — but `cmd_lock_acquire`
+  is non-atomic between `mkdir "$LOCK_DIR"` (sh:348) and `stamp_holder` (sh:349), so a
+  holderless dir also exists transiently during a LIVE peer's normal acquire. Trace:
+  X `mkdir`s the dir; Y sees mkdir-fail + no holder + dir present → `clear_and_own`
+  with empty `h_obs` (the `is_alive` guard at sh:281 is skipped, the ABA check at
+  sh:309 passes vacuously since both stamps are empty) → Y `mv`s X's fresh dir away,
+  `rm`s it, `mkdir`s a new one, stamps Y, returns `acquired`. X then runs its
+  unconditional `stamp_holder` into Y's dir and also returns `acquired`. Both pass a
+  re-assert at different instants (Y between its stamp and X's overwrite; X after) →
+  **both perform a main write → lock double-ownership**. INV-2 does not save this:
+  its premise (plan line 156) is that `holder` is installed only by a winning `mkdir`
+  and is stable-single-valued, but here `stamp_holder` writes `holder` without
+  re-verifying ownership of the dir it created. The round-2 required-change #3 said
+  "treat lock dir … with absent/empty holder **past TTL** as stale" — the implementation
+  dropped the TTL/age gate. NEG-F3 never races a mid-acquire peer, so it misses this.
+- [BLOCKER] **R5 — cold-restart re-adoption wedges on a holderless lock
+  (`cmd_lock_acquire_internal`, sh:676-710).** session-bootstrap's inline acquire was
+  NOT given the holderless branch the other three call sites received: its `mkdir`
+  fails, `[ -f "$HOLDER_FILE" ]` is false, there is no `elif [ -d "$LOCK_DIR" ]` → it
+  backs off, exhausts retries, exits 3 "could not acquire lock". A session that crashed
+  mid-acquire (leaving a holderless dir) and then cold-restarts cannot renew/re-adopt
+  its claims — a **cold-restart wedge**, contradicting ADR 0014's "cold-restart
+  re-adoption must not wedge" and the fix's own "holderless = always reclaimable" claim
+  elsewhere. (Note: the *correct* repair is the race-safe holderless handling of R4,
+  applied consistently here too — not the current unsafe branch.)
+- [MAJOR] **R3 — `is_alive` interpolates `$sid` into an ERE unescaped (sh:127).** The
+  F4 fix switched `grep -qF` (literal) → `grep -qE` to add the anchor, but a
+  caller-supplied `--session` token with ERE metacharacters now mis-parses:
+  reproduced `run[1...` → grep exit 2 (regex error) → the `if` reads as no-match →
+  falls through to the (ephemeral, dead) pid probe → a genuinely **live** session is
+  reported DEAD → its slice is reclaimed → double-grant; a milder `a.c` over-matches
+  `wt-abc` → false-alive wedge. Default uuids are ERE-safe so the happy path holds,
+  but the plan explicitly supports arbitrary caller tokens; match the id literally
+  (boundary-anchored fixed-string / awk segment-exact), not as a regex.
+- [MAJOR] **R6 — orphan-worktree path extraction truncates paths with spaces
+  (`awk '/^worktree /{print $2}'`, sh:578 reclaim / sh:904 cleanup).** Reproduced:
+  `worktree /Users/me/my repos/wt-x` → `$2` = `/Users/me/my` → `[ -d "$wt_path" ]`
+  false → `worktree remove -f` never runs → the orphan leaks on disk and stays
+  registered (so its session-id lingers in `git worktree list`). Strip the leading
+  `worktree ` prefix instead of taking `$2`. (Narrower than round-2 Finding 6, which
+  printed nothing for ALL paths; now broken only for spaced paths — macOS home dirs
+  qualify.)
+- [MINOR] **R7 — cleanup's inline match lacks the empty-sid guard `is_alive` has
+  (sh:887).** A claims row with an empty session-id field makes `grep -qE "(/|$)"`
+  match every worktree line (confirmed), mis-driving the override and the wt_path
+  extraction (which could then target an arbitrary live worktree). The helper never
+  writes an empty-sid row, so this needs a corrupted/hand-seeded registry to trigger;
+  mirror the `is_alive` `[ -z "$sid" ] && skip` guard. Low severity, does not block on
+  its own.
+
+### Independent observations
+
+- The four BLOCKERs share two root causes: (a) the worktree-list liveness probe matches
+  the session-id as an **unanchored / regex substring** instead of an exact path
+  segment (R2, R3, and feeds R1/R7); and (b) the **holderless-lock reclaim has no age
+  gate and `stamp_holder` is unconditional**, so a live peer's non-atomic
+  mkdir→stamp window is reclaimable (R4, R5). Fixing the *patterns* — a literal
+  both-boundary segment match, and a TTL/mtime-gated + ownership-reverifying acquire —
+  is the durable repair, not the per-call-site patches.
+- The recovery override (R1) is **fundamentally unsound under session-id-primary** and
+  should be removed/redesigned, not tuned: any signal that force-clears a session
+  *present* in the worktree list contradicts ADR 0014. Reclaiming a crashed-but-dir-on-disk
+  worktree needs a liveness signal independent of the ephemeral claim-time pid (e.g.
+  rely on `git worktree prune` + session-id-absent, or a durable per-session liveness
+  token), never lease-age + `kill -0 $$`.
+- **Not regressed (verified):** the rename-capture CAS core for the *holder-present*
+  stale path (mkdir is the sole ownership gate; ABA mismatch never installs ownership),
+  lock-TTL (30s) ≠ lease-TTL (3600s), fail-closed exit 10 outside a repo (FC1/FC1b),
+  `lock-verify` (0/5/10), and the F1/F2/F7 fixes above. The new defects are confined to
+  the liveness-match and holderless-reclaim machinery added this pass.
+
+### Required changes (for FAIL)
+
+1. **Remove the cleanup recovery override (R1).** Do not sweep a claim whose session-id
+   is present in `git worktree list`, and never gate reclaim on the ephemeral claim-time
+   `$$`. Reclaim crashed-but-on-disk worktrees via a pid-independent signal
+   (`prune` + session-id-absent, or a durable liveness token). Add a bats case: a LIVE
+   session past `LOOM_LEASE_TTL` without `renew` (real worktree, claim pid = a
+   process that has exited) is **NOT** swept and its worktree survives.
+2. **Anchor the worktree-list match at BOTH boundaries as a literal (R2, R3).** Replace
+   `grep -qE "${sid}(/|$)"` in `is_alive` (sh:127) and cleanup (sh:887/906) with a
+   fixed-string, full-path-segment match (e.g. awk over `git worktree list --porcelain`
+   `worktree ` paths, exact-segment compare). Add bats: dead `bar` must NOT match live
+   `wt-foo-bar`; a session-id with ERE metacharacters is matched literally.
+3. **Make holderless-lock reclaim race-safe (R4).** Gate it on age (holderless dir
+   persisted past `lock-TTL`, e.g. via dir mtime) AND/OR make `stamp_holder` verify the
+   acquirer still owns the dir it `mkdir`'d (fail closed otherwise) so a displaced live
+   acquirer cannot also return `acquired`. Add a concurrency bats case racing a
+   contender against a peer paused between `mkdir` and `stamp_holder`; assert exactly
+   one holder ever acts.
+4. **Give `cmd_lock_acquire_internal` the same corrected holderless/stale handling
+   (R5)** so cold-restart re-adoption does not wedge on a holderless dir. Add a bats
+   case: `session-bootstrap` recovers (renews claims) when a holderless lock dir is
+   present.
+5. **Fix orphan-worktree path extraction for paths with spaces (R6)** — strip the
+   `worktree ` prefix rather than `awk '{print $2}'`. Add a spaced-path bats case.
+6. **Add the empty-sid guard to cleanup's inline match (R7).**
+7. Strengthen NEG-F3/F4/F6 so they actually exercise the regression surface (mid-acquire
+   race; leading-boundary substring; spaced path + a real live-session-not-swept case).
 
 ## Code review — Round 2 (FAIL)
 
