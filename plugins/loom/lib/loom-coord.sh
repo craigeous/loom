@@ -121,8 +121,10 @@ is_alive() {
     if [ -z "$sid" ]; then
         return 1
     fi
-    # Primary: session-id-in-worktree-list
-    if git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | grep -qF "$sid"; then
+    # Primary: session-id-in-worktree-list (anchored: sid must not be a substring of
+    # a longer live session-id path component — match sid at end-of-line or before /)
+    if git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
+        grep -qE "${sid}(/|$)"; then
         return 0
     fi
     # Secondary: pid probe (only when pid supplied and session-id not found)
@@ -181,13 +183,14 @@ backoff_sleep() {
 }
 
 # read_claim <slice> — prints the TSV line for slice, or empty
+# Uses exact first-field match (awk) to avoid substring collisions (e.g. "v2" != "auth-v2")
 read_claim() {
     local slice="$1"
     if [ ! -f "$CLAIMS" ]; then
         printf ''
         return 0
     fi
-    grep -F "${slice}	" "$CLAIMS" 2>/dev/null | head -1
+    awk -F'\t' -v s="$slice" '$1==s' "$CLAIMS" 2>/dev/null | head -1
 }
 
 # write_claim <slice> <session-id> <pid> <epoch> — atomic TSV upsert
@@ -197,7 +200,7 @@ write_claim() {
     local tmp
     tmp="${CLAIMS}.tmp.$$"
     if [ -f "$CLAIMS" ]; then
-        grep -vF "${slice}	" "$CLAIMS" 2>/dev/null >"$tmp" || true
+        awk -F'\t' -v s="$slice" '$1!=s' "$CLAIMS" 2>/dev/null >"$tmp" || true
     else
         : >"$tmp"
     fi
@@ -213,7 +216,7 @@ remove_claim() {
     fi
     local tmp
     tmp="${CLAIMS}.tmp.$$"
-    grep -vF "${slice}	" "$CLAIMS" 2>/dev/null >"$tmp" || true
+    awk -F'\t' -v s="$slice" '$1!=s' "$CLAIMS" 2>/dev/null >"$tmp" || true
     mv "$tmp" "$CLAIMS"
 }
 
@@ -268,19 +271,20 @@ assert_lock_held() {
 # Returns 0 on successful ownership, 1 if lost the race (caller back-off)
 # ---------------------------------------------------------------------------
 clear_and_own() {
-    # Read the observed stale holder stamp
+    # Read the observed holder stamp — may be empty for a holderless lock dir
+    # (crash between mkdir LOCK_DIR and stamp_holder leaves no holder file).
     local h_obs
-    h_obs=$(read_holder 2>/dev/null) || h_obs=""
-    if [ -z "$h_obs" ]; then
-        return 1
-    fi
-    local h_obs_sid h_obs_pid
-    h_obs_sid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $1}')
-    h_obs_pid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $2}')
+    h_obs=$(cat "$HOLDER_FILE" 2>/dev/null) || h_obs=""
 
-    # Double-check still dead before attempting capture
-    if is_alive "$h_obs_sid" "$h_obs_pid"; then
-        return 1
+    # If there IS a holder, verify it is dead before attempting capture.
+    # A holderless lock dir (h_obs empty) is always reclaimable — no live owner.
+    if [ -n "$h_obs" ]; then
+        local h_obs_sid h_obs_pid
+        h_obs_sid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $1}')
+        h_obs_pid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $2}')
+        if is_alive "$h_obs_sid" "$h_obs_pid"; then
+            return 1
+        fi
     fi
 
     local cap_epoch
@@ -294,13 +298,15 @@ clear_and_own() {
         return 1
     fi
 
-    # We captured the dir — verify it holds the stamp we observed (ABA check)
+    # We captured the dir — verify it holds the stamp we observed (ABA check).
+    # If h_obs was empty (holderless), cap_stamp must also be empty; a non-empty
+    # cap_stamp means a live peer stamped the dir in the window — treat as ABA.
     local cap_stamp cap_sid cap_pid
     cap_stamp=$(cat "$CAP/holder" 2>/dev/null) || cap_stamp=""
     cap_sid=$(printf '%s' "$cap_stamp" | awk -F'\t' '{print $1}')
     cap_pid=$(printf '%s' "$cap_stamp" | awk -F'\t' '{print $2}')
 
-    if [ "$cap_stamp" != "$h_obs" ] || is_alive "$cap_sid" "$cap_pid"; then
+    if [ "$cap_stamp" != "$h_obs" ] || { [ -n "$cap_sid" ] && is_alive "$cap_sid" "$cap_pid"; }; then
         # ABA: a live peer reclaimed in the interim; do NOT install ownership
         if [ ! -d "$LOCK_DIR" ]; then
             mv "$CAP" "$LOCK_DIR" 2>/dev/null || rm -rf "$CAP"
@@ -369,6 +375,13 @@ cmd_lock_acquire() {
                     exit 0
                 fi
                 # Lost the CAS race — fall through to backoff
+            fi
+        elif [ -d "$LOCK_DIR" ]; then
+            # Holderless lock dir (crash between mkdir and stamp_holder) —
+            # always reclaimable; the ABA check in clear_and_own protects us.
+            if clear_and_own; then
+                printf 'acquired\n'
+                exit 0
             fi
         fi
 
@@ -559,11 +572,11 @@ cmd_reclaim() {
 
     # Dead holder — prune orphan worktree, overwrite claim
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
-    # Find and remove the orphan worktree if it still shows (may already be pruned)
+    # Find and remove the orphan worktree if it still shows (e.g. dir still on disk)
     local wt_path
     wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
-        awk '/^worktree /{p=$2} /^branch /{b=$2} /^/{if(p && b) print p; p=""; b=""}' |
-        grep -F "$sid" | head -1)
+        awk '/^worktree /{print $2}' |
+        grep -E "${sid}(/|$)" | head -1)
     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
         git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
     fi
@@ -659,9 +672,7 @@ cmd_session_bootstrap() {
         exit 5
     fi
 
-    # Acquire lock to renew claims
-    local ORIG_SUBCOMMAND="$SUBCOMMAND"
-    SUBCOMMAND="lock-acquire"
+    # Acquire lock to renew claims (inline acquire loop — no exit, returns 0/1)
     cmd_lock_acquire_internal() {
         # Inline acquire without exit; returns 0 on success
         mkdir -p "$STATE_DIR"
@@ -697,7 +708,6 @@ cmd_session_bootstrap() {
             backoff_sleep "$((attempt - 1))"
         done
     }
-    SUBCOMMAND="$ORIG_SUBCOMMAND"
 
     if ! cmd_lock_acquire_internal; then
         printf 'loom-coord session-bootstrap: could not acquire lock\n' >&2
@@ -741,9 +751,10 @@ cmd_session_end() {
     assert_session
     local sess_dir="$STATE_DIR/session-$SESSION_ID"
 
-    # Release any still-held claims (self-locking)
+    # Release any still-held claims (self-locking).
+    # IMPORTANT: do NOT rm -rf the session dir when got_lock=0 — that would orphan
+    # claim registry rows (no held-claims backref → permanent double-grant risk).
     if [ -f "$sess_dir/held-claims" ]; then
-        # Acquire lock briefly
         local attempt=0
         local got_lock=0
         mkdir -p "$STATE_DIR"
@@ -752,6 +763,28 @@ cmd_session_end() {
                 stamp_holder
                 got_lock=1
                 break
+            fi
+            # Stale-lock handling: if the lock is past TTL and held by a dead session,
+            # reclaim it so session-end can release our claims properly.
+            if [ -f "$HOLDER_FILE" ]; then
+                local h_sid h_pid h_epoch elapsed cur_epoch
+                h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
+                h_pid=$(awk -F'\t' '{print $2}' "$HOLDER_FILE" 2>/dev/null)
+                h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
+                cur_epoch=$(now)
+                elapsed=$((cur_epoch - h_epoch))
+                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
+                    if clear_and_own; then
+                        got_lock=1
+                        break
+                    fi
+                fi
+            elif [ -d "$LOCK_DIR" ]; then
+                # Holderless lock dir — reclaimable
+                if clear_and_own; then
+                    got_lock=1
+                    break
+                fi
             fi
             attempt=$((attempt + 1))
             backoff_sleep "$((attempt - 1))"
@@ -770,10 +803,16 @@ cmd_session_end() {
                 fi
             done <"$sess_dir/held-claims"
             rm -rf "$LOCK_DIR"
+            # Only remove session dir after claims have been released
+            rm -rf "$sess_dir"
+        else
+            printf 'loom-coord session-end: could not acquire lock; claims not released\n' >&2
+            exit 3
         fi
+    else
+        # No held-claims file — safe to remove the session dir directly
+        rm -rf "$sess_dir"
     fi
-
-    rm -rf "$sess_dir"
     exit 0
 }
 
@@ -786,20 +825,21 @@ cmd_cleanup() {
     # Prune stale worktree refs
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
-    # Acquire lock
+    # Acquire lock (with stale-lock and holderless handling)
     local attempt=0
     local got_lock=0
+    local cleanup_sid="${SESSION_ID:-cleanup-$$}"
     while [ "$attempt" -lt "$LOOM_LOCK_RETRIES" ]; do
         if mkdir "$LOCK_DIR" 2>/dev/null; then
             if [ -n "$SESSION_ID" ]; then
                 stamp_holder
             else
-                printf 'cleanup\t0\t%s\n' "$(now)" >"$HOLDER_FILE"
+                printf '%s\t0\t%s\n' "$cleanup_sid" "$(now)" >"$HOLDER_FILE"
             fi
             got_lock=1
             break
         fi
-        # Check if stale
+        # Check if stale (holder present and dead) or holderless
         if [ -f "$HOLDER_FILE" ]; then
             local h_sid h_pid h_epoch elapsed cur_epoch
             h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
@@ -808,10 +848,16 @@ cmd_cleanup() {
             cur_epoch=$(now)
             elapsed=$((cur_epoch - h_epoch))
             if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
-                if SESSION_ID="${SESSION_ID:-cleanup-$$}" clear_and_own; then
+                if SESSION_ID="$cleanup_sid" clear_and_own; then
                     got_lock=1
                     break
                 fi
+            fi
+        elif [ -d "$LOCK_DIR" ]; then
+            # Holderless lock dir — reclaimable
+            if SESSION_ID="$cleanup_sid" clear_and_own; then
+                got_lock=1
+                break
             fi
         fi
         attempt=$((attempt + 1))
@@ -821,32 +867,65 @@ cmd_cleanup() {
     local swept=0
     local skipped=0
 
-    if [ -f "$CLAIMS" ]; then
-        local tmp
-        tmp="${CLAIMS}.tmp.$$"
-        : >"$tmp"
-        while IFS='	' read -r slice sid pid epoch; do
-            [ -z "$slice" ] && continue
-            if is_alive "$sid" "$pid"; then
-                printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
-                skipped=$((skipped + 1))
-            else
-                # Dead — remove orphan worktree
-                local wt_path
-                wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
-                    awk '/^worktree /{p=$2} /^branch /{b=$2} /^/{if(p && b) print p; p=""; b=""}' |
-                    grep -F "$sid" | head -1)
-                if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
-                    git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
+    # CLAIMS mutation MUST be under the lock (F2: mutual exclusion on shared store)
+    if [ "$got_lock" -eq 1 ]; then
+        if [ -f "$CLAIMS" ]; then
+            local tmp
+            tmp="${CLAIMS}.tmp.$$"
+            : >"$tmp"
+            # Hoist worktree list once for the entire sweep (F9: avoid per-claim re-run)
+            local wt_list
+            wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
+            while IFS='	' read -r slice sid pid epoch; do
+                [ -z "$slice" ] && continue
+                # Determine if the session is reclaimable.
+                # Primary: session-id absent from worktree list → dead.
+                # Recovery override: session-id in list (dir still on disk) but pid
+                # is dead AND lease is past TTL → treat as reclaimable so cleanup
+                # can force-remove the stale dir and reclaim the claim.
+                local is_dead=0
+                if printf '%s\n' "$wt_list" | grep -qE "${sid}(/|$)"; then
+                    local cur_ep elapsed_lease
+                    cur_ep=$(now)
+                    elapsed_lease=$((cur_ep - epoch))
+                    if [ "$elapsed_lease" -ge "$LOOM_LEASE_TTL" ] &&
+                        ! kill -0 "$pid" 2>/dev/null; then
+                        is_dead=1
+                    fi
+                else
+                    is_dead=1
                 fi
-                # Remove dead session dir
-                if [ -d "$STATE_DIR/session-$sid" ]; then
-                    rm -rf "$STATE_DIR/session-$sid"
+                if [ "$is_dead" -eq 0 ]; then
+                    printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
+                    skipped=$((skipped + 1))
+                else
+                    # Dead — force-remove orphan worktree if still registered (F6 fix)
+                    local wt_path
+                    wt_path=$(printf '%s\n' "$wt_list" |
+                        awk '/^worktree /{print $2}' |
+                        grep -E "${sid}(/|$)" | head -1)
+                    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+                        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
+                    fi
+                    # Remove dead session dir
+                    if [ -d "$STATE_DIR/session-$sid" ]; then
+                        rm -rf "$STATE_DIR/session-$sid"
+                    fi
+                    swept=$((swept + 1))
                 fi
-                swept=$((swept + 1))
-            fi
-        done <"$CLAIMS"
-        mv "$tmp" "$CLAIMS"
+            done <"$CLAIMS"
+            mv "$tmp" "$CLAIMS"
+        fi
+        rm -rf "$LOCK_DIR"
+    else
+        # Could not acquire lock — refuse to mutate shared state (fail-closed)
+        printf 'loom-coord cleanup: could not acquire lock; claims sweep skipped\n' >&2
+        # Sweep orphaned CAP dirs (safe — they are ours, no lock needed)
+        for cap_dir in "$STATE_DIR"/.main.lock.reclaiming.*; do
+            [ -d "$cap_dir" ] || continue
+            rm -rf "$cap_dir"
+        done
+        exit 3
     fi
 
     # Sweep orphaned CAP dirs
@@ -854,10 +933,6 @@ cmd_cleanup() {
         [ -d "$cap_dir" ] || continue
         rm -rf "$cap_dir"
     done
-
-    if [ "$got_lock" -eq 1 ]; then
-        rm -rf "$LOCK_DIR"
-    fi
 
     printf 'swept %d dead claims; skipped %d live claims\n' "$swept" "$skipped"
     exit 0

@@ -684,6 +684,215 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# NEG-F1 — F1: exact first-field match — sibling "auth-v2" survives a "v2" op
+# ---------------------------------------------------------------------------
+
+@test "NEG-F1 claiming 'v2' does not touch 'auth-v2' registry row" {
+    make_repo
+    cd "$REPO"
+
+    # Plant an existing claim for "auth-v2" (a live sibling session)
+    local sibling_sid="ses-authv2-owner"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sibling_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+    mkdir -p "$REPO/.git/loom"
+    printf 'auth-v2\t%s\t%s\t%s\n' "$sibling_sid" "$$" "$(date +%s)" \
+        >"$REPO/.git/loom/claims"
+
+    # Our session acquires the lock and claims "v2" (a different slice)
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-v2-owner"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim v2 --session "ses-v2-owner"
+    [ "$status" -eq 0 ]
+
+    # "auth-v2" row must still exist, unchanged
+    grep -qF "auth-v2	$sibling_sid" "$REPO/.git/loom/claims"
+    # "v2" row must also exist
+    grep -qF "v2	ses-v2-owner" "$REPO/.git/loom/claims"
+    # No stray row where first field is "v2" but name is "auth-v2"
+    local v2_count
+    v2_count=$(awk -F'\t' '$1=="v2"' "$REPO/.git/loom/claims" | wc -l | tr -d ' ')
+    [ "$v2_count" -eq 1 ]
+    teardown
+}
+
+@test "NEG-F1b remove_claim 'v2' does not remove 'auth-v2'" {
+    make_repo
+    cd "$REPO"
+
+    # Plant both claims
+    local sibling_sid="ses-authv2-owner-b"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sibling_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+    mkdir -p "$REPO/.git/loom"
+    printf 'auth-v2\t%s\t%s\t%s\nv2\tses-v2-b\t%s\t%s\n' \
+        "$sibling_sid" "$$" "$(date +%s)" "$$" "$(date +%s)" \
+        >"$REPO/.git/loom/claims"
+
+    # Acquire lock as "v2" session and release its own claim
+    mkdir -p "$REPO/.git/loom/main.lock"
+    printf 'ses-v2-b\t%s\t%s\n' "$$" "$(date +%s)" \
+        >"$REPO/.git/loom/main.lock/holder"
+    mkdir -p "$REPO/.git/loom/session-ses-v2-b"
+    printf 'v2\n' >"$REPO/.git/loom/session-ses-v2-b/held-claims"
+
+    run sh "$COORD" release-claim v2 --session "ses-v2-b"
+    [ "$status" -eq 0 ]
+
+    # "auth-v2" must still be in the registry
+    grep -qF "auth-v2	$sibling_sid" "$REPO/.git/loom/claims"
+    # "v2" must be gone
+    ! grep -qF "v2	ses-v2-b" "$REPO/.git/loom/claims" 2>/dev/null
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# NEG-F2 — F2: lock-less cleanup does not mutate claims
+# ---------------------------------------------------------------------------
+
+@test "NEG-F2 cleanup with live lock holder: exit non-zero, claims file unchanged" {
+    make_repo
+    cd "$REPO"
+
+    # Seed two claims
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-A\tses-A\t99\t1000\nslice-B\tses-B\t99\t1000\n' \
+        >"$REPO/.git/loom/claims"
+    local before_claims
+    before_claims=$(cat "$REPO/.git/loom/claims")
+
+    # Plant a live holder so cleanup cannot acquire the lock
+    make_live_holder "ses-lockowner-F2" >/dev/null
+    # Force long TTL so cleanup won't try to reclaim
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" cleanup
+    [ "$status" -ne 0 ]
+
+    # Claims file must be byte-for-byte identical
+    local after_claims
+    after_claims=$(cat "$REPO/.git/loom/claims")
+    [ "$before_claims" = "$after_claims" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# NEG-F3 — F3: holderless lock dir older than TTL is reclaimable
+# ---------------------------------------------------------------------------
+
+@test "NEG-F3 holderless lock dir (no holder file) is reclaimed, not permanent deadlock" {
+    make_repo
+    cd "$REPO"
+
+    # Simulate crash between mkdir LOCK_DIR and stamp_holder: dir exists, no holder
+    mkdir -p "$REPO/.git/loom/main.lock"
+    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
+
+    # A new contender should be able to acquire (holderless = always reclaimable)
+    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-F3"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acquired" ]
+    [ "$(holder_sid)" = "ses-F3" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# NEG-F4 — F4: substring-collision: dead "ses-foo" not falsely alive via live "ses-foo-bar"
+# ---------------------------------------------------------------------------
+
+@test "NEG-F4 dead ses-foo not reported alive because live ses-foo-bar exists" {
+    make_repo
+    cd "$REPO"
+
+    # Live session "ses-foo-bar": real worktree with that string in path
+    local live_sid="ses-foo-bar"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    # Dead session "ses-foo": claim in registry, no worktree, dead pid
+    local dead_sid="ses-foo"
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-F4\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+
+    # Acquire lock as our reclaimer and reclaim slice-F4
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-F4"
+    [ "$status" -eq 0 ]
+
+    # reclaim must succeed: ses-foo is dead (not falsely alive via ses-foo-bar substring)
+    run sh "$COORD" reclaim slice-F4 --session "ses-reclaimer-F4"
+    [ "$status" -eq 0 ]
+    [ "$output" = "reclaimed slice-F4" ]
+    # Registry now shows reclaimer as owner
+    grep -qF "slice-F4	ses-reclaimer-F4" "$REPO/.git/loom/claims"
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# NEG-F6 — F6: orphan worktree dir still on disk is actually removed by reclaim
+# ---------------------------------------------------------------------------
+
+@test "NEG-F6 cleanup with orphan worktree dir still on disk: worktree removed, claim swept" {
+    make_repo
+    cd "$REPO"
+
+    # Create a worktree for the dead session — do NOT delete the dir (simulate crash
+    # where only the process died but the worktree dir remains on disk).
+    local dead_sid="ses-dead-F6"
+    local wt_dead
+    wt_dead="$(cd "$REPO/.." && pwd)/wt-${dead_sid}"
+    git -C "$REPO" worktree add -q "$wt_dead" HEAD
+    # dir wt_dead still exists on disk
+
+    # Plant the dead session's claim: dead pid + epoch=0 so lease is always past TTL
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-F6\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+
+    # cleanup with LOOM_LEASE_TTL=0 so the dead-pid+expired-lease recovery triggers
+    run env LOOM_LOCK_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"swept 1"* ]]
+
+    # The orphan worktree must be gone from git worktree list
+    ! git -C "$REPO" worktree list --porcelain 2>/dev/null | grep -qF "$dead_sid"
+    # Claim must be removed from the registry
+    ! grep -qF "slice-F6" "$REPO/.git/loom/claims" 2>/dev/null
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# NEG-F7 — F7: session-end under lock contention does not orphan claims
+# ---------------------------------------------------------------------------
+
+@test "NEG-F7 session-end when lock busy: exit non-zero, claims and session dir preserved" {
+    make_repo
+    cd "$REPO"
+
+    local our_sid="ses-F7"
+
+    # Set up our session with a claim in the registry
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-F7\t%s\t%s\t%s\n' "$our_sid" "$$" "$(date +%s)" \
+        >"$REPO/.git/loom/claims"
+    mkdir -p "$REPO/.git/loom/session-${our_sid}"
+    printf 'slice-F7\n' >"$REPO/.git/loom/session-${our_sid}/held-claims"
+    touch "$REPO/.git/loom/session-${our_sid}/checkpoint"
+
+    # Plant a live lock holder so session-end cannot acquire the lock
+    make_live_holder "ses-lockowner-F7" >/dev/null
+
+    # session-end should exit non-zero (can't release claims) and preserve state
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" session-end --session "$our_sid"
+    [ "$status" -ne 0 ]
+
+    # Claim must still be in registry (not orphaned)
+    grep -qF "slice-F7	$our_sid" "$REPO/.git/loom/claims"
+    # Session dir must still exist (not deleted while claims unreleased)
+    [ -d "$REPO/.git/loom/session-${our_sid}" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
 # REG1 — Regression: existing hook suites not broken
 # ---------------------------------------------------------------------------
 

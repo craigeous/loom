@@ -1,6 +1,6 @@
 # Multi-Session Lock / Claim Coordination Helper
 
-Status: In Progress
+Status: Implemented
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014)"; ADR 0014 §1/§2/§3 + §Consequences (the helper contract)
 
@@ -365,11 +365,22 @@ new hook entry — the helper is deliberately unregistered).
 
 ## Notes
 
-**Gate evidence (2026-06-30):**
+**Gate evidence (round 3, 2026-06-30):**
 - `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
-- `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN (SC3043 suppressed file-wide; local is supported by all real sh implementations)
-- `bats plugins/loom/lib/loom-coord.bats` → 30/30 pass
+- `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN (SC3043 suppressed file-wide)
+- `bats plugins/loom/lib/loom-coord.bats` → 37/37 pass (30 original + 7 new negatives)
 - Existing hook suites unchanged: `bats plugins/loom/hooks/git-identity-guard.bats plugins/loom/hooks/precompact-write-ahead-backstop.bats` → 39/39 pass
+
+**Round-3 fixes (eval round-2 FAIL):**
+- F1: replaced unanchored `grep -F "${slice}\t"` in `read_claim`/`write_claim`/`remove_claim` with `awk -F'\t' -v s="$slice" '$1==s'` / `$1!=s` (exact first-field match; prevents `v2` op from touching `auth-v2`).
+- F2: guarded all `CLAIMS` mutation in `cmd_cleanup` behind `got_lock=1`; exits 3 (fail-closed) when lock unavailable.
+- F3: `clear_and_own` no longer returns 1 on empty holder; `cmd_lock_acquire` and `cmd_session_end` now attempt `clear_and_own` on a holderless lock dir; holderless is always reclaimable.
+- F4: `is_alive` primary probe anchored to `grep -qE "${sid}(/|$)"` so `ses-foo` doesn't match `wt-ses-foo-bar`.
+- F6: broken `awk '/^/{…}'` replaced with `awk '/^worktree /{print $2}'` in both `cmd_reclaim` and `cmd_cleanup`; `cmd_cleanup` adds dead-pid+expired-lease override to force-remove stale worktree dirs.
+- F7: `cmd_session_end` adds stale-lock handling; `rm -rf $sess_dir` only after successful lock+claim-release; exits 3 when lock unavailable.
+- F8: removed dead `ORIG_SUBCOMMAND`/`SUBCOMMAND` dance in `cmd_session_bootstrap`.
+- F9: hoisted `git worktree list --porcelain` to run once per cleanup sweep.
+- 7 new negative bats cases: NEG-F1, NEG-F1b, NEG-F2, NEG-F3, NEG-F4, NEG-F6, NEG-F7.
 
 **Key implementation decisions recorded here:**
 - `add_held_claim` does `mkdir -p` on the session dir (defensive, works even if session-start not called first).
