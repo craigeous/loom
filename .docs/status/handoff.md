@@ -357,6 +357,19 @@ source of truth; `roadmap.md` is milestone order.
    the identity-neutral review-findings artifact, then blind code-eval (resolving PASS closes Round 2;
    new FAIL → Round 3; escalate at 5). Watch the fix's new constructs (F4 `grep -E` with interpolated
    `$sid`; F6 awk; F3 reclaim) — the blind code-eval adjudicates, orchestrator does not pre-judge.
+   **Re-review DONE — the fixes introduced REGRESSIONS.** `/code-review` = ran-with-findings (17 verified
+   → **7 distinct NEW defects**, several CONFIRMED, several demonstrated): R1 cleanup override gates on the
+   ephemeral claim-time `$$` pid (always dead) → collapses to lease-age → reaps a LIVE >TTL-unrenewed
+   session's worktree (`rm -f` uncommitted work) + double-grant; R2 F4 `grep -qE "${sid}(/|$)"` unanchored
+   at the LEADING boundary (dead `bar` matches live `wt-foo-bar`); R3 F4 interpolates `$sid` unescaped into
+   an ERE (`run[1]`→grep error→live session reported dead); R4 new holderless reclaim races the
+   `mkdir`→`stamp_holder` window → lock double-grant (dup at cleanup/session-end); R5 `session-bootstrap`
+   inline acquire missing the holderless branch → cold-restart wedges; R6 F6 awk `{print $2}` truncates
+   space-containing worktree paths; R7 missing empty-sid guard. `/security-review` = ran-clean.
+   Findings artifact refreshed for this round. **NEXT ACTION:** blind code-eval adjudicates → almost
+   certainly FAIL `Round: 3` (the fix regressed) → developer round-3 fix. **META-WATCH:** fix-introduced-
+   regressions = the thrashing pattern the 5-FAIL round limit guards; at round 5 escalate (pause+summary,
+   incl. whether hand-rolled POSIX-sh concurrency is the right mechanism). Currently round 2→3 of 5.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
