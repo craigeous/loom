@@ -231,6 +231,25 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
+0. **ACTIVE THREAD (this session) — multi-session worktree coordination (new ADR 0014, extends
+   immutable ADR 0008).** Owner-reported: running **multiple independent top-level `/loom:run`
+   sessions** against the same repo causes collisions. ADR 0008 only makes *one* orchestrator's
+   sub-agent worktrees conflict-free; "living docs main-only, **serialized**" assumes a single
+   orchestrator. With N sessions they race at four points: the shared `main` working tree (file
+   clobber + `index.lock`); the driver-loop dispatch (both pick the **same** next action → same
+   slice twice); main's living-doc + `slice-plans/README.md` writes; and concurrent merge+finalize
+   on `main`. **Scope: full thread. Gates: none** (evaluator approval advances; stop only on
+   5-FAIL escalation or blocking ambiguity). **Design to record (per-slice granularity):**
+   (1) **session-owned slice worktrees** — a session never does slice work in the shared `main`
+   checkout; it `git worktree add`s per slice off fresh `origin/main` and runs roles there;
+   (2) a **cross-session lock** on main's critical section `{claim, merge+finalize}` (atomic
+   `mkdir`/ref-CAS + the ADR 0008 §3 exponential backoff) — makes "serialized" true *across*
+   sessions; (3) **slice claiming/leasing** in the slice-plans index (session id + lease TTL,
+   stale-claim reclaim) so two sessions don't grab the same slice.
+   **NEXT ACTION:** planner authors `.docs/ADR/0014-multi-session-worktree-coordination.md`
+   (`Draft → Plan Review`) → blind plan-eval. Then spec 04 amendment → playbook slices
+   (`parallelism.md` / `orchestration.md` / `run.md` + a POSIX-sh lock/claim helper, shell-gated)
+   → blind code-eval → land.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
