@@ -246,10 +246,24 @@ source of truth; `roadmap.md` is milestone order.
    `mkdir`/ref-CAS + the ADR 0008 §3 exponential backoff) — makes "serialized" true *across*
    sessions; (3) **slice claiming/leasing** in the slice-plans index (session id + lease TTL,
    stale-claim reclaim) so two sessions don't grab the same slice.
-   **NEXT ACTION:** planner authors `.docs/ADR/0014-multi-session-worktree-coordination.md`
-   (`Draft → Plan Review`) → blind plan-eval. Then spec 04 amendment → playbook slices
-   (`parallelism.md` / `orchestration.md` / `run.md` + a POSIX-sh lock/claim helper, shell-gated)
-   → blind code-eval → land.
+   ADR 0014 authored + at `Plan Review`. **Owner raised 3 must-fix gaps (pre-approval, authoritative):**
+   (i) **BLOCKER — crashed lock-holder → global deadlock.** The §3 lease TTL covers a stale
+   *claim/lease* but NOT a stale *lock*: a session dying mid-critical-section still holding
+   `.git/loom-main.lock/` wedges every other session in §2 backoff forever (`mkdir` never frees).
+   The lock needs its OWN liveness/TTL — lock dir carries `{session-id, pid, timestamp}`; a contender
+   past a short **lock-TTL** verifies the holder is dead (worktree list / PID) and force-clears.
+   Distinct from the slice lease TTL. (ii) **MAJOR — scan source / read-consistency unspecified.**
+   A session works off a snapshot worktree, but the driver loop must derive "next action" from
+   **current `main`** (fetch/read live main) to see freshly-landed slices + live claims — pin the
+   per-loop scan to a fresh main view, never the session's stale worktree, else it re-picks
+   claimed/landed slices. (iii) **MAJOR — claim TOCTOU.** The scan isn't under the lock, so two
+   sessions can both see slice X free and both proceed. After acquiring the lock the session must
+   **re-read the lease and abort/re-select if X was claimed in between** (explicit check-then-act);
+   the lock currently serializes the write, not the decision.
+   **NEXT ACTION:** planner **revises** ADR 0014 to close gaps (i)-(iii), re-emits at `Plan Review`
+   → blind plan-eval on the corrected ADR (opus classifier was briefly unavailable — retry).
+   Then spec 04 amendment → playbook slices (`parallelism.md` / `orchestration.md` / `run.md`
+   + a POSIX-sh lock/claim helper, shell-gated) → blind code-eval → land.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
