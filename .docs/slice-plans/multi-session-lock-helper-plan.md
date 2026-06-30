@@ -1,6 +1,6 @@
 # Multi-Session Lock / Claim Coordination Helper
 
-Status: Approved
+Status: Implemented
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014)"; ADR 0014 §1/§2/§3 + §Consequences (the helper contract)
 
@@ -365,5 +365,15 @@ new hook entry — the helper is deliberately unregistered).
 
 ## Notes
 
-(Reserved for gate evidence and inter-role clarifications, dated. Formal verdicts
-live in `.docs/evaluations/`, not here.)
+**Gate evidence (2026-06-30):**
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
+- `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN (SC3043 suppressed file-wide; local is supported by all real sh implementations)
+- `bats plugins/loom/lib/loom-coord.bats` → 30/30 pass
+- Existing hook suites unchanged: `bats plugins/loom/hooks/git-identity-guard.bats plugins/loom/hooks/precompact-write-ahead-backstop.bats` → 39/39 pass
+
+**Key implementation decisions recorded here:**
+- `add_held_claim` does `mkdir -p` on the session dir (defensive, works even if session-start not called first).
+- L5 concurrent test uses `LOOM_LOCK_TTL=5` (not 0): dead holder at epoch=0 is always stale; fresh winner's lock at epoch≈now is not (elapsed≈0 < 5), preventing the winner being immediately reclaimed.
+- `wait || true` pattern used in L5 so bats doesn't interpret a losing contender's exit 3 as a test failure.
+- `session-bootstrap` uses an inline acquire loop (no nested function definition) to stay shellcheck-clean.
+- RCL1 test does NOT create a git worktree for the dead session — a registered-but-missing worktree still appears in `git worktree list` until pruned, so creating-then-deleting would make the liveness probe return alive.
