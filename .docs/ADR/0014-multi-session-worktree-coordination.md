@@ -102,7 +102,28 @@ living docs + `slice-plans/README.md`). Guard it with a **cross-session mutex**:
   exists) **or** a git-ref compare-and-swap. It must live **outside** the tracked worktree
   (under `.git/`, like ADR 0013 §5's checkpoint marker) so it is never itself a tracked,
   mergeable file, and it must be **per-repository** (shared across all sessions/worktrees,
-  since `.git/` is shared).
+  since `.git/` is shared). On acquire, the holder **stamps the lock with its own
+  liveness identity** — a small file inside the lock dir (e.g. `holder` containing
+  `{session-id, pid, acquired-timestamp}`); on release it removes the lock dir. The
+  `session-id`/`pid` are out-of-band liveness metadata only — **never** commit/author
+  metadata (ADR 0003 untouched).
+- **Stale-lock liveness reclaim — a `lock-TTL`, distinct from the §3 slice-lease TTL.**
+  An `mkdir` lock does **not** free itself: a session that dies mid-critical-section while
+  holding `.git/loom-main.lock/` would otherwise deadlock **every** other session, which
+  would back off forever. To break that deadlock the lock carries its **own** short
+  **`lock-TTL`** — covering the *lock dir*, separate from and much shorter than the
+  slice-lease TTL of §3 (a held lock is a milliseconds-to-seconds main-side op, §below;
+  a lease spans a whole slice). A contender that has been backing off past the `lock-TTL`
+  must not blindly clear the lock on the timeout alone — **the liveness check, not the TTL,
+  gates the force-clear.** It reads the lock's `holder` stamp and **verifies the holder is
+  actually dead** — its `session-id` is absent from `git worktree list` **and/or** its
+  `pid` is not alive (`kill -0`) — and **only then** force-clears the stale lock dir
+  (`rm -rf`/`rmdir`) and re-acquires (re-stamping with its own holder). A holder that is
+  **live but slow** (still in `git worktree list` / `pid` alive) must **NOT** be cleared —
+  the contender keeps backing off and lets the slow holder finish. This is a **distinct
+  mechanism from the §3 slice-lease TTL**: §2's `lock-TTL` protects the short main-critical
+  lock against a crashed lock-holder; §3's lease TTL protects a whole in-flight slice
+  against a crashed claimant.
 - **Backoff on contention — reuse ADR 0008 §3.** A session that cannot acquire the lock
   retries with the **exponential backoff ADR 0008 §3 already defines** for `index.lock`
   (3–5 attempts at ~200ms, 400ms, 800ms, …). This is the **same** mechanism applied to a
@@ -125,21 +146,42 @@ guarantee for disjoint slice files, which remain lock-free.
 Two sessions must not pick the **same** next action (race point 2). A **lease** in the
 `slice-plans/README.md` Active region, written under the §2 lock, prevents it:
 
-- **Claim (under the lock).** To take a slice, a session acquires the §2 lock, records a
-  **claim** on that slice in the `slice-plans/README.md` **Active** region — a
-  `{session-id, lease-timestamp}` marker (session-id is a per-session identifier, e.g. a
-  uuid; **not** the author identity — ADR 0003's uniform identity is untouched) — commits
-  that index update on `main`, then releases the lock. Only **then** does it create the
-  slice worktree (§1) and dispatch roles.
+- **Scan a fresh view of current `main` — never the slice-worktree snapshot.** A session's
+  slice worktree is created off a **snapshot** of `origin/main` (§1) and goes stale the
+  moment any other session lands or claims work. The per-loop **dispatch scan** — reading
+  the `Status:` lines *and* the lease/Active claim-state to derive the next action — must
+  therefore be performed against a **fresh view of current `main`**, **not** the session's
+  own stale slice-worktree checkout: the session first refreshes (`git fetch`) and reads
+  `origin/main`, **or** reads the shared `main` checkout under the §2 lock. **Current
+  `main` (fresh `origin/main` / the shared checkout) is the single authoritative read for
+  "what has landed and what is claimed."** This stops a session re-picking a slice that
+  another session already landed or claimed but that is invisible in its frozen snapshot.
+- **Claim is a check-then-act under the lock — the lock serializes the *decision*, not
+  just the write.** To take slice X a session acquires the §2 lock and, **while holding
+  it, re-reads the lease/Active region from current `main`** (the authoritative read
+  above). If X was **claimed (a live lease) or landed (moved to Archived)** by another
+  session in the interim — between the unlocked dispatch scan and acquiring the lock — the
+  session **aborts the claim and re-selects** a different next action (or releases and
+  loops). **Only when the re-read still shows X free** does it write its
+  **claim** — a `{session-id, pid, lease-timestamp}` marker in the **Active** region
+  (session-id is a per-session identifier, e.g. a uuid, and `pid` is recorded so the §3
+  liveness check has a probe target; **not** the author identity — ADR 0003's
+  uniform identity is untouched) — commit that index update on `main`, then release the
+  lock. Only **then** does it create the slice worktree (§1) and dispatch roles. This
+  closes the claim TOCTOU: because the read-validate-write is one locked section, two
+  sessions cannot both observe X free and both claim it.
 - **Skip live claims.** When deriving the next action, a session **skips** any slice whose
   Active entry carries a **live** (non-expired) claim by another session. This makes the
   driver-loop dispatch session-aware: two sessions scanning the same `Status:` lines now
   diverge on which slice they take.
-- **Stale-claim reclaim (TTL).** A crashed session leaves a stale lease and an orphaned
-  worktree. A claim whose `lease-timestamp` is older than a **TTL** is **stale** and may be
-  reclaimed: under the §2 lock, a reclaiming session runs `git worktree prune` +
-  `git worktree remove -f` for the orphan (ADR 0008 §3 crash cleanup), clears or overwrites
-  the expired Active entry, and may then claim the slice itself. A session holding a slice
+- **Stale-claim reclaim (slice-lease TTL).** A crashed session leaves a stale lease and an
+  orphaned worktree. A claim whose `lease-timestamp` is older than the **slice-lease TTL**
+  is a reclaim *candidate*, but — as with the §2 lock — the force-reclaim is gated on a
+  positive **liveness check, not the TTL alone**: under the §2 lock, the reclaiming session
+  verifies the lease's `session-id` is dead (absent from `git worktree list`, and/or its
+  recorded `pid` not alive) before it runs `git worktree prune` + `git worktree remove -f`
+  for the orphan (ADR 0008 §3 crash cleanup), clears or overwrites the expired Active entry,
+  and claims the slice itself. A live-but-slow holder is **not** reclaimed. A session holding a slice
   longer than the TTL must **renew** its lease (refresh the timestamp under the lock) so a
   legitimately long-running slice is not reclaimed out from under it. (The concrete TTL
   value and the renew cadence are a slice-plan parameter, not fixed here.)
@@ -164,9 +206,11 @@ This makes the lease the single source of "who is doing what" across sessions, w
   there being a single orchestrator — is now guaranteed by the §2 cross-session lock; the
   `git worktree add` isolation extends from one orchestrator's sub-agents to each session's
   slice work; ADR 0008 §3's exponential backoff extends from the transient `index.lock` to
-  the explicit `main`-critical-section lock; and the `slice-plans/README.md` Active region
-  gains a **lease** dimension (`session-id` + `lease-timestamp`) on top of the
-  Active/Archived bookkeeping ADR 0008 already put there.
+  the explicit `main`-critical-section lock — which **additionally** gains its own
+  `lock-TTL` liveness-reclaim (§2) so a crashed lock-holder cannot deadlock all sessions;
+  and the `slice-plans/README.md` Active region gains a **lease** dimension
+  (`session-id` + `pid` + `lease-timestamp`) on top of the Active/Archived bookkeeping
+  ADR 0008 already put there.
 
 ## Consequences
 
@@ -190,10 +234,15 @@ This makes the lease the single source of "who is doing what" across sessions, w
   (after `git-identity-guard.sh` and `precompact-write-ahead-backstop.sh`): a **POSIX-sh**
   helper alongside the existing two hooks, **identity-neutral**, persisting its lock/marker
   **outside** the tracked worktree (under `.git/`), gated by the **shell gate**
-  (`shfmt` → `shellcheck` → `bats`) and code-eval. This ADR records the **contract** (atomic
-  acquire/release, backoff, lease format, TTL/reclaim semantics); the implementation runs
-  through the normal loop (plan → plan-eval → develop → code-eval). The TTL value, the
-  renew cadence, and the lock primitive choice (`mkdir`-dir vs ref-CAS) are **slice-plan
+  (`shfmt` → `shellcheck` → `bats`) and code-eval. This ADR records the **contract**: atomic
+  acquire/release with a holder liveness-stamp (`{session-id, pid, acquired-timestamp}`);
+  backoff; the **lock-TTL stale-lock liveness reclaim** of §2 (verify-dead-then-force-clear,
+  never clear a live-but-slow holder); the **fresh-current-`main` dispatch scan** of §3
+  (authoritative read for landed/claimed state); the **check-then-act-under-the-lock**
+  claim of §3 (re-validate X is still free after acquiring the lock); lease format; and the
+  slice-lease TTL/reclaim semantics. The implementation runs through the normal loop
+  (plan → plan-eval → develop → code-eval). The `lock-TTL` value, the slice-lease TTL value,
+  the renew cadence, and the lock primitive choice (`mkdir`-dir vs ref-CAS) are **slice-plan
   parameters**.
 - **Playbook bodies to update at the fold:** `parallelism.md` (the operational
   worktree-per-slice body — add the multi-session layer), `orchestration.md` (the
@@ -213,9 +262,11 @@ This makes the lease the single source of "who is doing what" across sessions, w
 
 ## Notes
 
-- Open for the slice-plan / spec-04 pass: the concrete TTL value and lease-renew cadence;
-  the lock primitive choice (`mkdir` lock-dir vs git-ref CAS) and its exact failure
-  semantics; whether the lease marker is a structured line in `slice-plans/README.md` or a
-  sidecar under `.git/`; and how a reclaiming session distinguishes a crashed holder from a
-  slow-but-live one beyond the TTL (e.g. liveness via `git worktree list` + PID, if
-  available).
+- Open for the slice-plan / spec-04 pass: the concrete `lock-TTL` and slice-lease TTL
+  values and the lease-renew cadence; the lock primitive choice (`mkdir` lock-dir vs git-ref
+  CAS) and its exact failure semantics; whether the lease marker is a structured line in
+  `slice-plans/README.md` or a sidecar under `.git/`; and the exact liveness probe
+  (`git worktree list` vs `kill -0 <pid>` vs both, and the fallback when neither is
+  available). The **principle** that a force-clear is gated on a positive
+  holder-is-dead check — for both the §2 stale lock and the §3 stale lease — is **decided
+  here**, not open; only the probe's concrete form is a parameter.
