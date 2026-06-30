@@ -28,4 +28,4 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 
 ## In Review
 
-- [0014 — Multi-Session Worktree Coordination](0014-multi-session-worktree-coordination.md) — **extends** ADR 0008 (single-orchestrator "serialized on main" → cross-session lock + slice-lease for N concurrent `/loom:run` sessions); builds on ADR 0001/0003
+- [0014 — Multi-Session Worktree Coordination](0014-multi-session-worktree-coordination.md) — **extends** ADR 0008 (single-orchestrator "serialized on main" → cross-session lock + slice-lease for N concurrent `/loom:run` sessions); builds on ADR 0001/0003/0012/0013 (relocates ADR 0013's write-ahead cold-restart anchor to off-`main` per-session state)
