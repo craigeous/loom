@@ -1,6 +1,6 @@
 # 0014 — Multi-Session Worktree Coordination
 
-Status: Plan Review
+Status: Draft
 Date: 2026-06-29
 
 ## Context
