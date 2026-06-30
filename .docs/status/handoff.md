@@ -343,6 +343,10 @@ source of truth; `roadmap.md` is milestone order.
    releases before rm) — green tests that don't exercise the path are not acceptable. Re-run shell gate GREEN
    → `Implemented`. Then orchestrator **re-runs automated review** on the new diff → blind code-eval
    (resolving PASS closes Round 2; another FAIL → Round 3; escalation at 5). Then land → finalize → slice W.
+   **RETRY NOTE:** first developer-fix attempt crashed on the 32k output-token cap (no commit, clean tree,
+   no edits landed — verified) — a mechanical output-limit failure, NOT a starvation loop (work hadn't
+   started; round counter unchanged at 2). Re-spawning the developer with **incremental-Edit + terse-return**
+   discipline (no full-file Writes, never paste file bodies/gate logs) to avoid recurrence.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
