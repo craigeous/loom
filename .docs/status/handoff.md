@@ -280,11 +280,23 @@ source of truth; `roadmap.md` is milestone order.
    shared-`main` writes" undercounts — it's **three** locked writes (claim / lease-renew / land);
    (b) reconcile the liveness wording ("and/or" vs "session-id-primary"); (c) add **session-end cleanup
    of `.git/loom-session-<id>/`** to the helper contract + crash-cleanup (`git worktree prune` path).
-   **NEXT ACTION:** planner authors the **spec 04 amendment** (frozen-spec planning pass — ADR 0005)
-   folding ADR 0014's multi-session model into `.docs/spec/04-orchestrator.md` (Parallelism section)
-   and correcting MINORs (a)/(b) in the living prose → blind plan-eval. Then playbook slices
-   (`parallelism.md` / `orchestration.md` / `run.md` + a POSIX-sh lock/claim helper carrying MINOR (c),
-   shell-gated) → blind code-eval → land.
+   **Spec 04 amendment DONE** — `### Multi-session coordination (ADR 0014)` subsection added (ADR 0008
+   prose intact); MINORs (a) three locked writes [claim/lease-renew/land] + (b) session-id-primary
+   liveness fixed in living prose. **Blind plan-eval PASS `Round: 0`, no findings**
+   (`adr-0014-spec-amendment-eval.md`); spec 04 re-Approved/re-frozen. **spec-08 follow-up FLAGGED**
+   (ADR 0014 §Consequences names playbook bodies; spec 08 guidance touch deferred to a later planning
+   pass). Durable-design layer COMPLETE (ADR 0014 Accepted + spec 04 carries the model).
+   **IMPLEMENTATION = 2 sequenced slices** (dependent — bodies cite the helper CLI, so NOT parallel per
+   the slicer-independence rule): **Slice H (code)** = POSIX-sh lock/claim helper + bats + shell gate
+   green (the ONLY code-bearing slice → first real `/code-review` + `/security-review` run on actual
+   loom code); **Slice W (docs)** = wire `parallelism.md` + `orchestration.md` + `run.md` against H's
+   landed CLI (pure-docs → auto-review skip). MINOR (c) session-end `.git/loom-session-<id>/` cleanup
+   lands in H (helper + crash-cleanup/`git worktree prune`).
+   **NEXT ACTION:** planner authors slice-plan **H** `.docs/slice-plans/multi-session-lock-helper-plan.md`
+   — nail the helper CLI + behavior (mkdir-lock w/ lock-TTL + liveness-gated force-clear; claim
+   check-then-act under lock; lease renew; per-session `.git/loom-session-<id>/` state; session-end +
+   crash cleanup) → blind plan-eval → developer + shell gate → real automated review → blind code-eval
+   → land → finalize. Then slice-plan W against the landed helper.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
