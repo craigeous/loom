@@ -1,13 +1,151 @@
 # Evaluation: multi-session-lock-helper
 
 Verdict: FAIL
-Round: 3
-Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); spec 04 → "Multi-session
-coordination (ADR 0014)" (the three locked main writes — claim / lease-renew / land —
-and the session-id-primary liveness rule); the Approved slice-plan (CLI contract,
-lock/claim/clear-and-own invariants, fail-closed); `gates/shell.md`; the advisory
-review-findings artifact. Code-review phase: diff `4bb64b9..8f28b59`
-(`plugins/loom/lib/loom-coord.sh` + `.bats`) walked, gate re-run, findings adjudicated.
+Round: 4
+Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); ADR 0015 (lease-freshness
+liveness + {pid,start-time} renewer); ADR 0016 (git-`update-ref` CAS substrate); spec 04 →
+"Multi-session coordination"; the Approved slice-plan (CLI contract, fail-closed);
+`gates/shell.md`; the advisory review-findings artifact. Latest phase (Round 4) reviews the
+git-CAS RE-IMPLEMENTATION, delta `eedfc43..9fa9b63` (3 commits) —
+`plugins/loom/lib/loom-coord.sh` + `.bats` walked, gate re-run, findings adjudicated.
+
+## Code review — Round 4 (FAIL)
+
+Re-review of the **git-CAS re-implementation** (`eedfc43..9fa9b63`: `e0699f2` ref-CAS lock,
+`d342a77` claims→refs + lock heartbeat, `9fa9b63` U2/U5/U6/secondary fixes). The substrate
+was swapped from the hand-rolled `mkdir`/rename-capture lock + TSV registry to git
+`update-ref` CAS on `refs/loom/lock` + `refs/loom/claims/<slice>` per ADR 0016. Adjudicated
+the refreshed review-findings artifact (`/code-review` ran-with-findings V1–V6 CONFIRMED;
+`/security-review` ran-clean) plus independent verification.
+
+### Gate re-verification (independently re-run)
+
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh` → **CLEAN**.
+- `shellcheck plugins/loom/lib/loom-coord.sh` → **CLEAN** (SC3043 suppressed file-wide).
+- `bats plugins/loom/lib/loom-coord.bats` → **55/55 pass**. Existing hook suites
+  (`git-identity-guard.bats`, `precompact-write-ahead-backstop.bats`) → **39/39**, untouched;
+  `hooks.json` has no loom-coord entry (REG1). The gate is genuinely green — but **green is
+  not sufficient**: the confirmed defects below survive it because the suite exercises each
+  destructive path with an *already-dead* holder and never races a lock-free `renew` against
+  cleanup/reclaim (V2/V3), never holds a lock across a renewer heartbeat (V1/V4), and never
+  feeds a git-illegal or case-colliding slice name (V5/V6).
+
+### The git-CAS core is SOUND (verified — not regressed)
+
+The substrate itself is correct and closes the prior mkdir-CAS ABA/double-grant class:
+acquire is a **create-only CAS** (`update-ref <ref> <blob> <null-OID>` — fails unless the ref
+is absent); stale-steal and renew are **value-CAS** against the **exact read SHA**; release is
+a **delete-CAS** against the caller's own blob. git takes its per-ref lock and swaps only on an
+exact old-SHA match, so two contenders can never both win (CC1 proves exactly-one-winner under
+a real concurrent race; SC1 round-trips; the holder blob is created *before* the ref points at
+it, so there is no `mkdir`→`stamp` window). Confirmed the prior U1/U4 hand-rolled-atomicity
+hazards are retired. **The remaining defects are all in the PERIPHERAL logic around the CAS**,
+exactly as the review preamble states.
+
+### Findings adjudication (advisory review-findings + independent verification)
+
+`/code-review` V1–V6: **6 CONFIRMED, 0 rejected** (V5/V6 reproduced empirically in scratch
+repos on this macOS host; V1–V4 traced against the source). `/security-review` ran-clean
+(informational — no vuln to adjudicate; its note that V5/V6 are correctness-not-security
+defects is correct).
+
+- [BLOCKER] **V1 — renewer cadence (1200 s) is 40× the lock TTL (30 s); the lock heartbeat
+  cannot keep a held lock fresh (sh:43, heartbeat sh:1096–1109).** The single renewer loop
+  heartbeats BOTH the claim refs (lease TTL 3600 s — `1200 ≈ TTL/3`, correct) AND the lock ref
+  (lock TTL 30 s — `1200 = 40× TTL`, broken) at the *same* `LOOM_RENEW_INTERVAL`. A session
+  holding `refs/loom/lock` across a `land`/merge that exceeds 30 s has its lock value-CAS-stolen
+  by a peer at the 30 s mark before the renewer ever beats → two sessions believe they hold the
+  lock → concurrent README/merge writers → **double-grant against main**. This directly defeats
+  the U3 fix ADR 0016 §3 mandates ("the renewer now keeps [the lock lease] fresh … a long
+  `land` is never stolen") — an ADR-0016 invariant violation. Fix: the lock heartbeat needs a
+  cadence below the SHORTEST TTL it refreshes (≈ lock-TTL/3 ≈ 10 s), separate from the lease
+  cadence.
+- [BLOCKER] **V2 — `cleanup` destroys a LIVE holder's worktree + session dir BEFORE the
+  guarding delete-CAS (sh:1006–1015).** For a claim whose snapshot lease read stale, cleanup
+  runs `worktree remove -f` (sh:1007) and `rm -rf $STATE_DIR/session-$sid` (sh:1011) **before**
+  `update-ref -d "$refname" "$sha"` (sh:1014). `renew` is lock-free (value-CAS, sh:547), so a
+  holder that renews in the snapshot→destroy window (SHA S1→S2) has its **uncommitted worktree
+  and session state destroyed**, then the delete-CAS correctly FAILS (ref is now S2) and the
+  claim ref is left **orphaned with no held-claims backref**. Violates the "never destroy a LIVE
+  holder's resources" invariant and the ADR-0016 U6 carry-forward ("cleanup must not `rm -rf` a
+  live session dir"). Destructive ops must run ONLY AFTER the CAS succeeds.
+- [BLOCKER] **V3 — `reclaim` force-removes the holder's worktree BEFORE the value-CAS steal
+  (sh:644–661).** Same "destroy before confirm" bug: `worktree remove -f "$wt_path"` (sh:649)
+  runs before the value-CAS steal (sh:658). A holder that renews in the TOCTOU window has its
+  worktree/files deleted, then the CAS correctly FAILS (SHA changed) and reclaim exits 4 — so a
+  now-live peer's worktree is destroyed **even though the reclaim was refused** (U6 violation).
+  Prune + destroy must follow, never precede, a successful steal-CAS.
+- [BLOCKER] **V4 — `lock-release` wedges on its own renewer's heartbeat → permanent deadlock
+  (sh:431–438).** release reads `cur_sha=X`, confirms sid==self, then `update-ref -d <lock> X`;
+  if the session's OWN renewer value-CAS-updates the lock X→Y (sid still self, fresh ts) in the
+  window (sh:1105), the delete-CAS fails, release re-reads `new_sha=Y` (non-empty) and exits 5
+  "ref changed during release" — but the session **still owns the lock, it is never deleted, and
+  the renewer keeps it fresh forever** → peers blocked until `session-end`, a lock-wedge. Narrow
+  reachability (needs a lock held across a heartbeat, which V1's slow cadence makes rare), but
+  ADR 0016 Notes explicitly flags this "renewer↔release CAS-on-current-value" case as an open
+  obligation. release must stop the renewer and/or re-read + retry the delete-CAS on the current
+  SHA while sid==self, never exit 5 when it still owns the ref.
+- [MAJOR] **V5 — `slice_to_refname` does not satisfy `git check-ref-format`; git-illegal
+  slice names livelock (sh:265–281).** It percent-encodes only bytes outside
+  `[A-Za-z0-9._/-]` and ignores git's ref grammar, so `foo.lock`, `a..b`, `feature/.hack`,
+  trailing-`.`/`/` pass through unencoded. **Empirically confirmed** in a scratch repo: `claim
+  foo.lock` on a *free* slice → `update-ref` fails "bad name" → `cmd_claim` maps it to **exit 4
+  "claimed by another session"** — the slice can never be claimed/renewed/released. Fails CLOSED
+  (no double-grant), so MAJOR not BLOCKER, and conventional kebab-case slice names are unaffected
+  — but the misleading exit-4 mapping makes a class of legal slice names permanently unworkable.
+  Encode to satisfy `git check-ref-format` (dot-sequences, `.lock`, leading/trailing `.`/`/`).
+- [MAJOR] **V6 — case-fold ref collision on a case-insensitive filesystem (sh:265–285).**
+  Claim refs are loose ref FILES and `slice_to_refname` preserves case, so on macOS APFS/HFS+
+  (the dev host) `Auth` and `auth` map to the **same ref file**. **Empirically confirmed**:
+  after `claim Auth`, only `refs/loom/claims/Auth` exists and a second `claim auth` resolves to
+  it. Two case-distinct slices alias → a genuinely free slice reads as "already claimed" (a
+  different session's `claim auth` → exit 4, fail-closed block). Same-session it idempotent-
+  reaffirms. Fails closed in the double-grant direction (the ref stores the first owner's sid,
+  so a peer never *acquires* the alias), so MAJOR — but on the primary dev platform it silently
+  blocks a free slice. Encode/hash case so distinct names never case-fold to one ref path.
+- [MINOR] **V-additional — leftover staleness from the substrate swap.** The header comment
+  still describes "a cross-session **mkdir** lock" (sh:7) after the git-CAS rework; plus the
+  review noted leftover dead test code / a redundant `cat-file` dropped under the report cap.
+  Housekeeping; does not block on its own.
+
+### Independent observations
+
+- The four BLOCKERs cluster on **one root cause: `renew` is lock-free (correct per ADR 0016 §2)
+  but the destructive/authoritative paths were not made CAS-final.** V2/V3 perform irreversible
+  destruction (`worktree remove -f`, `rm -rf`) *before* the CAS that is supposed to authorize it;
+  V4 mishandles a self-concurrent CAS on the lock; V1 lets the lock lease go stale under a live
+  holder. The durable repair is the same discipline everywhere: **compute → CAS → (only on CAS
+  success) destroy**, and give the lock its own fast heartbeat cadence.
+- **Not regressed (verified):** the git-CAS core (create-only/value/delete CAS — CC1 races it),
+  lock-TTL (30 s) ≠ lease-TTL (3600 s), fail-closed exit 10 outside a repo, `lock-verify`
+  (0/5/10), the U2 (empty-epoch → fresh/fail-closed), U5 (`renewer-stop` identity gate), and
+  PROC-1 (field-22 last-`)` parse) carry-forwards all hold. Scope/identity are clean: code-only,
+  no `hooks.json` entry, holder/claim state is `refs/loom/*` blobs (no author metadata — ADR
+  0003 untouched), no commits made.
+
+### Required changes (for FAIL)
+
+1. **V1** — give the lock heartbeat its own cadence below the lock TTL (≈ `LOOM_LOCK_TTL/3`),
+   decoupled from the lease cadence; add a bats case holding a lock past `LOOM_LOCK_TTL` and
+   asserting the renewer keeps it un-stealable by a peer.
+2. **V2** — in `cleanup`, run the delete-CAS (`update-ref -d <refname> <sha>`) FIRST and perform
+   `worktree remove -f` / `rm -rf session-<id>` only after it succeeds; add a bats case racing a
+   lock-free `renew` (SHA change) into the sweep window and asserting the live worktree survives.
+3. **V3** — in `reclaim`, perform the value-CAS steal FIRST and prune/`worktree remove -f` only
+   after it succeeds; add a bats case where a renew in the TOCTOU window leaves the worktree
+   intact on a refused reclaim.
+4. **V4** — `lock-release` must not exit 5 while it still owns the ref: stop the renewer before
+   release and/or re-read + retry the delete-CAS on the current SHA while sid==self; add a bats
+   case simulating a renewer heartbeat between the read and the delete and asserting the lock is
+   released (not wedged).
+5. **V5** — encode `slice_to_refname` to satisfy `git check-ref-format` (handle `.` sequences,
+   `.lock` suffix, leading/trailing `.`/`/`); add a bats case claiming a slice named `foo.lock`
+   / `a..b` and asserting exit 0, not a misleading exit 4.
+6. **V6** — encode or hash case so case-distinct slice names never map to one ref path; add a
+   bats case (on a case-insensitive FS, or via an injected collision) asserting `Auth` and
+   `auth` are independent claims.
+7. **V-additional (MINOR)** — update the header comment (mkdir → git-CAS) and sweep the leftover
+   dead test code / redundant `cat-file`.
 
 ## Code review — Round 3 (FAIL)
 
