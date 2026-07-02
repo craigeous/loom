@@ -4,64 +4,64 @@ Automated review of the slice's code (`plugins/loom/lib/loom-coord.sh`; bats + `
 markdown out of scope). Advisory input to the blind code-evaluator. Transcribed from real
 command output. Identity-neutral.
 
-**This revision reviews the round-3 root-cause fix commit (`692bb14..21f9970`)** — the
-`wt_sid_match` porcelain-parser rework, R1 recovery-override removal, and age-gated holderless
-reclaim. The re-review finds the fix again introduced regressions (3rd consecutive round).
+**This revision reviews the ADR-0015 lease-freshness RE-IMPLEMENTATION (`21f9970..eedfc43`)** —
+the design is now sound (ADR 0015 Approved), but the review found the hand-rolled POSIX-sh
+mechanism introduced a fresh cluster of concurrency-correctness defects (4th implementation round).
 
 ## /code-review
 Status: ran-with-findings
 
-High-effort review. 7 distinct CONFIRMED defects (several the same root cause at multiple call
-sites, folded). The correctness set is dominated by a Linux-only crash in the age-gate and a
-permanent slice wedge from the new membership-only liveness model.
+High-effort review. Multiple CONFIRMED independent double-grant paths, centered on the mkdir-CAS
+lock primitive and the stamp-based lease model.
 
-### Finding T1
+### Finding U1
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:117 (also :406)
-- description: `dir_mtime_epoch` tries BSD `stat -f %m` FIRST; on GNU/Linux `-f` means `--file-system` and `%m` is a bogus operand → stat prints a multi-line filesystem block to stdout AND exits 1, so the `|| stat -c %Y` fallback APPENDS the real mtime to that garbage. On any Linux host (`/bin/sh=dash`), `h_dir_age=$(($(now) - h_dir_mt))` fails "Illegal number" → the helper aborts (exit 2); the crash-recovery age-gate never works and the holderless lock is never reclaimed. **Local macOS bats runs (BSD stat) pass, masking it** — a portability bug the green gate cannot see.
+- location: plugins/loom/lib/loom-coord.sh:369 (also :773, :852, :921)
+- description: **Lock-reclaim CAS ABA/TOCTOU.** `clear_and_own` re-reads the holder for its ABA baseline (`h_obs`) SEPARATELY from the caller's staleness check. Interleaving: O holds a stale lock; A and B both see it stale; A runs `clear_and_own` and fully acquires (stamps a FRESH epoch); B — which passed its staleness check on O's OLD epoch — now enters `clear_and_own`, reads A's FRESH stamp as `h_obs`, its `mv`→CAP wins, `cap_stamp==h_obs` so the ABA guard passes, B destroys A's fresh lock and stamps itself → **two holders write `.docs/` concurrently.** Replicated at all four `clear_and_own` call sites.
 - confidence: CONFIRMED
 
-### Finding T2
+### Finding U2
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:934 (also :39; test :835)
-- description: Removing the cleanup recovery-override makes worktree-list membership the SOLE liveness signal, so a crashed session whose `wt-<sid>` directory still exists on disk is classified **permanently alive** (`git worktree prune` won't remove a present dir). cleanup reports "skipped 1" and never sweeps the slice; `reclaim` returns exit 6 "holder still alive" forever → the slice is deadlocked until an operator manually runs `git worktree remove`. The dead-branch orphan-removal (942-946) is unreachable (see T6). (Architectural: membership ≠ liveness for a crashed session with a lingering worktree.)
+- location: plugins/loom/lib/loom-coord.sh:179 (also :960)
+- description: **Fail-OPEN on empty/corrupt epoch.** `claim_is_fresh` computes `$((_now - _epoch))`; an empty/non-numeric epoch is treated as `0` → elapsed `= now` (≫ TTL) → claim classified STALE → reclaimable. A live peer's claim row with an empty epoch field (`slice<TAB>sid<TAB>pid<TAB>`, the exact empty-field shape the T5 test documents) is swept/overwritten → the live peer's slice is double-granted. Empty-sid rows are guarded; empty-epoch rows are not. Fail-open in a fail-closed helper.
 - confidence: CONFIRMED
 
-### Finding T3
+### Finding U3
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:128
-- description: `wt_sid_match` passes the id via `awk -v sid="$1"`, which subjects the value to awk **escape-sequence processing**; a session-id containing a backslash (`wt-foo\bar` → `\b` becomes backspace) is silently mangled before the exact-match compare → the live worktree is not found → `is_alive` false → concurrent reclaim/claim double-grants the slice. (`-v` avoids code-injection but not escape processing.)
+- location: plugins/loom/lib/loom-coord.sh:448 (also :852, :921)
+- description: **The lock is never heartbeat.** The stale-steal path dropped the old `&& ! is_alive` guard, and the renewer refreshes the LEASE (claim) but NOT the lock stamp. A live session holding the main lock through a critical section that exceeds `LOOM_LOCK_TTL` (30s — e.g. a large `land`/merge/commit of `.docs/`) has its lock STOLEN by a peer → concurrent writers. Fix within ADR 0015: the lock-steal decision must key on the HOLDER's lease freshness (which the renewer keeps fresh), not on an un-renewed lock-stamp epoch — OR the lock must be heartbeat too.
+- confidence: PLAUSIBLE
+
+### Finding U4
+- source: /code-review
+- location: plugins/loom/lib/loom-coord.sh:343 (also :51)
+- description: **T4 fix widened a double-grant window.** The holderless-lock age-gate was narrowed from `LOOM_LOCK_TTL` (30s) to `LOOM_HOLDERLESS_TTL` (2s default) to recover within one acquire; but this widens the non-atomic `mkdir`→`stamp_holder` window: S1 `mkdir`s the lock then is descheduled >2s (load/cgroup throttling); S2 sees a 2s-old holderless dir, reclaims + acquires; S1 resumes and stamps into the recreated dir, its INV-1 confirm reads back its own write → both report "acquired". The old 30s gate made the required stall 15× larger.
 - confidence: CONFIRMED
 
-### Finding T4
+### Finding U5
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:408
-- description: The holderless age-gate refuses reclaim until the lock dir is older than `LOOM_LOCK_TTL` (default 30s), but the lock-acquire backoff budget (5 retries ≈ 6.2s) is far shorter. A crash-in-window holderless lock (mtime≈now) is never reclaimed within one invocation: age (~0s) < TTL (30s) → never `clear_and_own` → exhausts retries → exits 3 "lock busy" and the session stays blocked up to `LOOM_LOCK_TTL` after the crash. Regression from the prior "holderless always reclaimable" behavior.
+- location: plugins/loom/lib/loom-coord.sh:1099
+- description: **renewer-stop kills a recycled pid.** When `renewer.starttime` is empty (because `process_starttime` returned empty at start), `renewer-stop` reads `rst=''`, takes the `[ -z "$rst" ]` branch, and issues `kill` against the recorded pid WITHOUT the start-time identity check → if the renewer died and the OS recycled its pid, an unrelated process is killed. The identity guard exists precisely to prevent this; the empty-`rst` fallback bypasses it.
 - confidence: CONFIRMED
 
-### Finding T5
+### Finding U6
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:925
-- description: The R7 empty-sid guard preserves the row but does not increment `skipped`, so a retained (corrupted) claim is neither swept nor counted → the "swept N; skipped M live claims" summary undercounts live claims, misleading an operator.
+- location: plugins/loom/lib/loom-coord.sh:973
+- description: **cleanup sweeps live claims + rm-rf's the session dir.** With worktree-membership liveness removed, cleanup sweeps any stale-LEASE claim and `rm -rf`s the owning `session-<id>/` dir; combined with U2/U3 a live-but-momentarily-stale holder can have its per-session state destroyed. (Related to the fail-open/lease-window issues above.)
+- confidence: CONFIRMED
+
+### Secondary (cleanup / robustness)
+- source: /code-review
+- location: plugins/loom/lib/loom-coord.sh (renewer lifecycle + acquire dup)
+- description: Unreliable start-time persistence; non-atomic `session.pid` write; awk mis-parse of `/proc/<pid>/stat` field 22 (start-time can be wrong when the comm field contains spaces/parens); copy-pasted acquire loop with an already-diverged wasted-backoff bug.
 - confidence: CONFIRMED (lower severity)
-
-### Finding T6
-- source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:943 (also :941, :602)
-- description: The F6 orphan-worktree `git worktree remove -f` inside cleanup's dead branch is now **unreachable dead code**: `is_dead=1` requires `wt_sid_match` to return empty, but `wt_path` is computed from the same `wt_sid_match`, so it is always empty and the removal never fires. Orphaned `wt-<sid>` dirs from crashed sessions accumulate indefinitely — the capability the F6 fix was supposed to add is nullified (and it is the flip side of T2).
-- confidence: CONFIRMED
-
-### Finding T7
-- source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:404 (also :730, :818, :896)
-- description: The holderless age-gate block is copy-pasted verbatim across FOUR acquire sites (lock-acquire, session-bootstrap, session-end, cleanup) instead of a shared helper — and the copies are already drifting. Any correctness change (e.g. the T1 stat fix or the T4 window) must be applied in four places → one will be missed and the acquire paths will disagree. (The round-3 directive to "single-source the acquire logic" was not met.)
-- confidence: CONFIRMED (cleanup)
 
 ## /security-review
 Status: ran-clean
 
-No concrete (>=0.8) vulnerabilities. `wt_sid_match` passes `sid` as an awk `-v` DATA variable
-(no program injection) and compares by pure string equality; `dir_mtime_epoch` only stats the
-fixed `$LOCK_DIR`; `git worktree remove -f`/`mv`/`rm -rf` sinks act only on git-registered
-worktrees or trusted `.git/loom/` paths. No untrusted-input flow. (The T3 awk-escape and T1
-stat-portability issues are correctness defects, not security vulnerabilities.)
+No concrete (>=0.8) vulnerabilities. The detached renewer spawns `sh "$_coord" <subcmd>` with every
+value as a separate double-quoted argument (no `eval`/injection); `process_starttime` and the portable
+`stat` are quoted and read only trusted pids / the fixed lock dir; the `ENVIRON`-passed session-id is
+equality-compared only; all `mv`/`rm -rf`/`kill`/`git` sinks are fed by trusted CLI args / minted UUIDs /
+git output / tool-written `.git/loom/` state. No untrusted-input flow. (U1-U6 are correctness defects,
+not security vulnerabilities.)

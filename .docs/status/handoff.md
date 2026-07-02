@@ -500,6 +500,21 @@ source of truth; `roadmap.md` is milestone order.
    review-findings → blind code-eval (resolving PASS carries the slice's Round 3 and LANDS slice H; FAIL →
    Round 4, 1 attempt left before its 5-FAIL escalation). Then finalize → slice W. Watch: renewer detach
    correctness, lease-freshness reclaim windows, T1/T4 portability.
+   **⚠️ ESCALATED TO OWNER AGAIN (mechanism decision — not a round FAIL; slice counter stays 3).**
+   Re-review of the ADR-0015 re-impl (`21f9970..eedfc43`): `/code-review` = ran-with-findings, **~6-8
+   CONFIRMED concurrency defects** (U1 `clear_and_own` **CAS ABA/TOCTOU** → fresh lock reclaimed → 2 holders,
+   at all 4 call sites; U2 `claim_is_fresh` **fail-OPEN on empty epoch** → live peer double-granted; U3 the
+   **lock is never heartbeat** (renewer refreshes the lease not the lock) → long `land` >LOCK_TTL stolen;
+   U4 the T4 30s→2s narrowing **widened** the mkdir→stamp double-grant window; U5 `renewer-stop` kills a
+   recycled pid when start-time empty; U6 cleanup sweeps live claims + rm-rf session dir). `/security-review`
+   = ran-clean. **DIAGNOSIS SHIFT: the DESIGN (ADR 0015) is now sound + stable; the persistent fault is the
+   HAND-ROLLED POSIX-sh MECHANISM itself** (mkdir-CAS ABA races, fail-open arithmetic, un-renewed lock,
+   narrowed windows) — 4th impl round of subtle concurrency bugs. This is exactly the class **git-native
+   atomic primitives (option C)** eliminate. Paused before a round-4 code-eval+dev cycle to put the
+   mechanism choice to the owner: **(A)** one more sh patch of U1-U6 (fixable but high subtle-bug rate) vs
+   **(C)** pivot the lock/claim mechanism to **git's atomic `update-ref` CAS** (new ADR superseding ADR 0014's
+   mkdir-lock mechanism; removes the whole hand-rolled-CAS bug class) — recommend leaning C given 4 rounds.
+   **NEXT ACTION: await owner A/C decision.** Slice still `In Progress` at `eedfc43`.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
