@@ -4,64 +4,65 @@ Automated review of the slice's code (`plugins/loom/lib/loom-coord.sh`; bats + `
 markdown out of scope). Advisory input to the blind code-evaluator. Transcribed from real
 command output. Identity-neutral.
 
-**This revision reviews the ADR-0015 lease-freshness RE-IMPLEMENTATION (`21f9970..eedfc43`)** —
-the design is now sound (ADR 0015 Approved), but the review found the hand-rolled POSIX-sh
-mechanism introduced a fresh cluster of concurrency-correctness defects (4th implementation round).
+**This revision reviews the git-CAS RE-IMPLEMENTATION (`eedfc43..9fa9b63`, 3 passes).** The
+CAS primitive itself is now correct (git owns atomicity — the prior mkdir-CAS ABA/race class is
+eliminated, confirmed by the review). The remaining defects are in peripheral logic (renewer
+cadence, destroy-before-CAS ordering, the renewer↔release race, ref-name encoding, case-fold).
 
 ## /code-review
 Status: ran-with-findings
 
-High-effort review. Multiple CONFIRMED independent double-grant paths, centered on the mkdir-CAS
-lock primitive and the stamp-based lease model.
+High-effort review; ~10 distinct defects (correctness-first; lower-value cleanup items dropped
+under the cap). CONFIRMED set below.
 
-### Finding U1
+### Finding V1
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:369 (also :773, :852, :921)
-- description: **Lock-reclaim CAS ABA/TOCTOU.** `clear_and_own` re-reads the holder for its ABA baseline (`h_obs`) SEPARATELY from the caller's staleness check. Interleaving: O holds a stale lock; A and B both see it stale; A runs `clear_and_own` and fully acquires (stamps a FRESH epoch); B — which passed its staleness check on O's OLD epoch — now enters `clear_and_own`, reads A's FRESH stamp as `h_obs`, its `mv`→CAP wins, `cap_stamp==h_obs` so the ABA guard passes, B destroys A's fresh lock and stamps itself → **two holders write `.docs/` concurrently.** Replicated at all four `clear_and_own` call sites.
+- location: plugins/loom/lib/loom-coord.sh:43
+- description: Default `LOOM_RENEW_INTERVAL` (1200s) is **40× the lock TTL** (`LOOM_LOCK_TTL` 30s), so the renewer's lock heartbeat (the U3 fix) cannot keep a held lock fresh: a session holding `refs/loom/lock` across an op >30s has its lock value-CAS-stolen by a peer at the 30s mark → both believe they hold it → double-grant. The renew cadence must be well below the SHORTEST TTL it must refresh (i.e. < lock TTL ⇒ ~TTL/3).
 - confidence: CONFIRMED
 
-### Finding U2
+### Finding V2
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:179 (also :960)
-- description: **Fail-OPEN on empty/corrupt epoch.** `claim_is_fresh` computes `$((_now - _epoch))`; an empty/non-numeric epoch is treated as `0` → elapsed `= now` (≫ TTL) → claim classified STALE → reclaimable. A live peer's claim row with an empty epoch field (`slice<TAB>sid<TAB>pid<TAB>`, the exact empty-field shape the T5 test documents) is swept/overwritten → the live peer's slice is double-granted. Empty-sid rows are guarded; empty-epoch rows are not. Fail-open in a fail-closed helper.
+- location: plugins/loom/lib/loom-coord.sh:1006 (also :1011)
+- description: `cleanup` runs `git worktree remove -f` on the holder's worktree and `rm -rf` its `.git/loom/session-<id>` dir **BEFORE** the guarding `update-ref -d <ref> <old-SHA>`, and `renew` is lock-free. A live session whose claim was momentarily stale in cleanup's `for-each-ref` snapshot renews (SHA S1→S2) mid-sweep; cleanup destroys its worktree (uncommitted work) + session dir, then the delete-CAS fails (ref is now S2) → **a LIVE session's resources are destroyed and its claim ref is left orphaned** (no held-claims backref). Destructive ops must run ONLY AFTER the CAS succeeds.
 - confidence: CONFIRMED
 
-### Finding U3
+### Finding V3
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:448 (also :852, :921)
-- description: **The lock is never heartbeat.** The stale-steal path dropped the old `&& ! is_alive` guard, and the renewer refreshes the LEASE (claim) but NOT the lock stamp. A live session holding the main lock through a critical section that exceeds `LOOM_LOCK_TTL` (30s — e.g. a large `land`/merge/commit of `.docs/`) has its lock STOLEN by a peer → concurrent writers. Fix within ADR 0015: the lock-steal decision must key on the HOLDER's lease freshness (which the renewer keeps fresh), not on an un-renewed lock-stamp epoch — OR the lock must be heartbeat too.
-- confidence: PLAUSIBLE
-
-### Finding U4
-- source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:343 (also :51)
-- description: **T4 fix widened a double-grant window.** The holderless-lock age-gate was narrowed from `LOOM_LOCK_TTL` (30s) to `LOOM_HOLDERLESS_TTL` (2s default) to recover within one acquire; but this widens the non-atomic `mkdir`→`stamp_holder` window: S1 `mkdir`s the lock then is descheduled >2s (load/cgroup throttling); S2 sees a 2s-old holderless dir, reclaims + acquires; S1 resumes and stamps into the recreated dir, its INV-1 confirm reads back its own write → both report "acquired". The old 30s gate made the required stall 15× larger.
+- location: plugins/loom/lib/loom-coord.sh:649
+- description: `reclaim` force-removes the stale holder's worktree **before** the guarding value-CAS steal. A holder that renews in the TOCTOU window (renew is lock-free) has its worktree/files deleted, and then the value-CAS correctly FAILS (SHA changed) and reclaim exits — so a now-live peer's worktree is destroyed even though the reclaim was refused (U6 violation). Same "destroy before confirm" bug as V2.
 - confidence: CONFIRMED
 
-### Finding U5
+### Finding V4
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:1099
-- description: **renewer-stop kills a recycled pid.** When `renewer.starttime` is empty (because `process_starttime` returned empty at start), `renewer-stop` reads `rst=''`, takes the `[ -z "$rst" ]` branch, and issues `kill` against the recorded pid WITHOUT the start-time identity check → if the renewer died and the OS recycled its pid, an unrelated process is killed. The identity guard exists precisely to prevent this; the empty-`rst` fallback bypasses it.
+- location: plugins/loom/lib/loom-coord.sh:435 (also :431)
+- description: `lock-release` reads `cur_sha=X`, confirms sid==self, then the session's OWN background renewer value-CAS-updates the lock blob X→Y (still sid==self, fresh ts); the `update-ref -d <lock> X` then fails, the code re-reads `new_sha=Y` (non-empty) and exits 5 "ref changed during release" — but the session still owns the lock, it is never deleted, and the renewer keeps it fresh so it never goes stale → **permanent deadlock** (peers blocked; self can't re-acquire until session-end). This is the ADR-0016 "renewer↔release CAS-on-current-value" note: release must stop the renewer and/or re-read + retry the delete-CAS on the current SHA while sid==self.
 - confidence: CONFIRMED
 
-### Finding U6
+### Finding V5
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:973
-- description: **cleanup sweeps live claims + rm-rf's the session dir.** With worktree-membership liveness removed, cleanup sweeps any stale-LEASE claim and `rm -rf`s the owning `session-<id>/` dir; combined with U2/U3 a live-but-momentarily-stale holder can have its per-session state destroyed. (Related to the fail-open/lease-window issues above.)
+- location: plugins/loom/lib/loom-coord.sh:265 (also :269)
+- description: `slice_to_refname` percent-encodes only bytes outside `[A-Za-z0-9._/-]` and does NOT enforce git's ref grammar, so legal slice names produce refnames git refuses: `foo.lock`, `a..b`, `feature/.hack`, or names ending in `/` or `.` pass through unencoded. `git update-ref` then fails "bad name", and `cmd_claim` maps that to exit 4 "claimed by another session" → the slice can NEVER be claimed/renewed/released/reclaimed → a **permanent live-lock on any git-illegal-ref-token slice name**, even with no peer holding it. Encode to satisfy `git check-ref-format` (e.g. encode `.`-sequences, `.lock`, leading/trailing `.`/`/`).
 - confidence: CONFIRMED
 
-### Secondary (cleanup / robustness)
+### Finding V6
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh (renewer lifecycle + acquire dup)
-- description: Unreliable start-time persistence; non-atomic `session.pid` write; awk mis-parse of `/proc/<pid>/stat` field 22 (start-time can be wrong when the comm field contains spaces/parens); copy-pasted acquire loop with an already-diverged wasted-backoff bug.
-- confidence: CONFIRMED (lower severity)
+- location: plugins/loom/lib/loom-coord.sh:285
+- description: Claim refs are loose ref FILES, so on a **case-insensitive filesystem** (macOS default APFS/HFS+ — the dev host) two distinct slice names differing only in case (`Auth` vs `auth`) map to the same ref file → one slice's claim silently aliases the other's (false "already claimed" or cross-grant). Encode case (or hash) so distinct names never case-fold to one ref path.
+- confidence: CONFIRMED
+
+### Additional (lower-severity / cleanup)
+- source: /code-review
+- location: plugins/loom/lib/loom-coord.sh (various)
+- description: The review noted ~4 further lower-value items (leftover dead test code from the deleted mkdir/TSV machinery, a redundant `cat-file`, a stale header comment) dropped under the report cap — worth a cleanup sweep in the fix.
+- confidence: CONFIRMED (minor)
 
 ## /security-review
 Status: ran-clean
 
-No concrete (>=0.8) vulnerabilities. The detached renewer spawns `sh "$_coord" <subcmd>` with every
-value as a separate double-quoted argument (no `eval`/injection); `process_starttime` and the portable
-`stat` are quoted and read only trusted pids / the fixed lock dir; the `ENVIRON`-passed session-id is
-equality-compared only; all `mv`/`rm -rf`/`kill`/`git` sinks are fed by trusted CLI args / minted UUIDs /
-git output / tool-written `.git/loom/` state. No untrusted-input flow. (U1-U6 are correctness defects,
-not security vulnerabilities.)
+No concrete (>=0.8) vulnerabilities. The git argument-injection check is safe (every value in a
+`git` option/ref position is a fixed literal, a 40-hex SHA, or a `refs/loom/`-prefixed ref — none
+can lead with `-`); holder/claim blobs are read only via `cat-file | awk` string comparison, never
+`eval`'d; `rm -rf`/`kill`/`mv` sinks are fed by trusted session-id / tool-written state; the
+`/proc` field-22 parse is string-compared only. The V5 ref-grammar / V6 case-fold issues are
+correctness defects that fail closed, not security vulnerabilities.

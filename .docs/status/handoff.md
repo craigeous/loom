@@ -595,6 +595,18 @@ source of truth; `roadmap.md` is milestone order.
    the git-CAS helper → refresh review-findings → blind code-eval. **Resolving PASS carries the slice's
    Round 3 → LANDS slice H at last**; FAIL → Round 4. The git-CAS substrate should finally break the
    fix-introduces-regressions cycle (git owns atomicity). Then finalize → slice W.
+   **Automated review re-run DONE.** `/code-review` = ran-with-findings (~10 defects) BUT **the CAS core is
+   now CORRECT — the mkdir-CAS ABA/race class is ELIMINATED** (git owns atomicity; confirmed). Remaining are
+   PERIPHERAL/discrete (not the fix-spawns-new-CAS-race pattern): **V1** `LOOM_RENEW_INTERVAL` 1200s vs 30s
+   lock TTL → renewer can't heartbeat the lock → stolen (defeats U3; cadence must be <lock-TTL ⇒ ~10s);
+   **V2/V3** cleanup/reclaim `worktree remove -f`+`rm -rf` BEFORE the guarding delete/value-CAS → live
+   session data loss (destroy must be AFTER CAS confirms); **V4** `lock-release` loses to its OWN renewer's
+   heartbeat → wedged deadlock (the ADR-0016 renewer↔release MINOR; re-read+retry / stop renewer first);
+   **V5** `slice_to_refname` doesn't enforce git ref grammar (`foo.lock`/`a..b`/trailing `.`) → legal slice
+   permanently un-claimable; **V6** loose-ref case-fold collision on macOS APFS (`Auth`/`auth`). `/security-
+   review` = ran-clean. **NEXT ACTION:** blind code-eval adjudicates → almost certainly FAIL `Round: 4` →
+   developer round-4 fix (discrete bugs; good chance of a clean resolving PASS). Then land → finalize →
+   slice W. (Round 4 of 5 — 1 attempt before escalation, but these are ordinary bugs, not thrash.)
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
