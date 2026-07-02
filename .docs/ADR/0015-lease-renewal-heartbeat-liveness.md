@@ -1,6 +1,6 @@
 # 0015 — Lease-Renewal Heartbeat as the Liveness Signal
 
-Status: Draft
+Status: Plan Review
 Date: 2026-07-02
 
 ## Context
@@ -94,23 +94,43 @@ would then classify the lease stale → "holder dead," `git worktree remove -f` 
 slice, and re-grant it — a self-inflicted double-grant, strictly worse than the round-2
 reap. **The renew obligation therefore MUST NOT be carried by the blocked driver loop.**
 
-**Renewal is discharged by a detached, out-of-band background renewer gated on the stable
-session pid.** The concrete mechanism the re-implementation slice must build:
+**Renewal is discharged by a detached, out-of-band background renewer gated on a
+reuse-robust identity of the stable session process.** The concrete mechanism the
+re-implementation slice must build:
 
-- **Capture the stable session pid.** At session start the orchestrator records its **own
-  long-lived process pid** — the pid of the `/loom:run` main session itself — as
-  `session-pid` in the per-session `.git/loom-session-<session-id>/` state (ADR 0014 §1).
-  This is the **stable, long-lived orchestrator-session pid**, which stays *alive-but-busy*
-  for the entire duration of a blocking sub-agent call (so `kill -0 <session-pid>` succeeds
-  throughout the block) and dies **only** when the session genuinely exits or crashes. It
-  is emphatically **not** the ephemeral per-invocation `loom-coord` CLI pid that caused the
-  round-2 reap — that pid is dead the instant the CLI returns (§4).
+- **Capture a reuse-robust session-process identity — pid PAIRED WITH its start-time.** A
+  bare pid is **not** a durable identity: after the session process dies the OS is free to
+  **recycle its pid** to an unrelated process, and a later `kill -0 <session-pid>` on that
+  recycled pid would falsely report the dead session "alive." The identity must therefore be
+  a pid the OS cannot forge by reuse. At session start the orchestrator records its **own
+  long-lived process pid together with that process's start-time** — the identity pair
+  **`{session-pid, session-pid-start-time}`** — in the per-session
+  `.git/loom-session-<session-id>/` state (ADR 0014 §1). The pid is the pid of the
+  `/loom:run` main session itself: the **stable, long-lived orchestrator-session pid**,
+  which stays *alive-but-busy* for the entire duration of a blocking sub-agent call and dies
+  **only** when the session genuinely exits or crashes. It is emphatically **not** the
+  ephemeral per-invocation `loom-coord` CLI pid that caused the round-2 reap — that pid is
+  dead the instant the CLI returns (§4). Reading a process start-time is **OS-specific**
+  (its source differs across Linux/macOS/BSD), so the re-implementation must obtain it
+  **portably** — see the start-time-capture item in the mechanical carry-forward list
+  (Consequences), alongside T1's `stat` portability lesson.
+- **The liveness gate is a pid-alive-AND-start-time-matches check.** The renewer's loop
+  condition (and any duplicate-suppression check below) treats the session as alive **iff**
+  the recorded `session-pid` is alive **AND** the pid's *current* start-time equals the
+  recorded `session-pid-start-time`. A recycled pid belongs to a **different** process with
+  a **different** start-time, so the AND fails → the gate reports the original session dead →
+  the renewer exits. This closes the pid-reuse trap that a bare `kill -0` leaves open. The
+  gate is written here at the principle level as `alive(session-pid) && starttime(session-pid)
+  == session-pid-start-time`; the exact OS primitive that reads the start-time is a
+  re-implementation parameter (see carry-forward).
 - **Start the renewer once, on first acquire.** When a session first acquires any lock or
   claim, it launches **exactly one** detached background renewer — shape:
 
   ```sh
-  # detached; runs independently of the blocked main thread
-  while kill -0 "$SESSION_PID" 2>/dev/null; do
+  # detached; runs independently of the blocked main thread.
+  # session_alive := kill -0 succeeds AND current start-time of SESSION_PID
+  #                  still equals the recorded SESSION_PID_STARTTIME (reuse-robust).
+  while session_alive "$SESSION_PID" "$SESSION_PID_STARTTIME"; do
       loom-coord renew --session "$SESSION_ID"   # refresh every held lease, under ADR 0014 §2 lock
       sleep "$RENEW_INTERVAL"                     # ~TTL/3
   done &
@@ -118,24 +138,37 @@ session pid.** The concrete mechanism the re-implementation slice must build:
 
   The renewer heartbeats **independently of the blocked main thread**, so leases stay
   fresh straight through a 40-min sub-agent call — **many** beats occur *during* the block,
-  not zero. Its pid is recorded as `renewer-pid` in the per-session `.git/` state.
+  not zero. Its own identity — `renewer-pid` paired with `renewer-pid-start-time` — is
+  recorded in the per-session `.git/` state.
 - **Never duplicate it.** Launch is **check-then-launch**: before starting a renewer the
-  session reads `renewer-pid` from its per-session state and starts a new one **only if**
-  none is recorded or the recorded one is dead (`kill -0` fails). On a cold-restart
-  bootstrap (ADR 0014 §3) the re-adopting session applies the same check — it refreshes
-  `session-pid` to the **restarted** process's pid and **relaunches the renewer only if the
-  recorded one did not survive the restart** — so a restart never leaves two renewers
-  racing, and a renewer left running by the pre-restart process (whose `kill -0` still
-  points at a now-dead pid) is superseded rather than duplicated.
+  session reads the recorded `{renewer-pid, renewer-pid-start-time}` from its per-session
+  state and starts a new one **only if** none is recorded or the recorded one is **not**
+  alive under the **same reuse-robust check** (pid dead, *or* pid alive but its start-time
+  no longer matches — i.e. the recorded renewer-pid has been recycled to an unrelated
+  process). A bare `kill -0` on the recorded `renewer-pid` alone would misread a recycled
+  renewer-pid as "alive," suppress a needed relaunch, and let the session's **own** lease go
+  stale while it is live (a reap-the-living re-regression) — the start-time pairing forecloses
+  that. On a cold-restart bootstrap (ADR 0014 §3) the re-adopting session applies the same
+  check — it refreshes `{session-pid, session-pid-start-time}` to the **restarted** process's
+  identity and **relaunches the renewer only if the recorded one did not survive the restart**
+  (dead, or recycled per the start-time check) — so a restart never leaves two renewers
+  racing, and a renewer left running by the pre-restart process is superseded rather than
+  duplicated.
 - **Stop it on clean session-end.** On orderly session shutdown the session **kills the
-  recorded `renewer-pid`** and releases its held leases, so the leases go stale promptly
-  and a peer may reclaim without waiting a full TTL.
-- **Orphan self-termination is the crash path.** The renewer's loop condition is
-  `kill -0 "$SESSION_PID"`. If the session **crashes** or is killed without the orderly
-  stop, `kill -0 <session-pid>` **fails on the next beat**, the loop exits, and the
-  renewer **self-terminates**: it stops heartbeating, the lease goes stale within one TTL,
-  and the slice becomes reclaimable. A **dead session therefore cannot keep its own lease
-  alive**, while a **live-but-busy** one keeps it fresh.
+  recorded `renewer-pid`** (only after confirming its start-time still matches, so it never
+  signals a recycled pid) and releases its held leases, so the leases go stale promptly and a
+  peer may reclaim without waiting a full TTL.
+- **Orphan self-termination is the crash path.** The renewer's loop condition is the
+  reuse-robust `session_alive("$SESSION_PID", "$SESSION_PID_STARTTIME")` check. If the session
+  **crashes** or is killed without the orderly stop, that check **fails on the next beat** —
+  either the pid is gone, or the OS has recycled it to a process whose start-time no longer
+  matches the recorded one — the loop exits, and the renewer **self-terminates**: it stops
+  heartbeating, the lease goes stale within one TTL, and the slice becomes reclaimable.
+  **Under this reuse-robust identity gate, a dead session cannot keep its own lease alive**,
+  while a **live-but-busy** one keeps it fresh. (A bare-pid gate would *not* deliver this: a
+  recycled `session-pid` would read "alive" and the orphaned renewer would refresh a dead
+  session's lease forever — a permanent wedge, the very T2 class this ADR removes. The
+  start-time pairing is what makes the self-termination guarantee hold.)
 
 Renewal refreshes the lease timestamp under ADR 0014's §2 lock, exactly as ADR 0014 §3's
 "a session holding a slice longer than the TTL must renew its lease" already required —
@@ -149,10 +182,13 @@ clock skew and a single missed *renewer* beat (e.g. a transient lock-contention 
 ### 3. Failure to renew makes the work reclaimable — by design
 
 The out-of-band renewer (§2) keeps a lease fresh for exactly as long as the **session
-process is alive** (its `kill -0 <session-pid>` gate). When a session **stops running** —
-it crashed, was killed, or ended cleanly — its renewer self-terminates, the lease goes
-**stale** within one TTL, and its lock/claim becomes **reclaimable** by a peer (subject to
-ADR 0014's §2 lock serializing the reclaim decision). This is **correct, not a defect: a
+process is genuinely alive** — as decided by its **reuse-robust identity gate** (pid alive
+**AND** its start-time still matches the recorded `session-pid-start-time`, §2), not by a
+bare `kill -0` that a recycled pid could fool. When a session **stops running** — it
+crashed, was killed, or ended cleanly — its renewer self-terminates (the pid is gone, or a
+reused pid fails the start-time match), the lease goes **stale** within one TTL, and its
+lock/claim becomes **reclaimable** by a peer (subject to ADR 0014's §2 lock serializing the
+reclaim decision). This is **correct, not a defect: a
 session that is no longer running is indistinguishable from a crashed one and should be
 treated as one.** Crucially, because the renewer is **not** gated on the blocked main
 thread, a session that is merely **suspended inside a long (20–40+ min) sub-agent call**
@@ -162,7 +198,8 @@ BLOCKER identified is foreclosed.
 The **no-forward-progress-but-still-running** case (a wedge or livelock) composes with
 [ADR 0013](0013-starvation-loop-guards-cold-restart.md): a session that wedges without
 advancing is required to **escalate and stop**, not spin — and once it stops, its process
-exits, the renewer's `kill -0` fails, and the lease becomes reclaimable by the path above.
+exits, the renewer's reuse-robust identity gate (§2) fails, and the lease becomes
+reclaimable by the path above.
 The heartbeat thus proves *the session is still running its work*, not merely that some
 transient process once existed (the round-2 pid) nor that a directory persists on disk
 after a crash (the round-3 membership) — the two properties both prior signals lacked. A
@@ -184,14 +221,16 @@ within a TTL.
 - **The ephemeral per-invocation CLI pid is dropped as a liveness signal.** It is always
   dead by the time a peer probes it (the round-2 defect), so it reaps live sessions. **No
   peer ever probes any pid to decide another session's liveness** — a peer consults **only
-  lease freshness** (§1), which is primary and sufficient. The one pid that *is* probed is
-  the **stable session pid**, and it is probed **only locally, by the session's own
-  background renewer** (§2), to decide whether to keep beating its **own** leases — an
-  **intra-session** gate, never a **cross-session** one. This is the sharp line that keeps
-  §2's renewer sound while §4 keeps pid off the peer-facing path: the round-2 defect probed
-  the *ephemeral CLI* pid *across sessions*; the renewer probes its *own stable session*
-  pid *locally*. Any pid recorded in the lease stamp itself remains **advisory diagnostic
-  metadata only**, never a liveness gate.
+  lease freshness** (§1), which is primary and sufficient. The one process identity that *is*
+  probed is the **stable session process** (its `{session-pid, session-pid-start-time}` pair,
+  §2), and it is probed **only locally, by the session's own background renewer**, to decide
+  whether to keep beating its **own** leases — an **intra-session** gate, never a
+  **cross-session** one. This is the sharp line that keeps §2's renewer sound while §4 keeps
+  pid off the peer-facing path: the round-2 defect probed the *ephemeral CLI* pid *across
+  sessions*; the renewer probes its *own stable session* process *locally*, and does so via
+  the reuse-robust pid+start-time identity (§2) so a recycled pid cannot forge the answer.
+  Any pid recorded in the lease stamp itself remains **advisory diagnostic metadata only**,
+  never a liveness gate.
 
 ### 5. What ADR 0014 preserves (superseded ONLY on the liveness signal)
 
@@ -240,16 +279,22 @@ worktree list` **no longer proves it alive** — its **fresh lease** does.
   — and because the renewer is **out-of-band** (§2), "continuing to renew" holds even while
   the single-threaded orchestrator is **blocked for 20–40+ minutes inside a sub-agent
   call**: the renewer beats through the block, so a **legitimately-busy holder is never
-  reclaimed**. A crashed or killed session's renewer falls silent (its `kill -0
-  <session-pid>` fails) and a wedged one is required to escalate-and-stop (ADR 0013), after
-  which its process exits and its renewer likewise falls silent — so the slice is reclaimed
-  within one TTL. This directly closes findings **T2** (permanent wedge) and **T6**
-  (unreachable orphan-removal), and removes the pid-reaping root cause behind the round-2
-  regression **without** reintroducing it during the long blocking ops that matter most.
+  reclaimed**. A crashed or killed session's renewer falls silent (its **reuse-robust
+  identity gate** — pid alive AND start-time matches, §2 — fails) and a wedged one is
+  required to escalate-and-stop (ADR 0013), after which its process exits and its renewer
+  likewise falls silent — so the slice is reclaimed within one TTL. **Under that reuse-robust
+  identity gate** this closes findings **T2** (permanent wedge) and **T6** (unreachable
+  orphan-removal), and removes the pid-reaping root cause behind the round-2 regression
+  **without** reintroducing it during the long blocking ops that matter most. The closure
+  depends on the pid+start-time identity: a **bare-pid** gate would leave the T2 wedge open,
+  because a recycled `session-pid` would keep an orphaned renewer refreshing a dead session's
+  lease forever (§2).
 - **New standing obligation on every session.** On first acquiring any lock or claim, the
   session MUST start (**once**, not duplicated) an **out-of-band background renewer** that
-  refreshes every held lease on the ~TTL/3 cadence for as long as the **stable session pid**
-  is alive, and MUST stop it on clean session-end (§2). Ceasing to renew — because the
+  refreshes every held lease on the ~TTL/3 cadence for as long as the **stable session
+  process is alive under the reuse-robust identity gate** (pid alive AND its start-time
+  matches the recorded `session-pid-start-time`, §2), and MUST stop it on clean session-end
+  (§2). Ceasing to renew — because the
   session crashed, was killed, or wedged in a starvation loop and escalated-and-stopped — is
   *defined* to make the work reclaimable (§3). This composes with ADR 0013's starvation-loop
   guard: a session that wedges without forward progress escalates-and-stops, its process
@@ -269,6 +314,14 @@ worktree list` **no longer proves it alive** — its **fresh lease** does.
   - **T1 — Linux `stat` portability.** The mtime/age read must work on GNU/Linux
     (`/bin/sh=dash`), not only BSD/macOS `stat`. The **gate and tests must exercise the
     Linux `stat` path**, not mask the bug behind local BSD `stat` runs.
+  - **Process start-time capture portability (new, from this ADR's §2 identity gate).**
+    Reading a process's start-time — the second half of the reuse-robust
+    `{session-pid, session-pid-start-time}` identity — is **OS-specific**: the source and
+    format differ across Linux (`/proc/<pid>/stat` field 22, or `ps -o lstart=`), macOS/BSD
+    (`ps -o lstart=`/`-o start=`), etc. The re-implementation must capture and compare it
+    **portably** (same GNU/Linux-`dash` vs BSD/macOS matrix as T1), and the **gate and tests
+    must exercise the non-local OS path**, not mask a divergence behind local runs. The
+    comparison is exact-equality of the recorded vs current start-time for the pid.
   - **T3 — `awk -v` escape processing** of the `session-id`: `-v` still applies escape
     processing, mangling ids containing a backslash; the id must be matched by exact string
     equality with no escape interpretation.
@@ -302,9 +355,11 @@ worktree list` **no longer proves it alive** — its **fresh lease** does.
 - Open for the re-implementation slice / spec-04 pass: the exact renew-cadence fraction
   (bounded here as comfortably below the TTL, ~TTL/3, measured against the **out-of-band
   renewer** that is *not* suspended during sub-agent calls) and its margin for clock skew
-  and a single missed *renewer* beat; the concrete means by which the **stable session pid**
-  is captured and recorded in the per-session `.git/` state and the detached-renewer
-  spawn/reap primitive (operational parameters of §2's mechanism); whether the lease
+  and a single missed *renewer* beat; the concrete means by which the **stable session
+  process identity `{session-pid, session-pid-start-time}`** is captured and recorded in the
+  per-session `.git/` state (including the portable start-time read — carry-forward item)
+  and the detached-renewer spawn/reap primitive (operational parameters of §2's mechanism);
+  whether the lease
   timestamp is stored inline in the `slice-plans/README.md` Active row or in a `.git/`-side
   sidecar (an ADR 0014 open parameter, unchanged); and whether any advisory pid is retained
   in the lease stamp for diagnostics (permitted, but never as a liveness gate). The
