@@ -453,6 +453,18 @@ source of truth; `roadmap.md` is milestone order.
    lease stale → reclaimable; (b) TTL > longest blocking op (crude, slow crash-recovery); (c) block-surviving
    fallback. Fix the 2 MINORs (§3 not §F5; add T4). Re-emit `Plan Review` → blind plan-eval re-review. Then
    spec-04 amendment → re-implement → land. (Resolvable within owner-chosen B; no re-escalation needed.)
+   **ADR 0015 round-1 revision (background renewer gated on stable session pid) → blind re-review closed the
+   round-1 items but FAILed `Round: 2`** (ADR 0015's own counter): **BLOCKER pid-reuse** — a bare
+   `kill -0 $SESSION_PID` gate is fooled after the OS recycles the dead session's pid → orphaned renewer
+   keeps a dead lease fresh forever → permanent wedge (T2 re-regression). Round-1 items confirmed closed
+   (renewer heartbeats through long blocking calls; cross-session purity clean; §3 + T4 fixed).
+   **NEXT ACTION:** planner **revises ADR 0015 (round 2)** — fix pid-reuse at principle level via
+   **pid + process-start-time identity** (record `{session-pid, start-time}`; renewer gate = pid alive AND
+   start-time matches → recycled pid fails → renewer exits → lease stale); soften the "closes T2 / dead
+   session can't keep its lease" claim to hold only under the reuse-robust gate; flag start-time capture as
+   another cross-platform-sensitive item for the re-impl (like T1 `stat`). Re-emit `Plan Review` → blind
+   plan-eval re-review. Then spec-04 amendment → re-implement → land. (ADR 0015 at Round 2 of 5; slice H
+   code-eval counter separately at 3.)
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
