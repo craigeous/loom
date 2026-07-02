@@ -622,6 +622,14 @@ source of truth; `roadmap.md` is milestone order.
    first); V5/V6 make ref names always valid + case-distinct (option: ref = hash(slice), store slice-name in
    the blob for list-claims); MINOR cleanup. Red-green tests. Gate green → `Implemented` → re-run automated
    review → blind code-eval (resolving PASS carries Round 4 → LANDS slice H; FAIL → Round 5 → escalate).
+   **Round-4 fix LANDED `9a79c27`** (slice `Implemented`, gate green **bats 62/62** +7 red→green V1-V6):
+   V5/V6 → **SHA-1 hash ref name** (`refs/loom/claims/<sha1-of-slice>`, slice name stored as blob field 3
+   for `list-claims`) — any name is a valid case-distinct ref; V1 → `LOOM_LOCK_RENEW_INTERVAL` (~TTL/3≈10s)
+   fast lock-heartbeat + slow claim cadence; V2/V3 → CAS-first, destroy-on-success-only; V4 → release retry
+   loop, exit 5 only when sid≠self; MINOR cleanup. Fix delta = `9fa9b63..9a79c27`.
+   **NEXT ACTION:** re-run `/code-review` + `/security-review` on the fix → refresh review-findings → blind
+   code-eval. **Resolving PASS carries Round 4 → LANDS slice H at last** (CAS core already confirmed sound,
+   these were discrete fixes); FAIL → Round 5 → escalate. Then finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
