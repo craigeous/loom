@@ -491,6 +491,15 @@ source of truth; `roadmap.md` is milestone order.
    **exercise the Linux path (don't mask with BSD `stat`)**. Strict OUTPUT discipline + **incremental
    commits** (blast-radius lever). Gate green → `Implemented`. Then re-run automated review → blind code-eval
    → land → finalize → slice W (fold lease-freshness into `parallelism.md`/`orchestration.md`/`run.md`).
+   **Re-impl LANDED `eedfc43`** (slice `Implemented`, tree clean, **bats 52/52** = 44+8 new): lease-freshness
+   liveness replaces membership/pid; `renewer-start`/`renewer-stop` with `{pid, starttime}` identity gate +
+   fd-close detach; T1 (GNU-stat-first), T3 (ENVIRON awk — sid via environ, no escape), T4
+   (`LOOM_HOLDERLESS_TTL=2s`), T5 (skipped counter), T7 (factored `try_acquire_holderless`); NEG-R1/NEG-F6
+   inverted to verify stale-lease orphan reclaim. Code delta range `21f9970..eedfc43`.
+   **NEXT ACTION:** re-run `/code-review` + `/security-review` on the re-implemented helper → refresh
+   review-findings → blind code-eval (resolving PASS carries the slice's Round 3 and LANDS slice H; FAIL →
+   Round 4, 1 attempt left before its 5-FAIL escalation). Then finalize → slice W. Watch: renewer detach
+   correctness, lease-freshness reclaim windows, T1/T4 portability.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
