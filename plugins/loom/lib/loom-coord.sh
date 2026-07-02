@@ -4,7 +4,7 @@
 #
 # Hand-invoked CLI helper (NOT a hook — not registered in hooks.json).
 # Serializes N independent /loom:run sessions writing to the shared main
-# checkout through a cross-session mkdir lock and a slice-lease protocol.
+# checkout through a git-CAS lock (refs/loom/lock) and a slice-lease protocol.
 #
 # FAIL DIRECTION: fail-closed (opposite of the guard hooks).
 #   The guard hooks fail-open (false block > missed guard).
@@ -41,6 +41,11 @@ LOOM_LOCK_TTL="${LOOM_LOCK_TTL:-30}"
 LOOM_LEASE_TTL="${LOOM_LEASE_TTL:-3600}"
 LOOM_LOCK_RETRIES="${LOOM_LOCK_RETRIES:-5}"
 LOOM_RENEW_INTERVAL="${LOOM_RENEW_INTERVAL:-1200}"
+# Lock-heartbeat cadence (V1 fix): must be strictly < LOOM_LOCK_TTL (~TTL/3).
+# Default derived from LOOM_LOCK_TTL; override with LOOM_LOCK_RENEW_INTERVAL.
+_default_lri=$((LOOM_LOCK_TTL / 3))
+[ "$_default_lri" -lt 1 ] && _default_lri=1
+LOOM_LOCK_RENEW_INTERVAL="${LOOM_LOCK_RENEW_INTERVAL:-$_default_lri}"
 
 # ---------------------------------------------------------------------------
 # Arg parsing — subcommand and --session
@@ -258,26 +263,14 @@ backoff_sleep() {
     esac
 }
 
-# slice_to_refname <slice> — encode slice name to a safe git ref path component.
-# Characters outside [A-Za-z0-9._/-] are percent-encoded (%XX).  Slashes are
-# preserved so multi-component slice names create hierarchical ref paths naturally.
-# The % itself is encoded as %25 first to avoid double-encoding.
+# slice_to_refname <slice> — map a slice name to a safe git ref path component.
+# Uses git hash-object (SHA-1 of the slice bytes, no store) so the result always
+# passes git check-ref-format regardless of the slice name (V5 fix: handles
+# ".lock", "..", leading/trailing "."/"/", "@{", etc.) and is case-sensitive by
+# construction (SHA-1 is byte-exact), solving case-fold collisions on APFS (V6).
+# The original slice name is stored as field 3 of the claim blob.
 slice_to_refname() {
-    printf '%s' "$1" | LC_ALL=C awk 'BEGIN { ORS="" } {
-        for (i = 1; i <= length($0); i++) {
-            c = substr($0, i, 1)
-            if (c ~ /[A-Za-z0-9._\/\-]/) {
-                printf "%s", c
-            } else {
-                printf "%%%02X", ord(c)
-            }
-        }
-        printf "\n"
-    }
-    function ord(c,    k) {
-        for (k = 0; k < 256; k++) if (sprintf("%c", k) == c) return k
-        return 0
-    }'
+    printf '%s' "$1" | git -C "$REPO_ROOT" hash-object --stdin 2>/dev/null
 }
 
 # claim_ref_for <slice> — full ref path for a slice claim
@@ -285,10 +278,11 @@ claim_ref_for() {
     printf '%s/%s' "$CLAIMS_REF_PREFIX" "$(slice_to_refname "$1")"
 }
 
-# _make_claim_blob_for <sid> — write {sid}\t{ts}\n blob; print SHA or empty on failure
+# _make_claim_blob_for <sid> <slice> — write {sid}\t{ts}\t{slice}\n blob; print SHA or empty.
+# Field 3 (slice) lets list-claims recover the original slice name from the hash-keyed ref.
 _make_claim_blob_for() {
-    local _csid="$1"
-    printf '%s\t%s\n' "$_csid" "$(now)" |
+    local _csid="$1" _cslice="$2"
+    printf '%s\t%s\t%s\n' "$_csid" "$(now)" "$_cslice" |
         git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null
 }
 
@@ -427,17 +421,28 @@ cmd_lock_release() {
         printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
         exit 5
     fi
-    # Delete-CAS: only succeeds if ref still equals our blob SHA
-    if ! git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$cur_sha" 2>/dev/null; then
-        # CAS failed — ref changed (race); verify whether we still hold it
-        local new_sha
-        new_sha=$(read_lock_sha)
-        if [ -n "$new_sha" ]; then
-            printf 'loom-coord lock-release: ref changed during release\n' >&2
+    # Delete-CAS with retry while sid==self (V4 fix): the session's own renewer may
+    # value-CAS-update the lock blob (keeping sid=self, bumping ts) between our read
+    # and the delete.  The delete-CAS correctly refuses (SHA changed), but the lock is
+    # still ours.  Re-read + retry converges because the renewer only bumps ts —
+    # sid stays self — so the next delete-CAS wins.  Exit 5 only when sid≠self or
+    # the ref is already gone (someone else stole/released it).
+    while true; do
+        if git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$cur_sha" 2>/dev/null; then
+            break # Released successfully
+        fi
+        # CAS refused — re-read current state
+        cur_sha=$(read_lock_sha)
+        if [ -z "$cur_sha" ]; then
+            break # Ref already gone — idempotent success
+        fi
+        h_sid=$(decode_lock_field "$cur_sha" 1)
+        if [ "$h_sid" != "$SESSION_ID" ]; then
+            printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
             exit 5
         fi
-        # Ref gone already — treat as success (idempotent)
-    fi
+        # Still ours (renewer bumped ts) — retry the delete-CAS
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -510,7 +515,7 @@ cmd_claim() {
         fi
 
         # Stale claim — value-CAS steal from exact read SHA
-        new_sha=$(_make_claim_blob_for "$SESSION_ID")
+        new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
         if [ -z "$new_sha" ]; then
             printf 'loom-coord claim: cannot create claim blob\n' >&2
             exit 10
@@ -525,7 +530,7 @@ cmd_claim() {
     fi
 
     # Absent — create-only CAS from null OID
-    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
     if [ -z "$new_sha" ]; then
         printf 'loom-coord claim: cannot create claim blob\n' >&2
         exit 10
@@ -565,7 +570,7 @@ cmd_renew() {
         exit 5
     fi
 
-    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
     if [ -z "$new_sha" ]; then
         printf 'loom-coord renew: cannot create claim blob\n' >&2
         exit 10
@@ -641,23 +646,26 @@ cmd_reclaim() {
         exit 6
     fi
 
-    # Stale lease — prune orphan worktree, then value-CAS steal.
-    git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
-    local wt_path
-    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$cur_sid")
-    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
-        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
-    fi
-
-    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    # V3 fix: CAS steal FIRST; only destroy the orphan worktree after the CAS confirms
+    # the old holder is provably stale and unchanged.  Never remove resources before
+    # the CAS that authorises it — a holder that renewed in the TOCTOU window would
+    # have its worktree destroyed even though the CAS would correctly refuse (V3).
+    new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
     if [ -z "$new_sha" ]; then
         printf 'loom-coord reclaim: cannot create claim blob\n' >&2
         exit 10
     fi
     # Value-CAS steal from exact read SHA (ABA-safe)
     if ! git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
-        printf 'loom-coord reclaim: CAS failed for %s — another session claimed it\n' "$slice" >&2
+        printf 'loom-coord reclaim: CAS failed for %s — holder renewed (still alive)\n' "$slice" >&2
         exit 4
+    fi
+    # CAS succeeded — orphan worktree cleanup is now safe
+    git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+    local wt_path
+    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$cur_sid")
+    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
     fi
     add_held_claim "$slice"
     printf 'reclaimed %s\n' "$slice"
@@ -675,9 +683,17 @@ cmd_list_claims() {
         "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
     while IFS=' ' read -r refname sha; do
         [ -z "$refname" ] && continue
-        local content
-        content=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null) || continue
-        printf '%s\t%s\n' "$refname" "$content"
+        local _sid _ts _slice
+        _sid=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $1}')
+        _ts=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $2}')
+        _slice=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $3}')
+        [ -z "$_sid" ] && continue
+        # Print: <original-slice-name or refname>\t<sid>\t<ts>
+        if [ -n "$_slice" ]; then
+            printf '%s\t%s\t%s\n' "$_slice" "$_sid" "$_ts"
+        else
+            printf '%s\t%s\t%s\n' "$refname" "$_sid" "$_ts"
+        fi
     done <"$refs_tmp"
     rm -f "$refs_tmp"
 }
@@ -811,7 +827,7 @@ cmd_session_bootstrap() {
             if [ -n "$cur_sha" ]; then
                 cur_sid=$(decode_claim_field "$cur_sha" 1)
                 if [ "$cur_sid" = "$SESSION_ID" ]; then
-                    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+                    new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
                     if [ -n "$new_sha" ] &&
                         git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
                         printf 'renewed %s %s\n' "$slice" "$(now)"
@@ -1000,19 +1016,25 @@ cmd_cleanup() {
             if claim_is_fresh "$ts"; then
                 skipped=$((skipped + 1))
             else
-                # Stale lease — orphan worktree removal (T2/T6 fix: driven by lease staleness)
-                local wt_path
-                wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
-                if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
-                    git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
+                # V2 fix: delete-CAS FIRST; destroy resources only after the CAS
+                # confirms the claim was stale and unchanged.  If the holder renewed
+                # in the snapshot→destroy window (SHA changed), the CAS fails and we
+                # skip destruction — the holder is alive, its worktree survives.
+                if git -C "$REPO_ROOT" update-ref -d "$refname" "$sha" 2>/dev/null; then
+                    # CAS succeeded — safe to clean up orphan worktree + session dir
+                    local wt_path
+                    wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
+                    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+                        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
+                    fi
+                    if [ -d "$STATE_DIR/session-$sid" ]; then
+                        rm -rf "$STATE_DIR/session-$sid"
+                    fi
+                    swept=$((swept + 1))
+                else
+                    # CAS refused — holder renewed (alive); skip destruction
+                    skipped=$((skipped + 1))
                 fi
-                # Remove dead session dir
-                if [ -d "$STATE_DIR/session-$sid" ]; then
-                    rm -rf "$STATE_DIR/session-$sid"
-                fi
-                # Delete the claim ref (delete-CAS on exact read SHA)
-                git -C "$REPO_ROOT" update-ref -d "$refname" "$sha" 2>/dev/null || true
-                swept=$((swept + 1))
             fi
         done <"$refs_tmp"
         rm -f "$refs_tmp"
@@ -1078,22 +1100,34 @@ cmd_renewer_start() {
     local _sid="$SESSION_ID"
     local _sdir="$sess_dir"
     local _interval="$LOOM_RENEW_INTERVAL"
+    local _lock_interval="$LOOM_LOCK_RENEW_INTERVAL"
     local _root="$REPO_ROOT"
 
     # Launch detached background renewer.  Uses _session_alive (inherited function)
     # with the reuse-robust identity gate: exits when session pid dies or start-time
-    # changes (recycled pid).  On each interval:
-    #   1. CAS-renews refs/loom/lock if our session currently holds it (U3 fix — ADR 0016 §3).
-    #   2. CAS-renews each held claim ref directly (no lock-acquire needed — ADR 0016 §2).
+    # changes (recycled pid).
+    #
+    # V1 fix — two cadences, decoupled:
+    #   Lock heartbeat:  every _lock_interval (~LOOM_LOCK_TTL/3, default 10s).
+    #                    Keeps refs/loom/lock alive across long critical sections.
+    #   Claim heartbeat: every LOOM_RENEW_INTERVAL (default 1200s).
+    #                    Claims have a much longer TTL (3600s); infrequent renewal OK.
+    # The loop sleeps _lock_interval per tick; claims are renewed every
+    # (_interval/_lock_interval) ticks.
+    #
     # stdin/stdout/stderr are closed (redirected to /dev/null) so the subshell does
     # not hold inherited file descriptors open — prevents callers that capture output
     # (e.g. bats `run`) from hanging.
     (
         cd "$_root" 2>/dev/null || exit 1
+        _tick=0
+        _lease_every=$((_interval / _lock_interval))
+        [ "$_lease_every" -lt 1 ] && _lease_every=1
         while _session_alive "$_sdir"; do
-            sleep "$_interval" 2>/dev/null || true
+            sleep "$_lock_interval" 2>/dev/null || true
+            _tick=$((_tick + 1))
 
-            # Heartbeat the lock ref if our session currently holds it (U3 fix)
+            # Lock heartbeat every tick (fast cadence — must stay below LOOM_LOCK_TTL)
             _lsha=$(git -C "$_root" rev-parse --verify "refs/loom/lock" 2>/dev/null || true)
             if [ -n "$_lsha" ]; then
                 _lsid=$(git -C "$_root" cat-file blob "$_lsha" 2>/dev/null |
@@ -1108,13 +1142,15 @@ cmd_renewer_start() {
                 fi
             fi
 
-            # Heartbeat held claim refs (direct value-CAS, no lock needed)
-            _hcf="$_sdir/held-claims"
-            if [ -f "$_hcf" ]; then
-                while IFS= read -r _s; do
-                    [ -z "$_s" ] && continue
-                    sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
-                done <"$_hcf"
+            # Claim heartbeat every _lease_every ticks (slow cadence — claims have long TTL)
+            if [ $((_tick % _lease_every)) -eq 0 ]; then
+                _hcf="$_sdir/held-claims"
+                if [ -f "$_hcf" ]; then
+                    while IFS= read -r _s; do
+                        [ -z "$_s" ] && continue
+                        sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
+                    done <"$_hcf"
+                fi
             fi
         done
     ) </dev/null >/dev/null 2>&1 &

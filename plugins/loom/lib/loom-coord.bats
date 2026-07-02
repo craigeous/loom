@@ -96,23 +96,11 @@ dead_pid() {
 # Claim-ref helpers (Pass 2: claims are refs/loom/claims/<encoded-slice>)
 # ---------------------------------------------------------------------------
 
-# _slice_to_refname <slice> — encode slice name the same way loom-coord.sh does
+# _slice_to_refname <slice> — hash slice name the same way loom-coord.sh does (V5/V6 fix).
+# Uses git hash-object --stdin (no store) so the result is always a valid git ref
+# component and is case-sensitive (solving case-fold collisions on APFS).
 _slice_to_refname() {
-    printf '%s' "$1" | LC_ALL=C awk 'BEGIN { ORS="" } {
-        for (i = 1; i <= length($0); i++) {
-            c = substr($0, i, 1)
-            if (c ~ /[A-Za-z0-9._\/\-]/) {
-                printf "%s", c
-            } else {
-                printf "%%%02X", ord(c)
-            }
-        }
-        printf "\n"
-    }
-    function ord(c,    k) {
-        for (k = 0; k < 256; k++) if (sprintf("%c", k) == c) return k
-        return 0
-    }'
+    printf '%s' "$1" | git -C "$REPO" hash-object --stdin 2>/dev/null
 }
 
 # claim_ref_sha <slice> — print SHA of refs/loom/claims/<slice>, or empty
@@ -139,11 +127,12 @@ claim_ts() {
 }
 
 # plant_claim_ref <slice> <sid> <ts> — create a claim ref directly in REPO
+# Blob format matches loom-coord.sh: {sid}\t{ts}\t{slice}\n
 plant_claim_ref() {
     local slice="$1" sid="$2" ts="$3"
     local encoded sha
     encoded=$(_slice_to_refname "$slice")
-    sha=$(printf '%s\t%s\n' "$sid" "$ts" | git -C "$REPO" hash-object -w --stdin)
+    sha=$(printf '%s\t%s\t%s\n' "$sid" "$ts" "$slice" | git -C "$REPO" hash-object -w --stdin)
     git -C "$REPO" update-ref "refs/loom/claims/$encoded" "$sha"
 }
 
@@ -1296,8 +1285,8 @@ EOF
     run sh "$COORD" claim "slice:foo" --session "ses-SC1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed slice:foo"* ]]
-    # Colon encoded as %3A; ref must exist
-    git -C "$REPO" rev-parse --verify "refs/loom/claims/slice%3Afoo" 2>/dev/null
+    # Ref must exist under the hash-keyed path (V5: hash avoids invalid ref chars)
+    [ -n "$(claim_ref_sha "slice:foo")" ]
     # Claim sid correct
     [ "$(claim_sid "slice:foo")" = "ses-SC1" ]
     # Renew value-CAS works
@@ -1322,8 +1311,9 @@ EOF
     [ "$status" -eq 0 ]
     run sh "$COORD" list-claims
     [ "$status" -eq 0 ]
-    [[ "$output" == *"refs/loom/claims/slice-lc1a"* ]]
-    [[ "$output" == *"refs/loom/claims/slice-lc1b"* ]]
+    # list-claims now outputs <original-slice-name>\t<sid>\t<ts> (V5 fix)
+    [[ "$output" == *"slice-lc1a"* ]]
+    [[ "$output" == *"slice-lc1b"* ]]
     [[ "$output" == *"ses-LC1"* ]]
     teardown
 }
@@ -1344,9 +1334,9 @@ EOF
     lock_sha_before=$(git_lock_sha)
     [ -n "$lock_sha_before" ]
 
-    # Start renewer with a short interval (1 s) so it fires quickly
+    # Start renewer with short cadences so the lock heartbeat fires quickly
     local mypid=$$
-    run env LOOM_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW3"
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW3"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-started"* ]]
 
@@ -1464,6 +1454,220 @@ EOF
 # PROC-1 — /proc/<pid>/stat field-22 parse: comm with spaces and parens
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# V1 — Lock held past LOOM_LOCK_TTL with renewer running: NOT stolen by peer
+# ---------------------------------------------------------------------------
+
+@test "V1 lock held past TTL with renewer: peer cannot steal (renewer keeps it fresh)" {
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-V1-holder"
+    [ "$status" -eq 0 ]
+
+    # Acquire the lock
+    run env LOOM_LOCK_TTL=3 LOOM_LOCK_RENEW_INTERVAL=1 LOOM_LOCK_RETRIES=3 \
+        sh "$COORD" lock-acquire --session "ses-V1-holder"
+    [ "$status" -eq 0 ]
+
+    # Start renewer with 1s lock cadence (< 3s TTL)
+    local mypid=$$
+    run env LOOM_LOCK_TTL=3 LOOM_LOCK_RENEW_INTERVAL=1 \
+        sh "$COORD" renewer-start "$mypid" --session "ses-V1-holder"
+    [ "$status" -eq 0 ]
+
+    # Wait longer than the lock TTL (3s) so the lock WOULD expire without renewal
+    sleep 4
+
+    # Peer tries to steal with TTL=3 (the lock timestamp is fresh due to renewal)
+    run env LOOM_LOCK_TTL=3 LOOM_LOCK_RETRIES=2 \
+        sh "$COORD" lock-acquire --session "ses-V1-peer"
+    # Peer must fail — lock is kept fresh by the renewer
+    [ "$status" -ne 0 ]
+    [ "$(holder_sid)" = "ses-V1-holder" ]
+
+    run sh "$COORD" renewer-stop --session "ses-V1-holder"
+    [ "$status" -eq 0 ]
+    run env LOOM_LOCK_TTL=3 sh "$COORD" lock-release --session "ses-V1-holder"
+    [ "$status" -eq 0 ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V2 — Claim that renews during cleanup sweep window is NOT destroyed
+# ---------------------------------------------------------------------------
+
+@test "V2 claim renewed during cleanup window: worktree and ref survive (CAS-first)" {
+    make_repo
+    cd "$REPO"
+
+    local sid="ses-V2-alive"
+    # Plant a claim ref that appears stale (ts=0)
+    plant_claim_ref "slice-V2" "$sid" "0"
+
+    # Create a matching worktree so wt_sid_match can find it
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    # Now — BEFORE cleanup runs — renew the claim (simulates the holder renewing
+    # just as cleanup reads the stale snapshot).  The V2 CAS-first fix means the
+    # delete-CAS will fail (SHA changed) and cleanup skips destruction.
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$sid"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" renew slice-V2 --session "$sid"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" lock-release --session "$sid"
+    [ "$status" -eq 0 ]
+
+    # cleanup sees a fresh lease now — it must skip, not destroy
+    run env LOOM_LOCK_TTL=0 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    # Claim ref must still exist (not swept)
+    [ -n "$(claim_ref_sha "slice-V2")" ]
+    # Worktree dir must still exist (not removed)
+    [ -d "$wt_path" ]
+    git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V3 — Refused reclaim (holder renewed) does NOT remove worktree
+# ---------------------------------------------------------------------------
+
+@test "V3 reclaim refused by CAS (holder renewed): worktree intact" {
+    make_repo
+    cd "$REPO"
+
+    local holder_sid="ses-V3-holder"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${holder_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    # Plant a stale-looking claim, then renew it so the SHA changes
+    # (simulating the holder renewing between reclaim's liveness-check and CAS)
+    plant_claim_ref "slice-V3" "$holder_sid" "0"
+    # Renew it to make the SHA change (now fresh)
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$holder_sid"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" renew slice-V3 --session "$holder_sid"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" lock-release --session "$holder_sid"
+    [ "$status" -eq 0 ]
+
+    # Reclaim attempt: fresh lease → exit 6, worktree intact
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V3-reclaimer"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" reclaim slice-V3 --session "ses-V3-reclaimer"
+    [ "$status" -eq 6 ]
+    # Worktree must still exist (reclaim was refused)
+    [ -d "$wt_path" ]
+    [ "$(claim_sid "slice-V3")" = "$holder_sid" ]
+    git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V4 — lock-release succeeds even while renewer is heartbeating (no wedge)
+# ---------------------------------------------------------------------------
+
+@test "V4 lock-release succeeds while renewer heartbeats (retry-loop, no deadlock)" {
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-V4"
+    [ "$status" -eq 0 ]
+
+    run env LOOM_LOCK_TTL=30 LOOM_LOCK_RENEW_INTERVAL=1 LOOM_LOCK_RETRIES=3 \
+        sh "$COORD" lock-acquire --session "ses-V4"
+    [ "$status" -eq 0 ]
+
+    # Start renewer with 1s lock cadence so it heartbeats frequently
+    local mypid=$$
+    run env LOOM_LOCK_TTL=30 LOOM_LOCK_RENEW_INTERVAL=1 \
+        sh "$COORD" renewer-start "$mypid" --session "ses-V4"
+    [ "$status" -eq 0 ]
+
+    # Wait for at least one heartbeat so the lock SHA has changed since acquire
+    sleep 2
+
+    # Release must succeed despite the renewer having changed the SHA (V4 retry-loop)
+    run env LOOM_LOCK_TTL=30 sh "$COORD" lock-release --session "ses-V4"
+    [ "$status" -eq 0 ]
+    # Lock must be gone
+    [ -z "$(git_lock_sha)" ]
+
+    run sh "$COORD" renewer-stop --session "ses-V4"
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V5 — git-illegal slice names can be claimed/released without error
+# ---------------------------------------------------------------------------
+
+@test "V5a slice named 'foo.lock' can be claimed and released (hash-ref avoids .lock suffix)" {
+    make_repo
+    cd "$REPO"
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V5a"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim "foo.lock" --session "ses-V5a"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claimed foo.lock"* ]]
+    [ "$(claim_sid "foo.lock")" = "ses-V5a" ]
+    run sh "$COORD" release-claim "foo.lock" --session "ses-V5a"
+    [ "$status" -eq 0 ]
+    [ -z "$(claim_ref_sha "foo.lock")" ]
+    teardown
+}
+
+@test "V5b slice named 'a..b' can be claimed and released (hash-ref avoids double-dot)" {
+    make_repo
+    cd "$REPO"
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V5b"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim "a..b" --session "ses-V5b"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claimed a..b"* ]]
+    [ "$(claim_sid "a..b")" = "ses-V5b" ]
+    run sh "$COORD" release-claim "a..b" --session "ses-V5b"
+    [ "$status" -eq 0 ]
+    [ -z "$(claim_ref_sha "a..b")" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V6 — case-distinct slice names map to DISTINCT refs (case-insensitive FS safe)
+# ---------------------------------------------------------------------------
+
+@test "V6 'Auth' and 'auth' are independent claims (hash-ref is case-sensitive)" {
+    make_repo
+    cd "$REPO"
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V6"
+    [ "$status" -eq 0 ]
+
+    run sh "$COORD" claim "Auth" --session "ses-V6"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claimed Auth"* ]]
+
+    run sh "$COORD" claim "auth" --session "ses-V6"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claimed auth"* ]]
+
+    # Both claims must exist and both name our session
+    [ "$(claim_sid "Auth")" = "ses-V6" ]
+    [ "$(claim_sid "auth")" = "ses-V6" ]
+
+    # The two claim refs must be DISTINCT (different hashes)
+    local sha_auth sha_Auth
+    sha_Auth=$(claim_ref_sha "Auth")
+    sha_auth=$(claim_ref_sha "auth")
+    [ -n "$sha_Auth" ]
+    [ -n "$sha_auth" ]
+    [ "$sha_Auth" != "$sha_auth" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
 @test "PROC-1 stat field-22 parse: comm containing spaces and parens gives correct starttime" {
     # Secondary fix: naïve awk '{print $22}' misparses field 22 when comm contains
     # spaces or ')' — e.g. comm "(a b) c)" shifts all subsequent fields left.
