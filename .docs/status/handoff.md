@@ -398,6 +398,16 @@ source of truth; `roadmap.md` is milestone order.
    tree clean at green `692bb14`; re-spawning the round-3 developer with the root-cause directive (porcelain
    parse + exact field compare; remove R1 override; age-gate + ownership-reverify reclaim incl.
    `session-bootstrap`; red-green tests). Round counter still 3 (no new FAIL from the aborted attempt).
+   **Round-3 fix LANDED `21f9970`** (slice `Implemented`, tree clean): `wt_sid_match` awk helper (exact
+   `wt-<sid>` last-segment equality, space-safe) replaces every `grep -qE "${sid}(/|$)"` → dissolves
+   R2/R3/R6; R1 recovery-override REMOVED (liveness = pure worktree-list membership); holderless reclaim
+   age-gated everywhere incl. `session-bootstrap`'s internal fn (R4/R5); empty-sid guard (R7). Gate green
+   **bats 44/44** (7 new negatives, 6 verified red→green; NEG-R4/R6 already passed on old code with sound
+   rationale — durable fixes covered by NEG-R4b + `wt_sid_match`). New range `692bb14..21f9970`.
+   **NEXT ACTION:** re-run `/code-review` + `/security-review` on the fixed helper → refresh
+   review-findings → blind code-eval (resolving PASS carries **Round 3** and **LANDS slice H**; FAIL → Round
+   4). Then finalize (archive plan, progress/CLAUDE.md) → **log the deferred `.docs/` infra-blocked-escalation
+   follow-up** (owner idea, saved to memory `loom-infra-blocked-escalation`) → slice W (playbook wiring).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
