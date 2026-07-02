@@ -515,6 +515,21 @@ source of truth; `roadmap.md` is milestone order.
    **(C)** pivot the lock/claim mechanism to **git's atomic `update-ref` CAS** (new ADR superseding ADR 0014's
    mkdir-lock mechanism; removes the whole hand-rolled-CAS bug class) — recommend leaning C given 4 rounds.
    **NEXT ACTION: await owner A/C decision.** Slice still `In Progress` at `eedfc43`.
+   **OWNER CHOSE C (git-native atomic CAS).** Pivot the lock/claim MECHANISM to git's atomic
+   `git update-ref <ref> <new> <old>` CAS: lock = a ref (e.g. `refs/loom/lock`) whose value is an object
+   encoding holder + lease-ts; acquire/steal/release via CAS (git's old-SHA compare is **ABA-safe by
+   construction** → U1 gone); claims = `refs/loom/claims/<slice>`. git owns the ref-locking atomicity →
+   the hand-rolled mkdir-CAS / rename-capture / clear_and_own machinery is DELETED (U1/U3/U4 vanish). The
+   renewer also CAS-renews the LOCK ref's lease-ts while held → fixes U3 (long `land` not stolen). KEEP:
+   ADR 0014 coordination model + ADR 0015 lease-freshness liveness + `{pid,start-time}` renewer. refs/loom/*
+   live in the shared common ref store (all worktrees see them) = natural cross-session medium.
+   **NEXT ACTION:** planner authors `.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md` (`Plan Review`) —
+   supersede ONLY the lock/claim mechanism/substrate wherever recorded (determine exact scope from ADR 0014
+   + spec-04 prose + slice-plan H's mkdir/rename-capture choice); carry forward the non-CAS bugs still to fix
+   in the re-impl (U2 fail-open empty epoch, U5 recycled-pid kill, U6 cleanup-sweeps-live, secondary:
+   non-atomic pid write / `/proc` field-22 parse) + the T-series portability items → blind plan-eval →
+   spec-04 amendment → blind plan-eval → developer RE-IMPLEMENTS with git-CAS → automated review → blind
+   code-eval → land → finalize → slice W. Slice `In Progress` at `eedfc43`; slice counter stays 3.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
