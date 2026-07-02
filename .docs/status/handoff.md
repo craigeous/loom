@@ -587,6 +587,14 @@ source of truth; `roadmap.md` is milestone order.
    split on LAST `)`; Linux-exercised). Red-green tests. Gate green → set `Status: Implemented`. Then re-run
    automated review → blind code-eval (resolving PASS carries the slice's Round 3 and LANDS slice H) →
    finalize → slice W.
+   **git-CAS RE-IMPL COMPLETE — 3 gate-green passes, NO crash:** Pass 1 `e0699f2` (lock→`refs/loom/lock`
+   CAS), Pass 2 `d342a77` (claims→`refs/loom/claims/*` + renewer heartbeats lock, U3), Pass 3 `9fa9b63`
+   (U2 fail-closed epoch / U5 recycled-pid-kill guard / U6 no-sweep-live / secondary: atomic pid write +
+   `/proc` last-`)` field-22 parse). Slice `Implemented`, bats **55/55**, shfmt/shellcheck clean. Full
+   re-impl code delta = `eedfc43..9fa9b63`. **NEXT ACTION:** re-run `/code-review` + `/security-review` on
+   the git-CAS helper → refresh review-findings → blind code-eval. **Resolving PASS carries the slice's
+   Round 3 → LANDS slice H at last**; FAIL → Round 4. The git-CAS substrate should finally break the
+   fix-introduces-regressions cycle (git owns atomicity). Then finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
