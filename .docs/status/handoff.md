@@ -578,6 +578,15 @@ source of truth; `roadmap.md` is milestone order.
    claim / value-CAS renew / delete-CAS release / stale-lease reclaim); renewer CAS-renews claim(s) **+ the
    LOCK ref** (U3 fix); keep lease-freshness liveness. Gate green → commit, stay `In Progress`. Then Pass 3
    (U2/U5/U6 + secondary → `Implemented`).
+   **Pass 2 DONE `d342a77`** (gate green bats 51/51): claims TSV → `refs/loom/claims/<percent-encoded-slice>`
+   refs; `cmd_renew` lock-free; renewer heartbeats lock + claim refs (U3 fixed). Pass-1 lock tests still pass.
+   **NEXT ACTION: developer Pass 3 (final)** — fix carried **U2** (lease-freshness fail-CLOSED on empty/
+   non-numeric epoch), **U5** (guard `renewer-stop` recycled-pid kill when start-time empty), **U6**
+   (cleanup/reclaim must not remove a LIVE holder's claim / `rm -rf` a live session dir) + secondary (atomic
+   `session.pid` write via temp+`mv`; `/proc/<pid>/stat` start-time parse robust to comm spaces/parens —
+   split on LAST `)`; Linux-exercised). Red-green tests. Gate green → set `Status: Implemented`. Then re-run
+   automated review → blind code-eval (resolving PASS carries the slice's Round 3 and LANDS slice H) →
+   finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
