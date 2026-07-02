@@ -438,6 +438,21 @@ source of truth; `roadmap.md` is milestone order.
    replaces membership/pid; also fix mechanical T1 Linux `stat` portability [+ gate/tests must exercise the
    Linux path, not mask it], T3 awk-escape, T5 skipped-count, T7 dedup into a shared acquire helper) →
    automated review → blind code-eval → land → finalize → slice W. Round counter still 3.
+   **ADR 0015 authored (`Plan Review`) → blind plan-eval FAILed `Round: 1`**
+   (`0015-lease-renewal-heartbeat-liveness-eval.md`). **BLOCKER:** the thin orchestrator is single-threaded
+   and **suspended inside its long (20-40+min) sub-agent calls**, so a ~TTL/3 driver-loop `renew` can't fire
+   mid-op → a live-but-blocked holder's lease goes stale → peer reclaims + `git worktree remove -f`s its
+   in-progress slice = **self-inflicted double-grant, worse than round-2.** ADR gives no mitigation.
+   **MINORs:** dangling `§F5` ref (ADR 0014 liveness is in §3, no F5 anchor); mechanical carry-forward omits
+   T4 (holderless age-gate vs backoff window). Sound: supersession scope, deferrals, T2/T6 closure, README.
+   **NEXT ACTION:** planner **revises ADR 0015 (round 1)** to resolve the blocking-op renewal gap. Design
+   space (planner picks + records mechanism/cleanup/crash semantics): (a) **background renewer process gated
+   on the STABLE orchestrator-session pid** (`while kill -0 $SESSION_PID; do renew; sleep TTL/3; done` as a
+   detached child) — survives long tool calls (process alive-but-busy) AND fixes round-2 by using the stable
+   session pid, NOT the ephemeral per-invocation CLI pid the round-2 reap used [key distinction]; dies →
+   lease stale → reclaimable; (b) TTL > longest blocking op (crude, slow crash-recovery); (c) block-surviving
+   fallback. Fix the 2 MINORs (§3 not §F5; add T4). Re-emit `Plan Review` → blind plan-eval re-review. Then
+   spec-04 amendment → re-implement → land. (Resolvable within owner-chosen B; no re-escalation needed.)
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
