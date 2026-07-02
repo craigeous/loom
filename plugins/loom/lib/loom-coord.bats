@@ -146,14 +146,16 @@ EOF
 # L4 — Lock: live holder NOT cleared even past TTL (negative)
 # ---------------------------------------------------------------------------
 
-@test "L4 lock-acquire vs LIVE holder past TTL: exit 3, holder unchanged" {
+@test "L4 lock holder with FRESH stamp (within TTL) is not cleared" {
+    # ADR 0015: liveness for the lock = stamp freshness.  A holder within TTL is
+    # never cleared — worktree membership is no longer consulted.
     make_repo
     cd "$REPO"
-    make_live_holder "ses-live-L4" >/dev/null
-    # Force old epoch so TTL check passes, but liveness probe must still block
-    printf '%s\t%s\t%s\n' "ses-live-L4" "$$" "0" \
+    # Fresh holder stamp (epoch=now) with a generous TTL — must not be cleared
+    mkdir -p "$REPO/.git/loom/main.lock"
+    printf '%s\t%s\t%s\n' "ses-live-L4" "$$" "$(date +%s)" \
         >"$REPO/.git/loom/main.lock/holder"
-    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-contender-L4"
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-contender-L4"
     [ "$status" -eq 3 ]
     [ "$(holder_sid)" = "ses-live-L4" ]
     teardown
@@ -788,8 +790,9 @@ EOF
     mkdir -p "$REPO/.git/loom/main.lock"
     [ ! -f "$REPO/.git/loom/main.lock/holder" ]
 
-    # A new contender should be able to acquire (holderless = always reclaimable)
-    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-F3"
+    # LOOM_HOLDERLESS_TTL=0: make any holderless dir immediately reclaimable
+    # (LOOM_LOCK_TTL=0 is kept for legacy compat but the effective gate is LOOM_HOLDERLESS_TTL)
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-F3"
     [ "$status" -eq 0 ]
     [ "$output" = "acquired" ]
     [ "$(holder_sid)" = "ses-F3" ]
@@ -832,32 +835,32 @@ EOF
 # NEG-F6 — F6: orphan worktree dir still on disk is actually removed by reclaim
 # ---------------------------------------------------------------------------
 
-@test "NEG-F6 live session with worktree dir on disk: session-id-primary protects it from cleanup" {
+@test "NEG-F6 stale-lease session with orphan worktree still on disk: orphan IS removed by cleanup" {
+    # ADR 0015 closes T2/T6: orphan-worktree removal is now driven by lease staleness,
+    # not worktree-membership.  A crashed session's worktree (dir still on disk) is removed
+    # once its lease goes stale, making the T6 dead-code path reachable.
     make_repo
     cd "$REPO"
 
-    # Dead session — worktree dir still on disk (simulates crashed process, dir not removed).
-    # Under session-id-primary (ADR 0014): sid still in worktree list → considered alive →
-    # cleanup must NOT sweep it, regardless of lease age or stored pid.
     local dead_sid="ses-dead-F6"
     local wt_dead
     wt_dead="$(cd "$REPO/.." && pwd)/wt-${dead_sid}"
     git -C "$REPO" worktree add -q "$wt_dead" HEAD
-    # wt_dead dir still exists on disk — so prune won't remove the ref
+    # wt_dead dir still exists on disk (crashed session — not cleaned up)
 
-    # Plant the claim: dead pid + epoch=0 (expired lease)
+    # Plant the claim: epoch=0 (stale)
     mkdir -p "$REPO/.git/loom"
     printf 'slice-F6\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
 
-    # Cleanup with LOOM_LEASE_TTL=0 and LOOM_LOCK_TTL=0 — session-id-primary must win
-    run env LOOM_LOCK_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    # Cleanup: stale lease → sweep → orphan worktree removal
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
-    [[ "$output" == *"skipped 1"* ]]
-
-    # Claim must still be present (not swept)
-    grep -qF "slice-F6	$dead_sid" "$REPO/.git/loom/claims"
-    # Worktree dir must still exist
-    [ -d "$wt_dead" ]
+    # Stale claim must be swept
+    [[ "$output" == *"swept 1"* ]]
+    # Claim must be gone
+    ! grep -qF "slice-F6" "$REPO/.git/loom/claims" 2>/dev/null
+    # Orphan worktree dir must have been removed (T6 fix: now reachable)
+    [ ! -d "$wt_dead" ]
     teardown
 }
 
@@ -908,31 +911,29 @@ EOF
 # NEG-R1 — R1: live session past LOOM_LEASE_TTL is NOT swept (no recovery override)
 # ---------------------------------------------------------------------------
 
-@test "NEG-R1 live session past LOOM_LEASE_TTL without renew: not swept, worktree survives" {
+@test "NEG-R1 stale-lease session with worktree IS swept (lease freshness is the sole liveness signal)" {
+    # ADR 0015: a stale lease means the holder is dead, regardless of worktree presence.
+    # Old model (worktree-primary): a session whose wt-<sid> dir exists was protected.
+    # New model: only lease freshness counts; a stale-lease session is swept even with a worktree.
     make_repo
     cd "$REPO"
 
-    local live_sid="ses-live-R1"
-    # Real worktree embedding the session-id — makes is_alive (worktree-list primary) return true
+    local sid="ses-R1-stale"
     local wt_path
-    wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
-    git -C "$REPO" worktree add -q "$wt_path" HEAD
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD # worktree still present on disk
 
     mkdir -p "$REPO/.git/loom"
-    # Claim: epoch=0 (always past any lease TTL), dead pid (claim-time $$ long gone)
-    local dpid
-    dpid=$(dead_pid)
-    printf 'slice-R1\t%s\t%s\t0\n' "$live_sid" "$dpid" >"$REPO/.git/loom/claims"
+    # Claim: epoch=0 (always past any lease TTL)
+    printf 'slice-R1\t%s\t99999999\t0\n' "$sid" >"$REPO/.git/loom/claims"
 
-    # Run cleanup with LOOM_LEASE_TTL=0 (expired) — session-id-primary must protect the session
-    run env LOOM_LOCK_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    # Run cleanup with LOOM_LEASE_TTL=0 (any epoch is stale) and LOOM_HOLDERLESS_TTL=0
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
-    [[ "$output" == *"skipped 1"* ]]
-
-    # Claim must still be in registry
-    grep -qF "slice-R1	$live_sid" "$REPO/.git/loom/claims"
-    # Worktree dir must not have been force-removed
-    [ -d "$wt_path" ]
+    # Stale claim must be swept (not skipped)
+    [[ "$output" == *"swept 1"* ]]
+    # Claim must be gone from registry
+    ! grep -qF "slice-R1" "$REPO/.git/loom/claims" 2>/dev/null
     teardown
 }
 
@@ -1084,7 +1085,7 @@ EOF
     touch -t 202001010000 "$REPO/.git/loom/main.lock"
 
     # session-bootstrap must recover despite holderless dir
-    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" session-bootstrap --session "$sid"
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" session-bootstrap --session "$sid"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewed slice-SB-R5"* ]]
     teardown
@@ -1121,5 +1122,241 @@ EOF
     # Clean up the space-containing dir tree
     git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
     rm -rf "$(dirname "$space_parent")"
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# T1 — Portability: dir_mtime_epoch works when only GNU stat (-c %Y) is present
+# ---------------------------------------------------------------------------
+
+@test "T1 dir_mtime_epoch: GNU-stat-only path (Linux) returns valid mtime" {
+    # Simulate a Linux host where `stat -f` outputs a filesystem block to stdout
+    # AND exits 1 (the T1 bug: BSD-first code appended the filesystem block to the
+    # real mtime, causing integer-parse failures).  The fix (GNU-first) captures
+    # only the epoch from `stat -c %Y` and never runs `stat -f`.
+    mkdir -p "$BATS_TEST_TMPDIR/fake-bin"
+    cat >"$BATS_TEST_TMPDIR/fake-bin/stat" <<'FAKEST'
+#!/bin/sh
+# Simulate GNU stat: only -c %Y <file> is valid; -f writes garbage to stdout.
+if [ "$1" = "-c" ] && [ "$2" = "%Y" ]; then
+    date +%s
+else
+    printf 'File: %s\nSize: 4096 Blocks: 8 IO Block: 4096\n' "$3"
+    exit 1
+fi
+FAKEST
+    chmod +x "$BATS_TEST_TMPDIR/fake-bin/stat"
+
+    make_repo
+    cd "$REPO"
+    # Create an aged holderless lock dir — if dir_mtime_epoch fails, reclaim fails
+    mkdir -p "$REPO/.git/loom/main.lock"
+    touch -t 202001010000 "$REPO/.git/loom/main.lock"
+
+    # With LOOM_HOLDERLESS_TTL=0 any holderless dir is reclaimable IF stat returns valid mtime.
+    # Current code (BSD-first): `stat -f` runs first → garbage on stdout → age computation fails
+    # Fixed code (GNU-first): `stat -c %Y` runs first → clean epoch → reclaim succeeds.
+    run env PATH="$BATS_TEST_TMPDIR/fake-bin:$PATH" \
+        LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 \
+        sh "$COORD" lock-acquire --session "ses-T1-gnu"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acquired" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# T3 — wt_sid_match: backslash in session-id not mangled by awk ENVIRON
+# ---------------------------------------------------------------------------
+
+@test "T3 wt_sid_match: backslash-n in session-id not mangled (awk -v vs ENVIRON)" {
+    # awk -v sid="foo\nbar" interprets \n as a newline → comparison fails.
+    # awk ENVIRON["LOOM_SID"] delivers the value byte-for-byte → comparison correct.
+    # Test: cleanup with stale-lease claim where sid contains '\n' (literal backslash-n).
+    # With T3 bug: wt_sid_match returns empty → orphan worktree NOT removed.
+    # With T3 fix: wt_sid_match returns the path  → orphan worktree IS removed.
+    make_repo
+    cd "$REPO"
+
+    local sid
+    sid='foo\nbar'
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD 2>/dev/null || {
+        skip "filesystem or git does not support backslash in worktree path"
+    }
+
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-T3\t%s\t99\t0\n' "$sid" >"$REPO/.git/loom/claims"
+
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"swept 1"* ]]
+    ! grep -qF "slice-T3" "$REPO/.git/loom/claims" 2>/dev/null
+    # Orphan worktree must have been removed (requires correct wt_sid_match)
+    [ ! -d "$wt_path" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# T4 — Holderless lock reclaim within backoff budget (crash-in-window)
+# ---------------------------------------------------------------------------
+
+@test "T4 holderless lock reclaim: crash-in-window lock reclaimed with LOOM_HOLDERLESS_TTL=0" {
+    # T4: the old holderless age-gate used LOOM_LOCK_TTL (30s), which exceeds the
+    # ~6s backoff budget.  LOOM_HOLDERLESS_TTL (default 2s) reconciles the gap.
+    # With LOOM_HOLDERLESS_TTL=0 any holderless dir is reclaimable immediately.
+    # Current code (without LOOM_HOLDERLESS_TTL): uses LOOM_LOCK_TTL=30 as the gate
+    # → mtime≈now, age≈0 < 30 → not reclaimable → exits 3 (T4 bug).
+    # Fixed code: uses LOOM_HOLDERLESS_TTL=0 → age≈0 >= 0 → reclaimable → exits 0.
+    make_repo
+    cd "$REPO"
+    # Fresh holderless dir (mtime=now, simulating a crash-in-window)
+    mkdir -p "$REPO/.git/loom/main.lock"
+    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
+
+    run env LOOM_LOCK_TTL=30 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 \
+        sh "$COORD" lock-acquire --session "ses-T4"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acquired" ]
+    [ "$(holder_sid)" = "ses-T4" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# T5 — empty-sid guard increments skipped counter
+# ---------------------------------------------------------------------------
+
+@test "T5 cleanup: corrupted claim (empty sid) increments skipped counter" {
+    # T5: the R7 empty-sid guard preserved the row but did not increment 'skipped',
+    # so the "swept N; skipped M" summary undercounted live claims.
+    # Note: IFS=TAB collapsing means consecutive TABs merge into one delimiter;
+    # a claim file with trailing-TAB format ("slice-T5<TAB><NL>") produces sid=""
+    # after the read because shell strips the trailing IFS whitespace, leaving only
+    # "slice-T5" for slice and "" for all remaining variables.
+    make_repo
+    cd "$REPO"
+    mkdir -p "$REPO/.git/loom"
+    # Plant a corrupted row: slice name + TAB + newline → sid gets "" after read
+    printf 'slice-T5\t\n' >"$REPO/.git/loom/claims"
+
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    # skipped counter must include the empty-sid row (T5 fix)
+    [[ "$output" == *"skipped 1"* ]]
+    # Row must still be present (preserved fail-closed)
+    grep -qF "slice-T5" "$REPO/.git/loom/claims"
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# LV — Liveness model: fresh lease = alive; stale lease = dead (ADR 0015)
+# ---------------------------------------------------------------------------
+
+@test "LV-fresh fresh-lease claim (no worktree) is NOT reclaimable (exit 6)" {
+    # Old model: no worktree + dead pid → is_alive false → reclaim succeeds (wrong).
+    # New model: fresh epoch → alive → exit 6 regardless of worktree or pid.
+    make_repo
+    cd "$REPO"
+    local peer_sid="ses-peer-LVF"
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-LVF\t%s\t99999999\t%s\n' "$peer_sid" "$(date +%s)" >"$REPO/.git/loom/claims"
+
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVF"
+    [ "$status" -eq 0 ]
+
+    run sh "$COORD" reclaim slice-LVF --session "ses-us-LVF"
+    [ "$status" -eq 6 ]
+    grep -qF "slice-LVF	$peer_sid" "$REPO/.git/loom/claims"
+    teardown
+}
+
+@test "LV-stale stale-lease claim with live worktree IS reclaimable (worktree no longer protects)" {
+    # Old model: worktree present → is_alive true → exit 6 (crash-then-worktree-stays wedge).
+    # New model: stale epoch → dead → reclaim regardless of worktree (T2 fix).
+    make_repo
+    cd "$REPO"
+    local peer_sid="ses-peer-LVST"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${peer_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    mkdir -p "$REPO/.git/loom"
+    printf 'slice-LVST\t%s\t99999999\t0\n' "$peer_sid" >"$REPO/.git/loom/claims"
+
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVST"
+    [ "$status" -eq 0 ]
+
+    # Reclaim must succeed: stale epoch = dead, regardless of worktree
+    run sh "$COORD" reclaim slice-LVST --session "ses-us-LVST"
+    [ "$status" -eq 0 ]
+    grep -qF "slice-LVST	ses-us-LVST" "$REPO/.git/loom/claims"
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# RNW — Background renewer subcommands
+# ---------------------------------------------------------------------------
+
+@test "RNW-1 renewer-start launches renewer; renewer-stop kills it cleanly" {
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-RNW1"
+    [ "$status" -eq 0 ]
+
+    local mypid=$$
+    run env LOOM_RENEW_INTERVAL=60 sh "$COORD" renewer-start "$mypid" --session "ses-RNW1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewer-started"* ]]
+
+    # Renewer pid recorded and alive
+    local rpid
+    rpid=$(cat "$REPO/.git/loom/session-ses-RNW1/renewer.pid" 2>/dev/null)
+    [ -n "$rpid" ]
+    kill -0 "$rpid" 2>/dev/null
+
+    # Second renewer-start must be a no-op (duplicate suppression)
+    run env LOOM_RENEW_INTERVAL=60 sh "$COORD" renewer-start "$mypid" --session "ses-RNW1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewer-already-running"* ]]
+
+    # Stop renewer
+    run sh "$COORD" renewer-stop --session "ses-RNW1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewer-stopped"* ]]
+    sleep 0.5
+    ! kill -0 "$rpid" 2>/dev/null
+    teardown
+}
+
+@test "RNW-2 renewer identity gate: renewer self-exits when session start-time changes" {
+    # ADR 0015 §2: the renewer checks alive(pid) AND starttime == recorded.
+    # If the start-time is overwritten (simulating a recycled pid), the renewer exits.
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-RNW2"
+    [ "$status" -eq 0 ]
+
+    local mypid=$$
+    run env LOOM_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW2"
+    [ "$status" -eq 0 ]
+
+    local rpid
+    rpid=$(cat "$REPO/.git/loom/session-ses-RNW2/renewer.pid" 2>/dev/null)
+    kill -0 "$rpid" 2>/dev/null # renewer alive
+
+    # Corrupt the recorded session start-time (simulates a recycled pid returning
+    # a different start-time — the identity gate must fail → renewer self-exits)
+    printf 'WRONG_STARTTIME_SIMULATED_RECYCLE\n' \
+        >"$REPO/.git/loom/session-ses-RNW2/session.starttime"
+
+    # Renewer sleeps 1 s, then re-checks _session_alive; with wrong starttime it exits
+    local i=0
+    while [ "$i" -lt 15 ] && kill -0 "$rpid" 2>/dev/null; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+    ! kill -0 "$rpid" 2>/dev/null
     teardown
 }

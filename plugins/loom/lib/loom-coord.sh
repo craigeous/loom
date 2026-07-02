@@ -18,8 +18,12 @@
 #   $STATE_DIR/main.lock/holder     — <session-id>\t<pid>\t<epoch>
 #   $STATE_DIR/claims               — TSV: <slice>\t<session-id>\t<pid>\t<epoch>
 #   $STATE_DIR/session-<id>/        — per-session dir
-#   $STATE_DIR/session-<id>/checkpoint  — write-ahead next action
-#   $STATE_DIR/session-<id>/held-claims — one slice name per line
+#   $STATE_DIR/session-<id>/checkpoint    — write-ahead next action
+#   $STATE_DIR/session-<id>/held-claims   — one slice name per line
+#   $STATE_DIR/session-<id>/session.pid   — stable session process pid
+#   $STATE_DIR/session-<id>/session.starttime — session process start-time
+#   $STATE_DIR/session-<id>/renewer.pid   — background renewer pid
+#   $STATE_DIR/session-<id>/renewer.starttime — renewer start-time
 #   $STATE_DIR/.main.lock.reclaiming.<session-id>.<pid>.<epoch>  — CAS cap dir
 #
 # Exit codes:
@@ -38,6 +42,13 @@
 LOOM_LOCK_TTL="${LOOM_LOCK_TTL:-30}"
 LOOM_LEASE_TTL="${LOOM_LEASE_TTL:-3600}"
 LOOM_LOCK_RETRIES="${LOOM_LOCK_RETRIES:-5}"
+LOOM_RENEW_INTERVAL="${LOOM_RENEW_INTERVAL:-1200}"
+# LOOM_HOLDERLESS_TTL — age-gate for a holderless lock dir (no holder file).
+# Defaults to 2 s — short enough that reclaim fits within the ~6 s backoff
+# budget, long enough to cover the non-atomic mkdir→stamp_holder window.
+# Set to 0 (or equal to LOOM_LOCK_TTL when LOOM_LOCK_TTL=0) to make any
+# holderless dir immediately reclaimable (used by tests).
+LOOM_HOLDERLESS_TTL="${LOOM_HOLDERLESS_TTL:-2}"
 
 # ---------------------------------------------------------------------------
 # Arg parsing — subcommand and --session
@@ -112,20 +123,44 @@ now() {
     date +%s 2>/dev/null
 }
 
-# dir_mtime_epoch <dir> — print directory mtime as epoch seconds; empty on failure
+# dir_mtime_epoch <dir> — print directory mtime as epoch seconds; empty on failure.
+# Feature-detects GNU stat (-c %Y) first so Linux/dash works; falls back to
+# BSD stat (-f %m).  BSD-first order was T1: on GNU/Linux `stat -f` outputs a
+# multi-line filesystem block to stdout AND exits 1, so the `||` appended the
+# real mtime to that garbage, causing integer-parse failures.
 dir_mtime_epoch() {
-    stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
+    local _mt
+    _mt=$(stat -c %Y "$1" 2>/dev/null) && {
+        printf '%s\n' "$_mt"
+        return 0
+    }
+    stat -f %m "$1" 2>/dev/null
+}
+
+# process_starttime <pid> — print the start-time of a process; empty on failure.
+# Portable: tries Linux /proc/<pid>/stat (field 22, jiffies since boot — stable,
+# locale-independent) first; falls back to BSD/macOS `ps -o lstart=`.
+process_starttime() {
+    local _pid="$1"
+    local _f="/proc/$_pid/stat"
+    if [ -f "$_f" ]; then
+        awk '{print $22}' "$_f" 2>/dev/null
+        return
+    fi
+    ps -o lstart= -p "$_pid" 2>/dev/null
 }
 
 # wt_sid_match <sid> — read git worktree list --porcelain from stdin;
 # print the first worktree path whose LAST PATH SEGMENT equals "wt-<sid>".
-# Uses awk exact string equality — no regex, no substring, space-safe (full-path
-# via substr, not $2). Implements the both-boundary literal match that replaces
-# grep -qE "${sid}(/|$)" (R2/R3/R6 root-cause fix).
+# Uses awk ENVIRON (not -v) to avoid escape-sequence processing: awk -v applies
+# backslash escape processing to the value, so a session-id like "foo\nbar"
+# becomes "foo<newline>bar" and never matches the literal last segment (T3 fix).
+# ENVIRON delivers the value byte-for-byte with no interpretation.
 wt_sid_match() {
     local sid="$1"
     [ -z "$sid" ] && return
-    awk -v sid="$sid" '
+    LOOM_SID="$sid" awk '
+        BEGIN { sid = ENVIRON["LOOM_SID"] }
         /^worktree / {
             path = substr($0, 10)
             n = split(path, parts, "/")
@@ -134,25 +169,40 @@ wt_sid_match() {
     '
 }
 
-# is_alive <session-id> [pid]
-# Returns 0 (alive) if session-id token appears in git worktree list.
-# Falls back to kill -0 <pid> only when session-id probe is inconclusive.
-is_alive() {
-    local sid="$1"
-    local pid="${2:-}"
-    if [ -z "$sid" ]; then
-        return 1
-    fi
-    # Primary: session-id-in-worktree-list — exact last-segment match via awk
-    # (wt_sid_match checks last path segment == "wt-<sid>"; no regex/substring; space-safe)
-    if [ -n "$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$sid")" ]; then
-        return 0
-    fi
-    # Secondary: pid probe (only when pid supplied and session-id not found)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        return 0
-    fi
-    return 1
+# claim_is_fresh <epoch> — returns 0 (alive/fresh) if the claim epoch is within
+# LOOM_LEASE_TTL of now.  This is the SOLE liveness signal for claims (ADR 0015):
+# worktree-list membership and the process pid are NOT liveness gates.
+claim_is_fresh() {
+    local _epoch="$1"
+    local _now
+    _now=$(now)
+    [ $((_now - _epoch)) -lt "$LOOM_LEASE_TTL" ]
+}
+
+# _session_alive <sess_dir> — returns 0 if the recorded session process is alive
+# under the reuse-robust identity gate: pid alive AND start-time still matches.
+# Used by the background renewer as its loop condition.
+_session_alive() {
+    local _sd="$1" _spid _sst _cur_st
+    _spid=$(cat "$_sd/session.pid" 2>/dev/null) || return 1
+    [ -z "$_spid" ] && return 1
+    _sst=$(cat "$_sd/session.starttime" 2>/dev/null) || return 1
+    kill -0 "$_spid" 2>/dev/null || return 1
+    _cur_st=$(process_starttime "$_spid")
+    [ "$_cur_st" = "$_sst" ]
+}
+
+# _renewer_alive <sess_dir> — returns 0 if the recorded renewer process is alive
+# under the reuse-robust identity gate.  Used for duplicate-suppression in
+# renewer-start.
+_renewer_alive() {
+    local _sd="$1" _rpid _rst _cur_st
+    _rpid=$(cat "$_sd/renewer.pid" 2>/dev/null) || return 1
+    [ -z "$_rpid" ] && return 1
+    _rst=$(cat "$_sd/renewer.starttime" 2>/dev/null) || return 1
+    kill -0 "$_rpid" 2>/dev/null || return 1
+    _cur_st=$(process_starttime "$_rpid")
+    [ "$_cur_st" = "$_rst" ]
 }
 
 # lock_held_by_self — exits 0 if $SESSION_ID currently holds the lock
@@ -279,6 +329,24 @@ assert_session() {
     fi
 }
 
+# try_acquire_holderless — single-source holderless-lock reclaim (T7).
+# Called when LOCK_DIR exists but HOLDER_FILE does not.
+# Uses LOOM_HOLDERLESS_TTL (not LOOM_LOCK_TTL) so reclaim fits within the ~6 s
+# backoff budget; LOOM_LOCK_TTL=0 tests set LOOM_HOLDERLESS_TTL=0 implicitly via
+# the default formula or explicitly to keep NEG-F3/NEG-R5 working.
+# Returns 0 on successful acquisition via clear_and_own; 1 otherwise.
+try_acquire_holderless() {
+    local _h_mt _h_age
+    _h_mt=$(dir_mtime_epoch "$LOCK_DIR")
+    if [ -n "$_h_mt" ]; then
+        _h_age=$(($(now) - _h_mt))
+        if [ "$_h_age" -ge "$LOOM_HOLDERLESS_TTL" ] && clear_and_own; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # assert_lock_held — exit 5 if caller does not hold the lock
 assert_lock_held() {
     if ! lock_held_by_self; then
@@ -294,19 +362,11 @@ assert_lock_held() {
 clear_and_own() {
     # Read the observed holder stamp — may be empty for a holderless lock dir
     # (crash between mkdir LOCK_DIR and stamp_holder leaves no holder file).
+    # The caller has already verified that a stamped holder is stale (elapsed >= TTL);
+    # we do NOT re-check is_alive here — under ADR 0015 the liveness gate for
+    # locks is stamp freshness, and the ABA check below is the correctness guard.
     local h_obs
     h_obs=$(cat "$HOLDER_FILE" 2>/dev/null) || h_obs=""
-
-    # If there IS a holder, verify it is dead before attempting capture.
-    # A holderless lock dir (h_obs empty) is always reclaimable — no live owner.
-    if [ -n "$h_obs" ]; then
-        local h_obs_sid h_obs_pid
-        h_obs_sid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $1}')
-        h_obs_pid=$(printf '%s' "$h_obs" | awk -F'\t' '{print $2}')
-        if is_alive "$h_obs_sid" "$h_obs_pid"; then
-            return 1
-        fi
-    fi
 
     local cap_epoch
     cap_epoch=$(now)
@@ -319,16 +379,14 @@ clear_and_own() {
         return 1
     fi
 
-    # We captured the dir — verify it holds the stamp we observed (ABA check).
+    # ABA check: verify the captured dir still holds the stamp we observed.
     # If h_obs was empty (holderless), cap_stamp must also be empty; a non-empty
-    # cap_stamp means a live peer stamped the dir in the window — treat as ABA.
-    local cap_stamp cap_sid cap_pid
+    # cap_stamp means a live peer stamped the dir in the window.
+    local cap_stamp
     cap_stamp=$(cat "$CAP/holder" 2>/dev/null) || cap_stamp=""
-    cap_sid=$(printf '%s' "$cap_stamp" | awk -F'\t' '{print $1}')
-    cap_pid=$(printf '%s' "$cap_stamp" | awk -F'\t' '{print $2}')
 
-    if [ "$cap_stamp" != "$h_obs" ] || { [ -n "$cap_sid" ] && is_alive "$cap_sid" "$cap_pid"; }; then
-        # ABA: a live peer reclaimed in the interim; do NOT install ownership
+    if [ "$cap_stamp" != "$h_obs" ]; then
+        # ABA: stamp changed — another contender reclaimed and re-stamped; restore
         if [ ! -d "$LOCK_DIR" ]; then
             mv "$CAP" "$LOCK_DIR" 2>/dev/null || rm -rf "$CAP"
         else
@@ -380,17 +438,15 @@ cmd_lock_acquire() {
             exit 0
         fi
 
-        # Lock exists — check if stale
+        # Lock exists — check if stale (ADR 0015: liveness = stamp freshness for lock)
         if [ -f "$HOLDER_FILE" ]; then
-            local h_sid h_pid h_epoch cur_epoch elapsed
-            h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-            h_pid=$(awk -F'\t' '{print $2}' "$HOLDER_FILE" 2>/dev/null)
+            local h_epoch cur_epoch elapsed
             h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
             cur_epoch=$(now)
             elapsed=$((cur_epoch - h_epoch))
 
-            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
-                # Stale and dead — attempt CAS clear-and-own
+            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                # Stamp stale (holder crashed) — attempt CAS clear-and-own
                 if clear_and_own; then
                     printf 'acquired\n'
                     exit 0
@@ -399,16 +455,10 @@ cmd_lock_acquire() {
             fi
         elif [ -d "$LOCK_DIR" ]; then
             # Holderless lock dir (crash between mkdir and stamp_holder).
-            # Age-gate: only reclaim when dir is older than LOOM_LOCK_TTL so a live
-            # peer's non-atomic mkdir→stamp_holder window is never mis-classified.
-            local h_dir_mt h_dir_age
-            h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
-            if [ -n "$h_dir_mt" ]; then
-                h_dir_age=$(($(now) - h_dir_mt))
-                if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
-                    printf 'acquired\n'
-                    exit 0
-                fi
+            # Use LOOM_HOLDERLESS_TTL (short, fits within backoff budget) — T4 fix.
+            if try_acquire_holderless; then
+                printf 'acquired\n'
+                exit 0
             fi
         fi
 
@@ -484,7 +534,6 @@ cmd_claim() {
 
     if [ -n "$line" ]; then
         sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-        pid=$(printf '%s' "$line" | awk -F'\t' '{print $3}')
         epoch=$(printf '%s' "$line" | awk -F'\t' '{print $4}')
 
         if [ "$sid" = "$SESSION_ID" ]; then
@@ -493,13 +542,13 @@ cmd_claim() {
             exit 0
         fi
 
-        # Another session's claim — liveness check
-        if is_alive "$sid" "$pid"; then
+        # Another session's claim — liveness = lease freshness (ADR 0015)
+        if claim_is_fresh "$epoch"; then
             printf 'loom-coord claim: slice %s has live claim by %s\n' "$slice" "$sid" >&2
             exit 4
         fi
 
-        # Stale claim — overwrite (dead holder)
+        # Stale claim — overwrite
     fi
 
     write_claim "$slice" "$SESSION_ID" "$$" "$cur"
@@ -577,14 +626,14 @@ cmd_reclaim() {
         exit 1
     fi
 
-    local line sid pid
+    local line sid epoch
     line=$(read_claim "$slice")
     if [ -z "$line" ]; then
         printf 'loom-coord reclaim: no claim found for %s\n' "$slice" >&2
         exit 5
     fi
     sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-    pid=$(printf '%s' "$line" | awk -F'\t' '{print $3}')
+    epoch=$(printf '%s' "$line" | awk -F'\t' '{print $4}')
 
     if [ "$sid" = "$SESSION_ID" ]; then
         # Own claim — nothing to reclaim
@@ -592,14 +641,16 @@ cmd_reclaim() {
         exit 5
     fi
 
-    if is_alive "$sid" "$pid"; then
-        printf 'loom-coord reclaim: holder %s of %s is still alive\n' "$sid" "$slice" >&2
+    # Liveness = lease freshness (ADR 0015): a fresh lease means holder is alive.
+    # Worktree-list membership and pid are NOT liveness signals.
+    if claim_is_fresh "$epoch"; then
+        printf 'loom-coord reclaim: holder %s of %s still has a fresh lease\n' "$sid" "$slice" >&2
         exit 6
     fi
 
-    # Dead holder — prune orphan worktree, overwrite claim
+    # Stale lease (holder crashed/stopped) — prune orphan worktree, overwrite claim.
+    # wt_sid_match is used here for ORPHAN REMOVAL targeting only (not liveness).
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
-    # Find and remove the orphan worktree if still registered (space-safe via wt_sid_match, R6)
     local wt_path
     wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$sid")
     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
@@ -697,54 +748,46 @@ cmd_session_bootstrap() {
         exit 5
     fi
 
-    # Acquire lock to renew claims (inline acquire loop — no exit, returns 0/1)
-    cmd_lock_acquire_internal() {
-        # Inline acquire without exit; returns 0 on success
-        mkdir -p "$STATE_DIR"
-        local attempt=0
-        while true; do
-            if mkdir "$LOCK_DIR" 2>/dev/null; then
-                stamp_holder
-                local confirm
-                confirm=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-                if [ "$confirm" != "$SESSION_ID" ]; then
-                    rm -rf "$LOCK_DIR"
-                    return 1
-                fi
-                return 0
+    # Acquire lock to renew claims (inline acquire loop — no exit, returns 0/1;
+    # nested function definition avoided to stay shellcheck-clean per prior round).
+    local _sb_got_lock=0
+    local _sb_attempt=0
+    mkdir -p "$STATE_DIR"
+    while true; do
+        if mkdir "$LOCK_DIR" 2>/dev/null; then
+            stamp_holder
+            local _sb_confirm
+            _sb_confirm=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
+            if [ "$_sb_confirm" != "$SESSION_ID" ]; then
+                rm -rf "$LOCK_DIR"
+            else
+                _sb_got_lock=1
             fi
-            if [ -f "$HOLDER_FILE" ]; then
-                local h_sid h_pid h_epoch elapsed cur_epoch
-                h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-                h_pid=$(awk -F'\t' '{print $2}' "$HOLDER_FILE" 2>/dev/null)
-                h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
-                cur_epoch=$(now)
-                elapsed=$((cur_epoch - h_epoch))
-                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
-                    if clear_and_own; then
-                        return 0
-                    fi
-                fi
-            elif [ -d "$LOCK_DIR" ]; then
-                # Holderless lock dir (R5: session-bootstrap must also handle this)
-                local h_dir_mt h_dir_age
-                h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
-                if [ -n "$h_dir_mt" ]; then
-                    h_dir_age=$(($(now) - h_dir_mt))
-                    if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
-                        return 0
-                    fi
-                fi
+            break
+        fi
+        if [ -f "$HOLDER_FILE" ]; then
+            local _sb_h_epoch _sb_elapsed _sb_cur_epoch
+            _sb_h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
+            _sb_cur_epoch=$(now)
+            _sb_elapsed=$((_sb_cur_epoch - _sb_h_epoch))
+            if [ "$_sb_elapsed" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
+                _sb_got_lock=1
+                break
             fi
-            attempt=$((attempt + 1))
-            if [ "$attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
-                return 1
+        elif [ -d "$LOCK_DIR" ]; then
+            if try_acquire_holderless; then
+                _sb_got_lock=1
+                break
             fi
-            backoff_sleep "$((attempt - 1))"
-        done
-    }
+        fi
+        _sb_attempt=$((_sb_attempt + 1))
+        if [ "$_sb_attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
+            break
+        fi
+        backoff_sleep "$((_sb_attempt - 1))"
+    done
 
-    if ! cmd_lock_acquire_internal; then
+    if [ "$_sb_got_lock" -ne 1 ]; then
         printf 'loom-coord session-bootstrap: could not acquire lock\n' >&2
         exit 3
     fi
@@ -802,27 +845,18 @@ cmd_session_end() {
             # Stale-lock handling: if the lock is past TTL and held by a dead session,
             # reclaim it so session-end can release our claims properly.
             if [ -f "$HOLDER_FILE" ]; then
-                local h_sid h_pid h_epoch elapsed cur_epoch
-                h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-                h_pid=$(awk -F'\t' '{print $2}' "$HOLDER_FILE" 2>/dev/null)
+                local h_epoch elapsed cur_epoch
                 h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
                 cur_epoch=$(now)
                 elapsed=$((cur_epoch - h_epoch))
-                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
-                    if clear_and_own; then
-                        got_lock=1
-                        break
-                    fi
+                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
+                    got_lock=1
+                    break
                 fi
             elif [ -d "$LOCK_DIR" ]; then
-                local h_dir_mt h_dir_age
-                h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
-                if [ -n "$h_dir_mt" ]; then
-                    h_dir_age=$(($(now) - h_dir_mt))
-                    if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
-                        got_lock=1
-                        break
-                    fi
+                if try_acquire_holderless; then
+                    got_lock=1
+                    break
                 fi
             fi
             attempt=$((attempt + 1))
@@ -878,29 +912,22 @@ cmd_cleanup() {
             got_lock=1
             break
         fi
-        # Check if stale (holder present and dead) or holderless
+        # Check if stale (holder stamp too old) or holderless
         if [ -f "$HOLDER_FILE" ]; then
-            local h_sid h_pid h_epoch elapsed cur_epoch
-            h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-            h_pid=$(awk -F'\t' '{print $2}' "$HOLDER_FILE" 2>/dev/null)
+            local h_epoch elapsed cur_epoch
             h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
             cur_epoch=$(now)
             elapsed=$((cur_epoch - h_epoch))
-            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && ! is_alive "$h_sid" "$h_pid"; then
+            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
                 if SESSION_ID="$cleanup_sid" clear_and_own; then
                     got_lock=1
                     break
                 fi
             fi
         elif [ -d "$LOCK_DIR" ]; then
-            local h_dir_mt h_dir_age
-            h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
-            if [ -n "$h_dir_mt" ]; then
-                h_dir_age=$(($(now) - h_dir_mt))
-                if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && SESSION_ID="$cleanup_sid" clear_and_own; then
-                    got_lock=1
-                    break
-                fi
+            if SESSION_ID="$cleanup_sid" try_acquire_holderless; then
+                got_lock=1
+                break
             fi
         fi
         attempt=$((attempt + 1))
@@ -916,29 +943,26 @@ cmd_cleanup() {
             local tmp
             tmp="${CLAIMS}.tmp.$$"
             : >"$tmp"
-            # Hoist worktree list once for the entire sweep (F9: avoid per-claim re-run)
+            # Hoist worktree list once for the entire sweep (for orphan-removal lookups only)
             local wt_list
             wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
             while IFS='	' read -r slice sid pid epoch; do
                 [ -z "$slice" ] && continue
-                # R7: empty-sid guard — preserve row fail-closed (can't assess liveness)
+                # R7: empty-sid guard — preserve row fail-closed (can't assess liveness).
+                # T5 fix: count as skipped so the summary is accurate.
                 if [ -z "$sid" ]; then
                     printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
+                    skipped=$((skipped + 1))
                     continue
                 fi
-                # Liveness: session-id-primary (ADR 0014).
-                # Alive iff "wt-<sid>" is the last segment of any registered worktree path.
-                # No lease-age/pid override: a worktree-registered session is live regardless
-                # of lease age or stored pid (which is an ephemeral claim-time $$).
-                local is_dead=0
-                if [ -z "$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")" ]; then
-                    is_dead=1
-                fi
-                if [ "$is_dead" -eq 0 ]; then
+                # Liveness = lease freshness (ADR 0015): worktree-list membership and
+                # the stored pid are NOT liveness signals; a fresh epoch means alive.
+                if claim_is_fresh "$epoch"; then
                     printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
                     skipped=$((skipped + 1))
                 else
-                    # Dead — force-remove orphan worktree if still registered (space-safe R6)
+                    # Stale lease — holder crashed/stopped.  Orphan-worktree removal is
+                    # now reachable (T2/T6 fix): driven by lease staleness, not membership.
                     local wt_path
                     wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
                     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
@@ -976,6 +1000,117 @@ cmd_cleanup() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommand: renewer-start <session-pid>
+# ---------------------------------------------------------------------------
+cmd_renewer_start() {
+    assert_session
+    local sess_dir="$STATE_DIR/session-$SESSION_ID"
+    if [ ! -d "$sess_dir" ]; then
+        printf 'loom-coord renewer-start: session %s not found\n' "$SESSION_ID" >&2
+        exit 5
+    fi
+
+    local spid="$EXTRA_ARGS"
+    if [ -z "$spid" ]; then
+        printf 'loom-coord renewer-start: <session-pid> required\n' >&2
+        exit 1
+    fi
+
+    # Capture reuse-robust identity of the stable session process (ADR 0015 §2)
+    local sst
+    sst=$(process_starttime "$spid")
+    if [ -z "$sst" ]; then
+        printf 'loom-coord renewer-start: cannot read start-time for pid %s\n' "$spid" >&2
+        exit 10
+    fi
+    printf '%s\n' "$spid" >"$sess_dir/session.pid"
+    printf '%s\n' "$sst" >"$sess_dir/session.starttime"
+
+    # Check-then-launch: do not start a second renewer (duplicate suppression)
+    if _renewer_alive "$sess_dir"; then
+        printf 'renewer-already-running\n'
+        exit 0
+    fi
+
+    # Resolve absolute path to this script for the renewer's lock-acquire callbacks
+    local _coord
+    _coord="$(cd "$(dirname -- "$0")" 2>/dev/null && pwd)/$(basename -- "$0")"
+
+    # Capture locals needed inside the detached subshell
+    local _sid="$SESSION_ID"
+    local _sdir="$sess_dir"
+    local _interval="$LOOM_RENEW_INTERVAL"
+    local _root="$REPO_ROOT"
+
+    # Launch detached background renewer.  Uses _session_alive (inherited function)
+    # with the reuse-robust identity gate: exits when session pid dies or start-time
+    # changes (recycled pid).  Renews held claims under the lock on each interval.
+    # stdin/stdout/stderr are closed (redirected to /dev/null) so the subshell does
+    # not hold inherited file descriptors open — prevents callers that capture output
+    # (e.g. bats `run`) from hanging.
+    (
+        cd "$_root" 2>/dev/null || exit 1
+        while _session_alive "$_sdir"; do
+            _hcf="$_sdir/held-claims"
+            if [ -f "$_hcf" ] && grep -q . "$_hcf" 2>/dev/null; then
+                if sh "$_coord" lock-acquire --session "$_sid" >/dev/null 2>&1; then
+                    while IFS= read -r _s; do
+                        [ -z "$_s" ] && continue
+                        sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
+                    done <"$_hcf"
+                    sh "$_coord" lock-release --session "$_sid" >/dev/null 2>&1 || true
+                fi
+            fi
+            sleep "$_interval" 2>/dev/null || true
+        done
+    ) </dev/null >/dev/null 2>&1 &
+    local rpid=$!
+    local rst
+    rst=$(process_starttime "$rpid")
+    printf '%s\n' "$rpid" >"$sess_dir/renewer.pid"
+    if [ -n "$rst" ]; then
+        printf '%s\n' "$rst" >"$sess_dir/renewer.starttime"
+    fi
+    printf 'renewer-started pid=%s\n' "$rpid"
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: renewer-stop
+# ---------------------------------------------------------------------------
+cmd_renewer_stop() {
+    assert_session
+    local sess_dir="$STATE_DIR/session-$SESSION_ID"
+    if [ ! -d "$sess_dir" ]; then
+        printf 'loom-coord renewer-stop: session %s not found\n' "$SESSION_ID" >&2
+        exit 5
+    fi
+
+    local rpid rst cur_st
+    rpid=$(cat "$sess_dir/renewer.pid" 2>/dev/null) || rpid=""
+    if [ -z "$rpid" ]; then
+        printf 'no-renewer\n'
+        exit 0
+    fi
+    rst=$(cat "$sess_dir/renewer.starttime" 2>/dev/null) || rst=""
+
+    # Only kill if the recorded renewer pid is still the one we started (identity gate)
+    if kill -0 "$rpid" 2>/dev/null; then
+        if [ -z "$rst" ]; then
+            kill "$rpid" 2>/dev/null || true
+        else
+            cur_st=$(process_starttime "$rpid")
+            if [ "$cur_st" = "$rst" ]; then
+                kill "$rpid" 2>/dev/null || true
+            fi
+        fi
+    fi
+    rm -f "$sess_dir/renewer.pid" "$sess_dir/renewer.starttime"
+    printf 'renewer-stopped\n'
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 case "$SUBCOMMAND" in
@@ -994,6 +1129,8 @@ checkpoint-read) cmd_checkpoint_read ;;
 session-bootstrap) cmd_session_bootstrap ;;
 session-end) cmd_session_end ;;
 cleanup) cmd_cleanup ;;
+renewer-start) cmd_renewer_start ;;
+renewer-stop) cmd_renewer_stop ;;
 *)
     printf 'loom-coord: unknown subcommand: %s\n' "$SUBCOMMAND" >&2
     exit 1

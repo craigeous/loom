@@ -1,6 +1,6 @@
 # Multi-Session Lock / Claim Coordination Helper
 
-Status: In Progress
+Status: Implemented
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014)"; ADR 0014 §1/§2/§3 + §Consequences (the helper contract)
 
@@ -364,6 +364,11 @@ by this slice and must still pass unchanged; `hooks.json` is unmodified (assert 
 new hook entry — the helper is deliberately unregistered).
 
 ## Notes
+
+**Gate evidence (round 4, 2026-07-02 — ADR 0015 liveness rework):**
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
+- `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN (SC3043 suppressed file-wide)
+- `bats plugins/loom/lib/loom-coord.bats` → **52/52 pass** (44 pre-existing + 8 new: T1, T3, T4, T5, LV-fresh, LV-stale, RNW-1, RNW-2)
 
 **Gate evidence (round 3, 2026-06-30):**
 - `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
