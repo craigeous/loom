@@ -408,6 +408,24 @@ source of truth; `roadmap.md` is milestone order.
    review-findings → blind code-eval (resolving PASS carries **Round 3** and **LANDS slice H**; FAIL → Round
    4). Then finalize (archive plan, progress/CLAUDE.md) → **log the deferred `.docs/` infra-blocked-escalation
    follow-up** (owner idea, saved to memory `loom-infra-blocked-escalation`) → slice W (playbook wiring).
+   **⚠️ ESCALATED TO OWNER (pause on blocking design ambiguity — NOT a round FAIL; round counter stays 3).**
+   Re-review of the round-3 fix (`692bb14..21f9970`): `/code-review` = ran-with-findings, **7 more CONFIRMED
+   regressions** (T1 `dir_mtime_epoch` BSD-first `stat` → **Linux-only crash**, masked by macOS bats; T2
+   membership-only liveness → **crashed session with lingering `wt-<sid>` dir seen alive forever → slice
+   wedged**; T3 `awk -v sid` escape-processing mangles backslash → double-grant; T4 age-gate 30s > backoff
+   6.2s → crash-in-window lock blocks 30s; T5 skipped-count; T6 orphan-removal now unreachable dead code;
+   T7 4× copy-paste drift). `/security-review` = ran-clean. **DIAGNOSIS:** 3 fix rounds, each trading one
+   liveness failure mode for another — too-aggressive (ephemeral pid always dead → reaps live) ↔ too-lenient
+   (membership-only → never reclaims crashed). **Root cause is architectural: worktree-membership alone
+   can't distinguish a live session from a crashed one with a leftover worktree dir, and the ephemeral CLI
+   pid is useless as a liveness signal — a gap in ADR 0014's §F5 membership-primary liveness model surfaced
+   only in implementation.** Chose to pause BEFORE spending a round-4 code-eval + dev cycle (which would
+   re-trade the same tension) and present the owner an A/B/C fork: (A) keep patching; (B) refine the
+   liveness model to a **lease-renewal heartbeat** (staleness = lease older than TTL; live sessions renew,
+   crashed ones don't → resolves the oscillation) via a spec-04 amendment / new ADR, then re-implement;
+   (C) simplify the mechanism (lean on git's own atomic ref/branch ops instead of bespoke lock+liveness).
+   **NEXT ACTION: await owner's A/B/C decision.** Recommend **B** (targeted root-cause; keeps ADR 0014
+   architecture). Slice still `In Progress` at `21f9970` (gate green 44/44 but T1 means Linux-broken).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
