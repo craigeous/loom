@@ -426,6 +426,18 @@ source of truth; `roadmap.md` is milestone order.
    (C) simplify the mechanism (lean on git's own atomic ref/branch ops instead of bespoke lock+liveness).
    **NEXT ACTION: await owner's A/B/C decision.** Recommend **B** (targeted root-cause; keeps ADR 0014
    architecture). Slice still `In Progress` at `21f9970` (gate green 44/44 but T1 means Linux-broken).
+   **OWNER CHOSE B (lease-renewal heartbeat).** Liveness = **lease freshness**: a live session renews its
+   lease on a cadence << TTL; a holder/claim is live iff its lease timestamp is within TTL, else reclaimable.
+   Worktree-dir presence is NOT a liveness signal (fixes T2/T6); the ephemeral pid is dropped as a liveness
+   signal (fixes the round-2 reap). Resolves the too-aggressive↔too-lenient oscillation. ADR 0014 §F5
+   (membership-primary liveness) is immutable → record via a **new ADR 0015 that supersedes ADR 0014 on the
+   liveness-signal point ONLY** (worktrees/lock/claim/per-session-state/cold-restart all stand). **NEXT
+   ACTION:** planner authors `.docs/ADR/0015-lease-renewal-heartbeat-liveness.md` (`Plan Review`) → blind
+   plan-eval → spec-04 amendment (fold the new liveness model + the session's renew-cadence obligation into
+   the driver loop) → blind plan-eval → developer RE-IMPLEMENTS the helper's liveness (lease-freshness
+   replaces membership/pid; also fix mechanical T1 Linux `stat` portability [+ gate/tests must exercise the
+   Linux path, not mask it], T3 awk-escape, T5 skipped-count, T7 dedup into a shared acquire helper) →
+   automated review → blind code-eval → land → finalize → slice W. Round counter still 3.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
