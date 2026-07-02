@@ -394,6 +394,10 @@ source of truth; `roadmap.md` is milestone order.
    (root-cause: proper `git worktree list --porcelain` parsing + exact field compare; remove the R1
    recovery-override; age-gate + ownership-reverify holderless reclaim consistently incl. `session-bootstrap`;
    red-green tests). Only pop-and-continue the WIP if a quick read shows it's coherent and worth salvaging.
+   **UPDATE (owner: discard+retry):** WIP discarded (`git checkout -- plugins/loom/lib/loom-coord.sh`),
+   tree clean at green `692bb14`; re-spawning the round-3 developer with the root-cause directive (porcelain
+   parse + exact field compare; remove R1 override; age-gate + ownership-reverify reclaim incl.
+   `session-bootstrap`; red-green tests). Round counter still 3 (no new FAIL from the aborted attempt).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
