@@ -560,6 +560,17 @@ source of truth; `roadmap.md` is milestone order.
    in a real scratch git repo, red-green, exercise real CAS races (2 contenders → 1 wins). Strict output
    discipline + incremental commits. Gate green → `Implemented` → automated review → blind code-eval → land
    → finalize → slice W. Slice `In Progress` at `eedfc43`; slice counter stays 3.
+   **git-CAS re-impl attempt 1 CRASHED on the 32k output cap (3rd infra interruption; NO progress — tree
+   clean, no commits, helper still has zero `refs/loom`/`update-ref`, verified).** The single-agent rewrite
+   is too large for one response. **NEW APPROACH: split into 3 smaller gate-green developer passes** (each
+   commits before the next, so a crash can't wipe it): **Pass 1** lock → `refs/loom/lock` `update-ref` CAS
+   (create-only acquire / value-CAS stale-steal / delete-CAS release; holder blob `{sid,lease-ts,pid,start}`;
+   DELETE mkdir-lock/`clear_and_own`/rename-capture/holderless-age-gate/`$CAP`/holder-file); keep claims TSV +
+   liveness working; gate green → commit. **Pass 2** claims → `refs/loom/claims/<slice>` CAS (delete TSV);
+   renewer CAS-renews claim(s) + LOCK ref (U3). **Pass 3** fix carried U2(fail-closed epoch)/U5(recycled-pid
+   kill guard)/U6(no-sweep-live) + secondary (atomic pid write, `/proc` field-22 parse) → `Implemented`.
+   MAX incremental discipline (one tiny edit per step; no long prose in responses; commit each coherent
+   chunk). **NEXT ACTION:** developer Pass 1.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
