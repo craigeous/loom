@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Plan Review
+Status: Approved
 
 ## What the orchestrator is
 
