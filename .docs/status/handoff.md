@@ -384,6 +384,16 @@ source of truth; `roadmap.md` is milestone order.
    `Implemented` → re-run automated review → code-eval (resolving PASS carries Round 3; FAIL → Round 4;
    escalate at 5). **META: 2 fix attempts left before the 5-FAIL escalation** (which would surface the
    mechanism question: hand-rolled POSIX-sh liveness is the recurring fault line).
+   **⛔ BLOCKED — monthly spend limit hit (raise at claude.ai/settings/usage); opus classifier also down.**
+   The round-3 developer fix was **cut off mid-work**: `plugins/loom/lib/loom-coord.sh` has **UNCOMMITTED
+   partial edits** in the working tree (889→1006 lines), **NO red-green tests added** (bats unchanged),
+   **gate NOT run**, **nothing committed**, slice still `In Progress`, round counter still 3 (no new FAIL).
+   The WIP is **unverified and possibly mid-edit** — do NOT trust or commit it as-is. **RESUME:** once the
+   spend limit is raised, prefer **discard the WIP** (`git checkout -- plugins/loom/lib/loom-coord.sh`) and
+   re-run the round-3 developer from the last green commit `692bb14` with the crisp eval guidance
+   (root-cause: proper `git worktree list --porcelain` parsing + exact field compare; remove the R1
+   recovery-override; age-gate + ownership-reverify holderless reclaim consistently incl. `session-bootstrap`;
+   red-green tests). Only pop-and-continue the WIP if a quick read shows it's coherent and worth salvaging.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
