@@ -465,6 +465,19 @@ source of truth; `roadmap.md` is milestone order.
    another cross-platform-sensitive item for the re-impl (like T1 `stat`). Re-emit `Plan Review` → blind
    plan-eval re-review. Then spec-04 amendment → re-implement → land. (ADR 0015 at Round 2 of 5; slice H
    code-eval counter separately at 3.)
+   **ADR 0015 APPROVED** (blind plan-eval PASS `Round: 2`; `{session-pid, start-time}` identity gate closes
+   pid-reuse; background renewer heartbeats through long blocking ops; peers read lease freshness only).
+   README moved In Review → Accepted. **NEXT ACTION:** planner authors the **spec-04 amendment** folding
+   ADR 0015 into the `### Multi-session coordination` subsection — REPLACE the now-superseded ADR-0014
+   "membership-primary liveness (presence in git worktree list)" prose with: **liveness = lease freshness**;
+   the **background renewer gated on `{session-pid, start-time}`** (survives long blocking sub-agent calls;
+   pid gate is local-only, peers read lease freshness); the **session's renew obligation** (renew < TTL while
+   holding a lock/claim; stop renewing → reclaimable, incl. after an ADR-0013 escalate-and-stop wedge);
+   membership/pid demoted as liveness signals → `Plan Review` → blind plan-eval. Then developer
+   RE-IMPLEMENTS the helper's liveness against the new model + fixes mechanical T1(Linux `stat`)/T3(`awk -v`
+   escape)/T4(age-gate vs backoff)/T5(skipped-count)/T7(shared acquire helper) + start-time portability,
+   with tests that exercise the Linux path (don't mask) → automated review → blind code-eval → land →
+   finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable

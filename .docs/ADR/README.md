@@ -26,7 +26,8 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0012 — Thin Orchestrator: `sonnet` Default + Bounded Role-Return Contract](0012-thin-orchestrator-sonnet-default-bounded-return.md) — **extends** ADR 0002 (adds the orchestrator tier row) and builds on ADR 0001/0003/0004/0010/0011; keeps the orchestrator's context flat via pass-references-not-bodies + a bounded return contract
 - [0013 — Starvation-Loop Guards for the Orchestrator Cold-Restart](0013-starvation-loop-guards-cold-restart.md) — builds on ADR 0012/0003/0010/0011; write-ahead checkpoint + restart-before-big-op + forward-progress escalation + lossless-beats-lossy, plus a follow-on PreCompact mechanical-backstop slice
 - [0014 — Multi-Session Worktree Coordination](0014-multi-session-worktree-coordination.md) — **extends** ADR 0008 (single-orchestrator "serialized on main" → cross-session lock + slice-lease for N concurrent `/loom:run` sessions); builds on ADR 0001/0003/0012/0013 (relocates ADR 0013's write-ahead cold-restart anchor to off-`main` per-session state) — **liveness signal superseded by 0015** (worktree-membership/pid → lease-renewal heartbeat); rest of 0014 stands
+- [0015 — Lease-Renewal Heartbeat as the Liveness Signal](0015-lease-renewal-heartbeat-liveness.md) — supersedes ADR 0014 on the **liveness signal only** (worktree-list membership / ephemeral pid → lease-freshness heartbeat within the TTL; a session that stops renewing becomes reclaimable); rest of 0014 stands; builds on ADR 0014/0001/0003
 
 ## In Review
 
-- [0015 — Lease-Renewal Heartbeat as the Liveness Signal](0015-lease-renewal-heartbeat-liveness.md) — supersedes ADR 0014 on the **liveness signal only** (worktree-list membership / ephemeral pid → lease-freshness heartbeat within the TTL; a session that stops renewing becomes reclaimable); rest of 0014 stands; builds on ADR 0014/0001/0003
+_(none)_
