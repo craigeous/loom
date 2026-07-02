@@ -571,6 +571,13 @@ source of truth; `roadmap.md` is milestone order.
    kill guard)/U6(no-sweep-live) + secondary (atomic pid write, `/proc` field-22 parse) → `Implemented`.
    MAX incremental discipline (one tiny edit per step; no long prose in responses; commit each coherent
    chunk). **NEXT ACTION:** developer Pass 1.
+   **Pass 1 DONE `e0699f2`** (gate green bats 47/47): lock = `refs/loom/lock` git-blob + `update-ref` CAS;
+   mkdir/`clear_and_own`/rename-capture/holderless/`$CAP` machinery DELETED (verified: 17 refs/loom uses, 0
+   old machinery). Claims TSV + renewer + session dirs untouched. Split approach avoided the crash (42 small
+   tool calls). **NEXT ACTION: developer Pass 2** — claims TSV → `refs/loom/claims/<slice>` CAS (create-only
+   claim / value-CAS renew / delete-CAS release / stale-lease reclaim); renewer CAS-renews claim(s) **+ the
+   LOCK ref** (U3 fix); keep lease-freshness liveness. Gate green → commit, stay `In Progress`. Then Pass 3
+   (U2/U5/U6 + secondary → `Implemented`).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
