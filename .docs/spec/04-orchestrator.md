@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## What the orchestrator is
 
@@ -183,7 +183,7 @@ calls. This gives parallel slices safely:
 headless `claude -p` to spawn a peer agent. Kept in reserve for deep nesting;
 the worktree approach is primary because it is more observable and controllable.
 
-### Multi-session coordination (ADR 0014, ADR 0015)
+### Multi-session coordination (ADR 0014, ADR 0015, ADR 0016)
 
 Everything above assumes a **single** orchestrator session — which is exactly what
 makes ADR 0008's "main-only, serialized" true *by construction*. The owner may
@@ -199,6 +199,17 @@ above remains intact; the following adds the cross-session layer.
 **on the liveness signal only** — a session's liveness is now **lease freshness** (a
 renewal heartbeat within the TTL), **not** worktree-list membership and **not** the
 process pid; every other ADR 0014 decision below stands unchanged.
+[ADR 0016](../ADR/0016-git-native-ref-cas-lock-mechanism.md) supersedes ADR 0014
+**on the lock/claim *substrate* only** — the concrete atomic primitive under the model.
+The lock and the slice claims are now **git refs** in the repository's **common (shared)
+ref store**, and every acquire / stale-steal / release / claim / renew / reclaim is a
+**`git update-ref` compare-and-swap (CAS)**, replacing the hand-rolled `mkdir` lock-dir +
+rename-capture CAS and the inline/registry lease marker. git owns the atomicity, so the
+CAS is **ABA-safe by construction** (the old-value is the exact prior object SHA) and a
+losing CAS is a **clean, retryable failure**. The coordination model below (session-owned
+worktrees, the three locked shared-`main` writes, per-session `.git/` state, cold-restart)
+and ADR 0015's lease-freshness liveness stand unchanged and now **ride this substrate**;
+only the primitive and its storage change.
 
 - **Session-owned slice worktrees.** A `/loom:run` session **never does slice work in
   the shared `main` checkout.** When it picks up a slice it creates **its own**
@@ -220,40 +231,61 @@ process pid; every other ADR 0014 decision below stands unchanged.
   / pre-filter only** — never authoritative. The correctness-critical re-read reads
   **local `main` under the lock** (below).
 
-- **A cross-session lock on `main`'s critical section.** The critical section is
-  `{claim-a-slice, merge+finalize-land}` — the only operations that touch the shared
-  `main` checkout and its single-instance coordination files (the three living docs +
-  `slice-plans/README.md`). It is guarded by a **per-repository cross-session mutex**
-  living **outside** the tracked worktree (under `.git/`, e.g. an atomic `mkdir`
-  lock-dir or a git-ref compare-and-swap), so the lock itself is never a tracked,
-  mergeable file. On acquire the holder stamps the lock with an out-of-band identity
-  (`{session-id, acquired-timestamp}`; any recorded `pid` is **advisory diagnostics
-  only, never a liveness gate** —
+- **A cross-session lock on `main`'s critical section (a git ref — ADR 0016).** The
+  critical section is `{claim-a-slice, merge+finalize-land}` — the only operations that
+  touch the shared `main` checkout and its single-instance coordination files (the three
+  living docs + `slice-plans/README.md`). It is guarded by a **per-repository cross-session
+  mutex that is a single git ref — `refs/loom/lock`** — in the repository's **common
+  (shared) ref store** (below), not a tracked, mergeable file. The ref's value is a small
+  content-addressed **blob** (`git hash-object -w`, which carries **no** author/committer
+  metadata) encoding the holder record `{session-id, lease-timestamp, session-pid,
+  start-time}`; the `session-pid`/`start-time` are **advisory diagnostics / the session's
+  own renewer bookkeeping only, never a cross-session liveness gate** —
   [ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md) — and none of it is ever
-  commit/author metadata, ADR 0003 untouched) and removes it on release. Contention reuses ADR 0008's
-  exponential backoff (the same mechanism applied to a coarser resource; the transient
-  `index.lock` backoff still applies underneath for the individual git writes). The
-  lock brackets a **short, bounded** main-side op and is **never held across a role
-  spawn** or while a role works in a worktree. This makes ADR 0008's "serialized on
-  main" true *across* sessions — closing concurrent-living-doc-write and
-  concurrent-merge races — while leaving the conflict-free-by-construction disjoint
-  slice files lock-free.
+  commit/author metadata (ADR 0003 untouched). Each state transition is a **`git update-ref`
+  compare-and-swap against the exact object SHA the caller last read**:
+  - **Acquire** is a **create-only CAS** from the null OID (`git update-ref refs/loom/lock
+    <holder-blob> 0{40}`): it succeeds only if the ref is **absent**, so a peer already
+    holding the lock makes it fail.
+  - **Stale-steal** is a **value-CAS** from the exact read SHA, taken **only when the
+    holder's lease is stale** by the lock-TTL gate (below).
+  - **Release** is a **delete-CAS** (`git update-ref -d refs/loom/lock <my-holder-blob>`):
+    it deletes only if the ref still equals the caller's own holder blob, so a session that
+    already lost the lock cannot delete a peer's.
+  Because the old-value in every CAS is the **exact prior object SHA** — checked atomically
+  by git under its own per-ref lock — the mutex is **ABA-safe by construction**: any peer
+  that changed the ref between the caller's read and its `update-ref` makes the old-SHA
+  check fail, so **the caller cleanly loses and retries** and there is never a window in
+  which two contenders both believe they captured the same lock. This delegates
+  cross-worktree atomicity to git's ref-transaction semantics instead of reconstructing
+  compare-and-swap from `mkdir` + `rename(2)` + a re-read, and retires the hand-rolled
+  rename-capture machinery. Contention — a lost value-CAS, or a lost race for the ref's
+  own transient `.lock` (a clean non-zero exit) — reuses ADR 0008's exponential backoff
+  (the same mechanism, now under a git-native primitive). The lock brackets a **short,
+  bounded** main-side op and is **never held across a role spawn** or while a role works in
+  a worktree. This makes ADR 0008's "serialized on main" true *across* sessions — closing
+  concurrent-living-doc-write and concurrent-merge races — while leaving the
+  conflict-free-by-construction disjoint slice files lock-free.
 
-- **Lock liveness / TTL — distinct from the slice lease.** An `mkdir` lock does not
-  free itself, so a session that dies mid-critical-section would otherwise deadlock
-  every contender. The lock therefore carries its **own short `lock-TTL`** covering
-  only the lock dir — separate from and much shorter than the slice-lease TTL below (a
-  held lock is a milliseconds-to-seconds op; a lease spans a whole slice). The TTL
-  alone never authorizes a force-clear on a *populated* stamp: **stamp freshness gates
-  it.** A contender backing off past the `lock-TTL` reads the `holder` stamp and
-  force-clears **only when that stamp is stale — its timestamp older than the
-  `lock-TTL`** ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)
+- **Lock liveness / TTL — distinct from the slice lease.** The `refs/loom/lock` ref does
+  not free itself, so a session that dies mid-critical-section would otherwise deadlock
+  every contender. The lock therefore carries its **own short `lock-TTL`** covering only
+  the lock ref — separate from and much shorter than the slice-lease TTL below (a held lock
+  is a milliseconds-to-seconds op; a lease spans a whole slice). The TTL alone never
+  authorizes a force-clear on a *populated* ref: **holder-lease freshness gates it.** A
+  contender backing off past the `lock-TTL` reads the current holder blob's SHA `H_obs`
+  **and** decodes its `lease-timestamp`, and force-steals **only when that lease is
+  stale — older than the `lock-TTL`** ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)
   lease-freshness applied to the lock: because the locked section is a
-  milliseconds-to-seconds op, a stamp older than the `lock-TTL` means the holder
-  crashed mid-section). Worktree-list membership and the process pid do **not** enter
-  this decision. A holder still inside its bounded section keeps its stamp within the
-  `lock-TTL` and is **never** cleared — the contender keeps backing off and lets it
-  finish.
+  milliseconds-to-seconds op — provided the holder is not keeping the lock's lease fresh
+  through a long `land` (see the renewer below) — a lease older than the `lock-TTL` means
+  the holder crashed mid-section). The steal is a **value-CAS from that exact `H_obs`**, so
+  if any peer changed the ref in the interim the CAS fails and the contender cleanly loses
+  and retries — two contenders that both saw the lock stale cannot both capture it.
+  Worktree-list membership and the process pid do **not** enter this decision. A holder
+  still inside its bounded section (or renewing the lock's lease through a long `land`)
+  keeps its lease within the `lock-TTL` and is **never** stolen — the contender keeps
+  backing off and lets it finish.
 
 - **Liveness rule — lease freshness (a renewal heartbeat)**
   ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)). A holder/claimant is
@@ -282,9 +314,21 @@ process pid; every other ADR 0014 decision below stands unchanged.
   the session is very much alive** (its blocked sub-agent *is* the progress), and a peer
   would reclaim an in-progress slice. Instead, on **first acquire** of any lock or claim,
   the session launches **exactly one** detached background renewer that refreshes every
-  held lease on the ~TTL/3 cadence (under the §2 lock — this is locked write #2 below),
+  held lease on the ~TTL/3 cadence (locked write #2 below),
   **independently of the blocked main thread**, so leases stay fresh straight through a
-  multi-hour sub-agent call. The renewer is gated on the **stable session process's
+  multi-hour sub-agent call. Each renew is a **value-CAS** of the held ref (a slice claim
+  ref and/or `refs/loom/lock`) from its **exact read SHA** to a blob with a refreshed
+  `lease-timestamp` (ADR 0016). The renewer refreshes **the lock ref's own lease-timestamp
+  while the lock is held**, not only the slice claims: because the lock holder record
+  carries a `lease-timestamp`, a session running a long `land`/merge keeps its **lock**
+  lease fresh, so a peer's stale-steal gate (above) sees the lock as **live** and does
+  **not** steal it mid-critical-section (this closes the review's un-renewed-lock defect —
+  the lock is now heartbeat like any other lease; peers still decide liveness by lease
+  freshness alone). Because the renewer mutates the lock ref's SHA, the main thread's
+  release / `land` must delete-CAS or value-CAS against the **current** ref value — never a
+  remembered stale SHA — so a renew that landed between the main thread's last read and its
+  release does not spuriously fail the release. The renewer is gated on the **stable session
+  process's
   reuse-robust identity** — the pair **`{session-pid, session-pid-start-time}`** — and
   keeps beating **only while** that pid is alive **and** its current start-time still
   matches the recorded one (`alive(session-pid) && starttime == recorded`). This identity
@@ -303,34 +347,43 @@ process pid; every other ADR 0014 decision below stands unchanged.
   which the session's leases go stale promptly, so a peer may reclaim without waiting a
   full TTL).
 
-- **Slice claim / lease — check-then-act under the lock.** Two sessions must not pick
-  the same next action. A **lease** in the `slice-plans/README.md` Active region,
-  written under the lock, prevents it. The dispatch scan derives the next action from
-  the `Status:` lines plus the lease/claim state on a fresh view of local `main`. To
-  take slice X, a session acquires the lock and, **while holding it, re-reads the
-  lease/Active state from current local `main`**; if X was claimed (a live lease) or
-  landed (moved to Archived) by a peer in the interim, it **aborts and re-selects** a
-  different action. Only when the re-read still shows X free does it write its claim —
-  a `{session-id, pid, lease-timestamp}` marker in the Active region — commit that
-  index update on `main`, release the lock, and only then create the worktree and
-  dispatch roles. Because read-validate-write is one locked section, two sessions
-  cannot both observe X free and both claim it. A session **skips** any slice carrying
-  a **live** (non-expired) claim by another session, so two sessions scanning the same
-  `Status:` lines diverge on which slice they take.
+- **Slice claim / lease — a per-slice ref, check-then-act under the lock (ADR 0016).**
+  Two sessions must not pick the same next action. Each slice's **lease** is a **per-slice
+  git ref — `refs/loom/claims/<slice>`** — in the common ref store, whose value is a blob
+  encoding `{session-id, lease-timestamp}` (this resolves ADR 0015's open
+  inline-vs-sidecar lease-storage parameter to a ref; the `slice-plans/README.md`
+  Active/Archived index remains the ADR 0008 orchestrator-owned listing of which slices are
+  in-flight). Because each claim is an **independent** ref, two sessions claiming
+  **different** slices never contend, and two racing the **same** slice resolve by CAS —
+  exactly one wins. The dispatch scan derives the next action from the `Status:` lines plus
+  the claim-ref/Active state on a fresh view of local `main`. To take slice X, a session
+  acquires the lock and, **while holding it, re-reads the claim-ref/Active state from
+  current local `main`**; if X carries a **live** claim ref by a peer, or landed (moved to
+  Archived) in the interim, it **aborts and re-selects**. Only when the re-read still shows
+  X free does it write its claim — a **CAS on `refs/loom/claims/X`** (create-only from the
+  null OID if absent; a staleness-gated value-CAS steal from the exact read SHA if the prior
+  claim is stale; an idempotent re-affirm of its **own** fresh claim) — record X in the
+  `main` Active index, release the lock, and only then create the worktree and dispatch
+  roles. Because read-validate-write is one locked section **and** the claim itself is an
+  atomic CAS, two sessions cannot both observe X free and both claim it. A session **skips**
+  any slice carrying a **live** (non-expired) claim ref by another session, so two sessions
+  scanning the same `Status:` lines diverge on which slice they take.
 
-- **Stale-claim reclaim — slice-lease TTL.** A claim whose `lease-timestamp` is older
+- **Stale-claim reclaim — slice-lease TTL.** A claim ref whose `lease-timestamp` is older
   than the slice-lease TTL is **stale**, and — because **lease freshness is the liveness
   signal** ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)) — a stale lease
   **means** its holder is dead: no membership or pid check overrides it. Under the lock
-  the reclaiming session **re-reads** the lease from current local `main`, and if it is
-  **still stale**, runs `git worktree prune` + `git worktree remove -f` for the orphan
-  worktree, clears/overwrites the expired Active entry, and claims the slice. (Driving
+  the reclaiming session **re-reads** `refs/loom/claims/<slice>` from the common ref store,
+  and if it is **still stale**, force-steals it with a **value-CAS from the exact read SHA**
+  (gated on that staleness), runs `git worktree prune` + `git worktree remove -f` for the
+  orphan worktree, updates the expired Active entry, and claims the slice. (Driving
   orphan-worktree cleanup off lease **staleness** — rather than off an always-populated
   worktree-membership read — is what makes a crashed session's worktree reclaimable at
   all.) A holder whose out-of-band renewer is still beating keeps its lease **fresh** and
   is **never** reclaimed — this is exactly how a legitimately long-running or
-  sub-agent-blocked slice is protected, since its renewer (above) refreshes the lease
-  under the lock on the ~TTL/3 cadence throughout.
+  sub-agent-blocked slice is protected, since its renewer (above) CAS-renews the claim ref
+  on the ~TTL/3 cadence throughout; landing subsumes the claim release (a **delete-CAS** of
+  the caller's own claim ref — no separate unclaim step).
 
 - **Per-session write-ahead anchor — off `main`.** Each thin session must write its
   next intended action **ahead of every large/in-window op** (ADR 0013 rule 1) so a
@@ -338,8 +391,8 @@ process pid; every other ADR 0014 decision below stands unchanged.
   orchestrator the shared `handoff.md` doubled as both the human-facing status doc and
   that machine anchor; with N sessions the two roles **split**. The **machine
   cold-restart anchor** moves to **per-session state keyed by `session-id`, persisted
-  under `.git/`** (e.g. `.git/loom-session-<session-id>/`, untracked, alongside the
-  lock dir) holding `{session-id, write-ahead checkpoint (next intended action),
+  under `.git/`** (e.g. `.git/loom-session-<session-id>/`, untracked, alongside loom's
+  other under-`.git/` coordination state) holding `{session-id, write-ahead checkpoint (next intended action),
   held-claims set}`. Because it is under `.git/` it is **not** a tracked `main` file:
   writing it is **not** a `main` write, needs **no** lock, and is per-session — a
   restarting session reads only **its own** anchor, never a peer's. This **preserves**
@@ -364,16 +417,20 @@ process pid; every other ADR 0014 decision below stands unchanged.
   owner **recovers** (re-adopts and renews) rather than orphaning its claims.
 
 - **Exactly three locked shared-`main` writes.** With the restart anchor moved
-  off `main`, a session mutates the shared `main` checkout at exactly **three**
-  moments, **all inside the lock**:
-  1. **Claim** — write the lease into `slice-plans/README.md`'s Active region.
-  2. **Lease-renew** — refresh a held lease's `lease-timestamp` (performed by the
-     out-of-band background renewer on the ~TTL/3 cadence, and by the session on
-     cold-restart bootstrap) so a long-running or restarted slice is not reclaimed.
+  off `main`, a session mutates the shared `main`-side coordination state (the tracked
+  living docs + the `slice-plans/README.md` index on `main`, and the `refs/loom/*` refs in
+  the common ref store — ADR 0016) at exactly **three** moments, **all inside the lock**:
+  1. **Claim** — CAS the lease ref `refs/loom/claims/<slice>` and record the slice in
+     `slice-plans/README.md`'s Active region.
+  2. **Lease-renew** — CAS-renew a held lease's `lease-timestamp`: the claim ref and, while
+     the lock is held, `refs/loom/lock` itself (ADR 0016), performed by the out-of-band
+     background renewer on the ~TTL/3 cadence and by the session on cold-restart bootstrap,
+     so a long-running or restarted slice — or a long `land` holding the lock — is not
+     reclaimed/stolen.
   3. **Land + finalize** — `git merge <slice-branch>`, the living-doc finalize updates
-     (`progress.md`/`handoff.md`, and `roadmap.md` if a milestone closed), and moving
-     the slice Active → Archived in `slice-plans/README.md` (which **is** the claim
-     release — no separate unclaim step).
+     (`progress.md`/`handoff.md`, and `roadmap.md` if a milestone closed), moving
+     the slice Active → Archived in `slice-plans/README.md`, and the **delete-CAS** of the
+     caller's own claim ref (which **is** the claim release — no separate unclaim step).
 
   At all other times a session operates only in its own slice worktree(s). The
   per-session write-ahead checkpoint is **not** one of these three — it is off-`main`
@@ -384,12 +441,13 @@ process pid; every other ADR 0014 decision below stands unchanged.
 - Every shared-`main` write happens **inside** the cross-session lock; there are
   exactly **three** (claim, lease-renew, land+finalize). No unguarded living-doc or
   `handoff.md` write is left open.
-- A force-clear of the lock **or** a lease is gated on **lease/stamp freshness** — a
-  lease not renewed within the TTL (for the lock stamp: a timestamp older than the
-  `lock-TTL`) — [ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md);
-  worktree-list membership and the process pid are **not** liveness signals. A
-  live-but-busy holder keeps its lease fresh via its out-of-band renewer and is **never**
-  cleared.
+- A force-clear of the lock **or** a lease is a **staleness-gated value-CAS steal** (ADR
+  0016) gated on **holder-lease freshness** — a lease not renewed within the TTL (for the
+  lock ref: a holder `lease-timestamp` older than the `lock-TTL`) —
+  [ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md); worktree-list membership and
+  the process pid are **not** liveness signals. A live-but-busy holder keeps its lease fresh
+  via its out-of-band renewer (which now heartbeats the lock ref too) and is **never**
+  cleared; a losing steal-CAS is a clean, retryable failure.
 - The cold-restart anchor is **off-`main`, per-session, under `.git/`**, keyed by a
   `session-id` **stable across restart and never pid-derived**; the shared `handoff.md`
   stays on `main`, written at land under the lock.
@@ -399,18 +457,31 @@ process pid; every other ADR 0014 decision below stands unchanged.
   out-of-band coordination metadata and any recorded `pid`/`start-time` is out-of-band
   bookkeeping for the session's **own** renewer (never a cross-session liveness gate —
   ADR 0015), **never** commit/author metadata, so cross-session commits stay
-  indistinguishable to the blind evaluator; only the session spawns (ADR 0001). No new
-  `Status:` token — the lease is bookkeeping in the
-  `slice-plans/README.md` Active region (ADR 0008's bucket), not a lifecycle state
-  (spec 03 unchanged).
-- The concrete **mechanism** — the lock primitive (`mkdir`-dir vs ref-CAS), the
-  `lock-TTL` and slice-lease TTL values, the exact renew-cadence fraction, the lease
-  format, the detached-renewer spawn/reap primitive, the **portable** capture of the
-  process start-time for the `{session-pid, session-pid-start-time}` identity gate, and
-  the per-session `.git/` state location/derivation — is **deferred to a later POSIX-sh
-  helper slice** (loom's third executable file, shell-gated). This spec records the
-  **contract**, not the implementation. (Liveness itself is **no longer** a deferred
-  parameter — ADR 0015 fixes it as lease freshness.)
+  indistinguishable to the blind evaluator; only the session spawns (ADR 0001). The holder
+  record lives in a `refs/loom/*` **blob** (via `git hash-object -w`, no author/committer
+  metadata) and those refs are **never** `refs/heads/*` branch history and **never** appear
+  in the blind code-evaluator's slice-commit diff (ADR 0016 / ADR 0003). No new `Status:`
+  token — the lease is coordination bookkeeping in a `refs/loom/claims/<slice>` ref (with
+  the slice listed in `slice-plans/README.md`'s Active region, ADR 0008's index bucket), not
+  a lifecycle state (spec 03 unchanged).
+- **Substrate is now decided (ADR 0016); values remain deferred.** The lock/claim primitive
+  is **fixed** as git-native `update-ref` **CAS** on the common ref store —
+  `refs/loom/lock` + `refs/loom/claims/<slice>` (create-only, value, and delete CAS on the
+  exact read SHA; ABA-safe by construction) — no longer the open `mkdir`-dir-vs-ref-CAS
+  parameter. These refs **must** live in the **common (shared) ref store** (never a
+  per-worktree / `refs/worktree/` namespace, which would defeat cross-session visibility).
+  Two re-implementation notes carry from the ADR 0016 review: **(a) loose-blob cleanup** —
+  each CAS supersedes the prior holder blob, leaving it unreferenced; these are reclaimed by
+  ordinary `git gc` (noted, not over-specified); **(b) renewer↔release coordination** —
+  because the renewer mutates the lock/claim ref's SHA, the main thread's release/`land`
+  must CAS against the **current** ref value, not a remembered stale SHA. Still deferred to
+  the POSIX-sh helper slice (loom's third executable file, shell-gated): the `lock-TTL` and
+  slice-lease TTL values, the exact renew-cadence fraction, the holder-blob field encoding,
+  the exact ref names / create-only sentinel, the detached-renewer spawn/reap primitive, the
+  **portable** capture of the process start-time for the `{session-pid,
+  session-pid-start-time}` identity gate, and the per-session `.git/` state
+  location/derivation. This spec records the **contract**, not the implementation. (Liveness
+  itself is **no longer** a deferred parameter — ADR 0015 fixes it as lease freshness.)
 
 ## Human checkpoints
 
