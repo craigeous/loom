@@ -478,6 +478,19 @@ source of truth; `roadmap.md` is milestone order.
    escape)/T4(age-gate vs backoff)/T5(skipped-count)/T7(shared acquire helper) + start-time portability,
    with tests that exercise the Linux path (don't mask) → automated review → blind code-eval → land →
    finalize → slice W.
+   **Spec-04 amendment DONE** (`adr-0015-spec-amendment-eval.md` PASS `Round: 0`, no findings; spec 04
+   re-Approved) — liveness prose now lease-freshness; non-liveness invariants intact; `rg` zero residual
+   membership-as-liveness. Liveness-refinement design layer COMPLETE (ADR 0015 Accepted + spec 04 updated).
+   **NEXT ACTION:** developer **re-implements `loom-coord.sh` liveness** against spec-04/ADR-0015: peer
+   liveness = **lease freshness** (staleness by lease-timestamp vs TTL; remove membership/pid as the peer
+   liveness signal); add the **background renewer** subcommands (capture `{session-pid, start-time}`; detached
+   `while identity-ok; do renew; sleep ~TTL/3; done`; start/stop; identity = `alive(pid) && starttime==recorded`);
+   + mechanical **T1** (Linux-portable `stat` for mtime AND start-time — feature-detect, not BSD-first),
+   **T3** (`awk -v` escape), **T4** (holderless age-gate vs backoff — recover within one invocation),
+   **T5** (skipped-count), **T7** (single shared acquire helper, dedup the 4 copies). Tests: red-green +
+   **exercise the Linux path (don't mask with BSD `stat`)**. Strict OUTPUT discipline + **incremental
+   commits** (blast-radius lever). Gate green → `Implemented`. Then re-run automated review → blind code-eval
+   → land → finalize → slice W (fold lease-freshness into `parallelism.md`/`orchestration.md`/`run.md`).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
