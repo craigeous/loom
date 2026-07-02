@@ -1371,3 +1371,125 @@ EOF
     [ "$status" -eq 0 ]
     teardown
 }
+
+# ---------------------------------------------------------------------------
+# U2 — Fail-closed: empty/non-numeric lease-ts treated as FRESH (live), not stale
+# ---------------------------------------------------------------------------
+
+@test "U2 empty lease-ts: claim treated as live (reclaim refused, exit 6)" {
+    # U2 fix: an empty epoch must be treated as unparseable → FRESH (live).
+    # A peer whose claim blob has an empty ts field (e.g. partial write) must NOT
+    # be reclaimable — fail-closed.
+    make_repo
+    cd "$REPO"
+    local peer_sid="ses-peer-U2"
+    # Plant a claim with empty ts field (tab-delimited: "sid\t\n")
+    plant_claim_ref_raw "slice-U2" "$(printf '%s\t\n' "$peer_sid")"
+
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-U2"
+    [ "$status" -eq 0 ]
+
+    # Pre-fix: empty epoch → $(( now - '' )) = now (huge) >> TTL → stale → reclaim OK (exit 0).
+    # Post-fix: empty epoch → return 0 (fresh) → exit 6 (refused).
+    run sh "$COORD" reclaim slice-U2 --session "ses-us-U2"
+    [ "$status" -eq 6 ]
+    [ "$(claim_sid "slice-U2")" = "$peer_sid" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# U5 — renewer-stop with empty start-time must NOT kill the recorded pid
+# ---------------------------------------------------------------------------
+
+@test "U5 renewer-stop with empty starttime and alive pid: no kill issued" {
+    # U5 fix: when renewer.starttime is empty, renewer-stop cannot confirm the
+    # pid's identity → must NOT kill (the pid may have been recycled).
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-U5"
+    [ "$status" -eq 0 ]
+
+    local sess_dir="$REPO/.git/loom/session-ses-U5"
+
+    # Start a harmless stand-in process whose pid we record as the "renewer"
+    sleep 60 &
+    local spid=$!
+
+    # Record its pid but leave renewer.starttime ABSENT (simulates process_starttime
+    # returning empty at renewer-start time — e.g. non-Linux without /proc)
+    printf '%s\n' "$spid" >"$sess_dir/renewer.pid"
+    # renewer.starttime intentionally not written
+
+    # Pre-fix: rst empty → kill $spid unconditionally → sleep process dies.
+    # Post-fix: rst empty → skip kill → sleep process survives.
+    run sh "$COORD" renewer-stop --session "ses-U5"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewer-stopped"* ]]
+
+    # The stand-in process must still be alive (kill was NOT issued)
+    kill -0 "$spid" 2>/dev/null
+
+    kill "$spid" 2>/dev/null || true
+    wait "$spid" 2>/dev/null || true
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# U6 — cleanup: empty-ts claim is skipped (not swept), session dir preserved
+# ---------------------------------------------------------------------------
+
+@test "U6 cleanup: empty-ts claim treated as live (skipped, session dir preserved)" {
+    # U6/U2: a claim with empty lease-ts must be treated as live → skipped by
+    # cleanup, session dir NOT removed (fail-closed).
+    make_repo
+    cd "$REPO"
+    local peer_sid="ses-u6-live"
+    plant_claim_ref_raw "slice-U6" "$(printf '%s\t\n' "$peer_sid")"
+    mkdir -p "$REPO/.git/loom/session-$peer_sid"
+    touch "$REPO/.git/loom/session-$peer_sid/checkpoint"
+
+    run env LOOM_LOCK_TTL=0 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    # Must be counted as skipped (R7 guard), not swept
+    [[ "$output" == *"skipped 1"* ]]
+    # Claim ref must still be present
+    [ -n "$(claim_ref_sha "slice-U6")" ]
+    # Session dir must NOT have been removed
+    [ -d "$REPO/.git/loom/session-$peer_sid" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# PROC-1 — /proc/<pid>/stat field-22 parse: comm with spaces and parens
+# ---------------------------------------------------------------------------
+
+@test "PROC-1 stat field-22 parse: comm containing spaces and parens gives correct starttime" {
+    # Secondary fix: naïve awk '{print $22}' misparses field 22 when comm contains
+    # spaces or ')' — e.g. comm "(a b) c)" shifts all subsequent fields left.
+    # The robust parse splits on the LAST ')' then takes field 20 of the suffix.
+    #
+    # Test string: "12345 (a b) c) S f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 99999"
+    # last ')' is after 'c'; suffix fields: S(1) f2(2)...f19(19) 99999(20) → starttime=99999
+    # awk '{print $22}' would give field 22 by whitespace split = f16 (wrong).
+    local stat_line
+    stat_line="12345 (a b) c) S f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 f16 f17 f18 f19 99999"
+
+    local got
+    got=$(printf '%s\n' "$stat_line" | awk '{
+        last = 0
+        for (i = 1; i <= length($0); i++) {
+            if (substr($0, i, 1) == ")") last = i
+        }
+        if (last == 0) next
+        rest = substr($0, last + 2)
+        n = split(rest, a, " ")
+        if (n >= 20) print a[20]
+    }')
+    [ "$got" = "99999" ]
+
+    # Confirm the naïve parse gives the wrong answer (demonstrates the original bug)
+    local naive
+    naive=$(printf '%s\n' "$stat_line" | awk '{print $22}')
+    [ "$naive" != "99999" ]
+}

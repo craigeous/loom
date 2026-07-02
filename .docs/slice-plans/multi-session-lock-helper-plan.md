@@ -365,6 +365,12 @@ new hook entry — the helper is deliberately unregistered).
 
 ## Notes
 
+**Gate evidence (Pass 3, 2026-07-02 — U2/U5/U6/secondary defect fixes):**
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh` → FORMAT CLEAN
+- `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN
+- `bats plugins/loom/lib/loom-coord.bats` → **55/55 pass** (51 pre-existing + 4 new: U2, U5, U6, PROC-1)
+- Fixes landed: U2 (`claim_is_fresh` fail-closed on empty/non-numeric epoch); U5 (`renewer-stop` skips kill when `rst` empty); U6 (covered by U2 + cleanup's existing R7 guard, regression test added); secondary proc parse (robust field-22 via last-`)` split); secondary atomic writes (session.pid, session.starttime, renewer.pid, renewer.starttime all written via temp+mv).
+
 **Gate evidence (round 4, 2026-07-02 — ADR 0015 liveness rework):**
 - `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
 - `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN (SC3043 suppressed file-wide)

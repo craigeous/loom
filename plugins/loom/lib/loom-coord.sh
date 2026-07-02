@@ -137,11 +137,28 @@ _make_blob_for() {
 # process_starttime <pid> — print the start-time of a process; empty on failure.
 # Portable: tries Linux /proc/<pid>/stat (field 22, jiffies since boot — stable,
 # locale-independent) first; falls back to BSD/macOS `ps -o lstart=`.
+#
+# Field 22 MUST be located by splitting on the LAST ')' because the comm field
+# (field 2) is wrapped in parens and may itself contain spaces or ')' (e.g.
+# "(a b) c)" is a legal comm).  Naïve `awk '{print $22}'` gives the wrong field
+# in that case.  After the last ')', the fields are:
+#   state(1) ppid(2) pgrp(3) session(4) tty_nr(5) tpgid(6) flags(7) minflt(8)
+#   cminflt(9) majflt(10) cmajflt(11) utime(12) stime(13) cutime(14) cstime(15)
+#   priority(16) nice(17) num_threads(18) itrealvalue(19) starttime(20)
 process_starttime() {
     local _pid="$1"
     local _f="/proc/$_pid/stat"
     if [ -f "$_f" ]; then
-        awk '{print $22}' "$_f" 2>/dev/null
+        awk '{
+            last = 0
+            for (i = 1; i <= length($0); i++) {
+                if (substr($0, i, 1) == ")") last = i
+            }
+            if (last == 0) next
+            rest = substr($0, last + 2)
+            n = split(rest, a, " ")
+            if (n >= 20) print a[20]
+        }' "$_f" 2>/dev/null
         return
     fi
     ps -o lstart= -p "$_pid" 2>/dev/null
@@ -169,9 +186,15 @@ wt_sid_match() {
 # claim_is_fresh <epoch> — returns 0 (alive/fresh) if the claim epoch is within
 # LOOM_LEASE_TTL of now.  This is the SOLE liveness signal for claims (ADR 0015):
 # worktree-list membership and the process pid are NOT liveness gates.
+# Fail-closed (U2): empty or non-numeric epoch is UNPARSEABLE → treat as FRESH
+# (live). Never classify an unreadable lease as stale — that would allow reclaim
+# of a live holder whose epoch write was partial or corrupt.
 claim_is_fresh() {
     local _epoch="$1"
     local _now
+    case "$_epoch" in
+    '' | *[!0-9]*) return 0 ;;
+    esac
     _now=$(now)
     [ $((_now - _epoch)) -lt "$LOOM_LEASE_TTL" ]
 }
@@ -1033,8 +1056,13 @@ cmd_renewer_start() {
         printf 'loom-coord renewer-start: cannot read start-time for pid %s\n' "$spid" >&2
         exit 10
     fi
-    printf '%s\n' "$spid" >"$sess_dir/session.pid"
-    printf '%s\n' "$sst" >"$sess_dir/session.starttime"
+    # Atomic writes: write to a temp file then mv into place so readers never see
+    # a partial value (secondary fix).
+    local _atmp
+    _atmp="${sess_dir}/session.pid.tmp.$$"
+    printf '%s\n' "$spid" >"$_atmp" && mv "$_atmp" "${sess_dir}/session.pid"
+    _atmp="${sess_dir}/session.starttime.tmp.$$"
+    printf '%s\n' "$sst" >"$_atmp" && mv "$_atmp" "${sess_dir}/session.starttime"
 
     # Check-then-launch: do not start a second renewer (duplicate suppression)
     if _renewer_alive "$sess_dir"; then
@@ -1093,9 +1121,12 @@ cmd_renewer_start() {
     local rpid=$!
     local rst
     rst=$(process_starttime "$rpid")
-    printf '%s\n' "$rpid" >"$sess_dir/renewer.pid"
+    local _rtmp
+    _rtmp="${sess_dir}/renewer.pid.tmp.$$"
+    printf '%s\n' "$rpid" >"$_rtmp" && mv "$_rtmp" "${sess_dir}/renewer.pid"
     if [ -n "$rst" ]; then
-        printf '%s\n' "$rst" >"$sess_dir/renewer.starttime"
+        _rtmp="${sess_dir}/renewer.starttime.tmp.$$"
+        printf '%s\n' "$rst" >"$_rtmp" && mv "$_rtmp" "${sess_dir}/renewer.starttime"
     fi
     printf 'renewer-started pid=%s\n' "$rpid"
     exit 0
@@ -1120,11 +1151,12 @@ cmd_renewer_stop() {
     fi
     rst=$(cat "$sess_dir/renewer.starttime" 2>/dev/null) || rst=""
 
-    # Only kill if the recorded renewer pid is still the one we started (identity gate)
+    # Identity gate (U5): only kill if start-time is known AND matches the live pid.
+    # Empty rst means process_starttime failed at renewer-start time; we cannot
+    # confirm identity → do NOT kill (the pid may have been recycled by an unrelated
+    # process since the renewer died).
     if kill -0 "$rpid" 2>/dev/null; then
-        if [ -z "$rst" ]; then
-            kill "$rpid" 2>/dev/null || true
-        else
+        if [ -n "$rst" ]; then
             cur_st=$(process_starttime "$rpid")
             if [ "$cur_st" = "$rst" ]; then
                 kill "$rpid" 2>/dev/null || true
