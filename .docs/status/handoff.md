@@ -545,6 +545,21 @@ source of truth; `roadmap.md` is milestone order.
    + TSV registry; refs substrate; keep lease-freshness + renewer) + fix carried U2(fail-closed epoch)/
    U5(recycled-pid kill guard)/U6(no-sweep-live) + secondary (atomic pid write, `/proc` field-22 parse,
    Linux-exercised start-time/`stat`) → automated review → blind code-eval → land → finalize → slice W.
+   **Spec-04 ADR-0016 amendment DONE** (`adr-0016-spec-amendment-eval.md` PASS `Round: 0`; spec 04
+   re-Approved; no leftover mkdir/rename-capture/TSV prose; coordination + liveness intact; 1 non-blocking
+   MINOR carried). **git-CAS design layer COMPLETE** (ADR 0016 Accepted + spec 04 updated).
+   **NEXT ACTION:** developer **re-implements `loom-coord.sh` on git-CAS**: DELETE the mkdir-lock +
+   rename-capture CAS + `clear_and_own` + TSV claims registry; lock = `refs/loom/lock` (blob holder record
+   via `hash-object -w`), claims = `refs/loom/claims/<slice>`; acquire=create-only CAS (null OID), steal=
+   value-CAS on exact read SHA, release=delete-CAS; all `git update-ref` (common shared ref store; losing
+   CAS = clean retry-with-backoff). KEEP ADR-0015 lease-freshness + `{pid,start-time}` renewer; renewer also
+   CAS-renews the LOCK ref (U3). FIX carried **U2** (fail-CLOSED on empty/non-numeric epoch), **U5** (guard
+   `renewer-stop` recycled-pid kill), **U6** (don't sweep live claims / rm-rf live session dir) + secondary
+   (atomic `session.pid` write, `/proc/<pid>/stat` field-22 parse robust to spaces/parens, Linux-exercised
+   start-time/`stat`) + MINOR notes (loose-blob `git gc`; renewer↔release CAS-on-current-value). Tests: bats
+   in a real scratch git repo, red-green, exercise real CAS races (2 contenders → 1 wins). Strict output
+   discipline + incremental commits. Gate green → `Implemented` → automated review → blind code-eval → land
+   → finalize → slice W. Slice `In Progress` at `eedfc43`; slice counter stays 3.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
