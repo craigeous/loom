@@ -13,9 +13,8 @@
 #   because a falsely-granted lock or double-granted claim corrupts main.
 #   Every error branch exits non-zero; exit 0 means "provably safe".
 #
-# State paths (all under <git-dir>/loom/, untracked, per-repo):
-#   $STATE_DIR/main.lock/           — lock dir (mkdir atomic)
-#   $STATE_DIR/main.lock/holder     — <session-id>\t<pid>\t<epoch>
+# State paths:
+#   refs/loom/lock                  — git ref (git-CAS lock; blob = {sid}\t{ts}\t{pid}\t{st})
 #   $STATE_DIR/claims               — TSV: <slice>\t<session-id>\t<pid>\t<epoch>
 #   $STATE_DIR/session-<id>/        — per-session dir
 #   $STATE_DIR/session-<id>/checkpoint    — write-ahead next action
@@ -24,7 +23,6 @@
 #   $STATE_DIR/session-<id>/session.starttime — session process start-time
 #   $STATE_DIR/session-<id>/renewer.pid   — background renewer pid
 #   $STATE_DIR/session-<id>/renewer.starttime — renewer start-time
-#   $STATE_DIR/.main.lock.reclaiming.<session-id>.<pid>.<epoch>  — CAS cap dir
 #
 # Exit codes:
 #   0  — success
@@ -43,12 +41,6 @@ LOOM_LOCK_TTL="${LOOM_LOCK_TTL:-30}"
 LOOM_LEASE_TTL="${LOOM_LEASE_TTL:-3600}"
 LOOM_LOCK_RETRIES="${LOOM_LOCK_RETRIES:-5}"
 LOOM_RENEW_INTERVAL="${LOOM_RENEW_INTERVAL:-1200}"
-# LOOM_HOLDERLESS_TTL — age-gate for a holderless lock dir (no holder file).
-# Defaults to 2 s — short enough that reclaim fits within the ~6 s backoff
-# budget, long enough to cover the non-atomic mkdir→stamp_holder window.
-# Set to 0 (or equal to LOOM_LOCK_TTL when LOOM_LOCK_TTL=0) to make any
-# holderless dir immediately reclaimable (used by tests).
-LOOM_HOLDERLESS_TTL="${LOOM_HOLDERLESS_TTL:-2}"
 
 # ---------------------------------------------------------------------------
 # Arg parsing — subcommand and --session
@@ -111,8 +103,8 @@ case "$GITDIR" in
 esac
 
 STATE_DIR="$GITDIR/loom"
-LOCK_DIR="$STATE_DIR/main.lock"
-HOLDER_FILE="$LOCK_DIR/holder"
+LOCK_REF="refs/loom/lock"
+NULL_SHA="0000000000000000000000000000000000000000"
 CLAIMS="$STATE_DIR/claims"
 
 # ---------------------------------------------------------------------------
@@ -123,18 +115,23 @@ now() {
     date +%s 2>/dev/null
 }
 
-# dir_mtime_epoch <dir> — print directory mtime as epoch seconds; empty on failure.
-# Feature-detects GNU stat (-c %Y) first so Linux/dash works; falls back to
-# BSD stat (-f %m).  BSD-first order was T1: on GNU/Linux `stat -f` outputs a
-# multi-line filesystem block to stdout AND exits 1, so the `||` appended the
-# real mtime to that garbage, causing integer-parse failures.
-dir_mtime_epoch() {
-    local _mt
-    _mt=$(stat -c %Y "$1" 2>/dev/null) && {
-        printf '%s\n' "$_mt"
-        return 0
-    }
-    stat -f %m "$1" 2>/dev/null
+# read_lock_sha — print current SHA of refs/loom/lock, or empty if absent
+read_lock_sha() {
+    git -C "$REPO_ROOT" rev-parse --verify "$LOCK_REF" 2>/dev/null || true
+}
+
+# decode_lock_field <sha> <field-number> — read lock blob and print the Nth tab field
+decode_lock_field() {
+    local _sha="$1" _field="$2"
+    git -C "$REPO_ROOT" cat-file blob "$_sha" 2>/dev/null |
+        awk -F'\t' -v f="$_field" '{print $f}'
+}
+
+# _make_blob_for <sid> — write {sid}\t{ts}\t{pid}\t\n blob; print SHA or empty on failure
+_make_blob_for() {
+    local _msid="$1"
+    printf '%s\t%s\t%s\t\n' "$_msid" "$(now)" "$$" |
+        git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null
 }
 
 # process_starttime <pid> — print the start-time of a process; empty on failure.
@@ -205,28 +202,13 @@ _renewer_alive() {
     [ "$_cur_st" = "$_rst" ]
 }
 
-# lock_held_by_self — exits 0 if $SESSION_ID currently holds the lock
+# lock_held_by_self — exits 0 if $SESSION_ID currently holds refs/loom/lock
 lock_held_by_self() {
-    if [ ! -f "$HOLDER_FILE" ]; then
-        return 1
-    fi
-    local h_sid
-    h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-    [ "$h_sid" = "$SESSION_ID" ]
-}
-
-# read_holder — prints holder stamp or empty; returns 1 if unreadable
-read_holder() {
-    if [ ! -f "$HOLDER_FILE" ]; then
-        printf ''
-        return 1
-    fi
-    cat "$HOLDER_FILE" 2>/dev/null
-}
-
-# stamp_holder — write <SESSION_ID>\t<pid>\t<epoch> to holder
-stamp_holder() {
-    printf '%s\t%s\t%s\n' "$SESSION_ID" "$$" "$(now)" >"$HOLDER_FILE"
+    local _sha _sid
+    _sha=$(read_lock_sha)
+    [ -z "$_sha" ] && return 1
+    _sid=$(decode_lock_field "$_sha" 1)
+    [ "$_sid" = "$SESSION_ID" ]
 }
 
 # backoff_sleep <attempt>  (0-indexed; 0.2 0.4 0.8 1.6 3.2)
@@ -329,24 +311,6 @@ assert_session() {
     fi
 }
 
-# try_acquire_holderless — single-source holderless-lock reclaim (T7).
-# Called when LOCK_DIR exists but HOLDER_FILE does not.
-# Uses LOOM_HOLDERLESS_TTL (not LOOM_LOCK_TTL) so reclaim fits within the ~6 s
-# backoff budget; LOOM_LOCK_TTL=0 tests set LOOM_HOLDERLESS_TTL=0 implicitly via
-# the default formula or explicitly to keep NEG-F3/NEG-R5 working.
-# Returns 0 on successful acquisition via clear_and_own; 1 otherwise.
-try_acquire_holderless() {
-    local _h_mt _h_age
-    _h_mt=$(dir_mtime_epoch "$LOCK_DIR")
-    if [ -n "$_h_mt" ]; then
-        _h_age=$(($(now) - _h_mt))
-        if [ "$_h_age" -ge "$LOOM_HOLDERLESS_TTL" ] && clear_and_own; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
 # assert_lock_held — exit 5 if caller does not hold the lock
 assert_lock_held() {
     if ! lock_held_by_self; then
@@ -356,110 +320,51 @@ assert_lock_held() {
 }
 
 # ---------------------------------------------------------------------------
-# Atomic clear-and-own (rename-capture CAS) for stale lock reclaim
-# Returns 0 on successful ownership, 1 if lost the race (caller back-off)
-# ---------------------------------------------------------------------------
-clear_and_own() {
-    # Read the observed holder stamp — may be empty for a holderless lock dir
-    # (crash between mkdir LOCK_DIR and stamp_holder leaves no holder file).
-    # The caller has already verified that a stamped holder is stale (elapsed >= TTL);
-    # we do NOT re-check is_alive here — under ADR 0015 the liveness gate for
-    # locks is stamp freshness, and the ABA check below is the correctness guard.
-    local h_obs
-    h_obs=$(cat "$HOLDER_FILE" 2>/dev/null) || h_obs=""
-
-    local cap_epoch
-    cap_epoch=$(now)
-    local CAP
-    CAP="${STATE_DIR}/.main.lock.reclaiming.${SESSION_ID}.$$.${cap_epoch}"
-
-    # Attempt atomic rename (only one concurrent mv of $LOCK_DIR can win)
-    if ! mv "$LOCK_DIR" "$CAP" 2>/dev/null; then
-        # Lost the rename race — another contender captured it
-        return 1
-    fi
-
-    # ABA check: verify the captured dir still holds the stamp we observed.
-    # If h_obs was empty (holderless), cap_stamp must also be empty; a non-empty
-    # cap_stamp means a live peer stamped the dir in the window.
-    local cap_stamp
-    cap_stamp=$(cat "$CAP/holder" 2>/dev/null) || cap_stamp=""
-
-    if [ "$cap_stamp" != "$h_obs" ]; then
-        # ABA: stamp changed — another contender reclaimed and re-stamped; restore
-        if [ ! -d "$LOCK_DIR" ]; then
-            mv "$CAP" "$LOCK_DIR" 2>/dev/null || rm -rf "$CAP"
-        else
-            rm -rf "$CAP"
-        fi
-        return 1
-    fi
-
-    # Captured a genuinely stale dir — destroy it and seize with mkdir
-    rm -rf "$CAP"
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        # A peer re-created the lock between our rm and mkdir — lost
-        return 1
-    fi
-
-    # Own it
-    stamp_holder
-    # Confirm holder == self (INV-1)
-    local confirm
-    confirm=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-    if [ "$confirm" != "$SESSION_ID" ]; then
-        rm -rf "$LOCK_DIR"
-        return 1
-    fi
-    return 0
-}
-
-# ---------------------------------------------------------------------------
 # Subcommand: lock-acquire
 # ---------------------------------------------------------------------------
 cmd_lock_acquire() {
     assert_session
-    mkdir -p "$STATE_DIR"
 
     local attempt=0
     while true; do
-        # Try atomic mkdir
-        if mkdir "$LOCK_DIR" 2>/dev/null; then
-            stamp_holder
-            # Confirm INV-1
-            local confirm
-            confirm=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-            if [ "$confirm" != "$SESSION_ID" ]; then
-                rm -rf "$LOCK_DIR"
-                printf 'loom-coord lock-acquire: holder confirm failed\n' >&2
-                exit 10
-            fi
+        # Try create-only CAS: succeeds only if refs/loom/lock is absent
+        local new_sha
+        new_sha=$(_make_blob_for "$SESSION_ID")
+        if [ -z "$new_sha" ]; then
+            printf 'loom-coord lock-acquire: cannot create holder blob\n' >&2
+            exit 10
+        fi
+        if git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$new_sha" "$NULL_SHA" 2>/dev/null; then
             printf 'acquired\n'
             exit 0
         fi
 
-        # Lock exists — check if stale (ADR 0015: liveness = stamp freshness for lock)
-        if [ -f "$HOLDER_FILE" ]; then
-            local h_epoch cur_epoch elapsed
-            h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
-            cur_epoch=$(now)
-            elapsed=$((cur_epoch - h_epoch))
-
-            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                # Stamp stale (holder crashed) — attempt CAS clear-and-own
-                if clear_and_own; then
-                    printf 'acquired\n'
-                    exit 0
+        # Lock ref exists — check if stale (ADR 0015: liveness = ts freshness)
+        local cur_sha
+        cur_sha=$(read_lock_sha)
+        if [ -n "$cur_sha" ]; then
+            local h_ts
+            h_ts=$(decode_lock_field "$cur_sha" 2)
+            case "$h_ts" in
+            '' | *[!0-9]*)
+                # Non-numeric ts → treat as fresh (fail-closed); fall through
+                ;;
+            *)
+                local cur_epoch elapsed
+                cur_epoch=$(now)
+                elapsed=$((cur_epoch - h_ts))
+                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                    # Stale — attempt value-CAS steal (ABA-safe: old-value = exact read SHA)
+                    new_sha=$(_make_blob_for "$SESSION_ID")
+                    if [ -n "$new_sha" ] &&
+                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$new_sha" "$cur_sha" 2>/dev/null; then
+                        printf 'acquired\n'
+                        exit 0
+                    fi
+                    # Lost CAS race — fall through to backoff
                 fi
-                # Lost the CAS race — fall through to backoff
-            fi
-        elif [ -d "$LOCK_DIR" ]; then
-            # Holderless lock dir (crash between mkdir and stamp_holder).
-            # Use LOOM_HOLDERLESS_TTL (short, fits within backoff budget) — T4 fix.
-            if try_acquire_holderless; then
-                printf 'acquired\n'
-                exit 0
-            fi
+                ;;
+            esac
         fi
 
         attempt=$((attempt + 1))
@@ -476,19 +381,40 @@ cmd_lock_acquire() {
 # ---------------------------------------------------------------------------
 cmd_lock_release() {
     assert_session
-    if ! lock_held_by_self; then
+    # Re-read current SHA (renewer may have updated the blob's ts since acquire)
+    local cur_sha
+    cur_sha=$(read_lock_sha)
+    if [ -z "$cur_sha" ]; then
         printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
         exit 5
     fi
-    rm -rf "$LOCK_DIR"
+    local h_sid
+    h_sid=$(decode_lock_field "$cur_sha" 1)
+    if [ "$h_sid" != "$SESSION_ID" ]; then
+        printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
+        exit 5
+    fi
+    # Delete-CAS: only succeeds if ref still equals our blob SHA
+    if ! git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$cur_sha" 2>/dev/null; then
+        # CAS failed — ref changed (race); verify whether we still hold it
+        local new_sha
+        new_sha=$(read_lock_sha)
+        if [ -n "$new_sha" ]; then
+            printf 'loom-coord lock-release: ref changed during release\n' >&2
+            exit 5
+        fi
+        # Ref gone already — treat as success (idempotent)
+    fi
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: lock-holder
 # ---------------------------------------------------------------------------
 cmd_lock_holder() {
-    if [ -f "$HOLDER_FILE" ]; then
-        cat "$HOLDER_FILE" 2>/dev/null
+    local _sha
+    _sha=$(read_lock_sha)
+    if [ -n "$_sha" ]; then
+        git -C "$REPO_ROOT" cat-file blob "$_sha" 2>/dev/null || true
     fi
 }
 
@@ -497,12 +423,15 @@ cmd_lock_holder() {
 # ---------------------------------------------------------------------------
 cmd_lock_verify() {
     assert_session
-    if [ ! -f "$HOLDER_FILE" ]; then
+    local cur_sha
+    cur_sha=$(read_lock_sha)
+    if [ -z "$cur_sha" ]; then
         printf 'loom-coord lock-verify: no lock held\n' >&2
         exit 5
     fi
     local h_sid
-    if ! h_sid=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null) || [ -z "$h_sid" ]; then
+    h_sid=$(decode_lock_field "$cur_sha" 1)
+    if [ -z "$h_sid" ]; then
         printf 'loom-coord lock-verify: cannot read holder\n' >&2
         exit 10
     fi
@@ -748,37 +677,37 @@ cmd_session_bootstrap() {
         exit 5
     fi
 
-    # Acquire lock to renew claims (inline acquire loop — no exit, returns 0/1;
-    # nested function definition avoided to stay shellcheck-clean per prior round).
+    # Acquire lock to renew claims (git-CAS inline loop)
     local _sb_got_lock=0
     local _sb_attempt=0
-    mkdir -p "$STATE_DIR"
     while true; do
-        if mkdir "$LOCK_DIR" 2>/dev/null; then
-            stamp_holder
-            local _sb_confirm
-            _sb_confirm=$(awk -F'\t' '{print $1}' "$HOLDER_FILE" 2>/dev/null)
-            if [ "$_sb_confirm" != "$SESSION_ID" ]; then
-                rm -rf "$LOCK_DIR"
-            else
-                _sb_got_lock=1
-            fi
+        local _sb_new_sha
+        _sb_new_sha=$(_make_blob_for "$SESSION_ID")
+        if [ -n "$_sb_new_sha" ] &&
+            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_sb_new_sha" "$NULL_SHA" 2>/dev/null; then
+            _sb_got_lock=1
             break
         fi
-        if [ -f "$HOLDER_FILE" ]; then
-            local _sb_h_epoch _sb_elapsed _sb_cur_epoch
-            _sb_h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
-            _sb_cur_epoch=$(now)
-            _sb_elapsed=$((_sb_cur_epoch - _sb_h_epoch))
-            if [ "$_sb_elapsed" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
-                _sb_got_lock=1
-                break
-            fi
-        elif [ -d "$LOCK_DIR" ]; then
-            if try_acquire_holderless; then
-                _sb_got_lock=1
-                break
-            fi
+        local _sb_cur_sha
+        _sb_cur_sha=$(read_lock_sha)
+        if [ -n "$_sb_cur_sha" ]; then
+            local _sb_h_ts _sb_now _sb_elapsed
+            _sb_h_ts=$(decode_lock_field "$_sb_cur_sha" 2)
+            case "$_sb_h_ts" in
+            '' | *[!0-9]*) ;;
+            *)
+                _sb_now=$(now)
+                _sb_elapsed=$((_sb_now - _sb_h_ts))
+                if [ "$_sb_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                    _sb_new_sha=$(_make_blob_for "$SESSION_ID")
+                    if [ -n "$_sb_new_sha" ] &&
+                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_sb_new_sha" "$_sb_cur_sha" 2>/dev/null; then
+                        _sb_got_lock=1
+                        break
+                    fi
+                fi
+                ;;
+            esac
         fi
         _sb_attempt=$((_sb_attempt + 1))
         if [ "$_sb_attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
@@ -811,7 +740,12 @@ cmd_session_bootstrap() {
         done <"$hcf"
     fi
 
-    rm -rf "$LOCK_DIR"
+    # Release lock (delete-CAS)
+    local _sb_rel_sha
+    _sb_rel_sha=$(read_lock_sha)
+    if [ -n "$_sb_rel_sha" ]; then
+        git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_sb_rel_sha" 2>/dev/null || true
+    fi
 
     # Print checkpoint
     local chk="$sess_dir/checkpoint"
@@ -835,29 +769,34 @@ cmd_session_end() {
     if [ -f "$sess_dir/held-claims" ]; then
         local attempt=0
         local got_lock=0
-        mkdir -p "$STATE_DIR"
         while [ "$attempt" -lt "$LOOM_LOCK_RETRIES" ]; do
-            if mkdir "$LOCK_DIR" 2>/dev/null; then
-                stamp_holder
+            local _se_new_sha
+            _se_new_sha=$(_make_blob_for "$SESSION_ID")
+            if [ -n "$_se_new_sha" ] &&
+                git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_se_new_sha" "$NULL_SHA" 2>/dev/null; then
                 got_lock=1
                 break
             fi
-            # Stale-lock handling: if the lock is past TTL and held by a dead session,
-            # reclaim it so session-end can release our claims properly.
-            if [ -f "$HOLDER_FILE" ]; then
-                local h_epoch elapsed cur_epoch
-                h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
-                cur_epoch=$(now)
-                elapsed=$((cur_epoch - h_epoch))
-                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
-                    got_lock=1
-                    break
-                fi
-            elif [ -d "$LOCK_DIR" ]; then
-                if try_acquire_holderless; then
-                    got_lock=1
-                    break
-                fi
+            local _se_cur_sha
+            _se_cur_sha=$(read_lock_sha)
+            if [ -n "$_se_cur_sha" ]; then
+                local _se_h_ts _se_now _se_elapsed
+                _se_h_ts=$(decode_lock_field "$_se_cur_sha" 2)
+                case "$_se_h_ts" in
+                '' | *[!0-9]*) ;;
+                *)
+                    _se_now=$(now)
+                    _se_elapsed=$((_se_now - _se_h_ts))
+                    if [ "$_se_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                        _se_new_sha=$(_make_blob_for "$SESSION_ID")
+                        if [ -n "$_se_new_sha" ] &&
+                            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_se_new_sha" "$_se_cur_sha" 2>/dev/null; then
+                            got_lock=1
+                            break
+                        fi
+                    fi
+                    ;;
+                esac
             fi
             attempt=$((attempt + 1))
             backoff_sleep "$((attempt - 1))"
@@ -875,8 +814,12 @@ cmd_session_end() {
                     fi
                 fi
             done <"$sess_dir/held-claims"
-            rm -rf "$LOCK_DIR"
-            # Only remove session dir after claims have been released
+            # Release lock (delete-CAS) then remove session dir
+            local _se_rel_sha
+            _se_rel_sha=$(read_lock_sha)
+            if [ -n "$_se_rel_sha" ]; then
+                git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_se_rel_sha" 2>/dev/null || true
+            fi
             rm -rf "$sess_dir"
         else
             printf 'loom-coord session-end: could not acquire lock; claims not released\n' >&2
@@ -898,37 +841,38 @@ cmd_cleanup() {
     # Prune stale worktree refs
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
-    # Acquire lock (with stale-lock and holderless handling)
+    # Acquire lock (git-CAS inline loop)
     local attempt=0
     local got_lock=0
     local cleanup_sid="${SESSION_ID:-cleanup-$$}"
     while [ "$attempt" -lt "$LOOM_LOCK_RETRIES" ]; do
-        if mkdir "$LOCK_DIR" 2>/dev/null; then
-            if [ -n "$SESSION_ID" ]; then
-                stamp_holder
-            else
-                printf '%s\t0\t%s\n' "$cleanup_sid" "$(now)" >"$HOLDER_FILE"
-            fi
+        local _cl_new_sha
+        _cl_new_sha=$(_make_blob_for "$cleanup_sid")
+        if [ -n "$_cl_new_sha" ] &&
+            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_cl_new_sha" "$NULL_SHA" 2>/dev/null; then
             got_lock=1
             break
         fi
-        # Check if stale (holder stamp too old) or holderless
-        if [ -f "$HOLDER_FILE" ]; then
-            local h_epoch elapsed cur_epoch
-            h_epoch=$(awk -F'\t' '{print $3}' "$HOLDER_FILE" 2>/dev/null)
-            cur_epoch=$(now)
-            elapsed=$((cur_epoch - h_epoch))
-            if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                if SESSION_ID="$cleanup_sid" clear_and_own; then
-                    got_lock=1
-                    break
+        local _cl_cur_sha
+        _cl_cur_sha=$(read_lock_sha)
+        if [ -n "$_cl_cur_sha" ]; then
+            local _cl_h_ts _cl_now _cl_elapsed
+            _cl_h_ts=$(decode_lock_field "$_cl_cur_sha" 2)
+            case "$_cl_h_ts" in
+            '' | *[!0-9]*) ;;
+            *)
+                _cl_now=$(now)
+                _cl_elapsed=$((_cl_now - _cl_h_ts))
+                if [ "$_cl_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                    _cl_new_sha=$(_make_blob_for "$cleanup_sid")
+                    if [ -n "$_cl_new_sha" ] &&
+                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_cl_new_sha" "$_cl_cur_sha" 2>/dev/null; then
+                        got_lock=1
+                        break
+                    fi
                 fi
-            fi
-        elif [ -d "$LOCK_DIR" ]; then
-            if SESSION_ID="$cleanup_sid" try_acquire_holderless; then
-                got_lock=1
-                break
-            fi
+                ;;
+            esac
         fi
         attempt=$((attempt + 1))
         backoff_sleep "$((attempt - 1))"
@@ -977,23 +921,17 @@ cmd_cleanup() {
             done <"$CLAIMS"
             mv "$tmp" "$CLAIMS"
         fi
-        rm -rf "$LOCK_DIR"
+        # Release lock (delete-CAS)
+        local _cl_rel_sha
+        _cl_rel_sha=$(read_lock_sha)
+        if [ -n "$_cl_rel_sha" ]; then
+            git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_cl_rel_sha" 2>/dev/null || true
+        fi
     else
         # Could not acquire lock — refuse to mutate shared state (fail-closed)
         printf 'loom-coord cleanup: could not acquire lock; claims sweep skipped\n' >&2
-        # Sweep orphaned CAP dirs (safe — they are ours, no lock needed)
-        for cap_dir in "$STATE_DIR"/.main.lock.reclaiming.*; do
-            [ -d "$cap_dir" ] || continue
-            rm -rf "$cap_dir"
-        done
         exit 3
     fi
-
-    # Sweep orphaned CAP dirs
-    for cap_dir in "$STATE_DIR"/.main.lock.reclaiming.*; do
-        [ -d "$cap_dir" ] || continue
-        rm -rf "$cap_dir"
-    done
 
     printf 'swept %d dead claims; skipped %d live claims\n' "$swept" "$skipped"
     exit 0

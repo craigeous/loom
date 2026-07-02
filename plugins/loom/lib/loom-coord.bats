@@ -41,37 +41,47 @@ state_dir() {
     printf '%s/.git/loom' "$REPO"
 }
 
-# holder_sid — read the session-id field from holder, or empty
+# git_lock_sha — print current SHA of refs/loom/lock, or empty if absent
+git_lock_sha() {
+    git -C "$REPO" rev-parse --verify "refs/loom/lock" 2>/dev/null || true
+}
+
+# holder_sid — read the session-id field from lock blob, or empty
 holder_sid() {
-    awk -F'\t' '{print $1}' "$REPO/.git/loom/main.lock/holder" 2>/dev/null || true
+    local sha
+    sha=$(git_lock_sha)
+    [ -z "$sha" ] && return
+    git -C "$REPO" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $1}'
 }
 
-# holder_pid — read the pid field from holder
+# holder_pid — read the pid field from lock blob
 holder_pid() {
-    awk -F'\t' '{print $2}' "$REPO/.git/loom/main.lock/holder" 2>/dev/null || true
+    local sha
+    sha=$(git_lock_sha)
+    [ -z "$sha" ] && return
+    git -C "$REPO" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $3}'
 }
 
-# make_live_holder <session-id> — plant a live holder with a real worktree path
-#   containing the session-id so the liveness probe returns alive
+# plant_lock_holder <sid> <ts> — create lock blob with given sid+ts and set refs/loom/lock
+plant_lock_holder() {
+    local sid="$1"
+    local ts="$2"
+    local sha
+    sha=$(printf '%s\t%s\t%s\t\n' "$sid" "$ts" "$$" | git -C "$REPO" hash-object -w --stdin)
+    git -C "$REPO" update-ref "refs/loom/lock" "$sha"
+}
+
+# make_live_holder <session-id> — plant a live lock blob (fresh timestamp)
 make_live_holder() {
     local sid="$1"
-    local wt_path="$REPO/../wt-${sid}"
-    wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
-    git -C "$REPO" worktree add -q "$wt_path" HEAD
-    mkdir -p "$REPO/.git/loom/main.lock"
-    printf '%s\t%s\t%s\n' "$sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/main.lock/holder"
-    printf '%s' "$wt_path"
+    plant_lock_holder "$sid" "$(date +%s)"
 }
 
-# make_dead_holder <session-id> [epoch] — plant a dead holder (no worktree, dead pid)
-#   epoch defaults to 0 (always past TTL)
+# make_dead_holder <session-id> [epoch] — plant a stale lock blob (epoch defaults to 0)
 make_dead_holder() {
     local sid="$1"
     local epoch="${2:-0}"
-    mkdir -p "$REPO/.git/loom/main.lock"
-    printf '%s\t%s\t%s\n' "$sid" "99999999" "$epoch" \
-        >"$REPO/.git/loom/main.lock/holder"
+    plant_lock_holder "$sid" "$epoch"
 }
 
 # dead_pid — a guaranteed-dead pid (use a process we started and waited)
@@ -151,10 +161,8 @@ EOF
     # never cleared — worktree membership is no longer consulted.
     make_repo
     cd "$REPO"
-    # Fresh holder stamp (epoch=now) with a generous TTL — must not be cleared
-    mkdir -p "$REPO/.git/loom/main.lock"
-    printf '%s\t%s\t%s\n' "ses-live-L4" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/main.lock/holder"
+    # Fresh holder stamp (ts=now) with a generous TTL — must not be cleared
+    make_live_holder "ses-live-L4"
     run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-contender-L4"
     [ "$status" -eq 3 ]
     [ "$(holder_sid)" = "ses-live-L4" ]
@@ -306,6 +314,28 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# L9 — Lock: release delete-CAS refuses if ref was changed by another holder
+# ---------------------------------------------------------------------------
+
+@test "L9 lock-release delete-CAS refuses when ref was changed by another holder" {
+    make_repo
+    cd "$REPO"
+    # A acquires the lock
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-A-L9"
+    [ "$status" -eq 0 ]
+
+    # Force-replace the ref (simulates stale-steal by ses-B-L9)
+    make_live_holder "ses-B-L9"
+
+    # A tries to release — should exit 5 (ref now belongs to B)
+    run sh "$COORD" lock-release --session "ses-A-L9"
+    [ "$status" -eq 5 ]
+    # Lock still held by B
+    [ "$(holder_sid)" = "ses-B-L9" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
 # C1 — Claim: free slice
 # ---------------------------------------------------------------------------
 
@@ -346,9 +376,7 @@ EOF
     printf 'slice-Y\n' >"$REPO/.git/loom/session-ses-peer-C2/held-claims"
 
     # Our session acquires the lock
-    mkdir -p "$REPO/.git/loom/main.lock"
-    printf 'ses-us-C2\t%s\t%s\n' "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/main.lock/holder"
+    make_live_holder "ses-us-C2"
     mkdir -p "$REPO/.git/loom/session-ses-us-C2"
     touch "$REPO/.git/loom/session-ses-us-C2/checkpoint"
     touch "$REPO/.git/loom/session-ses-us-C2/held-claims"
@@ -734,9 +762,7 @@ EOF
         >"$REPO/.git/loom/claims"
 
     # Acquire lock as "v2" session and release its own claim
-    mkdir -p "$REPO/.git/loom/main.lock"
-    printf 'ses-v2-b\t%s\t%s\n' "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/main.lock/holder"
+    make_live_holder "ses-v2-b"
     mkdir -p "$REPO/.git/loom/session-ses-v2-b"
     printf 'v2\n' >"$REPO/.git/loom/session-ses-v2-b/held-claims"
 
@@ -775,27 +801,6 @@ EOF
     local after_claims
     after_claims=$(cat "$REPO/.git/loom/claims")
     [ "$before_claims" = "$after_claims" ]
-    teardown
-}
-
-# ---------------------------------------------------------------------------
-# NEG-F3 — F3: holderless lock dir older than TTL is reclaimable
-# ---------------------------------------------------------------------------
-
-@test "NEG-F3 holderless lock dir (no holder file) is reclaimed, not permanent deadlock" {
-    make_repo
-    cd "$REPO"
-
-    # Simulate crash between mkdir LOCK_DIR and stamp_holder: dir exists, no holder
-    mkdir -p "$REPO/.git/loom/main.lock"
-    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
-
-    # LOOM_HOLDERLESS_TTL=0: make any holderless dir immediately reclaimable
-    # (LOOM_LOCK_TTL=0 is kept for legacy compat but the effective gate is LOOM_HOLDERLESS_TTL)
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-F3"
-    [ "$status" -eq 0 ]
-    [ "$output" = "acquired" ]
-    [ "$(holder_sid)" = "ses-F3" ]
     teardown
 }
 
@@ -998,100 +1003,6 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# NEG-R4 — R4: holderless lock race — exactly one contender wins (10 iterations)
-# ---------------------------------------------------------------------------
-
-@test "NEG-R4 holderless lock race: exactly one winner per iteration, 10x" {
-    make_repo
-    cd "$REPO"
-    local i=0
-    while [ "$i" -lt 10 ]; do
-        # Holderless dir aged to 2020 so mtime-based age >> LOOM_LOCK_TTL=5
-        mkdir -p "$REPO/.git/loom/main.lock"
-        rm -f "$REPO/.git/loom/main.lock/holder"
-        touch -t 202001010000 "$REPO/.git/loom/main.lock"
-
-        # TTL=5: old holderless dir reclaimable; winner's fresh lock (mtime=now) is not
-        (
-            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 sh "$COORD" lock-acquire --session "ses-HL-A"
-            echo "A:$?"
-        ) >"$BATS_TEST_TMPDIR/hl_A_$i" 2>&1 &
-        local pa=$!
-        (
-            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 sh "$COORD" lock-acquire --session "ses-HL-B"
-            echo "B:$?"
-        ) >"$BATS_TEST_TMPDIR/hl_B_$i" 2>&1 &
-        local pb=$!
-        wait "$pa" || true
-        wait "$pb" || true
-
-        local ea eb
-        ea=$(grep 'A:' "$BATS_TEST_TMPDIR/hl_A_$i" | sed 's/A://')
-        eb=$(grep 'B:' "$BATS_TEST_TMPDIR/hl_B_$i" | sed 's/B://')
-
-        local zeros=0
-        [ "$ea" = "0" ] && zeros=$((zeros + 1))
-        [ "$eb" = "0" ] && zeros=$((zeros + 1))
-        if [ "$zeros" -ne 1 ]; then
-            printf 'FAIL iter %d: ea=%s eb=%s\n' "$i" "$ea" "$eb" >&2
-            false
-        fi
-
-        rm -rf "$REPO/.git/loom/main.lock"
-        i=$((i + 1))
-    done
-    teardown
-}
-
-# ---------------------------------------------------------------------------
-# NEG-R4b — R4: holderless dir younger than lock-TTL is NOT reclaimed
-# ---------------------------------------------------------------------------
-
-@test "NEG-R4b holderless dir younger than LOOM_LOCK_TTL is not reclaimable (exit 3)" {
-    make_repo
-    cd "$REPO"
-
-    # Fresh holderless dir — mtime=now, age < TTL=9999
-    mkdir -p "$REPO/.git/loom/main.lock"
-    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
-
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-R4b"
-    [ "$status" -eq 3 ]
-    teardown
-}
-
-# ---------------------------------------------------------------------------
-# NEG-R5 — R5: session-bootstrap recovers when holderless lock dir present
-# ---------------------------------------------------------------------------
-
-@test "NEG-R5 session-bootstrap recovers (renews claims) when holderless lock dir present" {
-    make_repo
-    cd "$REPO"
-    local sid="ses-SB-R5"
-
-    run sh "$COORD" session-start --session "$sid"
-    [ "$status" -eq 0 ]
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$sid"
-    [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-SB-R5 --session "$sid"
-    [ "$status" -eq 0 ]
-    run sh "$COORD" lock-release --session "$sid"
-    [ "$status" -eq 0 ]
-
-    # Simulate crash: leave holderless lock dir (mkdir done, stamp_holder never ran)
-    mkdir -p "$REPO/.git/loom/main.lock"
-    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
-    # Age it to 2020 so TTL=0 makes it reclaimable
-    touch -t 202001010000 "$REPO/.git/loom/main.lock"
-
-    # session-bootstrap must recover despite holderless dir
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" session-bootstrap --session "$sid"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"renewed slice-SB-R5"* ]]
-    teardown
-}
-
-# ---------------------------------------------------------------------------
 # NEG-R6 — R6: live session with space in worktree path is protected (not falsely dead)
 # ---------------------------------------------------------------------------
 
@@ -1126,45 +1037,6 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# T1 — Portability: dir_mtime_epoch works when only GNU stat (-c %Y) is present
-# ---------------------------------------------------------------------------
-
-@test "T1 dir_mtime_epoch: GNU-stat-only path (Linux) returns valid mtime" {
-    # Simulate a Linux host where `stat -f` outputs a filesystem block to stdout
-    # AND exits 1 (the T1 bug: BSD-first code appended the filesystem block to the
-    # real mtime, causing integer-parse failures).  The fix (GNU-first) captures
-    # only the epoch from `stat -c %Y` and never runs `stat -f`.
-    mkdir -p "$BATS_TEST_TMPDIR/fake-bin"
-    cat >"$BATS_TEST_TMPDIR/fake-bin/stat" <<'FAKEST'
-#!/bin/sh
-# Simulate GNU stat: only -c %Y <file> is valid; -f writes garbage to stdout.
-if [ "$1" = "-c" ] && [ "$2" = "%Y" ]; then
-    date +%s
-else
-    printf 'File: %s\nSize: 4096 Blocks: 8 IO Block: 4096\n' "$3"
-    exit 1
-fi
-FAKEST
-    chmod +x "$BATS_TEST_TMPDIR/fake-bin/stat"
-
-    make_repo
-    cd "$REPO"
-    # Create an aged holderless lock dir — if dir_mtime_epoch fails, reclaim fails
-    mkdir -p "$REPO/.git/loom/main.lock"
-    touch -t 202001010000 "$REPO/.git/loom/main.lock"
-
-    # With LOOM_HOLDERLESS_TTL=0 any holderless dir is reclaimable IF stat returns valid mtime.
-    # Current code (BSD-first): `stat -f` runs first → garbage on stdout → age computation fails
-    # Fixed code (GNU-first): `stat -c %Y` runs first → clean epoch → reclaim succeeds.
-    run env PATH="$BATS_TEST_TMPDIR/fake-bin:$PATH" \
-        LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 \
-        sh "$COORD" lock-acquire --session "ses-T1-gnu"
-    [ "$status" -eq 0 ]
-    [ "$output" = "acquired" ]
-    teardown
-}
-
-# ---------------------------------------------------------------------------
 # T3 — wt_sid_match: backslash in session-id not mangled by awk ENVIRON
 # ---------------------------------------------------------------------------
 
@@ -1194,31 +1066,6 @@ FAKEST
     ! grep -qF "slice-T3" "$REPO/.git/loom/claims" 2>/dev/null
     # Orphan worktree must have been removed (requires correct wt_sid_match)
     [ ! -d "$wt_path" ]
-    teardown
-}
-
-# ---------------------------------------------------------------------------
-# T4 — Holderless lock reclaim within backoff budget (crash-in-window)
-# ---------------------------------------------------------------------------
-
-@test "T4 holderless lock reclaim: crash-in-window lock reclaimed with LOOM_HOLDERLESS_TTL=0" {
-    # T4: the old holderless age-gate used LOOM_LOCK_TTL (30s), which exceeds the
-    # ~6s backoff budget.  LOOM_HOLDERLESS_TTL (default 2s) reconciles the gap.
-    # With LOOM_HOLDERLESS_TTL=0 any holderless dir is reclaimable immediately.
-    # Current code (without LOOM_HOLDERLESS_TTL): uses LOOM_LOCK_TTL=30 as the gate
-    # → mtime≈now, age≈0 < 30 → not reclaimable → exits 3 (T4 bug).
-    # Fixed code: uses LOOM_HOLDERLESS_TTL=0 → age≈0 >= 0 → reclaimable → exits 0.
-    make_repo
-    cd "$REPO"
-    # Fresh holderless dir (mtime=now, simulating a crash-in-window)
-    mkdir -p "$REPO/.git/loom/main.lock"
-    [ ! -f "$REPO/.git/loom/main.lock/holder" ]
-
-    run env LOOM_LOCK_TTL=30 LOOM_HOLDERLESS_TTL=0 LOOM_LOCK_RETRIES=3 \
-        sh "$COORD" lock-acquire --session "ses-T4"
-    [ "$status" -eq 0 ]
-    [ "$output" = "acquired" ]
-    [ "$(holder_sid)" = "ses-T4" ]
     teardown
 }
 
