@@ -92,6 +92,70 @@ dead_pid() {
     printf '%s' "$p"
 }
 
+# ---------------------------------------------------------------------------
+# Claim-ref helpers (Pass 2: claims are refs/loom/claims/<encoded-slice>)
+# ---------------------------------------------------------------------------
+
+# _slice_to_refname <slice> — encode slice name the same way loom-coord.sh does
+_slice_to_refname() {
+    printf '%s' "$1" | LC_ALL=C awk 'BEGIN { ORS="" } {
+        for (i = 1; i <= length($0); i++) {
+            c = substr($0, i, 1)
+            if (c ~ /[A-Za-z0-9._\/\-]/) {
+                printf "%s", c
+            } else {
+                printf "%%%02X", ord(c)
+            }
+        }
+        printf "\n"
+    }
+    function ord(c,    k) {
+        for (k = 0; k < 256; k++) if (sprintf("%c", k) == c) return k
+        return 0
+    }'
+}
+
+# claim_ref_sha <slice> — print SHA of refs/loom/claims/<slice>, or empty
+claim_ref_sha() {
+    local encoded
+    encoded=$(_slice_to_refname "$1")
+    git -C "$REPO" rev-parse --verify "refs/loom/claims/$encoded" 2>/dev/null || true
+}
+
+# claim_sid <slice> — read session-id from claim blob, or empty
+claim_sid() {
+    local sha
+    sha=$(claim_ref_sha "$1")
+    [ -z "$sha" ] && return
+    git -C "$REPO" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $1}'
+}
+
+# claim_ts <slice> — read lease-ts from claim blob, or empty
+claim_ts() {
+    local sha
+    sha=$(claim_ref_sha "$1")
+    [ -z "$sha" ] && return
+    git -C "$REPO" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $2}'
+}
+
+# plant_claim_ref <slice> <sid> <ts> — create a claim ref directly in REPO
+plant_claim_ref() {
+    local slice="$1" sid="$2" ts="$3"
+    local encoded sha
+    encoded=$(_slice_to_refname "$slice")
+    sha=$(printf '%s\t%s\n' "$sid" "$ts" | git -C "$REPO" hash-object -w --stdin)
+    git -C "$REPO" update-ref "refs/loom/claims/$encoded" "$sha"
+}
+
+# plant_claim_ref_raw <slice> <blob-content> — plant a claim ref with arbitrary blob
+plant_claim_ref_raw() {
+    local slice="$1" content="$2"
+    local encoded sha
+    encoded=$(_slice_to_refname "$slice")
+    sha=$(printf '%s' "$content" | git -C "$REPO" hash-object -w --stdin)
+    git -C "$REPO" update-ref "refs/loom/claims/$encoded" "$sha"
+}
+
 # teardown — remove REPO and any side worktrees
 teardown() {
     if [ -n "${REPO:-}" ] && [ -d "${REPO:-}" ]; then
@@ -350,8 +414,8 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed slice-X"* ]]
 
-    # Registry contains the claim line
-    grep -qF "slice-X	ses-C1" "$REPO/.git/loom/claims"
+    # Claim ref exists and names our session
+    [ "$(claim_sid "slice-X")" = "ses-C1" ]
     # held-claims contains the slice
     grep -qxF "slice-X" "$REPO/.git/loom/session-ses-C1/held-claims"
     teardown
@@ -368,12 +432,10 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-ses-peer-C2"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Plant a live peer claim
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-Y\tses-peer-C2\t%s\t%s\n' "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    # Plant a live peer claim via ref
     mkdir -p "$REPO/.git/loom/session-ses-peer-C2"
     printf 'slice-Y\n' >"$REPO/.git/loom/session-ses-peer-C2/held-claims"
+    plant_claim_ref "slice-Y" "ses-peer-C2" "$(date +%s)"
 
     # Our session acquires the lock
     make_live_holder "ses-us-C2"
@@ -383,8 +445,8 @@ EOF
 
     run sh "$COORD" claim slice-Y --session "ses-us-C2"
     [ "$status" -eq 4 ]
-    # Registry still shows peer's claim
-    grep -qF "slice-Y	ses-peer-C2" "$REPO/.git/loom/claims"
+    # Claim ref still names peer
+    [ "$(claim_sid "slice-Y")" = "ses-peer-C2" ]
     teardown
 }
 
@@ -433,14 +495,14 @@ EOF
     [ "$status" -eq 0 ]
 
     local before_epoch
-    before_epoch=$(awk -F'\t' '$1=="slice-R"{print $4}' "$REPO/.git/loom/claims")
+    before_epoch=$(claim_ts "slice-R")
     sleep 1
     run sh "$COORD" renew slice-R --session "ses-R1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewed slice-R"* ]]
 
     local after_epoch
-    after_epoch=$(awk -F'\t' '$1=="slice-R"{print $4}' "$REPO/.git/loom/claims")
+    after_epoch=$(claim_ts "slice-R")
     [ "$after_epoch" -ge "$before_epoch" ]
     teardown
 }
@@ -471,7 +533,7 @@ EOF
 
     run sh "$COORD" release-claim slice-RC --session "ses-RC1"
     [ "$status" -eq 0 ]
-    ! grep -qF "slice-RC" "$REPO/.git/loom/claims" 2>/dev/null
+    [ -z "$(claim_ref_sha "slice-RC")" ]
     ! grep -qxF "slice-RC" "$REPO/.git/loom/session-ses-RC1/held-claims" 2>/dev/null
     teardown
 }
@@ -488,8 +550,7 @@ EOF
     # We must NOT create a git worktree for the dead sid — if we did, git worktree
     # list would still show it until pruned, making is_alive return true.
     local dead_sid="ses-dead-RCL1"
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-RCL\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-RCL" "$dead_sid" "0"
 
     # Our session acquires the lock
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-RCL1"
@@ -498,7 +559,7 @@ EOF
     run sh "$COORD" reclaim slice-RCL --session "ses-us-RCL1"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-RCL" ]
-    grep -qF "slice-RCL	ses-us-RCL1" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-RCL")" = "ses-us-RCL1" ]
     teardown
 }
 
@@ -510,16 +571,14 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-RCLb\t%s\t%s\t%s\n' "$live_sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-RCLb" "$live_sid" "$(date +%s)"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-RCL1b"
     [ "$status" -eq 0 ]
 
     run sh "$COORD" reclaim slice-RCLb --session "ses-us-RCL1b"
     [ "$status" -eq 6 ]
-    grep -qF "slice-RCLb	$live_sid" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-RCLb")" = "$live_sid" ]
     teardown
 }
 
@@ -593,7 +652,7 @@ EOF
 
     # Record old epoch
     local old_epoch
-    old_epoch=$(awk -F'\t' '$1=="slice-SB1a"{print $4}' "$REPO/.git/loom/claims")
+    old_epoch=$(claim_ts "slice-SB1a")
 
     sleep 1
 
@@ -605,7 +664,7 @@ EOF
 
     # Epoch refreshed
     local new_epoch
-    new_epoch=$(awk -F'\t' '$1=="slice-SB1a"{print $4}' "$REPO/.git/loom/claims")
+    new_epoch=$(claim_ts "slice-SB1a")
     [ "$new_epoch" -ge "$old_epoch" ]
 
     # A peer probe still sees sid as alive (worktree contains sid in path)
@@ -634,11 +693,8 @@ EOF
     git -C "$REPO" worktree add -q "$wt_dead" HEAD
     rm -rf "$wt_dead"
 
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-live\t%s\t%s\t%s\n' "$live_sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
-    printf 'slice-dead\t%s\t99999999\t0\n' "$dead_sid" \
-        >>"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-live" "$live_sid" "$(date +%s)"
+    plant_claim_ref "slice-dead" "$dead_sid" "0"
 
     mkdir -p "$REPO/.git/loom/session-$live_sid"
     touch "$REPO/.git/loom/session-$live_sid/checkpoint"
@@ -652,9 +708,9 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"swept 1"* ]]
 
-    # Dead claim removed; live claim intact
-    ! grep -qF "slice-dead" "$REPO/.git/loom/claims" 2>/dev/null
-    grep -qF "slice-live	$live_sid" "$REPO/.git/loom/claims"
+    # Dead claim ref removed; live claim ref intact
+    [ -z "$(claim_ref_sha "slice-dead")" ]
+    [ "$(claim_sid "slice-live")" = "$live_sid" ]
 
     # Dead session dir removed; live session dir intact
     [ ! -d "$REPO/.git/loom/session-$dead_sid" ]
@@ -726,9 +782,7 @@ EOF
     local wt_path
     wt_path="$(cd "$REPO/.." && pwd)/wt-${sibling_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
-    mkdir -p "$REPO/.git/loom"
-    printf 'auth-v2\t%s\t%s\t%s\n' "$sibling_sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    plant_claim_ref "auth-v2" "$sibling_sid" "$(date +%s)"
 
     # Our session acquires the lock and claims "v2" (a different slice)
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-v2-owner"
@@ -736,14 +790,16 @@ EOF
     run sh "$COORD" claim v2 --session "ses-v2-owner"
     [ "$status" -eq 0 ]
 
-    # "auth-v2" row must still exist, unchanged
-    grep -qF "auth-v2	$sibling_sid" "$REPO/.git/loom/claims"
-    # "v2" row must also exist
-    grep -qF "v2	ses-v2-owner" "$REPO/.git/loom/claims"
-    # No stray row where first field is "v2" but name is "auth-v2"
-    local v2_count
-    v2_count=$(awk -F'\t' '$1=="v2"' "$REPO/.git/loom/claims" | wc -l | tr -d ' ')
-    [ "$v2_count" -eq 1 ]
+    # "auth-v2" ref must still exist and name sibling
+    [ "$(claim_sid "auth-v2")" = "$sibling_sid" ]
+    # "v2" ref must also exist and name our session
+    [ "$(claim_sid "v2")" = "ses-v2-owner" ]
+    # The two refs are distinct (no cross-contamination)
+    local v2_sha authv2_sha
+    v2_sha=$(claim_ref_sha "v2")
+    authv2_sha=$(claim_ref_sha "auth-v2")
+    [ -n "$v2_sha" ] && [ -n "$authv2_sha" ]
+    [ "$v2_sha" != "$authv2_sha" ]
     teardown
 }
 
@@ -751,15 +807,13 @@ EOF
     make_repo
     cd "$REPO"
 
-    # Plant both claims
+    # Plant both claims as refs
     local sibling_sid="ses-authv2-owner-b"
     local wt_path
     wt_path="$(cd "$REPO/.." && pwd)/wt-${sibling_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
-    mkdir -p "$REPO/.git/loom"
-    printf 'auth-v2\t%s\t%s\t%s\nv2\tses-v2-b\t%s\t%s\n' \
-        "$sibling_sid" "$$" "$(date +%s)" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    plant_claim_ref "auth-v2" "$sibling_sid" "$(date +%s)"
+    plant_claim_ref "v2" "ses-v2-b" "$(date +%s)"
 
     # Acquire lock as "v2" session and release its own claim
     make_live_holder "ses-v2-b"
@@ -769,10 +823,10 @@ EOF
     run sh "$COORD" release-claim v2 --session "ses-v2-b"
     [ "$status" -eq 0 ]
 
-    # "auth-v2" must still be in the registry
-    grep -qF "auth-v2	$sibling_sid" "$REPO/.git/loom/claims"
-    # "v2" must be gone
-    ! grep -qF "v2	ses-v2-b" "$REPO/.git/loom/claims" 2>/dev/null
+    # "auth-v2" ref must still name the sibling
+    [ "$(claim_sid "auth-v2")" = "$sibling_sid" ]
+    # "v2" ref must be gone
+    [ -z "$(claim_ref_sha "v2")" ]
     teardown
 }
 
@@ -780,16 +834,17 @@ EOF
 # NEG-F2 — F2: lock-less cleanup does not mutate claims
 # ---------------------------------------------------------------------------
 
-@test "NEG-F2 cleanup with live lock holder: exit non-zero, claims file unchanged" {
+@test "NEG-F2 cleanup with live lock holder: exit non-zero, claims unchanged" {
     make_repo
     cd "$REPO"
 
-    # Seed two claims
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-A\tses-A\t99\t1000\nslice-B\tses-B\t99\t1000\n' \
-        >"$REPO/.git/loom/claims"
-    local before_claims
-    before_claims=$(cat "$REPO/.git/loom/claims")
+    # Seed two claims as refs
+    plant_claim_ref "slice-A" "ses-A" "1000"
+    plant_claim_ref "slice-B" "ses-B" "1000"
+    # Record SHAs before cleanup
+    local before_a before_b
+    before_a=$(claim_ref_sha "slice-A")
+    before_b=$(claim_ref_sha "slice-B")
 
     # Plant a live holder so cleanup cannot acquire the lock
     make_live_holder "ses-lockowner-F2" >/dev/null
@@ -797,10 +852,9 @@ EOF
     run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" cleanup
     [ "$status" -ne 0 ]
 
-    # Claims file must be byte-for-byte identical
-    local after_claims
-    after_claims=$(cat "$REPO/.git/loom/claims")
-    [ "$before_claims" = "$after_claims" ]
+    # Claim ref SHAs must be identical (no mutations)
+    [ "$(claim_ref_sha "slice-A")" = "$before_a" ]
+    [ "$(claim_ref_sha "slice-B")" = "$before_b" ]
     teardown
 }
 
@@ -818,10 +872,9 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Dead session "ses-foo": claim in registry, no worktree, dead pid
+    # Dead session "ses-foo": stale claim ref, no worktree
     local dead_sid="ses-foo"
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-F4\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-F4" "$dead_sid" "0"
 
     # Acquire lock as our reclaimer and reclaim slice-F4
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-F4"
@@ -831,8 +884,8 @@ EOF
     run sh "$COORD" reclaim slice-F4 --session "ses-reclaimer-F4"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-F4" ]
-    # Registry now shows reclaimer as owner
-    grep -qF "slice-F4	ses-reclaimer-F4" "$REPO/.git/loom/claims"
+    # Claim ref now names reclaimer
+    [ "$(claim_sid "slice-F4")" = "ses-reclaimer-F4" ]
     teardown
 }
 
@@ -853,17 +906,16 @@ EOF
     git -C "$REPO" worktree add -q "$wt_dead" HEAD
     # wt_dead dir still exists on disk (crashed session — not cleaned up)
 
-    # Plant the claim: epoch=0 (stale)
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-F6\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+    # Plant the claim ref: ts=0 (stale)
+    plant_claim_ref "slice-F6" "$dead_sid" "0"
 
     # Cleanup: stale lease → sweep → orphan worktree removal
     run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Stale claim must be swept
     [[ "$output" == *"swept 1"* ]]
-    # Claim must be gone
-    ! grep -qF "slice-F6" "$REPO/.git/loom/claims" 2>/dev/null
+    # Claim ref must be gone
+    [ -z "$(claim_ref_sha "slice-F6")" ]
     # Orphan worktree dir must have been removed (T6 fix: now reachable)
     [ ! -d "$wt_dead" ]
     teardown
@@ -879,10 +931,8 @@ EOF
 
     local our_sid="ses-F7"
 
-    # Set up our session with a claim in the registry
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-F7\t%s\t%s\t%s\n' "$our_sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    # Set up our session with a claim ref
+    plant_claim_ref "slice-F7" "$our_sid" "$(date +%s)"
     mkdir -p "$REPO/.git/loom/session-${our_sid}"
     printf 'slice-F7\n' >"$REPO/.git/loom/session-${our_sid}/held-claims"
     touch "$REPO/.git/loom/session-${our_sid}/checkpoint"
@@ -894,8 +944,8 @@ EOF
     run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" session-end --session "$our_sid"
     [ "$status" -ne 0 ]
 
-    # Claim must still be in registry (not orphaned)
-    grep -qF "slice-F7	$our_sid" "$REPO/.git/loom/claims"
+    # Claim ref must still name our session (not orphaned)
+    [ "$(claim_sid "slice-F7")" = "$our_sid" ]
     # Session dir must still exist (not deleted while claims unreleased)
     [ -d "$REPO/.git/loom/session-${our_sid}" ]
     teardown
@@ -928,17 +978,16 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD # worktree still present on disk
 
-    mkdir -p "$REPO/.git/loom"
-    # Claim: epoch=0 (always past any lease TTL)
-    printf 'slice-R1\t%s\t99999999\t0\n' "$sid" >"$REPO/.git/loom/claims"
+    # Claim ref: ts=0 (always past any lease TTL)
+    plant_claim_ref "slice-R1" "$sid" "0"
 
     # Run cleanup with LOOM_LEASE_TTL=0 (any epoch is stale) and LOOM_HOLDERLESS_TTL=0
     run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Stale claim must be swept (not skipped)
     [[ "$output" == *"swept 1"* ]]
-    # Claim must be gone from registry
-    ! grep -qF "slice-R1" "$REPO/.git/loom/claims" 2>/dev/null
+    # Claim ref must be gone
+    [ -z "$(claim_ref_sha "slice-R1")" ]
     teardown
 }
 
@@ -956,10 +1005,9 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Dead session "bar": no worktree, dead pid
+    # Dead session "bar": stale claim ref, no worktree
     local dead_sid="bar"
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-R2\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-R2" "$dead_sid" "0"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R2"
     [ "$status" -eq 0 ]
@@ -968,7 +1016,7 @@ EOF
     run sh "$COORD" reclaim slice-R2 --session "ses-reclaimer-R2"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-R2" ]
-    grep -qF "slice-R2	ses-reclaimer-R2" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-R2")" = "ses-reclaimer-R2" ]
     teardown
 }
 
@@ -986,10 +1034,9 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${live_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Dead session "run[1]": no worktree; as a regex, [1] matches "run1" — must NOT
+    # Dead session "run[1]": stale claim ref; as a regex, [1] matches "run1" — must NOT
     local dead_sid='run[1]'
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-R3\t%s\t99999999\t0\n' "$dead_sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-R3" "$dead_sid" "0"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R3"
     [ "$status" -eq 0 ]
@@ -998,7 +1045,7 @@ EOF
     run sh "$COORD" reclaim slice-R3 --session "ses-reclaimer-R3"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-R3" ]
-    grep -qF "slice-R3	ses-reclaimer-R3" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-R3")" = "ses-reclaimer-R3" ]
     teardown
 }
 
@@ -1018,9 +1065,7 @@ EOF
     local wt_path="$space_parent/wt-${live_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-R6\t%s\t%s\t%s\n' "$live_sid" "$$" "$(date +%s)" \
-        >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-R6" "$live_sid" "$(date +%s)"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R6"
     [ "$status" -eq 0 ]
@@ -1028,7 +1073,7 @@ EOF
     # reclaim must fail: the session is live (space-safe parser finds its sid)
     run sh "$COORD" reclaim slice-R6 --session "ses-reclaimer-R6"
     [ "$status" -eq 6 ]
-    grep -qF "slice-R6	$live_sid" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-R6")" = "$live_sid" ]
 
     # Clean up the space-containing dir tree
     git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
@@ -1057,13 +1102,12 @@ EOF
         skip "filesystem or git does not support backslash in worktree path"
     }
 
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-T3\t%s\t99\t0\n' "$sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-T3" "$sid" "0"
 
     run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
     [[ "$output" == *"swept 1"* ]]
-    ! grep -qF "slice-T3" "$REPO/.git/loom/claims" 2>/dev/null
+    [ -z "$(claim_ref_sha "slice-T3")" ]
     # Orphan worktree must have been removed (requires correct wt_sid_match)
     [ ! -d "$wt_path" ]
     teardown
@@ -1074,24 +1118,19 @@ EOF
 # ---------------------------------------------------------------------------
 
 @test "T5 cleanup: corrupted claim (empty sid) increments skipped counter" {
-    # T5: the R7 empty-sid guard preserved the row but did not increment 'skipped',
-    # so the "swept N; skipped M" summary undercounted live claims.
-    # Note: IFS=TAB collapsing means consecutive TABs merge into one delimiter;
-    # a claim file with trailing-TAB format ("slice-T5<TAB><NL>") produces sid=""
-    # after the read because shell strips the trailing IFS whitespace, leaving only
-    # "slice-T5" for slice and "" for all remaining variables.
+    # T5: the R7 empty-sid guard preserves the ref fail-closed and counts it as skipped.
+    # Simulate with a claim ref whose blob has an empty first field (empty sid).
     make_repo
     cd "$REPO"
-    mkdir -p "$REPO/.git/loom"
-    # Plant a corrupted row: slice name + TAB + newline → sid gets "" after read
-    printf 'slice-T5\t\n' >"$REPO/.git/loom/claims"
+    # Plant a corrupted blob: empty sid, numeric ts → "empty-sid guard" triggers
+    plant_claim_ref_raw "slice-T5" "$(printf '\t1000\n')"
 
     run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
-    # skipped counter must include the empty-sid row (T5 fix)
+    # skipped counter must include the empty-sid ref (T5 fix)
     [[ "$output" == *"skipped 1"* ]]
-    # Row must still be present (preserved fail-closed)
-    grep -qF "slice-T5" "$REPO/.git/loom/claims"
+    # Ref must still be present (preserved fail-closed)
+    [ -n "$(claim_ref_sha "slice-T5")" ]
     teardown
 }
 
@@ -1105,15 +1144,14 @@ EOF
     make_repo
     cd "$REPO"
     local peer_sid="ses-peer-LVF"
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-LVF\t%s\t99999999\t%s\n' "$peer_sid" "$(date +%s)" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-LVF" "$peer_sid" "$(date +%s)"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVF"
     [ "$status" -eq 0 ]
 
     run sh "$COORD" reclaim slice-LVF --session "ses-us-LVF"
     [ "$status" -eq 6 ]
-    grep -qF "slice-LVF	$peer_sid" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-LVF")" = "$peer_sid" ]
     teardown
 }
 
@@ -1127,8 +1165,7 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${peer_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    mkdir -p "$REPO/.git/loom"
-    printf 'slice-LVST\t%s\t99999999\t0\n' "$peer_sid" >"$REPO/.git/loom/claims"
+    plant_claim_ref "slice-LVST" "$peer_sid" "0"
 
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVST"
     [ "$status" -eq 0 ]
@@ -1136,7 +1173,7 @@ EOF
     # Reclaim must succeed: stale epoch = dead, regardless of worktree
     run sh "$COORD" reclaim slice-LVST --session "ses-us-LVST"
     [ "$status" -eq 0 ]
-    grep -qF "slice-LVST	ses-us-LVST" "$REPO/.git/loom/claims"
+    [ "$(claim_sid "slice-LVST")" = "ses-us-LVST" ]
     teardown
 }
 
@@ -1205,5 +1242,132 @@ EOF
         i=$((i + 1))
     done
     ! kill -0 "$rpid" 2>/dev/null
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# Pass 2 — claims-as-refs + lock-heartbeat tests
+# ---------------------------------------------------------------------------
+
+@test "CC1 claim CAS: two concurrent create-only attempts, exactly one wins" {
+    # Tests the underlying git ref CAS — two processes race to create the same
+    # claim ref from null; git's own ref-transaction ensures exactly one wins.
+    make_repo
+    cd "$REPO"
+
+    local sha_a sha_b
+    sha_a=$(printf 'ses-A-CC1\t%s\n' "$(date +%s)" |
+        git -C "$REPO" hash-object -w --stdin)
+    sha_b=$(printf 'ses-B-CC1\t%s\n' "$(date +%s)" |
+        git -C "$REPO" hash-object -w --stdin)
+    local null_sha="0000000000000000000000000000000000000000"
+    local ref="refs/loom/claims/slice-CC1"
+
+    # Race: both try create-only CAS from null simultaneously
+    (git -C "$REPO" update-ref "$ref" "$sha_a" "$null_sha" 2>/dev/null
+        echo "$?") >"$BATS_TEST_TMPDIR/cas_a" &
+    (git -C "$REPO" update-ref "$ref" "$sha_b" "$null_sha" 2>/dev/null
+        echo "$?") >"$BATS_TEST_TMPDIR/cas_b" &
+    wait
+
+    local exit_a exit_b
+    exit_a=$(cat "$BATS_TEST_TMPDIR/cas_a")
+    exit_b=$(cat "$BATS_TEST_TMPDIR/cas_b")
+
+    # Exactly one must succeed (exit 0)
+    local wins=0
+    [ "$exit_a" -eq 0 ] && wins=$((wins + 1))
+    [ "$exit_b" -eq 0 ] && wins=$((wins + 1))
+    [ "$wins" -eq 1 ]
+
+    # The ref must exist and point to exactly one of the two blobs
+    local final_sha
+    final_sha=$(git -C "$REPO" rev-parse "$ref" 2>/dev/null)
+    [ "$final_sha" = "$sha_a" ] || [ "$final_sha" = "$sha_b" ]
+    teardown
+}
+
+@test "SC1 slice name with colon maps to valid ref; claim/renew/release round-trip" {
+    # A colon is illegal in git ref names; loom-coord must percent-encode it.
+    make_repo
+    cd "$REPO"
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-SC1"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim "slice:foo" --session "ses-SC1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"claimed slice:foo"* ]]
+    # Colon encoded as %3A; ref must exist
+    git -C "$REPO" rev-parse --verify "refs/loom/claims/slice%3Afoo" 2>/dev/null
+    # Claim sid correct
+    [ "$(claim_sid "slice:foo")" = "ses-SC1" ]
+    # Renew value-CAS works
+    run sh "$COORD" renew "slice:foo" --session "ses-SC1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewed slice:foo"* ]]
+    # Release delete-CAS works
+    run sh "$COORD" release-claim "slice:foo" --session "ses-SC1"
+    [ "$status" -eq 0 ]
+    [ -z "$(claim_ref_sha "slice:foo")" ]
+    teardown
+}
+
+@test "LC1 list-claims returns ref paths and blob content for active claims" {
+    make_repo
+    cd "$REPO"
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-LC1"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim slice-lc1a --session "ses-LC1"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" claim slice-lc1b --session "ses-LC1"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" list-claims
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"refs/loom/claims/slice-lc1a"* ]]
+    [[ "$output" == *"refs/loom/claims/slice-lc1b"* ]]
+    [[ "$output" == *"ses-LC1"* ]]
+    teardown
+}
+
+@test "RNW-3 renewer heartbeats the lock ref while main session holds it (U3 fix)" {
+    # The renewer must CAS-update refs/loom/lock when the main session holds it,
+    # preventing a peer from stealing the lock mid-critical-section (ADR 0016 §3).
+    make_repo
+    cd "$REPO"
+
+    run sh "$COORD" session-start --session "ses-RNW3"
+    [ "$status" -eq 0 ]
+
+    # Main session acquires the lock
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-RNW3"
+    [ "$status" -eq 0 ]
+    local lock_sha_before
+    lock_sha_before=$(git_lock_sha)
+    [ -n "$lock_sha_before" ]
+
+    # Start renewer with a short interval (1 s) so it fires quickly
+    local mypid=$$
+    run env LOOM_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW3"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"renewer-started"* ]]
+
+    # Wait up to ~6 s for the renewer to fire and update the lock blob
+    local i=0
+    local lock_sha_after
+    while [ "$i" -lt 12 ]; do
+        sleep 0.5
+        lock_sha_after=$(git_lock_sha)
+        [ "$lock_sha_after" != "$lock_sha_before" ] && break
+        i=$((i + 1))
+    done
+
+    # Lock ref SHA must have changed (renewer wrote a new blob with fresh ts)
+    [ "$lock_sha_after" != "$lock_sha_before" ]
+    # Lock is still held by our session (sid unchanged)
+    [ "$(holder_sid)" = "ses-RNW3" ]
+
+    run sh "$COORD" renewer-stop --session "ses-RNW3"
+    [ "$status" -eq 0 ]
+    run sh "$COORD" lock-release --session "ses-RNW3"
+    [ "$status" -eq 0 ]
     teardown
 }

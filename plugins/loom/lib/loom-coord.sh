@@ -14,8 +14,8 @@
 #   Every error branch exits non-zero; exit 0 means "provably safe".
 #
 # State paths:
-#   refs/loom/lock                  — git ref (git-CAS lock; blob = {sid}\t{ts}\t{pid}\t{st})
-#   $STATE_DIR/claims               — TSV: <slice>\t<session-id>\t<pid>\t<epoch>
+#   refs/loom/lock                  — git ref (git-CAS lock; blob = {sid}\t{ts}\t{pid}\t\n)
+#   refs/loom/claims/<slice>        — git ref per slice (blob = {sid}\t{ts}\n)
 #   $STATE_DIR/session-<id>/        — per-session dir
 #   $STATE_DIR/session-<id>/checkpoint    — write-ahead next action
 #   $STATE_DIR/session-<id>/held-claims   — one slice name per line
@@ -104,8 +104,8 @@ esac
 
 STATE_DIR="$GITDIR/loom"
 LOCK_REF="refs/loom/lock"
+CLAIMS_REF_PREFIX="refs/loom/claims"
 NULL_SHA="0000000000000000000000000000000000000000"
-CLAIMS="$STATE_DIR/claims"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -235,42 +235,52 @@ backoff_sleep() {
     esac
 }
 
-# read_claim <slice> — prints the TSV line for slice, or empty
-# Uses exact first-field match (awk) to avoid substring collisions (e.g. "v2" != "auth-v2")
-read_claim() {
-    local slice="$1"
-    if [ ! -f "$CLAIMS" ]; then
-        printf ''
+# slice_to_refname <slice> — encode slice name to a safe git ref path component.
+# Characters outside [A-Za-z0-9._/-] are percent-encoded (%XX).  Slashes are
+# preserved so multi-component slice names create hierarchical ref paths naturally.
+# The % itself is encoded as %25 first to avoid double-encoding.
+slice_to_refname() {
+    printf '%s' "$1" | LC_ALL=C awk 'BEGIN { ORS="" } {
+        for (i = 1; i <= length($0); i++) {
+            c = substr($0, i, 1)
+            if (c ~ /[A-Za-z0-9._\/\-]/) {
+                printf "%s", c
+            } else {
+                printf "%%%02X", ord(c)
+            }
+        }
+        printf "\n"
+    }
+    function ord(c,    k) {
+        for (k = 0; k < 256; k++) if (sprintf("%c", k) == c) return k
         return 0
-    fi
-    awk -F'\t' -v s="$slice" '$1==s' "$CLAIMS" 2>/dev/null | head -1
+    }'
 }
 
-# write_claim <slice> <session-id> <pid> <epoch> — atomic TSV upsert
-write_claim() {
-    local slice="$1" sid="$2" pid="$3" epoch="$4"
-    mkdir -p "$STATE_DIR"
-    local tmp
-    tmp="${CLAIMS}.tmp.$$"
-    if [ -f "$CLAIMS" ]; then
-        awk -F'\t' -v s="$slice" '$1!=s' "$CLAIMS" 2>/dev/null >"$tmp" || true
-    else
-        : >"$tmp"
-    fi
-    printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
-    mv "$tmp" "$CLAIMS"
+# claim_ref_for <slice> — full ref path for a slice claim
+claim_ref_for() {
+    printf '%s/%s' "$CLAIMS_REF_PREFIX" "$(slice_to_refname "$1")"
 }
 
-# remove_claim <slice> — remove TSV line for slice
-remove_claim() {
-    local slice="$1"
-    if [ ! -f "$CLAIMS" ]; then
-        return 0
-    fi
-    local tmp
-    tmp="${CLAIMS}.tmp.$$"
-    awk -F'\t' -v s="$slice" '$1!=s' "$CLAIMS" 2>/dev/null >"$tmp" || true
-    mv "$tmp" "$CLAIMS"
+# _make_claim_blob_for <sid> — write {sid}\t{ts}\n blob; print SHA or empty on failure
+_make_claim_blob_for() {
+    local _csid="$1"
+    printf '%s\t%s\n' "$_csid" "$(now)" |
+        git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null
+}
+
+# read_claim_sha <slice> — print current SHA of refs/loom/claims/<slice>, or empty
+read_claim_sha() {
+    local _ref
+    _ref=$(claim_ref_for "$1")
+    git -C "$REPO_ROOT" rev-parse --verify "$_ref" 2>/dev/null || true
+}
+
+# decode_claim_field <sha> <field-number> — read claim blob and print Nth tab field
+decode_claim_field() {
+    local _sha="$1" _field="$2"
+    git -C "$REPO_ROOT" cat-file blob "$_sha" 2>/dev/null |
+        awk -F'\t' -v f="$_field" '{print $f}'
 }
 
 # held_claims_file — path to the session's held-claims file
@@ -455,65 +465,94 @@ cmd_claim() {
         exit 1
     fi
 
-    mkdir -p "$STATE_DIR"
-    # Re-read registry under the held lock (check-then-act)
-    local line sid pid epoch cur
-    line=$(read_claim "$slice")
-    cur=$(now)
+    # Check-then-act under the held lock; CAS on the claim ref provides extra safety.
+    local _ref cur_sha cur_sid cur_ts new_sha
+    _ref=$(claim_ref_for "$slice")
+    cur_sha=$(read_claim_sha "$slice")
 
-    if [ -n "$line" ]; then
-        sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-        epoch=$(printf '%s' "$line" | awk -F'\t' '{print $4}')
+    if [ -n "$cur_sha" ]; then
+        cur_sid=$(decode_claim_field "$cur_sha" 1)
+        cur_ts=$(decode_claim_field "$cur_sha" 2)
 
-        if [ "$sid" = "$SESSION_ID" ]; then
+        if [ "$cur_sid" = "$SESSION_ID" ]; then
             # Own claim — idempotent re-affirm
-            printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$epoch"
+            printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$cur_ts"
             exit 0
         fi
 
         # Another session's claim — liveness = lease freshness (ADR 0015)
-        if claim_is_fresh "$epoch"; then
-            printf 'loom-coord claim: slice %s has live claim by %s\n' "$slice" "$sid" >&2
+        if claim_is_fresh "$cur_ts"; then
+            printf 'loom-coord claim: slice %s has live claim by %s\n' "$slice" "$cur_sid" >&2
             exit 4
         fi
 
-        # Stale claim — overwrite
+        # Stale claim — value-CAS steal from exact read SHA
+        new_sha=$(_make_claim_blob_for "$SESSION_ID")
+        if [ -z "$new_sha" ]; then
+            printf 'loom-coord claim: cannot create claim blob\n' >&2
+            exit 10
+        fi
+        if ! git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
+            printf 'loom-coord claim: slice %s claimed by another session\n' "$slice" >&2
+            exit 4
+        fi
+        add_held_claim "$slice"
+        printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$(now)"
+        exit 0
     fi
 
-    write_claim "$slice" "$SESSION_ID" "$$" "$cur"
+    # Absent — create-only CAS from null OID
+    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    if [ -z "$new_sha" ]; then
+        printf 'loom-coord claim: cannot create claim blob\n' >&2
+        exit 10
+    fi
+    if ! git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$NULL_SHA" 2>/dev/null; then
+        printf 'loom-coord claim: slice %s claimed by another session\n' "$slice" >&2
+        exit 4
+    fi
     add_held_claim "$slice"
-    printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$cur"
+    printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$(now)"
     exit 0
 }
 
 # ---------------------------------------------------------------------------
 # Subcommand: renew <slice>
+# No lock required — value-CAS on the per-slice ref is atomic.  The renewer
+# calls this directly without acquiring the lock (ADR 0016 §2).
 # ---------------------------------------------------------------------------
 cmd_renew() {
     assert_session
-    assert_lock_held
     local slice="$EXTRA_ARGS"
     if [ -z "$slice" ]; then
         printf 'loom-coord renew: slice name required\n' >&2
         exit 1
     fi
 
-    local line sid
-    line=$(read_claim "$slice")
-    if [ -z "$line" ]; then
+    local _ref cur_sha cur_sid new_sha
+    _ref=$(claim_ref_for "$slice")
+    cur_sha=$(read_claim_sha "$slice")
+    if [ -z "$cur_sha" ]; then
         printf 'loom-coord renew: no claim found for %s\n' "$slice" >&2
         exit 5
     fi
-    sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-    if [ "$sid" != "$SESSION_ID" ]; then
+    cur_sid=$(decode_claim_field "$cur_sha" 1)
+    if [ "$cur_sid" != "$SESSION_ID" ]; then
         printf 'loom-coord renew: slice %s not owned by %s\n' "$slice" "$SESSION_ID" >&2
         exit 5
     fi
 
-    local cur
-    cur=$(now)
-    write_claim "$slice" "$SESSION_ID" "$$" "$cur"
-    printf 'renewed %s %s\n' "$slice" "$cur"
+    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    if [ -z "$new_sha" ]; then
+        printf 'loom-coord renew: cannot create claim blob\n' >&2
+        exit 10
+    fi
+    # Value-CAS on exact read SHA
+    if ! git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
+        printf 'loom-coord renew: CAS failed for %s (concurrent update)\n' "$slice" >&2
+        exit 5
+    fi
+    printf 'renewed %s %s\n' "$slice" "$(now)"
     exit 0
 }
 
@@ -529,16 +568,18 @@ cmd_release_claim() {
         exit 1
     fi
 
-    local line sid
-    line=$(read_claim "$slice")
-    if [ -n "$line" ]; then
-        sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-        if [ "$sid" != "$SESSION_ID" ]; then
+    local _ref cur_sha cur_sid
+    _ref=$(claim_ref_for "$slice")
+    cur_sha=$(read_claim_sha "$slice")
+    if [ -n "$cur_sha" ]; then
+        cur_sid=$(decode_claim_field "$cur_sha" 1)
+        if [ "$cur_sid" != "$SESSION_ID" ]; then
             printf 'loom-coord release-claim: slice %s not owned by %s\n' "$slice" "$SESSION_ID" >&2
             exit 5
         fi
+        # Delete-CAS: only if ref still equals our blob SHA
+        git -C "$REPO_ROOT" update-ref -d "$_ref" "$cur_sha" 2>/dev/null || true
     fi
-    remove_claim "$slice"
     remove_held_claim "$slice"
     exit 0
 }
@@ -555,40 +596,46 @@ cmd_reclaim() {
         exit 1
     fi
 
-    local line sid epoch
-    line=$(read_claim "$slice")
-    if [ -z "$line" ]; then
+    local _ref cur_sha cur_sid cur_ts new_sha
+    _ref=$(claim_ref_for "$slice")
+    cur_sha=$(read_claim_sha "$slice")
+    if [ -z "$cur_sha" ]; then
         printf 'loom-coord reclaim: no claim found for %s\n' "$slice" >&2
         exit 5
     fi
-    sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-    epoch=$(printf '%s' "$line" | awk -F'\t' '{print $4}')
+    cur_sid=$(decode_claim_field "$cur_sha" 1)
+    cur_ts=$(decode_claim_field "$cur_sha" 2)
 
-    if [ "$sid" = "$SESSION_ID" ]; then
-        # Own claim — nothing to reclaim
+    if [ "$cur_sid" = "$SESSION_ID" ]; then
         printf 'loom-coord reclaim: already owner of %s\n' "$slice" >&2
         exit 5
     fi
 
     # Liveness = lease freshness (ADR 0015): a fresh lease means holder is alive.
     # Worktree-list membership and pid are NOT liveness signals.
-    if claim_is_fresh "$epoch"; then
-        printf 'loom-coord reclaim: holder %s of %s still has a fresh lease\n' "$sid" "$slice" >&2
+    if claim_is_fresh "$cur_ts"; then
+        printf 'loom-coord reclaim: holder %s of %s still has a fresh lease\n' "$cur_sid" "$slice" >&2
         exit 6
     fi
 
-    # Stale lease (holder crashed/stopped) — prune orphan worktree, overwrite claim.
-    # wt_sid_match is used here for ORPHAN REMOVAL targeting only (not liveness).
+    # Stale lease — prune orphan worktree, then value-CAS steal.
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
     local wt_path
-    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$sid")
+    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$cur_sid")
     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
         git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
     fi
 
-    local cur
-    cur=$(now)
-    write_claim "$slice" "$SESSION_ID" "$$" "$cur"
+    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+    if [ -z "$new_sha" ]; then
+        printf 'loom-coord reclaim: cannot create claim blob\n' >&2
+        exit 10
+    fi
+    # Value-CAS steal from exact read SHA (ABA-safe)
+    if ! git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
+        printf 'loom-coord reclaim: CAS failed for %s — another session claimed it\n' "$slice" >&2
+        exit 4
+    fi
     add_held_claim "$slice"
     printf 'reclaimed %s\n' "$slice"
     exit 0
@@ -598,9 +645,18 @@ cmd_reclaim() {
 # Subcommand: list-claims
 # ---------------------------------------------------------------------------
 cmd_list_claims() {
-    if [ -f "$CLAIMS" ]; then
-        cat "$CLAIMS"
-    fi
+    local refs_tmp
+    refs_tmp=$(mktemp)
+    git -C "$REPO_ROOT" for-each-ref \
+        --format='%(refname) %(objectname)' \
+        "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
+    while IFS=' ' read -r refname sha; do
+        [ -z "$refname" ] && continue
+        local content
+        content=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null) || continue
+        printf '%s\t%s\n' "$refname" "$content"
+    done <"$refs_tmp"
+    rm -f "$refs_tmp"
 }
 
 # ---------------------------------------------------------------------------
@@ -721,20 +777,22 @@ cmd_session_bootstrap() {
         exit 3
     fi
 
-    # Renew each held claim
+    # Renew each held claim via value-CAS on the claim ref
     local hcf="$sess_dir/held-claims"
     if [ -f "$hcf" ]; then
         while IFS= read -r slice; do
             [ -z "$slice" ] && continue
-            local line sid
-            line=$(read_claim "$slice")
-            if [ -n "$line" ]; then
-                sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-                if [ "$sid" = "$SESSION_ID" ]; then
-                    local cur
-                    cur=$(now)
-                    write_claim "$slice" "$SESSION_ID" "$$" "$cur"
-                    printf 'renewed %s %s\n' "$slice" "$cur"
+            local _ref cur_sha cur_sid new_sha
+            _ref=$(claim_ref_for "$slice")
+            cur_sha=$(read_claim_sha "$slice")
+            if [ -n "$cur_sha" ]; then
+                cur_sid=$(decode_claim_field "$cur_sha" 1)
+                if [ "$cur_sid" = "$SESSION_ID" ]; then
+                    new_sha=$(_make_claim_blob_for "$SESSION_ID")
+                    if [ -n "$new_sha" ] &&
+                        git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
+                        printf 'renewed %s %s\n' "$slice" "$(now)"
+                    fi
                 fi
             fi
         done <"$hcf"
@@ -805,12 +863,13 @@ cmd_session_end() {
         if [ "$got_lock" -eq 1 ]; then
             while IFS= read -r slice; do
                 [ -z "$slice" ] && continue
-                local line sid
-                line=$(read_claim "$slice")
-                if [ -n "$line" ]; then
-                    sid=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-                    if [ "$sid" = "$SESSION_ID" ]; then
-                        remove_claim "$slice"
+                local _ref cur_sha cur_sid
+                _ref=$(claim_ref_for "$slice")
+                cur_sha=$(read_claim_sha "$slice")
+                if [ -n "$cur_sha" ]; then
+                    cur_sid=$(decode_claim_field "$cur_sha" 1)
+                    if [ "$cur_sid" = "$SESSION_ID" ]; then
+                        git -C "$REPO_ROOT" update-ref -d "$_ref" "$cur_sha" 2>/dev/null || true
                     fi
                 fi
             done <"$sess_dir/held-claims"
@@ -881,46 +940,59 @@ cmd_cleanup() {
     local swept=0
     local skipped=0
 
-    # CLAIMS mutation MUST be under the lock (F2: mutual exclusion on shared store)
+    # Claims mutation MUST be under the lock (F2: mutual exclusion on shared store).
+    # Iterate refs/loom/claims/* via a temp file to avoid subshell counter issues.
     if [ "$got_lock" -eq 1 ]; then
-        if [ -f "$CLAIMS" ]; then
-            local tmp
-            tmp="${CLAIMS}.tmp.$$"
-            : >"$tmp"
-            # Hoist worktree list once for the entire sweep (for orphan-removal lookups only)
-            local wt_list
-            wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
-            while IFS='	' read -r slice sid pid epoch; do
-                [ -z "$slice" ] && continue
-                # R7: empty-sid guard — preserve row fail-closed (can't assess liveness).
-                # T5 fix: count as skipped so the summary is accurate.
-                if [ -z "$sid" ]; then
-                    printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
-                    skipped=$((skipped + 1))
-                    continue
+        local refs_tmp
+        refs_tmp=$(mktemp)
+        git -C "$REPO_ROOT" for-each-ref \
+            --format='%(refname) %(objectname)' \
+            "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
+
+        # Hoist worktree list once for the entire sweep (orphan-removal lookups only)
+        local wt_list
+        wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
+
+        while IFS=' ' read -r refname sha; do
+            [ -z "$refname" ] && continue
+            local sid ts
+            sid=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
+                awk -F'\t' '{print $1}')
+            ts=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
+                awk -F'\t' '{print $2}')
+
+            # R7: empty-sid or non-numeric ts → preserve fail-closed, count as skipped
+            case "$ts" in
+            '' | *[!0-9]*)
+                skipped=$((skipped + 1))
+                continue
+                ;;
+            esac
+            if [ -z "$sid" ]; then
+                skipped=$((skipped + 1))
+                continue
+            fi
+
+            # Liveness = lease freshness (ADR 0015)
+            if claim_is_fresh "$ts"; then
+                skipped=$((skipped + 1))
+            else
+                # Stale lease — orphan worktree removal (T2/T6 fix: driven by lease staleness)
+                local wt_path
+                wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
+                if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+                    git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
                 fi
-                # Liveness = lease freshness (ADR 0015): worktree-list membership and
-                # the stored pid are NOT liveness signals; a fresh epoch means alive.
-                if claim_is_fresh "$epoch"; then
-                    printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
-                    skipped=$((skipped + 1))
-                else
-                    # Stale lease — holder crashed/stopped.  Orphan-worktree removal is
-                    # now reachable (T2/T6 fix): driven by lease staleness, not membership.
-                    local wt_path
-                    wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
-                    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
-                        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
-                    fi
-                    # Remove dead session dir
-                    if [ -d "$STATE_DIR/session-$sid" ]; then
-                        rm -rf "$STATE_DIR/session-$sid"
-                    fi
-                    swept=$((swept + 1))
+                # Remove dead session dir
+                if [ -d "$STATE_DIR/session-$sid" ]; then
+                    rm -rf "$STATE_DIR/session-$sid"
                 fi
-            done <"$CLAIMS"
-            mv "$tmp" "$CLAIMS"
-        fi
+                # Delete the claim ref (delete-CAS on exact read SHA)
+                git -C "$REPO_ROOT" update-ref -d "$refname" "$sha" 2>/dev/null || true
+                swept=$((swept + 1))
+            fi
+        done <"$refs_tmp"
+        rm -f "$refs_tmp"
         # Release lock (delete-CAS)
         local _cl_rel_sha
         _cl_rel_sha=$(read_lock_sha)
@@ -982,24 +1054,40 @@ cmd_renewer_start() {
 
     # Launch detached background renewer.  Uses _session_alive (inherited function)
     # with the reuse-robust identity gate: exits when session pid dies or start-time
-    # changes (recycled pid).  Renews held claims under the lock on each interval.
+    # changes (recycled pid).  On each interval:
+    #   1. CAS-renews refs/loom/lock if our session currently holds it (U3 fix — ADR 0016 §3).
+    #   2. CAS-renews each held claim ref directly (no lock-acquire needed — ADR 0016 §2).
     # stdin/stdout/stderr are closed (redirected to /dev/null) so the subshell does
     # not hold inherited file descriptors open — prevents callers that capture output
     # (e.g. bats `run`) from hanging.
     (
         cd "$_root" 2>/dev/null || exit 1
         while _session_alive "$_sdir"; do
-            _hcf="$_sdir/held-claims"
-            if [ -f "$_hcf" ] && grep -q . "$_hcf" 2>/dev/null; then
-                if sh "$_coord" lock-acquire --session "$_sid" >/dev/null 2>&1; then
-                    while IFS= read -r _s; do
-                        [ -z "$_s" ] && continue
-                        sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
-                    done <"$_hcf"
-                    sh "$_coord" lock-release --session "$_sid" >/dev/null 2>&1 || true
+            sleep "$_interval" 2>/dev/null || true
+
+            # Heartbeat the lock ref if our session currently holds it (U3 fix)
+            _lsha=$(git -C "$_root" rev-parse --verify "refs/loom/lock" 2>/dev/null || true)
+            if [ -n "$_lsha" ]; then
+                _lsid=$(git -C "$_root" cat-file blob "$_lsha" 2>/dev/null |
+                    awk -F'\t' '{print $1}')
+                if [ "$_lsid" = "$_sid" ]; then
+                    _nlsha=$(printf '%s\t%s\t%s\t\n' "$_sid" "$(date +%s)" "$$" |
+                        git -C "$_root" hash-object -w --stdin 2>/dev/null || true)
+                    if [ -n "$_nlsha" ]; then
+                        git -C "$_root" update-ref \
+                            "refs/loom/lock" "$_nlsha" "$_lsha" 2>/dev/null || true
+                    fi
                 fi
             fi
-            sleep "$_interval" 2>/dev/null || true
+
+            # Heartbeat held claim refs (direct value-CAS, no lock needed)
+            _hcf="$_sdir/held-claims"
+            if [ -f "$_hcf" ]; then
+                while IFS= read -r _s; do
+                    [ -z "$_s" ] && continue
+                    sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
+                done <"$_hcf"
+            fi
         done
     ) </dev/null >/dev/null 2>&1 &
     local rpid=$!
