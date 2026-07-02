@@ -1,6 +1,6 @@
 # Multi-Session Lock / Claim Coordination Helper
 
-Status: In Progress
+Status: Implemented
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014)"; ADR 0014 §1/§2/§3 + §Consequences (the helper contract)
 

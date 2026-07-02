@@ -112,6 +112,28 @@ now() {
     date +%s 2>/dev/null
 }
 
+# dir_mtime_epoch <dir> — print directory mtime as epoch seconds; empty on failure
+dir_mtime_epoch() {
+    stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
+}
+
+# wt_sid_match <sid> — read git worktree list --porcelain from stdin;
+# print the first worktree path whose LAST PATH SEGMENT equals "wt-<sid>".
+# Uses awk exact string equality — no regex, no substring, space-safe (full-path
+# via substr, not $2). Implements the both-boundary literal match that replaces
+# grep -qE "${sid}(/|$)" (R2/R3/R6 root-cause fix).
+wt_sid_match() {
+    local sid="$1"
+    [ -z "$sid" ] && return
+    awk -v sid="$sid" '
+        /^worktree / {
+            path = substr($0, 10)
+            n = split(path, parts, "/")
+            if (parts[n] == "wt-" sid) { print path; exit }
+        }
+    '
+}
+
 # is_alive <session-id> [pid]
 # Returns 0 (alive) if session-id token appears in git worktree list.
 # Falls back to kill -0 <pid> only when session-id probe is inconclusive.
@@ -121,10 +143,9 @@ is_alive() {
     if [ -z "$sid" ]; then
         return 1
     fi
-    # Primary: session-id-in-worktree-list (anchored: sid must not be a substring of
-    # a longer live session-id path component — match sid at end-of-line or before /)
-    if git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
-        grep -qE "${sid}(/|$)"; then
+    # Primary: session-id-in-worktree-list — exact last-segment match via awk
+    # (wt_sid_match checks last path segment == "wt-<sid>"; no regex/substring; space-safe)
+    if [ -n "$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$sid")" ]; then
         return 0
     fi
     # Secondary: pid probe (only when pid supplied and session-id not found)
@@ -377,11 +398,17 @@ cmd_lock_acquire() {
                 # Lost the CAS race — fall through to backoff
             fi
         elif [ -d "$LOCK_DIR" ]; then
-            # Holderless lock dir (crash between mkdir and stamp_holder) —
-            # always reclaimable; the ABA check in clear_and_own protects us.
-            if clear_and_own; then
-                printf 'acquired\n'
-                exit 0
+            # Holderless lock dir (crash between mkdir and stamp_holder).
+            # Age-gate: only reclaim when dir is older than LOOM_LOCK_TTL so a live
+            # peer's non-atomic mkdir→stamp_holder window is never mis-classified.
+            local h_dir_mt h_dir_age
+            h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
+            if [ -n "$h_dir_mt" ]; then
+                h_dir_age=$(($(now) - h_dir_mt))
+                if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
+                    printf 'acquired\n'
+                    exit 0
+                fi
             fi
         fi
 
@@ -572,11 +599,9 @@ cmd_reclaim() {
 
     # Dead holder — prune orphan worktree, overwrite claim
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
-    # Find and remove the orphan worktree if it still shows (e.g. dir still on disk)
+    # Find and remove the orphan worktree if still registered (space-safe via wt_sid_match, R6)
     local wt_path
-    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
-        awk '/^worktree /{print $2}' |
-        grep -E "${sid}(/|$)" | head -1)
+    wt_path=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | wt_sid_match "$sid")
     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
         git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
     fi
@@ -700,6 +725,16 @@ cmd_session_bootstrap() {
                         return 0
                     fi
                 fi
+            elif [ -d "$LOCK_DIR" ]; then
+                # Holderless lock dir (R5: session-bootstrap must also handle this)
+                local h_dir_mt h_dir_age
+                h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
+                if [ -n "$h_dir_mt" ]; then
+                    h_dir_age=$(($(now) - h_dir_mt))
+                    if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
+                        return 0
+                    fi
+                fi
             fi
             attempt=$((attempt + 1))
             if [ "$attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
@@ -780,10 +815,14 @@ cmd_session_end() {
                     fi
                 fi
             elif [ -d "$LOCK_DIR" ]; then
-                # Holderless lock dir — reclaimable
-                if clear_and_own; then
-                    got_lock=1
-                    break
+                local h_dir_mt h_dir_age
+                h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
+                if [ -n "$h_dir_mt" ]; then
+                    h_dir_age=$(($(now) - h_dir_mt))
+                    if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && clear_and_own; then
+                        got_lock=1
+                        break
+                    fi
                 fi
             fi
             attempt=$((attempt + 1))
@@ -854,10 +893,14 @@ cmd_cleanup() {
                 fi
             fi
         elif [ -d "$LOCK_DIR" ]; then
-            # Holderless lock dir — reclaimable
-            if SESSION_ID="$cleanup_sid" clear_and_own; then
-                got_lock=1
-                break
+            local h_dir_mt h_dir_age
+            h_dir_mt=$(dir_mtime_epoch "$LOCK_DIR")
+            if [ -n "$h_dir_mt" ]; then
+                h_dir_age=$(($(now) - h_dir_mt))
+                if [ "$h_dir_age" -ge "$LOOM_LOCK_TTL" ] && SESSION_ID="$cleanup_sid" clear_and_own; then
+                    got_lock=1
+                    break
+                fi
             fi
         fi
         attempt=$((attempt + 1))
@@ -878,32 +921,26 @@ cmd_cleanup() {
             wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
             while IFS='	' read -r slice sid pid epoch; do
                 [ -z "$slice" ] && continue
-                # Determine if the session is reclaimable.
-                # Primary: session-id absent from worktree list → dead.
-                # Recovery override: session-id in list (dir still on disk) but pid
-                # is dead AND lease is past TTL → treat as reclaimable so cleanup
-                # can force-remove the stale dir and reclaim the claim.
+                # R7: empty-sid guard — preserve row fail-closed (can't assess liveness)
+                if [ -z "$sid" ]; then
+                    printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
+                    continue
+                fi
+                # Liveness: session-id-primary (ADR 0014).
+                # Alive iff "wt-<sid>" is the last segment of any registered worktree path.
+                # No lease-age/pid override: a worktree-registered session is live regardless
+                # of lease age or stored pid (which is an ephemeral claim-time $$).
                 local is_dead=0
-                if printf '%s\n' "$wt_list" | grep -qE "${sid}(/|$)"; then
-                    local cur_ep elapsed_lease
-                    cur_ep=$(now)
-                    elapsed_lease=$((cur_ep - epoch))
-                    if [ "$elapsed_lease" -ge "$LOOM_LEASE_TTL" ] &&
-                        ! kill -0 "$pid" 2>/dev/null; then
-                        is_dead=1
-                    fi
-                else
+                if [ -z "$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")" ]; then
                     is_dead=1
                 fi
                 if [ "$is_dead" -eq 0 ]; then
                     printf '%s\t%s\t%s\t%s\n' "$slice" "$sid" "$pid" "$epoch" >>"$tmp"
                     skipped=$((skipped + 1))
                 else
-                    # Dead — force-remove orphan worktree if still registered (F6 fix)
+                    # Dead — force-remove orphan worktree if still registered (space-safe R6)
                     local wt_path
-                    wt_path=$(printf '%s\n' "$wt_list" |
-                        awk '/^worktree /{print $2}' |
-                        grep -E "${sid}(/|$)" | head -1)
+                    wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
                     if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
                         git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
                     fi
