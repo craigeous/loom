@@ -607,6 +607,21 @@ source of truth; `roadmap.md` is milestone order.
    review` = ran-clean. **NEXT ACTION:** blind code-eval adjudicates → almost certainly FAIL `Round: 4` →
    developer round-4 fix (discrete bugs; good chance of a clean resolving PASS). Then land → finalize →
    slice W. (Round 4 of 5 — 1 attempt before escalation, but these are ordinary bugs, not thrash.)
+   **Blind code-eval FAILed `Round: 4`** (6 CONFIRMED, 0 rejected; V5/V6 reproduced on macOS; gate re-verified
+   55/55 but masks the defects). **KEY: the evaluator confirmed the git-CAS CORE IS SOUND** (create-only/
+   value/delete CAS on exact read-SHA; CC1 races exactly-one-winner; U1/U4 retired) — all 6 defects are
+   PERIPHERAL. **BLOCKERs:** V1 renew cadence 1200s = 40× the 30s lock TTL; V2 `cleanup` destroys worktree/
+   session-dir BEFORE delete-CAS (lock-free `renew` race → live-holder data loss); V3 `reclaim` removes
+   worktree BEFORE value-CAS steal (live peer data loss on refused reclaim); V4 `lock-release` exits 5 when
+   its OWN renewer heartbeats mid-release → permanent deadlock. **MAJORs:** V5 `slice_to_refname` ignores
+   `git check-ref-format` (`foo.lock`/`a..b` livelock); V6 case-fold ref-file collision (`Auth`≡`auth`).
+   **MINOR:** stale "mkdir lock" header comment + dead test code. Evaluator fix pattern: **compute → CAS →
+   (only on success) destroy; separate FAST lock heartbeat.** **NEXT ACTION:** developer round-4 fix — V1 set
+   renew cadence < lock-TTL (~10s, renew lock+claims each tick); V2/V3 reorder so destroy happens only AFTER
+   the guarding CAS succeeds; V4 lock-release re-read+retry delete-CAS while sid==self (or stop renewer
+   first); V5/V6 make ref names always valid + case-distinct (option: ref = hash(slice), store slice-name in
+   the blob for list-claims); MINOR cleanup. Red-green tests. Gate green → `Implemented` → re-run automated
+   review → blind code-eval (resolving PASS carries Round 4 → LANDS slice H; FAIL → Round 5 → escalate).
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
