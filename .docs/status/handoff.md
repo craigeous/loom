@@ -665,6 +665,14 @@ source of truth; `roadmap.md` is milestone order.
    field or `refs/loom/schema`) so a scheme change is detectable; **W7** read each claim blob ONCE in
    list-claims. Strict output discipline + incremental commits. Gate green → `Implemented` → re-run automated
    review → blind code-eval (fresh counter) → land → finalize → slice W. git-CAS core already sound.
+   **W1-W7 fix LANDED `46e85dc`** (slice `Implemented`, gate green 62/62): W1 override floor≥1+clamp<TTL;
+   W2/W4 base64 slice name in claim blob (decode in list-claims); W3 `refs/loom/schema` v2 marker (fail-closed
+   exit 10 on mismatch); W5/W6 V2/V3 tests rewritten with **stale ts=0** claims so they reach the reordered
+   delete-CAS-first / steal-CAS-first branches (true red-green); W7 read blob once. Fix delta = `9a79c27..
+   46e85dc`. **NEXT ACTION:** re-run `/code-review` + `/security-review` on the fix (WATCH for finder crashes
+   on spend limit → if finders fail, the run is INVALID, do not treat "no findings" as clean) → refresh
+   review-findings → blind code-eval (fresh counter: PASS lands slice H; FAIL → round 1). Then finalize →
+   slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
