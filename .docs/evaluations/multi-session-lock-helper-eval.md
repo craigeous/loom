@@ -1,13 +1,93 @@
 # Evaluation: multi-session-lock-helper
 
-Verdict: FAIL
-Round: 4
+Verdict: PASS
+Round: 0
 Reviewed against: ADR 0014 (§1/§2/§3 + §Consequences contract); ADR 0015 (lease-freshness
 liveness + {pid,start-time} renewer); ADR 0016 (git-`update-ref` CAS substrate); spec 04 →
 "Multi-session coordination"; the Approved slice-plan (CLI contract, fail-closed);
-`gates/shell.md`; the advisory review-findings artifact. Latest phase (Round 4) reviews the
-git-CAS RE-IMPLEMENTATION, delta `eedfc43..9fa9b63` (3 commits) —
-`plugins/loom/lib/loom-coord.sh` + `.bats` walked, gate re-run, findings adjudicated.
+`gates/shell.md`; the advisory review-findings artifact. The owner **reset the round counter**
+for this slice (spec-03 round-limit reset) — this is a fresh review: PASS → Round 0.
+Latest phase reviews the X1-X7 fix pass, full re-implementation delta `eedfc43..HEAD`
+(latest fix `c3755d0`) — `plugins/loom/lib/loom-coord.sh` + `.bats` walked, gate re-run,
+the X1-X7 findings adjudicated with independent revert-based verification of the X2/X3 guards.
+
+## Code review — Round 0 (PASS)
+
+Re-review of the X1-X7 fix pass (`c3755d0` on top of the git-CAS re-implementation
+`eedfc43..HEAD`). The prior FAIL's four BLOCKERs (V1-V4) plus V5/V6 were already repaired in
+earlier commits (`9a79c27` V1-V6, `46e85dc` W1-W7); this pass closes the seven X findings the
+W-fix introduced (X1 fail-open, X4 wedge) or left open (X2/X3 ineffective tests). All seven are
+confirmed genuinely closed; the git-CAS core is sound and unregressed.
+
+### Gate re-verification (independently re-run)
+
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → **CLEAN**.
+- `shellcheck plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → **CLEAN**
+  (SC3043 suppressed file-wide).
+- `bats plugins/loom/lib/loom-coord.bats` → **64/64 pass**. Existing hook suites
+  (`git-identity-guard.bats`, `precompact-write-ahead-backstop.bats`) → **39/39**, untouched;
+  `hooks.json` has no loom-coord entry (REG1). Gate genuinely green.
+
+### The git-CAS core is SOUND (verified — not regressed)
+
+The X1-X7 fix commit touches only `_norm_int` (new), the schema-gate dispatch narrowing, the
+`list-claims` decode, and the V2b/V3b tests — it does **not** touch the CAS substrate. Acquire
+is a create-only CAS (`update-ref <ref> <blob> <null-OID>`), steal/renew are value-CAS against
+the exact read SHA, release is a delete-CAS on the caller's own blob — two contenders can never
+both win (CC1 races it green; V1/RNW-3 prove the renewer heartbeats the lock ref).
+
+### Findings adjudication — X1-X7 (all CONFIRMED-then-FIXED)
+
+`/code-review` X1-X7: **7 CONFIRMED by the prior round, all now VERIFIED CLOSED**;
+`/security-review` ran-clean (informational — no vuln to adjudicate).
+
+- **X1 (was fail-open → double-grant) — CLOSED.** `_norm_int` (sh:44) strips leading zeros via
+  pure parameter-expansion before any `$(( ))`; verified `08→8`, `09→9`, `007→7`, `00→0`. All
+  numeric env vars normalized (TTL, lease-TTL, retries, renew-interval, lock-renew-interval).
+  The renewer's `_lease_every=$((_interval/_lock_interval))` can no longer crash on a
+  zero-padded override; `renewer-start` with `LOOM_LOCK_RENEW_INTERVAL=08` reaches its normal
+  path, no octal abort.
+- **X2 [scrutinized hardest] — CLOSED, guard verified by revert.** `cmd_cleanup` runs the
+  delete-CAS FIRST (sh:1126) and destroys the worktree + session dir only inside the CAS-success
+  branch. **Independent revert-check:** patched a scratch copy back to destroy-before-CAS and ran
+  V2/V2b/V3/V3b — **V2b went RED** (`[ -d "$wt_path" ]` failed: worktree destroyed before the
+  `reference-transaction` hook aborts the CAS) while the happy-path V2 stayed green. The V2b test
+  genuinely guards the reorder.
+- **X3 [scrutinized hardest] — CLOSED, guard verified by revert.** `cmd_reclaim` runs the
+  value-CAS steal FIRST (sh:745) and prunes/removes the orphan worktree only after it succeeds.
+  Same revert-check: **V3b went RED** (worktree destroyed before the aborted CAS) with V3 still
+  green. V3b genuinely guards the reorder. Both V2b/V3b use a `reference-transaction` hook that
+  aborts `refs/loom/claims/*` writes — a faithful stand-in for a concurrent renewal changing the
+  SHA in the TOCTOU window.
+- **X4 (was schema wedge) — CLOSED.** Schema gate now runs only on `lock-acquire|claim|renew`
+  (sh:1317-1319); teardown/recovery (`lock-release`, `release-claim`, `reclaim`, `cleanup`,
+  `session-end`) are ungated. Behaviorally confirmed with a planted bad schema ref (v99):
+  `lock-acquire`→10 (fail-closed) but `cleanup`→0, `session-end`→0, `lock-release`→5 — recovery
+  is never wedged by a corrupt/unknown schema.
+- **X5 (v1 plaintext binary garbage) — CLOSED.** `list-claims` decode (sh:786-793) requires the
+  decoded value be non-empty and all-printable (`tr -cd '[:print:]'` == decoded) before use, else
+  falls back to the refname. Behaviorally confirmed: a v2 base64 blob prints `auth-service`; a v1
+  plaintext field-3 and a no-field-3 blob both fall back to the refname — no binary garbage in
+  stdout.
+- **X6 (heartbeat == TTL at TTL=1) — CLOSED.** `LOOM_LOCK_TTL` floored to 2 (sh:63) so
+  `_default_lri = TTL/3` (floored to 1) is always strictly `< TTL`; the `>= TTL` clamp resets to
+  `_default_lri` (sh:101-104). Verified strictly-less holds for TTL≥2.
+- **X7 (non-portable `base64 -d`) — CLOSED.** Decode tries `-d` then `-D` then empty
+  (sh:786-788); portable across GNU/BSD.
+
+### Independent observations
+
+- **Not regressed (verified):** the git-CAS create-only/value/delete core (CC1), lock-TTL (30s)
+  ≠ lease-TTL (3600s), fail-closed exit 10 outside a repo, `lock-verify` (0/5/10), the renewer
+  identity gate (RNW-2), the V1 lock-heartbeat cadence and V4 release-vs-heartbeat retry, and the
+  V5/V6 hash-ref encoding (`foo.lock`, `a..b`, case-distinct `Auth`/`auth`) all hold green.
+- **Scope/identity clean:** the X1-X7 fix commit touches only the two `plugins/loom/lib/` files;
+  holder/claim state is `refs/loom/*` blobs (no author metadata — ADR 0003 untouched); no commits
+  made; no `hooks.json` entry.
+- **Trivial (non-blocking):** the v1-plaintext decode emits a harmless `tr: Illegal byte
+  sequence` to stderr on some inputs; stdout is unaffected. Housekeeping only.
+
+### Prior-round context (Round 4 review below, retained as history)
 
 ## Code review — Round 4 (FAIL)
 
