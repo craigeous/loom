@@ -37,10 +37,52 @@
 # ---------------------------------------------------------------------------
 # Tunable parameters (overridable via env)
 # ---------------------------------------------------------------------------
+# X1 fix: _norm_int strips leading zeros to normalize to base-10.
+# POSIX $(( )) treats 08/09 as invalid octal → must normalize before any
+# arithmetic.  Pure parameter-expansion loop — no subprocess, no 10# (dash
+# does not support arithmetic base-conversion syntax).
+_norm_int() {
+    local _ni
+    _ni="$1"
+    while [ "${#_ni}" -gt 1 ]; do
+        case "$_ni" in
+        0*) _ni="${_ni#0}" ;;
+        *) break ;;
+        esac
+    done
+    printf '%s' "$_ni"
+}
+
+# X6 fix: floor LOOM_LOCK_TTL to 2 (minimum) so the heartbeat interval can
+# always be set strictly < TTL (TTL=1 has no valid sub-TTL integer interval).
 LOOM_LOCK_TTL="${LOOM_LOCK_TTL:-30}"
+case "$LOOM_LOCK_TTL" in
+*[!0-9]* | '') LOOM_LOCK_TTL=30 ;;
+*) LOOM_LOCK_TTL=$(_norm_int "$LOOM_LOCK_TTL") ;;
+esac
+[ "$LOOM_LOCK_TTL" -lt 2 ] && LOOM_LOCK_TTL=2
+
 LOOM_LEASE_TTL="${LOOM_LEASE_TTL:-3600}"
+case "$LOOM_LEASE_TTL" in
+*[!0-9]* | '') LOOM_LEASE_TTL=3600 ;;
+*) LOOM_LEASE_TTL=$(_norm_int "$LOOM_LEASE_TTL") ;;
+esac
+[ "$LOOM_LEASE_TTL" -lt 1 ] && LOOM_LEASE_TTL=1
+
 LOOM_LOCK_RETRIES="${LOOM_LOCK_RETRIES:-5}"
+case "$LOOM_LOCK_RETRIES" in
+*[!0-9]* | '') LOOM_LOCK_RETRIES=5 ;;
+*) LOOM_LOCK_RETRIES=$(_norm_int "$LOOM_LOCK_RETRIES") ;;
+esac
+[ "$LOOM_LOCK_RETRIES" -lt 1 ] && LOOM_LOCK_RETRIES=1
+
 LOOM_RENEW_INTERVAL="${LOOM_RENEW_INTERVAL:-1200}"
+case "$LOOM_RENEW_INTERVAL" in
+*[!0-9]* | '') LOOM_RENEW_INTERVAL=1200 ;;
+*) LOOM_RENEW_INTERVAL=$(_norm_int "$LOOM_RENEW_INTERVAL") ;;
+esac
+[ "$LOOM_RENEW_INTERVAL" -lt 1 ] && LOOM_RENEW_INTERVAL=1
+
 # Lock-heartbeat cadence (V1 fix): must be strictly < LOOM_LOCK_TTL (~TTL/3).
 # Default derived from LOOM_LOCK_TTL; override with LOOM_LOCK_RENEW_INTERVAL.
 _default_lri=$((LOOM_LOCK_TTL / 3))
@@ -49,12 +91,15 @@ LOOM_LOCK_RENEW_INTERVAL="${LOOM_LOCK_RENEW_INTERVAL:-$_default_lri}"
 # W1 fix: validate override — floor at 1 (prevents division-by-zero at the
 # renewer's _lease_every computation) and clamp below LOOM_LOCK_TTL (prevents
 # heartbeating slower than the lock expires → peer-steal of a live holder).
+# X1 fix: normalize leading zeros after digit-check (same zero-pad crash).
+# X6 fix: LOOM_LOCK_TTL >= 2 ensures _default_lri >= 1 < TTL is always safe.
 case "$LOOM_LOCK_RENEW_INTERVAL" in
 *[!0-9]* | '') LOOM_LOCK_RENEW_INTERVAL=$_default_lri ;;
+*) LOOM_LOCK_RENEW_INTERVAL=$(_norm_int "$LOOM_LOCK_RENEW_INTERVAL") ;;
 esac
 [ "$LOOM_LOCK_RENEW_INTERVAL" -lt 1 ] && LOOM_LOCK_RENEW_INTERVAL=1
 if [ "$LOOM_LOCK_RENEW_INTERVAL" -ge "$LOOM_LOCK_TTL" ]; then
-    LOOM_LOCK_RENEW_INTERVAL=$((_default_lri))
+    LOOM_LOCK_RENEW_INTERVAL=$_default_lri
     [ "$LOOM_LOCK_RENEW_INTERVAL" -lt 1 ] && LOOM_LOCK_RENEW_INTERVAL=1
 fi
 
@@ -732,7 +777,20 @@ cmd_list_claims() {
         _b64=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $3}')
         [ -z "$_sid" ] && continue
         # W4 fix: base64-decode field 3 to recover the original slice name.
-        _slice=$(printf '%s' "$_b64" | base64 -d 2>/dev/null || true)
+        # X7 fix: portable decode — try GNU (-d) then BSD (-D).
+        # X5 fix: v1 claims may have plaintext in field 3 (no base64); decoding
+        # them yields binary garbage.  Verify result is all-printable before
+        # using it; fall back to the refname on empty or non-printable output.
+        _slice=""
+        if [ -n "$_b64" ]; then
+            _decoded=$(printf '%s' "$_b64" | base64 -d 2>/dev/null) ||
+                _decoded=$(printf '%s' "$_b64" | base64 -D 2>/dev/null) ||
+                _decoded=""
+            _clean=$(printf '%s' "${_decoded:-}" | tr -cd '[:print:]')
+            if [ -n "$_clean" ] && [ "$_clean" = "$_decoded" ]; then
+                _slice="$_clean"
+            fi
+        fi
         # Print: <original-slice-name or refname>\t<sid>\t<ts>
         if [ -n "$_slice" ]; then
             printf '%s\t%s\t%s\n' "$_slice" "$_sid" "$_ts"
@@ -1252,7 +1310,14 @@ cmd_renewer_stop() {
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
-_check_or_set_schema
+# X4 fix: schema gate runs ONLY on acquire/claim paths.  Teardown/recovery
+# subcommands (lock-release, release-claim, cleanup, session-end) must always
+# run regardless of schema state — gating them on schema wedges recovery when
+# refs/loom/schema is corrupt or holds an unknown version.
+case "$SUBCOMMAND" in
+lock-acquire | claim | renew) _check_or_set_schema ;;
+esac
+
 case "$SUBCOMMAND" in
 lock-acquire) cmd_lock_acquire ;;
 lock-release) cmd_lock_release ;;

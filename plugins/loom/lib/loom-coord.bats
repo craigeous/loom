@@ -1533,6 +1533,58 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# V2b — TOCTOU guard: concurrent renewal aborts cleanup CAS; worktree preserved
+# ---------------------------------------------------------------------------
+
+@test "V2b concurrent renewal: cleanup CAS refused; live holder worktree preserved" {
+    # Guards the destroy-after-CAS ordering (V2 fix).
+    # Mechanism: a reference-transaction hook installed in the repo aborts any
+    # deletion of a claim ref, exactly as a concurrent renewal would change the
+    # SHA between for-each-ref snapshot and the delete-CAS.
+    #
+    # With destroy-BEFORE-CAS (reverted bug): cleanup removes the worktree
+    # BEFORE the hook aborts the CAS → worktree is gone → [ -d wt_path ] FAILS.
+    # With destroy-AFTER-CAS (fix): CAS refused → worktree untouched → PASS.
+    make_repo
+    cd "$REPO"
+
+    local sid="ses-V2b-alive"
+    plant_claim_ref "slice-V2b" "$sid" "0"
+
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    # Hook: read all stdin to drain the transaction, then abort if any
+    # refs/loom/claims/* ref is involved (simulates concurrent renewal).
+    mkdir -p "$REPO/.git/hooks"
+    cat >"$REPO/.git/hooks/reference-transaction" <<'HOOK'
+#!/bin/sh
+if [ "$1" = "prepared" ]; then
+    _abort=0
+    while IFS=' ' read -r _o _n _r; do
+        case "$_r" in
+        refs/loom/claims/*) _abort=1 ;;
+        esac
+    done
+    [ "$_abort" -eq 1 ] && exit 1
+fi
+exit 0
+HOOK
+    chmod +x "$REPO/.git/hooks/reference-transaction"
+
+    # cleanup: sees stale claim → delete-CAS → hook aborts (simulated renewal) →
+    # "CAS refused" branch → claim and worktree must survive.
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    # Hook aborted the CAS → claim ref must still exist
+    [ -n "$(claim_ref_sha "slice-V2b")" ]
+    # destroy-after-CAS: worktree not touched because CAS failed first
+    [ -d "$wt_path" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
 # V3 — Refused reclaim (holder renewed) does NOT remove worktree
 # ---------------------------------------------------------------------------
 
@@ -1564,6 +1616,58 @@ EOF
     [ "$(claim_sid "slice-V3")" = "ses-V3-reclaimer" ]
     # Holder's orphan worktree was removed (destroy happens after CAS)
     [ ! -d "$wt_path" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# V3b — TOCTOU guard: concurrent renewal aborts reclaim CAS; worktree preserved
+# ---------------------------------------------------------------------------
+
+@test "V3b concurrent renewal: reclaim CAS refused; holder worktree preserved" {
+    # Guards the destroy-after-CAS ordering (V3 fix).
+    # Mechanism: a reference-transaction hook aborts any write to a claim ref,
+    # simulating a holder renewal between reclaim's stale-check and the CAS steal.
+    #
+    # With destroy-BEFORE-CAS (reverted bug): reclaim removes the holder's
+    # worktree BEFORE the hook aborts the CAS → worktree is gone → FAILS.
+    # With destroy-AFTER-CAS (fix): CAS refused (exit 4) → worktree untouched → PASS.
+    make_repo
+    cd "$REPO"
+
+    local holder_sid="ses-V3b-holder"
+    local wt_path
+    wt_path="$(cd "$REPO/.." && pwd)/wt-${holder_sid}"
+    git -C "$REPO" worktree add -q "$wt_path" HEAD
+
+    plant_claim_ref "slice-V3b" "$holder_sid" "0"
+
+    # Hook: abort any write to a claim ref (covers value-CAS steal in reclaim)
+    mkdir -p "$REPO/.git/hooks"
+    cat >"$REPO/.git/hooks/reference-transaction" <<'HOOK'
+#!/bin/sh
+if [ "$1" = "prepared" ]; then
+    _abort=0
+    while IFS=' ' read -r _o _n _r; do
+        case "$_r" in
+        refs/loom/claims/*) _abort=1 ;;
+        esac
+    done
+    [ "$_abort" -eq 1 ] && exit 1
+fi
+exit 0
+HOOK
+    chmod +x "$REPO/.git/hooks/reference-transaction"
+
+    # lock-acquire touches refs/loom/lock — hook allows it
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V3b-reclaimer"
+    [ "$status" -eq 0 ]
+    # reclaim: stale claim → value-CAS → hook aborts (simulated renewal) → exit 4
+    run sh "$COORD" reclaim slice-V3b --session "ses-V3b-reclaimer"
+    [ "$status" -eq 4 ]
+    # Original holder still owns the claim (CAS was refused)
+    [ "$(claim_sid "slice-V3b")" = "$holder_sid" ]
+    # destroy-after-CAS: worktree untouched because CAS was refused first
+    [ -d "$wt_path" ]
     teardown
 }
 
