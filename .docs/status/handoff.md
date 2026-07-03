@@ -686,6 +686,16 @@ source of truth; `roadmap.md` is milestone order.
    the fixed version. **NEXT ACTION:** developer fixes X1 (base-10 normalize `10#`), X2/X3 (concurrent-renewal
    test mechanism — verify red-green), X4 (don't gate teardown/recovery on schema), X5 (decode fallback to
    refname), X6 (strictly <TTL), X7 (portable base64). Gate green → `Implemented` → blind code-eval → land.
+   **X1-X7 fix LANDED `c3755d0`** (slice `Implemented`, gate green **bats 64/64**, shfmt/shellcheck clean):
+   X1/X6 `_norm_int` base-10 normalizer on all 5 numeric env vars + `LOOM_LOCK_TTL` floored to 2 (interval
+   always strictly < TTL); **X2/X3 FIXED PROPERLY — dev used git `reference-transaction` hooks to simulate
+   concurrent renewal in the TOCTOU window and VERIFIED true red-green** (RED on reverted destroy-before-CAS,
+   GREEN with fix); X4 schema gate now only on `lock-acquire|claim|renew` (teardown/recovery ungated); X5/X7
+   portable 2-phase decode (`-d` then `-D`) + `tr -cd '[:print:]'` fallback to refname. Full git-CAS re-impl
+   + all fixes = `eedfc43..c3755d0`. **NEXT ACTION:** blind code-eval as the **LANDING GATE** (owner-reset
+   counter → PASS = round 0 → LANDS slice H; FAIL = round 1) — verify X1-X7 closed (esp. revert-the-reorder
+   to confirm X2/X3 tests fail), re-verify gate, scrutinize the new constructs (`_norm_int`, reference-
+   transaction test hooks, schema-gate move, base64 decode). Then finalize → slice W.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
