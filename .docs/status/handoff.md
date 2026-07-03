@@ -673,6 +673,19 @@ source of truth; `roadmap.md` is milestone order.
    on spend limit → if finders fail, the run is INVALID, do not treat "no findings" as clean) → refresh
    review-findings → blind code-eval (fresh counter: PASS lands slice H; FAIL → round 1). Then finalize →
    slice W.
+   **Valid `/code-review` of the W1-W7 fix — NOT clean; 7 more defects** (`multi-session-lock-helper-review-
+   findings.md`): **X1 BLOCKER** W1 validator accepts zero-padded `08`/`09` → renewer octal-arith crash →
+   lock not heartbeat → double-grant; **X2/X3 CONFIRMED** the V2/V3 tests are STILL ineffective (stale claim
+   but **no CONCURRENT RENEWAL** → both orderings match → reverted fix passes green, empirically) — the test
+   MUST renew the claim fresh mid-cleanup/reclaim so destroy-before-CAS kills a live holder (FAIL) vs
+   destroy-after-CAS refuses (PASS); **X4 BLOCKER** the new W3 schema gate runs before EVERY subcommand incl.
+   teardown (lock-release/cleanup/session-end) → bad schema ref wedges recovery unrecoverably; X5 base64-on-v1
+   plaintext garbage; X6 TTL=1 clamp edge; X7 `base64 -d` BSD portability. `/security-review` ran-clean.
+   **DECISION (cost-conscious, 2 spend-limit hits):** route the fix DIRECTLY from this valid review + precise
+   guidance (dev missed the V2/V3 test mechanism twice), keep the **blind code-eval as the LANDING gate** on
+   the fixed version. **NEXT ACTION:** developer fixes X1 (base-10 normalize `10#`), X2/X3 (concurrent-renewal
+   test mechanism — verify red-green), X4 (don't gate teardown/recovery on schema), X5 (decode fallback to
+   refname), X6 (strictly <TTL), X7 (portable base64). Gate green → `Implemented` → blind code-eval → land.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable

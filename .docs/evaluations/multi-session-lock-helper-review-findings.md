@@ -1,66 +1,61 @@
 # Review findings — multi-session-lock-helper
 
 Automated review of the slice's code (`plugins/loom/lib/loom-coord.sh` + `.bats`; `.docs/`
-markdown out of scope). Advisory input to the blind code-evaluator. Transcribed from real
-command output (valid, complete run — an earlier run was voided by a spend-limit finder crash).
-Identity-neutral.
+markdown out of scope). Advisory input. Transcribed from a real, complete `/code-review`
+run. Identity-neutral.
 
-**This revision reviews the round-4 fix (`9fa9b63..9a79c27`)** of the git-CAS helper. The CAS
-core remains sound; the round-4 fix closed the prior V1-V6 but introduced new fail-open
-regressions and shipped two ineffective regression tests.
+**This revision reviews the W1-W7 fix (`9a79c27..46e85dc`).** The git-CAS core stays sound; the
+fix introduced a new fail-open (X1) and a new wedge (X4), and the V2/V3 test gap is STILL open.
 
 ## /code-review
 Status: ran-with-findings
 
-High-effort review; 14 findings → 7 distinct defects.
-
-### Finding W1
+### Finding X1
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:48 (also :1124)
-- description: `LOOM_LOCK_RENEW_INTERVAL` **env override is not validated** against `LOOM_LOCK_TTL` nor floored `>=1` (only the derived default is floored at :47). An operator setting it `> TTL` → the renewer heartbeats the lock **slower than it expires** → a peer steals the (still-"active") lock → double-grant; setting it `=0` → **division-by-zero** at :1124, the renewer subshell exits immediately while `renewer-start` still reports success → lock never heartbeat → stale → stolen. Fail-open in a fail-closed coordinator. (The V1 fix floored the default but not the override.)
+- location: plugins/loom/lib/loom-coord.sh:52 (renewer arithmetic :1169)
+- description: The W1 `LOOM_LOCK_RENEW_INTERVAL` validator accepts **zero-padded all-digit** overrides (`08`, `09`): they pass the `*[!0-9]*` glob and the numeric tests, so validation leaves them as-is. The detached renewer then aborts at `_lease_every=$((_interval / _lock_interval))` because POSIX `$(( ))` rejects `08`/`09` as invalid octal → `renewer-start` reports success but the renewer subshell dies → the lock is never heartbeat → after TTL a peer steals it from a live holder → **double-grant**. Fix: normalize to base-10 (strip leading zeros or use `$((10#$x))`), or reject leading-zero input.
 - confidence: CONFIRMED
 
-### Finding W2
+### Finding X2
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:285 (also :283)
-- description: Storing the **raw slice name as tab/newline-delimited blob field 3** (the V5/V6 change) removes the newline-safety the percent-encoded refname used to provide. A slice name containing a newline makes `_make_claim_blob_for` write a 2-line blob `sid<TAB>ts<TAB>part1\npart2`; every later owner check `decode_claim_field <sha> 1` runs `awk -F'\t' '{print $1}'` over BOTH lines → returns `sid\npart2` != SESSION_ID → owner check fails (exit 5) though the session owns the claim → the renewer can never heartbeat it → lease goes stale → cleanup sweeps it while the session still holds the slice → a peer re-claims → **two sessions edit the same slice**. Fail-open. (Store the slice name newline/tab-safe — e.g. base64 — or keep it out of the parsed blob.)
+- location: plugins/loom/lib/loom-coord.bats:1506 (also :1526)
+- description: **The V2 regression test is STILL ineffective.** It now plants a stale claim but with **no concurrent renewal**, so a reverted destroy-before-CAS ordering in `cmd_cleanup` reaches the same end state (ref deleted, worktree removed) and the test passes identically — empirically confirmed. The test does NOT guard the reorder. **Required mechanism:** the test must have the claim **renewed concurrently DURING cleanup's snapshot→destroy window** (claim stale in the for-each-ref snapshot, then renewed fresh before the CAS), so destroy-before-CAS force-removes a LIVE holder's worktree (test FAILS) while destroy-after-CAS refuses the CAS and leaves it intact (test PASSES). Verify the test fails on a reverted fix.
 - confidence: CONFIRMED
 
-### Finding W3
+### Finding X3
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:272
-- description: V5/V6 changed the claim-ref naming from percent-encoding to a `git hash-object` SHA — an **incompatible naming change with no migration/version marker**. A claim created under the old scheme (or by a concurrently-running old-version invocation during an upgrade) is keyed differently and is invisible to the new code → the same slice can be double-claimed. (Low impact for an unreleased helper with no old refs in existence, but a concurrent old+new version would collide; add a ref-schema version marker.)
-- confidence: PLAUSIBLE
-
-### Finding W4
-- source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:689 (also :688)
-- description: `list-claims` recovers the slice name via `awk -F'\t' '{print $3}'`, which **truncates at the first embedded tab** (and a newline splits the blob into a second awk record), so a slice name containing a tab/newline is displayed corrupted → an operator cannot map the row back to the real slice. Same raw-slice-name flaw as W2; defeats the V5/V6 purpose of storing the original name.
+- location: plugins/loom/lib/loom-coord.bats:1539 (also :1561)
+- description: **The V3 regression test is STILL ineffective** — same root cause (stale claim, no concurrent renewal); its own comment admits it only checks the path is "reachable and functional", not destroy-after-CAS. A reverted destroy-before-CAS in `cmd_reclaim` ships green. Same fix: renew the claim concurrently in reclaim's TOCTOU window so destroy-before-CAS destroys a live holder's worktree (FAIL) vs destroy-after-CAS refuses (PASS).
 - confidence: CONFIRMED
 
-### Finding W5
+### Finding X4
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.bats:1500
-- description: **The V2 regression test is ineffective** — it renews the planted claim to `ts=now` before running cleanup, so cleanup skips it at the freshness check (`loom-coord.sh:1016`) and **never reaches the V2 delete-CAS-first branch it purports to guard**. Reverting the V2 fix to destroy-before-CAS leaves this test GREEN → a future regression that destroys a live holder's worktree ships undetected. The test must exercise the **stale-claim** path where the reorder matters.
+- location: plugins/loom/lib/loom-coord.sh:1255 (schema gate at dispatch)
+- description: The new W3 schema gate (`_check_or_set_schema`) runs at dispatch **before every subcommand, including teardown/recovery paths** (`lock-release`, `release-claim`, `cleanup`, `session-end`) which previously always ran. If `refs/loom/schema` ever holds a non-`2` value or an unreadable blob (`cat-file` failure → empty `_cur_ver` != `2`), EVERY subcommand exits 10 → a session can no longer release its lock/claims or run cleanup to recover → **the shared main checkout stays wedged for all sessions with no tool-level recovery.** Fix: do NOT gate teardown/recovery paths on the schema version (they must always run); gate only acquire/claim, or make a mismatch non-fatal on teardown.
 - confidence: CONFIRMED
 
-### Finding W6
+### Finding X5
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.bats:1538
-- description: **The V3 regression test is ineffective** — same root cause: it renews the claim to `ts=now`, so reclaim exits 6 at the freshness guard (`loom-coord.sh:644`) and never reaches the V3 CAS-steal-first path (exit 4) it claims to verify. A reclaim-TOCTOU worktree-destruction regression is not caught.
+- location: plugins/loom/lib/loom-coord.sh:735
+- description: `list-claims` decodes field 3 with `base64 -d`; on a **pre-W2 (v1) plaintext** claim blob the field is plaintext, so `base64 -d` emits binary garbage (non-empty), which the `[ -n "$_slice" ]` branch prints as the slice name instead of falling back to the refname. The W3 marker is created fresh as v2 without validating pre-existing claim blobs. Fix: fall back to the refname / try-decode-else-plaintext, or key decode on the per-claim schema.
 - confidence: CONFIRMED
 
-### Finding W7
+### Finding X6
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:687
-- description: `list-claims` re-reads each claim blob **three times** (three `git cat-file` spawns per ref) to extract three tab fields — read the blob once and split. Efficiency cleanup.
+- location: plugins/loom/lib/loom-coord.sh:56
+- description: The W1 too-large-override clamp resets to `_default_lri` (=`TTL/3` floored to 1), which is NOT strictly `< LOOM_LOCK_TTL` when `TTL=1` (yields 1 == TTL) → heartbeat fires at the lease-expiry boundary → stealable. Degenerate-config edge; enforce strictly-less (or document/floor a minimum TTL).
 - confidence: CONFIRMED (minor)
+
+### Finding X7
+- source: /code-review
+- location: plugins/loom/lib/loom-coord.sh:735
+- description: `base64 -d` is not portable — some BSD/POSIX `base64` accept only `-D` for decode; the error is swallowed so decode silently fails (empty → refname fallback, but on some platforms EVERY slice name silently fails to display). Use a portable decode (try `-d` then `-D`, or `openssl base64 -d`, or a POSIX fallback).
+- confidence: CONFIRMED (portability)
 
 ## /security-review
 Status: ran-clean
 
-No concrete (>=0.8) vulnerabilities newly introduced. The blob-stored slice name reaches no
-dangerous sink (stdin-hashed; `printf %s`; fixed-string `grep -qxF`); the hashing keeps the raw
-name off every `git` option position; the lock-release retry loop provably cannot delete another
-session's lock (re-reads, exits when `sid != self`); `rm -rf`/`kill`/`mv` sinks are fed by trusted
-session-id / tool-written state. (W2/W4 are correctness defects, not security vulnerabilities.)
+No concrete (>=0.8) vulnerabilities newly introduced. The base64-decoded slice name reaches only
+`printf` (never `eval`/git-option/path); the schema marker uses only constants + hex SHAs; the clamp
+arithmetic digit-validates before `$(( ))`; no new `rm`/`kill`/`mv`/`git` sink is fed by untrusted
+input. (X1/X4/X5 are correctness defects, not security vulnerabilities.)
