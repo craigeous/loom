@@ -630,6 +630,17 @@ source of truth; `roadmap.md` is milestone order.
    **NEXT ACTION:** re-run `/code-review` + `/security-review` on the fix → refresh review-findings → blind
    code-eval. **Resolving PASS carries Round 4 → LANDS slice H at last** (CAS core already confirmed sound,
    these were discrete fixes); FAIL → Round 5 → escalate. Then finalize → slice W.
+   **⛔ BLOCKED — monthly spend limit (raise at claude.ai/settings/usage).** The `/code-review` re-run on the
+   round-4 fix **DID NOT complete**: all 4 finder agents (angle-A/B/C + cleanup) crashed on the spend limit,
+   so the workflow's "No findings survived verification" is **NOT a valid clean review** (finders never ran)
+   — do NOT record it as `ran-clean` or feed it to the code-eval (faithfulness invariant). `/security-review`
+   **did** complete = ran-clean (valid). The review-findings artifact still holds the PRE-fix V1-V6 (stale).
+   **RESUME (when spend limit raised):** re-run `/code-review` on `9fa9b63..9a79c27` (valid, complete) →
+   refresh review-findings (both tools) → blind code-eval (Round 4 resolving: PASS carries Round 4 and LANDS
+   slice H; FAIL → Round 5 escalate) → finalize (archive plan, progress/CLAUDE.md, log the deferred
+   infra-blocked-escalation `.docs/` follow-up) → slice W (fold lease-freshness + git-CAS into
+   `parallelism.md`/`orchestration.md`/`run.md`). Slice `Implemented` at `9a79c27`, gate green 62/62, tree
+   clean. Design layer (ADR 0014/0015/0016 + spec 04) all committed + durable.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
