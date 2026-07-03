@@ -696,6 +696,17 @@ source of truth; `roadmap.md` is milestone order.
    counter → PASS = round 0 → LANDS slice H; FAIL = round 1) — verify X1-X7 closed (esp. revert-the-reorder
    to confirm X2/X3 tests fail), re-verify gate, scrutinize the new constructs (`_norm_int`, reference-
    transaction test hooks, schema-gate move, base64 decode). Then finalize → slice W.
+   **✅ SLICE H PASSED — blind code-eval PASS `Round: 0` → LANDS.** Evaluator's decisive revert-check:
+   patching to destroy-before-CAS turned V2b/V3b RED (guards genuine, not masking); git-CAS core sound; all
+   X1-X7 closed (independently verified incl. bad-schema recovery); gate green 64/64 + hooks 39/39. The
+   `loom-coord.sh` git-CAS multi-session helper is DONE (`eedfc43..c3755d0`). **NEXT ACTION:** developer
+   FINALIZE pass — set slice `Landed`→`Archived`; update `progress.md` (record the whole multi-session thread
+   outcome) + `handoff.md`; update root `CLAUDE.md` **curated digest** (new component `plugins/loom/lib/loom-
+   coord.sh` = loom's 1st non-hook CLI helper + the multi-session coordination mechanism; ADR 0014/0015/0016
+   + spec 04 multi-session model; shell gate now covers `lib/`; note the operational playbook-body fold comes
+   in slice W); `git mv` the slice-plan to `.docs/slice-plans/archive/` + move the index entry Active→Archived.
+   Then **slice W** (fold lease-freshness + git-CAS into `parallelism.md`/`orchestration.md`/`run.md`) + log
+   the deferred `infra-blocked-escalation` `.docs/` follow-up.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
