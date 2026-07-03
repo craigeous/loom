@@ -655,6 +655,16 @@ source of truth; `roadmap.md` is milestone order.
    once). **⏸ ESCALATED TO OWNER at the round limit** — decision: (a) authorize one more fix round (reset the
    counter) — likely lands; (b) pause slice H here (design committed + durable; helper `Implemented` at
    `9a79c27` but NOT clean); (c) other. **NEXT ACTION: await owner decision.**
+   **OWNER CHOSE (a): one more fix round + RESET the round counter** (owner-driven reset per spec-03
+   round-limit contract → slice H code-eval counter back to **0**; fresh 5-round budget). **NEXT ACTION:**
+   developer round-5 (counter-reset) fix of W1-W7: **W1** floor/validate the `LOOM_LOCK_RENEW_INTERVAL`
+   env OVERRIDE (≥1, and < lock TTL; no div-by-zero) same as the default; **W2/W4** store the slice name
+   **base64-encoded** in the claim blob (newline/tab-safe, single-line), decode in `list-claims`; **W5/W6**
+   fix the V2/V3 regression tests to exercise the **stale-claim** path (do NOT renew to `now`; assert the
+   test FAILS if the fix is reverted — true red-green); **W3** add a ref-schema **version marker** (blob
+   field or `refs/loom/schema`) so a scheme change is detectable; **W7** read each claim blob ONCE in
+   list-claims. Strict output discipline + incremental commits. Gate green → `Implemented` → re-run automated
+   review → blind code-eval (fresh counter) → land → finalize → slice W. git-CAS core already sound.
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
