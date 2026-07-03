@@ -1,68 +1,66 @@
 # Review findings — multi-session-lock-helper
 
-Automated review of the slice's code (`plugins/loom/lib/loom-coord.sh`; bats + `.docs/`
+Automated review of the slice's code (`plugins/loom/lib/loom-coord.sh` + `.bats`; `.docs/`
 markdown out of scope). Advisory input to the blind code-evaluator. Transcribed from real
-command output. Identity-neutral.
+command output (valid, complete run — an earlier run was voided by a spend-limit finder crash).
+Identity-neutral.
 
-**This revision reviews the git-CAS RE-IMPLEMENTATION (`eedfc43..9fa9b63`, 3 passes).** The
-CAS primitive itself is now correct (git owns atomicity — the prior mkdir-CAS ABA/race class is
-eliminated, confirmed by the review). The remaining defects are in peripheral logic (renewer
-cadence, destroy-before-CAS ordering, the renewer↔release race, ref-name encoding, case-fold).
+**This revision reviews the round-4 fix (`9fa9b63..9a79c27`)** of the git-CAS helper. The CAS
+core remains sound; the round-4 fix closed the prior V1-V6 but introduced new fail-open
+regressions and shipped two ineffective regression tests.
 
 ## /code-review
 Status: ran-with-findings
 
-High-effort review; ~10 distinct defects (correctness-first; lower-value cleanup items dropped
-under the cap). CONFIRMED set below.
+High-effort review; 14 findings → 7 distinct defects.
 
-### Finding V1
+### Finding W1
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:43
-- description: Default `LOOM_RENEW_INTERVAL` (1200s) is **40× the lock TTL** (`LOOM_LOCK_TTL` 30s), so the renewer's lock heartbeat (the U3 fix) cannot keep a held lock fresh: a session holding `refs/loom/lock` across an op >30s has its lock value-CAS-stolen by a peer at the 30s mark → both believe they hold it → double-grant. The renew cadence must be well below the SHORTEST TTL it must refresh (i.e. < lock TTL ⇒ ~TTL/3).
+- location: plugins/loom/lib/loom-coord.sh:48 (also :1124)
+- description: `LOOM_LOCK_RENEW_INTERVAL` **env override is not validated** against `LOOM_LOCK_TTL` nor floored `>=1` (only the derived default is floored at :47). An operator setting it `> TTL` → the renewer heartbeats the lock **slower than it expires** → a peer steals the (still-"active") lock → double-grant; setting it `=0` → **division-by-zero** at :1124, the renewer subshell exits immediately while `renewer-start` still reports success → lock never heartbeat → stale → stolen. Fail-open in a fail-closed coordinator. (The V1 fix floored the default but not the override.)
 - confidence: CONFIRMED
 
-### Finding V2
+### Finding W2
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:1006 (also :1011)
-- description: `cleanup` runs `git worktree remove -f` on the holder's worktree and `rm -rf` its `.git/loom/session-<id>` dir **BEFORE** the guarding `update-ref -d <ref> <old-SHA>`, and `renew` is lock-free. A live session whose claim was momentarily stale in cleanup's `for-each-ref` snapshot renews (SHA S1→S2) mid-sweep; cleanup destroys its worktree (uncommitted work) + session dir, then the delete-CAS fails (ref is now S2) → **a LIVE session's resources are destroyed and its claim ref is left orphaned** (no held-claims backref). Destructive ops must run ONLY AFTER the CAS succeeds.
+- location: plugins/loom/lib/loom-coord.sh:285 (also :283)
+- description: Storing the **raw slice name as tab/newline-delimited blob field 3** (the V5/V6 change) removes the newline-safety the percent-encoded refname used to provide. A slice name containing a newline makes `_make_claim_blob_for` write a 2-line blob `sid<TAB>ts<TAB>part1\npart2`; every later owner check `decode_claim_field <sha> 1` runs `awk -F'\t' '{print $1}'` over BOTH lines → returns `sid\npart2` != SESSION_ID → owner check fails (exit 5) though the session owns the claim → the renewer can never heartbeat it → lease goes stale → cleanup sweeps it while the session still holds the slice → a peer re-claims → **two sessions edit the same slice**. Fail-open. (Store the slice name newline/tab-safe — e.g. base64 — or keep it out of the parsed blob.)
 - confidence: CONFIRMED
 
-### Finding V3
+### Finding W3
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:649
-- description: `reclaim` force-removes the stale holder's worktree **before** the guarding value-CAS steal. A holder that renews in the TOCTOU window (renew is lock-free) has its worktree/files deleted, and then the value-CAS correctly FAILS (SHA changed) and reclaim exits — so a now-live peer's worktree is destroyed even though the reclaim was refused (U6 violation). Same "destroy before confirm" bug as V2.
+- location: plugins/loom/lib/loom-coord.sh:272
+- description: V5/V6 changed the claim-ref naming from percent-encoding to a `git hash-object` SHA — an **incompatible naming change with no migration/version marker**. A claim created under the old scheme (or by a concurrently-running old-version invocation during an upgrade) is keyed differently and is invisible to the new code → the same slice can be double-claimed. (Low impact for an unreleased helper with no old refs in existence, but a concurrent old+new version would collide; add a ref-schema version marker.)
+- confidence: PLAUSIBLE
+
+### Finding W4
+- source: /code-review
+- location: plugins/loom/lib/loom-coord.sh:689 (also :688)
+- description: `list-claims` recovers the slice name via `awk -F'\t' '{print $3}'`, which **truncates at the first embedded tab** (and a newline splits the blob into a second awk record), so a slice name containing a tab/newline is displayed corrupted → an operator cannot map the row back to the real slice. Same raw-slice-name flaw as W2; defeats the V5/V6 purpose of storing the original name.
 - confidence: CONFIRMED
 
-### Finding V4
+### Finding W5
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:435 (also :431)
-- description: `lock-release` reads `cur_sha=X`, confirms sid==self, then the session's OWN background renewer value-CAS-updates the lock blob X→Y (still sid==self, fresh ts); the `update-ref -d <lock> X` then fails, the code re-reads `new_sha=Y` (non-empty) and exits 5 "ref changed during release" — but the session still owns the lock, it is never deleted, and the renewer keeps it fresh so it never goes stale → **permanent deadlock** (peers blocked; self can't re-acquire until session-end). This is the ADR-0016 "renewer↔release CAS-on-current-value" note: release must stop the renewer and/or re-read + retry the delete-CAS on the current SHA while sid==self.
+- location: plugins/loom/lib/loom-coord.bats:1500
+- description: **The V2 regression test is ineffective** — it renews the planted claim to `ts=now` before running cleanup, so cleanup skips it at the freshness check (`loom-coord.sh:1016`) and **never reaches the V2 delete-CAS-first branch it purports to guard**. Reverting the V2 fix to destroy-before-CAS leaves this test GREEN → a future regression that destroys a live holder's worktree ships undetected. The test must exercise the **stale-claim** path where the reorder matters.
 - confidence: CONFIRMED
 
-### Finding V5
+### Finding W6
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:265 (also :269)
-- description: `slice_to_refname` percent-encodes only bytes outside `[A-Za-z0-9._/-]` and does NOT enforce git's ref grammar, so legal slice names produce refnames git refuses: `foo.lock`, `a..b`, `feature/.hack`, or names ending in `/` or `.` pass through unencoded. `git update-ref` then fails "bad name", and `cmd_claim` maps that to exit 4 "claimed by another session" → the slice can NEVER be claimed/renewed/released/reclaimed → a **permanent live-lock on any git-illegal-ref-token slice name**, even with no peer holding it. Encode to satisfy `git check-ref-format` (e.g. encode `.`-sequences, `.lock`, leading/trailing `.`/`/`).
+- location: plugins/loom/lib/loom-coord.bats:1538
+- description: **The V3 regression test is ineffective** — same root cause: it renews the claim to `ts=now`, so reclaim exits 6 at the freshness guard (`loom-coord.sh:644`) and never reaches the V3 CAS-steal-first path (exit 4) it claims to verify. A reclaim-TOCTOU worktree-destruction regression is not caught.
 - confidence: CONFIRMED
 
-### Finding V6
+### Finding W7
 - source: /code-review
-- location: plugins/loom/lib/loom-coord.sh:285
-- description: Claim refs are loose ref FILES, so on a **case-insensitive filesystem** (macOS default APFS/HFS+ — the dev host) two distinct slice names differing only in case (`Auth` vs `auth`) map to the same ref file → one slice's claim silently aliases the other's (false "already claimed" or cross-grant). Encode case (or hash) so distinct names never case-fold to one ref path.
-- confidence: CONFIRMED
-
-### Additional (lower-severity / cleanup)
-- source: /code-review
-- location: plugins/loom/lib/loom-coord.sh (various)
-- description: The review noted ~4 further lower-value items (leftover dead test code from the deleted mkdir/TSV machinery, a redundant `cat-file`, a stale header comment) dropped under the report cap — worth a cleanup sweep in the fix.
+- location: plugins/loom/lib/loom-coord.sh:687
+- description: `list-claims` re-reads each claim blob **three times** (three `git cat-file` spawns per ref) to extract three tab fields — read the blob once and split. Efficiency cleanup.
 - confidence: CONFIRMED (minor)
 
 ## /security-review
 Status: ran-clean
 
-No concrete (>=0.8) vulnerabilities. The git argument-injection check is safe (every value in a
-`git` option/ref position is a fixed literal, a 40-hex SHA, or a `refs/loom/`-prefixed ref — none
-can lead with `-`); holder/claim blobs are read only via `cat-file | awk` string comparison, never
-`eval`'d; `rm -rf`/`kill`/`mv` sinks are fed by trusted session-id / tool-written state; the
-`/proc` field-22 parse is string-compared only. The V5 ref-grammar / V6 case-fold issues are
-correctness defects that fail closed, not security vulnerabilities.
+No concrete (>=0.8) vulnerabilities newly introduced. The blob-stored slice name reaches no
+dangerous sink (stdin-hashed; `printf %s`; fixed-string `grep -qxF`); the hashing keeps the raw
+name off every `git` option position; the lock-release retry loop provably cannot delete another
+session's lock (re-reads, exits when `sid != self`); `rm -rf`/`kill`/`mv` sinks are fed by trusted
+session-id / tool-written state. (W2/W4 are correctness defects, not security vulnerabilities.)

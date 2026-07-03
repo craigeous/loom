@@ -641,6 +641,20 @@ source of truth; `roadmap.md` is milestone order.
    infra-blocked-escalation `.docs/` follow-up) → slice W (fold lease-freshness + git-CAS into
    `parallelism.md`/`orchestration.md`/`run.md`). Slice `Implemented` at `9a79c27`, gate green 62/62, tree
    clean. Design layer (ADR 0014/0015/0016 + spec 04) all committed + durable.
+   **`/code-review` re-run VALID this time — round-4 fix is NOT clean.** 7 defects (`multi-session-lock-helper-
+   review-findings.md`, refreshed): **W1 BLOCKER** `LOOM_LOCK_RENEW_INTERVAL` env override unvalidated
+   (>TTL slow-heartbeat OR =0 div-by-zero → lock stale → double-grant; V1 floored default not override);
+   **W2 BLOCKER** raw slice name as tab/newline blob field 3 corrupts owner-check parse on a newline → lease
+   stale → sweep → double-grant (V5/V6 introduced); **W4** list-claims truncates name on tab/newline; **W5/W6
+   CONFIRMED TEST BUGS** the V2 & V3 regression tests renew the claim to `now` so cleanup/reclaim skip at the
+   freshness check → **never exercise the reordered branch → V2/V3 fixes are UNTESTED**; W3 ref-name migration
+   edge (PLAUSIBLE); W7 efficiency. `/security-review` ran-clean (valid). **A blind code-eval here = Round 5 =
+   the round-limit escalation point.** Slice history: 4 FAIL rounds + 2 design pivots (ADR 0015/0016) + 3 dev
+   infra crashes + 2 spend-limit hits. git-CAS CORE sound; defects all fixable (validate/floor the override;
+   base64 the slice name in the blob; fix the 2 tests to hit the stale-claim path; version marker; read blob
+   once). **⏸ ESCALATED TO OWNER at the round limit** — decision: (a) authorize one more fix round (reset the
+   counter) — likely lands; (b) pause slice H here (design committed + durable; helper `Implemented` at
+   `9a79c27` but NOT clean); (c) other. **NEXT ACTION: await owner decision.**
 1. **DONE — mechanical write-ahead backstop slice (ADR 0013 §Decision 5).** Landed commit
    347e0d3 (code-eval PASS round 0; shell gate green 11/11 + 28/28 bats).
    `plugins/loom/hooks/precompact-write-ahead-backstop.sh` is live — loom's 2nd executable
