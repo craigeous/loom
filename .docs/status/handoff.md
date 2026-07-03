@@ -231,7 +231,23 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-0. **ACTIVE THREAD (this session) — multi-session worktree coordination (new ADR 0014, extends
+0. **NEXT ACTION — Slice W: fold multi-session coordination model into playbook bodies.**
+   The design layer is COMPLETE (ADR 0014/0015/0016 Accepted; spec 04 `### Multi-session
+   coordination` subsection updated + re-Approved; `loom-coord.sh` helper LANDED). The
+   remaining work is **pure-docs wiring**: author `parallelism.md`, `orchestration.md`,
+   and `commands/run.md` to describe where the orchestrator calls `loom-coord.sh`
+   subcommands in the loop, how it names worktrees (must embed session-id), and the
+   lease-freshness/renewer obligation. Pure-docs slice → auto-review skip. Plan→eval→
+   implement→code-eval→finalize. Also log the deferred **infra-blocked-escalation
+   `.docs/` follow-up** (owner idea: a `.docs/` mechanism for recording when a slice
+   is blocked by infra limits, not developer error, so the orchestrator can route
+   appropriately — carry as an Open item in progress.md).
+
+0. **COMPLETED — multi-session worktree coordination (ADR 0014/0015/0016).** `loom-coord.sh`
+   helper LANDED (code-eval PASS round 0, gate green 64/64). See item 0 history below for
+   the full thread. Original item:
+
+0. **[COMPLETED] ACTIVE THREAD — multi-session worktree coordination (new ADR 0014, extends
    immutable ADR 0008).** Owner-reported: running **multiple independent top-level `/loom:run`
    sessions** against the same repo causes collisions. ADR 0008 only makes *one* orchestrator's
    sub-agent worktrees conflict-free; "living docs main-only, **serialized**" assumes a single

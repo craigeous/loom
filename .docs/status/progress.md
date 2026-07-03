@@ -6,7 +6,26 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: PreCompact write-ahead backstop hook (ADR 0013 §Decision 5) — LANDED.**
+- **Phase:** **M0–M4 complete. Post-M4: multi-session worktree coordination (ADR 0014/0015/0016) helper — LANDED. Next: slice W (playbook wiring).**
+- **Last action:** **`multi-session-lock-helper` slice landed** (code-eval PASS round 0, gate green 64/64).
+  `plugins/loom/lib/loom-coord.sh` is loom's **first non-hook CLI helper** — the multi-session coordination
+  mechanism: git-`update-ref` CAS lock on `refs/loom/lock` + per-slice claim refs on `refs/loom/claims/<sha1>`
+  + lease-freshness liveness (ADR 0015) + `{pid,start-time}`-gated background renewer (U3); shell-gated,
+  not in `hooks.json`. **Design thread:** three ADRs Accepted — **ADR 0014** (multi-session worktree
+  coordination: cross-session lock + slice-lease protocol + session-id-primary liveness); **ADR 0015**
+  (lease-renewal heartbeat liveness: background renewer gated on `{session-pid, start-time}` → resolves the
+  live-but-blocked-session renewal gap + pid-reuse hazard); **ADR 0016** (git-native `update-ref` CAS lock
+  mechanism: replaces hand-rolled mkdir-CAS → eliminates ABA races, ABA-safe by construction, atomic per
+  git's own ref locking). Spec 04 `### Multi-session coordination` subsection amended twice (ADR 0014 fold,
+  ADR 0015/0016 fold) → re-Approved both times. **Path taken:** initial mkdir-CAS design (ADR 0014); 4
+  round-level code-eval FAIL cycles exposed architectural limits (mkdir-CAS ABA/holderless races; membership-
+  only liveness oscillation) → owner pivot → ADR 0015 (lease-renewal heartbeat) then ADR 0016 (git-CAS
+  substrate); git-CAS re-impl in 3 gate-green passes avoided the 32k output crash; W1-W7 peripheral fixes +
+  X1-X7 base64/schema fixes + owner-authorized round-counter reset brought the helper to a clean state.
+  **Remaining work: slice W** (fold the model into `parallelism.md` / `orchestration.md` / `run.md` — pure-docs,
+  auto-review skip). Also log the deferred infra-blocked-escalation `.docs/` follow-up.
+
+- **Prior action:** **`precompact-write-ahead-backstop` slice landed** (commit 347e0d3,
 - **Last action:** **`precompact-write-ahead-backstop` slice landed** (commit 347e0d3,
   code-eval PASS round 0; shell gate green 11/11 tests + 28/28 bats regression). This
   is loom's **2nd executable hook** — `plugins/loom/hooks/precompact-write-ahead-backstop.sh`
@@ -480,7 +499,11 @@ The status source of truth and decision index for building loom.
 0001 plugin/orchestrator · 0002 model tiers · 0003 commit-per-handoff · 0004 blind
 eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir layout) ·
 0007 namespaced command surface (supersedes bare `/loom` in 0001) ·
-0008 parallel `.docs/` coordination (worktree-per-slice; resolves OQ-A).
+0008 parallel `.docs/` coordination (worktree-per-slice; resolves OQ-A) ·
+0009 Unaligned-migrate sub-mode · 0010 automated review in code-review phase ·
+0011 `/code-review` command correction · 0012 thin orchestrator · 0013 write-ahead backstop ·
+0014 multi-session worktree coordination · 0015 lease-renewal heartbeat liveness ·
+0016 git-native `update-ref` CAS lock mechanism.
 
 ## Resolved build-time questions (M1)
 

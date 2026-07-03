@@ -32,14 +32,26 @@ after approval and change only via planning. Design decisions are in
   marketplace catalog is `.claude-plugin/marketplace.json`. Plugin components are
   namespaced `loom:<name>` (no bare `/loom`).
 - `.docs/` is loom's **own** design memory (dogfooding) — not a plugin component.
-- loom's content is primarily markdown (prompts/templates). Its two pieces of
-  executable code are both POSIX-sh hooks in `plugins/loom/hooks/`, auto-discovered
-  via `hooks/hooks.json`: `git-identity-guard.sh` (PreToolUse identity guard,
-  ADR 0003) and `precompact-write-ahead-backstop.sh` (PreCompact write-ahead backstop,
-  ADR 0013 §Decision 5 — blocks `manual` compaction when `.docs/` has not advanced
-  since the last compaction marker; never-wedge on `auto`). Both are shell-gated
-  (`shfmt` → `shellcheck` → `bats`). The Rust gate loom *imposes on managed projects*
-  is in `plugins/loom/skills/loom-playbook/gates/rust.md`.
+- loom's content is primarily markdown (prompts/templates). Its executable code is
+  POSIX-sh, split across two directories and all shell-gated (`shfmt` → `shellcheck` →
+  `bats`):
+  - **`plugins/loom/hooks/`** — two PreToolUse/PreCompact guard hooks, auto-discovered via
+    `hooks/hooks.json`: `git-identity-guard.sh` (PreToolUse identity guard, ADR 0003) and
+    `precompact-write-ahead-backstop.sh` (PreCompact write-ahead backstop, ADR 0013 §Decision 5
+    — blocks `manual` compaction when `.docs/` has not advanced since the last compaction marker;
+    never-wedge on `auto`).
+  - **`plugins/loom/lib/`** — loom's **first non-hook CLI helper**: `loom-coord.sh` — the
+    multi-session coordination mechanism (ADR 0014/0015/0016). **Not a hook** (not in
+    `hooks.json`); the orchestrator/session calls it directly. Mechanism: git-`update-ref` CAS
+    lock on `refs/loom/lock` + per-slice claim refs on `refs/loom/claims/<sha1>` (ABA-safe by
+    construction; git owns atomicity — ADR 0016); lease-freshness liveness + `{pid,start-time}`-gated
+    background renewer (ADR 0015); fails **closed** (inverse of the guard hooks). Subcommands:
+    `lock-acquire`/`lock-release`/`lock-verify`; `claim`/`renew`/`release-claim`/`reclaim`/`list-claims`;
+    `session-start`/`session-bootstrap`/`session-end`; `cleanup`. The shell gate now covers
+    `plugins/loom/lib/` as well as `plugins/loom/hooks/`. Operational playbook-body wiring
+    (`parallelism.md`/`orchestration.md`/`run.md`) lands in **slice W** (pending).
+  - The Rust gate loom *imposes on managed projects* is in
+    `plugins/loom/skills/loom-playbook/gates/rust.md`.
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
   is the single authoritative source for Greenfield / Unaligned / Initialized
   detection. All `/loom:*` commands run this classifier first.
@@ -144,11 +156,11 @@ slice is considered `Implemented`. Verified gates ship in
 **Rust gate** (`gates/rust.md`):
 `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`
 
-**Shell gate** (`gates/shell.md`) — the first *learned* gate, now verified on
-loom's own hook `plugins/loom/hooks/git-identity-guard.sh`:
-- format: `shfmt -i 4 -d plugins/loom/hooks/git-identity-guard.sh`
-- lint: `shellcheck plugins/loom/hooks/git-identity-guard.sh`
-- test: `bats plugins/loom/hooks/git-identity-guard.bats`
+**Shell gate** (`gates/shell.md`) — the first *learned* gate, covers all POSIX-sh in
+`plugins/loom/hooks/` and `plugins/loom/lib/` (path-generic). Example invocation on a file:
+- format: `shfmt -i 4 -d <file.sh>`
+- lint: `shellcheck <file.sh>`
+- test: `bats <file.bats>`
 
 For other stacks, the unknown-stack path is specified in
 `plugins/loom/skills/loom-playbook/references/gate-learning.md` (inspect toolchain
