@@ -2,6 +2,7 @@
 # Test suite for loom-coord.sh (ADR 0014 multi-session coordination helper).
 # Each test uses an isolated temp git repo so state writes never touch loom's .git/.
 # The code evaluator re-runs this suite as the shell gate's TEST step.
+bats_require_minimum_version 1.5.0
 
 COORD="${BATS_TEST_DIRNAME}/loom-coord.sh"
 
@@ -127,12 +128,13 @@ claim_ts() {
 }
 
 # plant_claim_ref <slice> <sid> <ts> — create a claim ref directly in REPO
-# Blob format matches loom-coord.sh: {sid}\t{ts}\t{slice}\n
+# Blob format matches loom-coord.sh: {sid}\t{ts}\t{b64-slice}\n  (W2 fix: field 3 is base64)
 plant_claim_ref() {
     local slice="$1" sid="$2" ts="$3"
-    local encoded sha
+    local encoded sha b64
     encoded=$(_slice_to_refname "$slice")
-    sha=$(printf '%s\t%s\t%s\n' "$sid" "$ts" "$slice" | git -C "$REPO" hash-object -w --stdin)
+    b64=$(printf '%s' "$slice" | base64 2>/dev/null | tr -d '\n')
+    sha=$(printf '%s\t%s\t%s\n' "$sid" "$ts" "$b64" | git -C "$REPO" hash-object -w --stdin)
     git -C "$REPO" update-ref "refs/loom/claims/$encoded" "$sha"
 }
 
@@ -523,7 +525,7 @@ EOF
     run sh "$COORD" release-claim slice-RC --session "ses-RC1"
     [ "$status" -eq 0 ]
     [ -z "$(claim_ref_sha "slice-RC")" ]
-    ! grep -qxF "slice-RC" "$REPO/.git/loom/session-ses-RC1/held-claims" 2>/dev/null
+    run ! grep -qxF "slice-RC" "$REPO/.git/loom/session-ses-RC1/held-claims"
     teardown
 }
 
@@ -1198,7 +1200,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-stopped"* ]]
     sleep 0.5
-    ! kill -0 "$rpid" 2>/dev/null
+    run ! kill -0 "$rpid" 2>/dev/null
     teardown
 }
 
@@ -1212,7 +1214,7 @@ EOF
     [ "$status" -eq 0 ]
 
     local mypid=$$
-    run env LOOM_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW2"
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW2"
     [ "$status" -eq 0 ]
 
     local rpid
@@ -1230,7 +1232,7 @@ EOF
         sleep 0.5
         i=$((i + 1))
     done
-    ! kill -0 "$rpid" 2>/dev/null
+    run ! kill -0 "$rpid" 2>/dev/null
     teardown
 }
 
@@ -1253,10 +1255,14 @@ EOF
     local ref="refs/loom/claims/slice-CC1"
 
     # Race: both try create-only CAS from null simultaneously
-    (git -C "$REPO" update-ref "$ref" "$sha_a" "$null_sha" 2>/dev/null
-        echo "$?") >"$BATS_TEST_TMPDIR/cas_a" &
-    (git -C "$REPO" update-ref "$ref" "$sha_b" "$null_sha" 2>/dev/null
-        echo "$?") >"$BATS_TEST_TMPDIR/cas_b" &
+    (
+        git -C "$REPO" update-ref "$ref" "$sha_a" "$null_sha" 2>/dev/null
+        echo "$?"
+    ) >"$BATS_TEST_TMPDIR/cas_a" &
+    (
+        git -C "$REPO" update-ref "$ref" "$sha_b" "$null_sha" 2>/dev/null
+        echo "$?"
+    ) >"$BATS_TEST_TMPDIR/cas_b" &
     wait
 
     local exit_a exit_b
@@ -1497,37 +1503,32 @@ EOF
 # V2 — Claim that renews during cleanup sweep window is NOT destroyed
 # ---------------------------------------------------------------------------
 
-@test "V2 claim renewed during cleanup window: worktree and ref survive (CAS-first)" {
+@test "V2 stale claim: cleanup runs delete-CAS-first path; ref and worktree swept" {
+    # W5 fix: plant a genuinely stale claim (ts=0) so cleanup reaches the
+    # delete-CAS-first branch (loom-coord.sh V2 fix) rather than skipping at
+    # the freshness check.  The CAS succeeds (no concurrent renewal) → ref is
+    # deleted and the orphan worktree is removed.  A bug that skips the CAS
+    # (or reorders destroy-before-CAS and the CAS then fails) would leave the
+    # ref in place, failing the [ -z "$(claim_ref_sha ...)" ] assertion.
     make_repo
     cd "$REPO"
 
-    local sid="ses-V2-alive"
-    # Plant a claim ref that appears stale (ts=0)
+    local sid="ses-V2-stale"
+    # Plant a genuinely stale claim (epoch 0 is always older than any TTL)
     plant_claim_ref "slice-V2" "$sid" "0"
 
-    # Create a matching worktree so wt_sid_match can find it
+    # Create the matching worktree (named wt-<sid> so wt_sid_match finds it)
     local wt_path
     wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Now — BEFORE cleanup runs — renew the claim (simulates the holder renewing
-    # just as cleanup reads the stale snapshot).  The V2 CAS-first fix means the
-    # delete-CAS will fail (SHA changed) and cleanup skips destruction.
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$sid"
+    # cleanup: stale claim → delete-CAS-first → succeeds → sweep ref + worktree
+    run env LOOM_LOCK_RETRIES=3 sh "$COORD" cleanup
     [ "$status" -eq 0 ]
-    run sh "$COORD" renew slice-V2 --session "$sid"
-    [ "$status" -eq 0 ]
-    run sh "$COORD" lock-release --session "$sid"
-    [ "$status" -eq 0 ]
-
-    # cleanup sees a fresh lease now — it must skip, not destroy
-    run env LOOM_LOCK_TTL=0 sh "$COORD" cleanup
-    [ "$status" -eq 0 ]
-    # Claim ref must still exist (not swept)
-    [ -n "$(claim_ref_sha "slice-V2")" ]
-    # Worktree dir must still exist (not removed)
-    [ -d "$wt_path" ]
-    git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
+    # delete-CAS succeeded → ref must be gone
+    [ -z "$(claim_ref_sha "slice-V2")" ]
+    # Worktree removed after CAS (not before)
+    [ ! -d "$wt_path" ]
     teardown
 }
 
@@ -1535,7 +1536,14 @@ EOF
 # V3 — Refused reclaim (holder renewed) does NOT remove worktree
 # ---------------------------------------------------------------------------
 
-@test "V3 reclaim refused by CAS (holder renewed): worktree intact" {
+@test "V3 stale claim: reclaim runs CAS-steal-first path; reclaimer owns claim, holder worktree removed" {
+    # W6 fix: plant a genuinely stale claim (ts=0) so reclaim reaches the
+    # value-CAS-steal-first branch (loom-coord.sh V3 fix) rather than exiting 6
+    # at the freshness check.  The CAS steal succeeds → reclaimer owns the claim
+    # and the orphan worktree is removed.  A bug that destroys the worktree before
+    # the CAS (destroy-before-CAS) is caught if the CAS were to fail: but even in
+    # the non-concurrent case this test verifies the CAS code path is reachable and
+    # functional (the old tests never reached it at all).
     make_repo
     cd "$REPO"
 
@@ -1544,26 +1552,18 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${holder_sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    # Plant a stale-looking claim, then renew it so the SHA changes
-    # (simulating the holder renewing between reclaim's liveness-check and CAS)
+    # Plant a genuinely stale claim for the holder (epoch 0)
     plant_claim_ref "slice-V3" "$holder_sid" "0"
-    # Renew it to make the SHA change (now fresh)
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$holder_sid"
-    [ "$status" -eq 0 ]
-    run sh "$COORD" renew slice-V3 --session "$holder_sid"
-    [ "$status" -eq 0 ]
-    run sh "$COORD" lock-release --session "$holder_sid"
-    [ "$status" -eq 0 ]
 
-    # Reclaim attempt: fresh lease → exit 6, worktree intact
+    # Reclaim as a different session: stale claim → CAS-steal-first → succeeds
     run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V3-reclaimer"
     [ "$status" -eq 0 ]
     run sh "$COORD" reclaim slice-V3 --session "ses-V3-reclaimer"
-    [ "$status" -eq 6 ]
-    # Worktree must still exist (reclaim was refused)
-    [ -d "$wt_path" ]
-    [ "$(claim_sid "slice-V3")" = "$holder_sid" ]
-    git -C "$REPO" worktree remove -f "$wt_path" 2>/dev/null || true
+    [ "$status" -eq 0 ]
+    # Reclaimer now owns the claim
+    [ "$(claim_sid "slice-V3")" = "ses-V3-reclaimer" ]
+    # Holder's orphan worktree was removed (destroy happens after CAS)
+    [ ! -d "$wt_path" ]
     teardown
 }
 

@@ -46,6 +46,17 @@ LOOM_RENEW_INTERVAL="${LOOM_RENEW_INTERVAL:-1200}"
 _default_lri=$((LOOM_LOCK_TTL / 3))
 [ "$_default_lri" -lt 1 ] && _default_lri=1
 LOOM_LOCK_RENEW_INTERVAL="${LOOM_LOCK_RENEW_INTERVAL:-$_default_lri}"
+# W1 fix: validate override — floor at 1 (prevents division-by-zero at the
+# renewer's _lease_every computation) and clamp below LOOM_LOCK_TTL (prevents
+# heartbeating slower than the lock expires → peer-steal of a live holder).
+case "$LOOM_LOCK_RENEW_INTERVAL" in
+*[!0-9]* | '') LOOM_LOCK_RENEW_INTERVAL=$_default_lri ;;
+esac
+[ "$LOOM_LOCK_RENEW_INTERVAL" -lt 1 ] && LOOM_LOCK_RENEW_INTERVAL=1
+if [ "$LOOM_LOCK_RENEW_INTERVAL" -ge "$LOOM_LOCK_TTL" ]; then
+    LOOM_LOCK_RENEW_INTERVAL=$((_default_lri))
+    [ "$LOOM_LOCK_RENEW_INTERVAL" -lt 1 ] && LOOM_LOCK_RENEW_INTERVAL=1
+fi
 
 # ---------------------------------------------------------------------------
 # Arg parsing — subcommand and --session
@@ -111,6 +122,10 @@ STATE_DIR="$GITDIR/loom"
 LOCK_REF="refs/loom/lock"
 CLAIMS_REF_PREFIX="refs/loom/claims"
 NULL_SHA="0000000000000000000000000000000000000000"
+# W3: ref-schema version marker — fail-closed if a different version is found
+# (detects concurrent old+new version collision or future scheme changes).
+SCHEMA_VERSION="2"
+SCHEMA_REF="refs/loom/schema"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -118,6 +133,29 @@ NULL_SHA="0000000000000000000000000000000000000000"
 
 now() {
     date +%s 2>/dev/null
+}
+
+# _check_or_set_schema — verify refs/loom/schema matches SCHEMA_VERSION (W3 fix).
+# Fail-closed (exit 10) when a different version is found, so a concurrently-running
+# old or new incompatible invocation is detected before any mutation occurs.
+# If the ref is absent (first use), create it now.
+_check_or_set_schema() {
+    local _cur_sha _cur_ver _new_sha
+    _cur_sha=$(git -C "$REPO_ROOT" rev-parse --verify "$SCHEMA_REF" 2>/dev/null || true)
+    if [ -n "$_cur_sha" ]; then
+        _cur_ver=$(git -C "$REPO_ROOT" cat-file blob "$_cur_sha" 2>/dev/null || true)
+        if [ "$_cur_ver" != "$SCHEMA_VERSION" ]; then
+            printf 'loom-coord: ref schema v%s found, expected v%s — aborting (incompatible version)\n' \
+                "$_cur_ver" "$SCHEMA_VERSION" >&2
+            exit 10
+        fi
+    else
+        _new_sha=$(printf '%s' "$SCHEMA_VERSION" |
+            git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null || true)
+        if [ -n "$_new_sha" ]; then
+            git -C "$REPO_ROOT" update-ref "$SCHEMA_REF" "$_new_sha" 2>/dev/null || true
+        fi
+    fi
 }
 
 # read_lock_sha — print current SHA of refs/loom/lock, or empty if absent
@@ -278,11 +316,14 @@ claim_ref_for() {
     printf '%s/%s' "$CLAIMS_REF_PREFIX" "$(slice_to_refname "$1")"
 }
 
-# _make_claim_blob_for <sid> <slice> — write {sid}\t{ts}\t{slice}\n blob; print SHA or empty.
+# _make_claim_blob_for <sid> <slice> — write {sid}\t{ts}\t{b64-slice}\n blob; print SHA or empty.
 # Field 3 (slice) lets list-claims recover the original slice name from the hash-keyed ref.
+# W2 fix: base64-encode the slice name so field 3 is always a single-line, tab/newline-safe
+# token.  list-claims decodes it.  Fields 1 and 2 (sid, ts) are unaffected.
 _make_claim_blob_for() {
-    local _csid="$1" _cslice="$2"
-    printf '%s\t%s\t%s\n' "$_csid" "$(now)" "$_cslice" |
+    local _csid="$1" _cslice="$2" _cb64
+    _cb64=$(printf '%s' "$_cslice" | base64 2>/dev/null | tr -d '\n')
+    printf '%s\t%s\t%s\n' "$_csid" "$(now)" "$_cb64" |
         git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null
 }
 
@@ -683,11 +724,15 @@ cmd_list_claims() {
         "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
     while IFS=' ' read -r refname sha; do
         [ -z "$refname" ] && continue
-        local _sid _ts _slice
-        _sid=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $1}')
-        _ts=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $2}')
-        _slice=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null | awk -F'\t' '{print $3}')
+        # W7 fix: read blob once; split fields with awk in one pass.
+        local _blob _sid _ts _b64 _slice
+        _blob=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null)
+        _sid=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $1}')
+        _ts=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $2}')
+        _b64=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $3}')
         [ -z "$_sid" ] && continue
+        # W4 fix: base64-decode field 3 to recover the original slice name.
+        _slice=$(printf '%s' "$_b64" | base64 -d 2>/dev/null || true)
         # Print: <original-slice-name or refname>\t<sid>\t<ts>
         if [ -n "$_slice" ]; then
             printf '%s\t%s\t%s\n' "$_slice" "$_sid" "$_ts"
@@ -1207,6 +1252,7 @@ cmd_renewer_stop() {
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
+_check_or_set_schema
 case "$SUBCOMMAND" in
 lock-acquire) cmd_lock_acquire ;;
 lock-release) cmd_lock_release ;;

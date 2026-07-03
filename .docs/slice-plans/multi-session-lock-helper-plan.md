@@ -365,6 +365,12 @@ new hook entry — the helper is deliberately unregistered).
 
 ## Notes
 
+**Gate evidence (round 5, 2026-07-03 — W1-W7 peripheral defect fixes):**
+- `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → FORMAT CLEAN
+- `shellcheck plugins/loom/lib/loom-coord.sh plugins/loom/lib/loom-coord.bats` → SHELLCHECK CLEAN (SC3043 suppressed file-wide; pre-existing SC2314 fixed with `run !` + `bats_require_minimum_version 1.5.0`)
+- `bats plugins/loom/lib/loom-coord.bats` → **62/62 pass** (pre-existing 62 all green; V2/V3 tests rewritten to exercise CAS paths; W5/W6 now reach the delete-CAS-first / steal-CAS-first branches)
+- W1: `LOOM_LOCK_RENEW_INTERVAL` override validated (floor≥1, clamp<TTL); W2/W4: slice name base64-encoded in claim blobs / decoded in list-claims; W3: `refs/loom/schema` v2 marker created + fail-closed on version mismatch; W5/W6: V2/V3 tests rewritten with stale claims (ts=0) to exercise CAS branches; W7: list-claims reads blob once.
+
 **Gate evidence (Pass 3, 2026-07-02 — U2/U5/U6/secondary defect fixes):**
 - `shfmt -i 4 -d plugins/loom/lib/loom-coord.sh` → FORMAT CLEAN
 - `shellcheck plugins/loom/lib/loom-coord.sh` → SHELLCHECK CLEAN
