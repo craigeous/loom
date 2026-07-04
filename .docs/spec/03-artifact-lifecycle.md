@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Approved
+Status: Plan Review
 
 Status is loom's dispatcher. Each gated artifact carries a `Status:` line; the
 orchestrator reads it (and git state) to decide which role to spawn next. **Every
@@ -78,7 +78,9 @@ pass** (cold):
    never in `CLAUDE.md`. If the slice changed nothing in that scope, **no
    `CLAUDE.md` edit is made.** This applies to loom's own root `CLAUDE.md` and, in
    a managed project, to that project's `CLAUDE.md`. The curated-digest boundary is
-   defined authoritatively in [08](08-playbook.md) (*Evolving the playbook*).
+   defined authoritatively in [08](08-playbook.md) (*Evolving the playbook*), whose
+   *Shape and Concision Discipline* governs how the edit is written (point-don't-restate
+   pointers, the size bound, the two-zone shape); the finalize pass applies it here.
 3. `git mv` the plan into `slice-plans/archive/`, set status `Archived`, commit.
 
 **No spec edit happens at landing.** The slice-plan and the living docs record

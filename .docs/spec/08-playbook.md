@@ -1,6 +1,6 @@
 # 08 — Playbook
 
-Status: Approved
+Status: Plan Review
 
 The **playbook** is loom's bundled, evolving set of conventions and templates. It
 makes loom opinionated: loom imposes the playbook on the projects it manages
@@ -103,6 +103,48 @@ loom keeps its conventions where agents already look — in `CLAUDE.md` — and 
   0005); maintaining `CLAUDE.md` at landing is a non-spec digest update, not a spec
   edit, so it does not violate the spec freeze. **On any conflict the specs win**,
   and `CLAUDE.md` is corrected to match.
+
+#### Shape and Concision Discipline
+
+The inclusion/exclusion rules above decide *what* may enter `CLAUDE.md`. This
+subsection governs its *shape and size*. `CLAUDE.md` is an **always-loaded entry
+point**: every agent session reads it in full, so it competes for the same context
+budget the thin-orchestrator discipline protects ([ADR 0012](../ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md)
+— context-budget discipline; [ADR 0013](../ADR/0013-starvation-loop-guards-cold-restart.md)
+— the ~60% cold-restart trigger). A bloated always-loaded file consumes budget that
+should go to work and buries high-value navigation under restatement. `CLAUDE.md`
+must therefore stay a **lean map that routes to on-demand detail, not a mirror of
+it.** The finalize pass applies these rules:
+
+1. **Point, don't restate.** When `CLAUDE.md` names an authoritative reference file
+   (a `spec/`, `ADR/`, or `references/` document), a **single-clause pointer**
+   (purpose + link) replaces any paragraph that restates that file's content.
+   `CLAUDE.md` names *where* the detail lives; the named file remains its sole
+   authority. Restating a reference file's body in `CLAUDE.md` is a defect, not a
+   convenience.
+2. **Bounded size.** The finalize pass keeps loom's own root `CLAUDE.md` **under
+   ~100 lines** (target 80–100) and a **managed project's `CLAUDE.md` under ~200
+   lines**. If a landed slice's change would push `CLAUDE.md` past its bound, the
+   detail **stays in a reference file** and `CLAUDE.md` points to it — the bound is
+   held by moving detail out, never by dropping a needed pointer.
+3. **Two zones.** `CLAUDE.md` is organized as a **stable top** (read-first
+   pointers, the one-paragraph "what is loom", core invariants, the gate) followed
+   by a **pointer index** (one entry per authoritative reference file: its name, a
+   one-clause purpose, and a link). The stable top rarely changes; the pointer index
+   grows by adding compact entries, not paragraphs.
+4. **Scope test.** For each bullet a finalize pass would add or change, ask:
+   *"Would a reader need the detail here, or just know where to find it?"* If the
+   latter, the entry is a **pointer**. If the former, the detail either fits the
+   shape and belongs in `CLAUDE.md` (rare) or stays in a reference file that
+   `CLAUDE.md` points to.
+
+**Enforcement.** This discipline is enforced at two points. The **developer's
+finalize pass** applies it when writing `CLAUDE.md`. Independently, the **blind
+code evaluator**, when a slice's diff touches `CLAUDE.md`, **flags restatement of a
+named reference file, size over the bound, or a paragraph where a pointer belongs
+as a finding.** (Wiring this check into the code-evaluator rubric is a follow-on
+playbook slice; it is **not** decided here — the normative rule lives in this spec,
+the rubric body is edited separately.)
 
 ## Verified gate (Rust)
 
