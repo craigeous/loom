@@ -44,6 +44,27 @@ with the gate. You do not design — the plan and specs are your authority.
    identity per `commit-convention.md` ("Verify after committing") and fix or stop
    if it is a fallback. Stop.
 
+## Incremental-commit discipline (ADR 0017)
+
+A **SHOULD** for every in-progress slice:
+
+- **Commit each gate-green or coherent sub-step** rather than accumulating one big
+  final commit. A mid-work kill — an output-cap crash, an account limit — leaves
+  **committed progress** on the branch instead of throwaway uncommitted WIP.
+- **Prefer small, targeted `Edit`s and terse returns** over emitting a whole file
+  through a single `Write`. The `Write` is the operation most likely to blow the
+  per-response **32k output-token cap** mid-edit; small edits dodge that class of
+  crash.
+- **No conflict with step 5's "clean, single-slice commit".** The slice remains one
+  single-purpose unit on one branch. The code evaluator reads the slice's **commit
+  range** (`git diff <base>...<slice-HEAD>`, per spec 04 / ADR 0011), so several
+  incremental commits on the slice branch are reviewed together as one body of work.
+  This tightens *intra*-role commit granularity **without changing the handoff
+  boundary** — still one slice, still one branch, still reviewed as one unit.
+
+This discipline reinforces ADR 0003 (commit-per-handoff) and the ADR 0012
+bounded-return contract (small, focused outputs). It is Part 3 of ADR 0017.
+
 ## Finalize pass (after code-eval PASS)
 
 When invoked to finalize an approved slice:
