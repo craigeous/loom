@@ -85,7 +85,22 @@ auto-compact) before recording progress, the restart re-bootstraps from a stale
 `handoff.md`, re-derives the **same** next action, does the same big thing, clears
 again — an infinite **starvation loop**. Four rules prevent it (classic write-ahead
 discipline; roles already commit their own output, so these mainly bite around
-*orchestrator-side* work and the in-window `/code-review` step):
+*orchestrator-side* work and the in-window `/code-review` step).
+
+**Multi-session cold restart:** under multi-session coordination, the write-ahead
+anchor is **off-`main`, per-session** — `loom-coord checkpoint-write --session <id>
+"<next action>"` writes to `.git/loom/session-<id>/checkpoint` (keyed by the stable
+`session-id`, never on main). On cold restart, run:
+```
+loom-coord session-bootstrap --session <id>
+# 0  → re-adopts the session-id, renews held leases, prints the saved checkpoint
+# 3  → could not acquire lock; backoff + retry
+# 5  → session not found; treat as fresh session-start
+```
+Then re-launch the renewer only if it did not survive: `loom-coord renewer-start
+<session-pid> --session <id>` (exits `renewer-already-running` if already up).
+The shared human-facing `handoff.md` stays on `main`, written at land under the lock
+(per spec 04 → *Per-session write-ahead anchor*). Both anchors advance together.
 
 - **Write-ahead checkpoint — checkpoint before the act, not after.** Keep
   `status/handoff.md` recording the **next intended action**, committed, **before**
@@ -224,9 +239,69 @@ summary must contain and the owner-driven reset rule.
 Worktree-per-slice parallelism is **active** — orchestrator-spawned background
 agents, each in its own worktree on its own branch, governed by
 [ADR 0008](../../../../../.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md).
-The owner opts in. See [`parallelism.md`](parallelism.md) for the complete
-operational body: create→work→land→cleanup workflow, the `.docs/` coordination
-model (living docs + slice-plans index orchestrator-owned/main-only/serialized;
-slice branches carry only disjoint uniquely-named plan/eval/code), concurrency
-safety (`index.lock` backoff, crash cleanup, one-branch-per-slice), and the
+The owner opts in. Multi-session coordination via `loom-coord.sh` is active when the
+owner runs multiple `/loom:run` sessions concurrently (see *Multi-session
+coordination* below). See [`parallelism.md`](parallelism.md) for the complete
+operational body: create→work→land→cleanup workflow (with multi-session lock/claim
+layering), the `.docs/` coordination model (living docs + slice-plans index
+orchestrator-owned/main-only/serialized; slice branches carry only disjoint
+uniquely-named plan/eval/code), concurrency safety (git-CAS coordination layer,
+`index.lock` backoff, crash cleanup, one-branch-per-slice), and the
 slicer-independence rule.
+
+## Multi-session coordination
+
+*Authority: spec [04](../../../../../.docs/spec/04-orchestrator.md) § "Multi-session
+coordination" · [ADR 0014](../../../../../.docs/ADR/0014-multi-session-worktree-coordination.md) ·
+[ADR 0015](../../../../../.docs/ADR/0015-lease-renewal-heartbeat-liveness.md) ·
+[ADR 0016](../../../../../.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md).
+Full operational body: [`parallelism.md`](parallelism.md) → *Multi-session
+coordination*.* Opt-in: a single-session run may skip coordination entirely.
+
+When the owner runs multiple `/loom:run` sessions concurrently, each session uses
+`plugins/loom/lib/loom-coord.sh` to serialize writes to the shared `main` checkout.
+The orchestrator's driver-loop obligations:
+
+**At session kickoff:**
+- Run `loom-coord session-start [--session <id>]` to mint the stable `session-id`
+  (printed on stdout) and create per-session state under `.git/loom/`. Adopt the
+  printed id. On exit `10` → fail-closed, abort the session and tell the owner.
+
+**Claim before working a slice (under the lock):**
+1. `loom-coord lock-acquire --session <id>` — acquire the cross-session lock.
+   `0` acquired → proceed; `3` busy (backoff exhausted) → defer this main-side op,
+   keep working other slices, retry later; `10` → abort.
+2. Re-read Active/claim state from **current local `main`** (authoritative under the
+   lock). `list-claims` (unlocked pre-scan) is a pre-filter only; the authoritative
+   re-check is always under the lock.
+3. `loom-coord claim <slice> --session <id>` — skip live-claimed slices (exit `4` →
+   re-select another slice); `reclaim` stale ones (exit `6` holder still fresh →
+   skip; exit `4` CAS failed → skip, holder alive).
+4. On first successful claim, launch the renewer:
+   `loom-coord renewer-start <session-pid> --session <id>`.
+5. `loom-coord lock-release --session <id>` — then create the worktree and dispatch.
+
+**The lock is NEVER held across a role spawn or while a role works in a worktree.**
+Claim registration and land+finalize are the only locked shared-`main` writes; all
+other session activity is lock-free in the session's own worktree.
+
+**Dispatch scan derives from current local `main`** (not the frozen slice worktree
+snapshot). Pre-scan with `loom-coord list-claims` (unlocked, prints `slice\tsid\tts`
+rows); authoritative re-check always under the lock.
+
+**Fail-closed land guard:**
+- `loom-coord lock-verify --session <id>` immediately before `git merge`. Exit `5`
+  (not held) → abort the land, re-acquire before retrying. Exit `10` → abort.
+
+**At session exit (normal or error path — always run):**
+```
+loom-coord renewer-stop --session <id>
+loom-coord session-end --session <id>
+# session-end exit 3 → lock unavailable; claims not released; retry
+# never rm state on exit 3 — that would orphan claim registry rows
+```
+
+**Deriving the dispatch scan:**
+- `loom-coord list-claims` provides an unlocked pre-filter of live sessions.
+- The orchestrator dispatches by reading `Status:` lines in `.docs/` slice-plans
+  on current local `main`; the claim state confirms which slices are actively held.

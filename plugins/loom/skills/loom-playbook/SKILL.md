@@ -67,11 +67,18 @@ archived on landing. On conflict, the spec wins.
 - `tooling.md` — **recommended** CLI/LSP toolkit by role, and the mechanical
   invariant-check discipline (verify with `rg -U`/`yq`/`ast-grep`/LSP, not by eye).
   All tools optional with graceful fallback.
-- `parallelism.md` — worktree-per-slice parallelism (ADR 0008): the
-  create→work→land→cleanup workflow, the `.docs/` coordination model (living docs +
-  slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
-  only disjoint uniquely-named plan/eval/code), concurrency safety (`index.lock`
-  backoff, crash cleanup, one-branch-per-slice), and the slicer-independence rule.
+- `parallelism.md` — worktree-per-slice parallelism (ADR 0008) **and the
+  multi-session coordination layer** (ADR 0014/0015/0016): the
+  create→work→land→cleanup workflow (with multi-session lock/claim/renewer layering),
+  the `.docs/` coordination model (living docs + slice-plans index
+  orchestrator-owned/main-only/serialized; slice branches carry only disjoint
+  uniquely-named plan/eval/code), concurrency safety (git-CAS cross-session
+  coordination via `refs/loom/lock` + `refs/loom/claims/<slice>`, lease-freshness
+  liveness, `index.lock` backoff, crash cleanup, one-branch-per-slice), and the
+  slicer-independence rule. The coordination CLI is
+  `plugins/loom/lib/loom-coord.sh` (subcommands: `session-start`, `lock-acquire`,
+  `claim`, `lock-verify`, `lock-release`, `session-end`, and more — see the file's
+  header for the full surface and exit codes).
 
 ## Gates (`gates/`)
 

@@ -14,6 +14,9 @@ Read first (source of truth):
 - `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/status-machine.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/loom-playbook/references/parallelism.md`
   (worktree-per-slice parallelism — available, owner opts in)
+- `${CLAUDE_PLUGIN_ROOT}/lib/loom-coord.sh` — the multi-session coordination CLI
+  (cross-session lock + per-slice claims + background renewer), active when the owner
+  opts in to concurrent `/loom:run` sessions
 
 Requested scope: `$ARGUMENTS` (if empty, ask).
 
@@ -57,7 +60,12 @@ See orchestration.md → *Restart safely*.
       the one branch signal}`, no echoed body (orchestration.md → *Context
       discipline*). Independent/disjoint slices may run in parallel
       (worktree-per-slice, owner opts in) — see `parallelism.md` for the
-      create→work→land→cleanup flow and the slicer-independence rule.
+      create→work→land→cleanup flow and the slicer-independence rule. When the owner
+      opts into multi-session runs (multiple concurrent `/loom:run` sessions),
+      coordinate via `loom-coord.sh`: `session-start` at kickoff, `claim <slice>`
+      (under `lock-acquire`) before working a slice, `lock-verify` before landing,
+      `session-end` at exit — per `orchestration.md` → *Multi-session coordination*
+      and `parallelism.md` → *Multi-session coordination*.
    d2. **When a slice reaches `Implemented`, before dispatching the code-evaluator,
       run the automated review** (orchestration.md → "Automated review before a slice
       lands"). This means a **real tool call**: actually invoke the `code-review` and
