@@ -1,6 +1,6 @@
 # 0017 — Infrastructure-Blocked Escalation, Degraded-Review Honesty, and Incremental-Commit Discipline
 
-Status: Plan Review
+Status: Approved
 Date: 2026-07-03
 
 ## Context
