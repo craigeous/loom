@@ -84,6 +84,33 @@ obligation.
 
 ---
 
+## Degraded runs are not clean — an infrastructure block (ADR 0017)
+
+A run whose **finder or verify sub-agents failed on an infrastructure limit**
+(spend/usage/quota, 429, 5xx, safety-classifier-unavailable) is **INVALID**, not
+clean. A "no findings" result from finders that **never executed** is a
+**false-clean** — never recorded `ran-clean` and **never fed to the blind
+code-evaluator**.
+
+Such a run is an instance of the infrastructure-blocked escalation: see
+[`orchestration.md`](orchestration.md) § "Infrastructure-blocked escalation" and
+§ "Automated review before a slice lands" for the detection rule and the pause +
+summary obligation, and spec [03](../../../../../.docs/spec/03-artifact-lifecycle.md)
+§ "Infrastructure-blocked escalation" + spec
+[04](../../../../../.docs/spec/04-orchestrator.md) § "Automated review before a slice
+lands" for the canonical contract.
+
+**Re-run** the command once unblocked. If it genuinely cannot be re-run, record the
+**existing `skipped: command-unavailable`** token — this **reuses** the four-token
+contract and **adds no fifth token**. It is the honest degraded state: the command
+did not complete, which is truthfully a non-run. (See ADR 0017 §2.)
+
+This extends the *Findings come from real command output — a hard invariant* section
+above: just as the orchestrator must not fabricate findings from its own diff reading,
+it must not fabricate a clean result from a run whose finders never ran.
+
+---
+
 ## Required status field — per command
 
 The artifact records an **explicit, machine- and human-distinguishable status for
@@ -98,7 +125,7 @@ The status uses a literal `Status:` line per command with exactly these tokens
 | `ran-with-findings` | Command ran; at least one finding recorded below. |
 | `ran-clean` | Command ran; no findings. |
 | `skipped: docs-only` | Pure-docs slice — review not applicable (ADR 0010 §5). |
-| `skipped: command-unavailable` | Built-in not available in this environment (ADR 0010 §7). |
+| `skipped: command-unavailable` | Built-in not available in this environment, or the command could not complete (e.g. limit-crashed) (ADR 0010 §7 / ADR 0017). |
 
 **Rule: a skip is never confusable with a clean review.** `ran-clean` means the
 command ran and found nothing; the two `skipped:` tokens mean the command did not
