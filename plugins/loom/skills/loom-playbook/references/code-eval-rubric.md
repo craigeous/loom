@@ -62,6 +62,15 @@ status tokens — do not restate them here.
 
 - **Playbook conformance** — commit is author-neutral and single-slice; status set
   correctly; slice-plan records the evidence.
+- **CLAUDE.md shape (finalize diffs only).** When the diff touches a `CLAUDE.md`,
+  flag as findings, per spec 08 § "Shape and Concision Discipline": **restatement**
+  (a paragraph that mirrors a named `spec/`/`ADR/`/`references/` file where a
+  single-clause pointer belongs); **over-bound** (loom's root `CLAUDE.md` > ~100
+  lines, a managed project's > ~200 — check with `wc -l`); and **lost coverage** (a
+  reference file / component / gate / read-first pointer present before the diff and
+  no longer pointed to — diff the pointer set, don't eyeball). Severity per
+  [`severity.md`](severity.md); this is a digest-hygiene dimension, not the
+  `format → lint → test` gate.
 
 ## Re-review
 

@@ -79,8 +79,9 @@ When invoked to finalize an approved slice:
    managed project, to that project's `CLAUDE.md`. `CLAUDE.md` is a **derived,
    non-spec digest** — never edit `.docs/spec/` or `.docs/ADR/`; on conflict the
    specs win and `CLAUDE.md` is corrected to match. See spec 08
-   (*Evolving the playbook → `CLAUDE.md` auto-propagation*) for the
-   authoritative boundary.
+   (*Evolving the playbook → `CLAUDE.md` auto-propagation*, and
+   *§ Shape and Concision Discipline* — keep it a lean pointer-index map under ~100
+   lines / ~200 for managed; point, don't restate) for the authoritative boundary.
 3. `git mv` the slice-plan into `.docs/slice-plans/archive/`, set `Status:
    Archived`, and (for parallel work) land the branch.
 4. Commit.

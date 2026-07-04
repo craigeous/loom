@@ -1,6 +1,6 @@
 # CLAUDE.md slim-down — apply + enforce the shape & concision discipline
 
-Status: Approved
+Status: Implemented
 Lifecycle: Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 08-playbook.md (§ "Shape and Concision Discipline"), 03-artifact-lifecycle.md (finalize pass step 2)
 Target research: 2026-07-03-claude-md-digest-discipline.md (Approved — the target blueprint)
