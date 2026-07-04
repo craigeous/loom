@@ -31,4 +31,4 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 
 ## In Review
 
-_(none)_
+- [0017 — Infrastructure-Blocked Escalation, Degraded-Review Honesty, and Incremental-Commit Discipline](0017-infrastructure-blocked-escalation.md) — builds on ADR 0013 (write-ahead checkpoint + pause+summary escalation machinery), 0010/0011 (review faithfulness invariant), and 0012 (bounded return); adds a third escalation *type* for account-level infrastructure blocks (spend/usage/quota, 429, 5xx, classifier-unavailable, limit-crashed sub-agents) — detect-on-failure + graceful-pause, **not** round-counted — plus degraded-review honesty (a limit-killed review is INVALID, never `ran-clean`) and developer incremental-commit discipline. Supersedes none.
