@@ -1,6 +1,6 @@
 # Research: CLAUDE.md Digest Discipline — Lean Maps vs. Restatement Mirrors
 
-Status: Research Review
+Status: Draft
 Date: 2026-07-03
 Topic: How loom should enforce "point-don't-restate" discipline and size bounds for CLAUDE.md, an always-loaded entry point
 
