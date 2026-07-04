@@ -76,12 +76,22 @@ See orchestration.md → *Restart safely*.
       (`skipped: command-unavailable`). This is the one step that runs review output
       through your window; **write-and-forget** — capture → write the artifact →
       drop it; do not reason over or branch on the findings (the blind code-evaluator
-      adjudicates them from the file — ADR 0012).
+      adjudicates them from the file — ADR 0012). **Before recording `ran-clean`**,
+      inspect the workflow result for a finder/sub-agent failure indicator: a
+      limit-crashed run (spend/usage/quota, 429, 5xx, classifier-unavailable) is
+      **INVALID** — a false-clean, never `ran-clean`; treat it as an infra-block
+      escalation (re-run when unblocked, else `skipped: command-unavailable`) — see
+      orchestration.md → *Automated review before a slice lands*.
    e. On return, verify the author-neutral commit and the new status. On a `Landed`
       code-eval PASS, spawn the developer's **finalize pass** (update `status/`,
       archive the plan).
    f. Honor the round limit (5 **FAIL** cycles per artifact → escalate = pause +
       summary; see spec 03 `## Round limits` for the counting + summary contract).
+      Also escalate — **same pause + summary, but NOT round-counted** — on an
+      **infrastructure block** (spend/usage/quota limit, 429, 5xx,
+      classifier-unavailable, or a limit-crashed workflow); detect-on-failure only —
+      see spec 03/04 + ADR 0017 → orchestration.md → *Infrastructure-blocked
+      escalation*.
    g. Repeat.
 4. **On break:** summarize what happened and ensure `.docs/status/handoff.md`
    reflects the next step.
