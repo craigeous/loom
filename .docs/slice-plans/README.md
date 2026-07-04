@@ -17,7 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [infra-blocked-escalation-wiring-plan.md](infra-blocked-escalation-wiring-plan.md) — `Plan Review` —
+  ADR 0017 playbook wiring (pure-docs, no code). Wires the re-frozen infrastructure-blocked
+  escalation into the operational bodies: `references/orchestration.md` (new *Infrastructure-blocked
+  escalation* section — infra-signature set, not-a-valid-result/no-round-consumed/halt-not-retry/
+  write-ahead/pause+summary, detect-on-failure — plus degraded-run + false-clean-detection bullets in
+  the automated-review step), `agents/developer.md` (incremental-commit discipline SHOULD — commit
+  each gate-green sub-step, small `Edit`s over whole-file `Write`, dodges the 32k cap),
+  `references/review-findings.md` (degraded-run subsection + broadened `skipped: command-unavailable`
+  gloss; still exactly four tokens), and `commands/run.md` (driver-loop pointers). Acceptance =
+  rg-based doc consistency (terminology parity with specs 03/04, links resolve, four review tokens).
 
 ## Archived plans
 
