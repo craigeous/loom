@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## What the orchestrator is
 
@@ -121,6 +121,32 @@ orchestrator may spawn and a sub-agent cannot safely run a command that may spaw
   ran-with-findings / ran-clean / skipped: docs-only / skipped: command
   unavailable. A skip is never confusable with a clean review; if a command is
   unavailable the orchestrator skips and records it, never silently claiming clean.
+- **Degraded runs are invalid, never clean**
+  ([ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)). A `/code-review`
+  or `/security-review` run whose **finder or verify sub-agents failed on an
+  infrastructure limit** (spend/usage/quota, 429, 5xx, safety-classifier-unavailable)
+  is **INVALID** — a "no findings" result from finders that never executed is a
+  **false-clean**, not a clean review. Such a run is **never recorded `ran-clean`**
+  and **never fed to the blind code-evaluator** as review input; extending the
+  review faithfulness invariant (ADR 0010/0011), it is an instance of the
+  infrastructure-blocked escalation ([03](03-artifact-lifecycle.md)) and triggers the
+  same pause + summary. The orchestrator **re-runs the command once unblocked**. If a
+  limit-killed run genuinely cannot be re-run, it is recorded as a **non-run** under
+  the existing token **`skipped: command-unavailable`** — the command effectively
+  could not complete in this environment — and **never** as `ran-clean`. This
+  **reuses** the four-token contract in
+  [`review-findings.md`](../../plugins/loom/skills/loom-playbook/references/review-findings.md)
+  rather than adding a token: a limit-crashed run maps to
+  `skipped: command-unavailable`.
+- **False-clean detection — how.** Before trusting any `/code-review` /
+  `/security-review` "no findings" (or "no findings survived verification") result as
+  `ran-clean`, the orchestrator MUST inspect the workflow result for a **sub-agent /
+  finder failure indicator**: a non-empty failures list, error signatures matching
+  the infrastructure set (spend/usage/quota, 429, 5xx, classifier-unavailable), or a
+  **finder count of 0 with failures present**. If any such indicator is present, the
+  "clean" result is treated as a **degraded run** (above) — **INVALID**, not
+  `ran-clean`. Only a "no findings" result from a run whose finders **actually
+  executed and completed** is recorded `ran-clean`.
 - **Not the gate.** This is a new, separate review dimension — **not** part of the
   `format → lint → test` gate, which is unchanged.
 
@@ -487,9 +513,23 @@ only the primitive and its storage change.
 
 The loop pauses and returns to the owner when: the scope boundary is reached; an
 owner-claimed gate is reached; an artifact exceeds the round limit (escalation =
-pause + summary, see [03](03-artifact-lifecycle.md)); or a role reports it cannot
+pause + summary, see [03](03-artifact-lifecycle.md)); an **infrastructure block** is
+detected — the infrastructure-blocked escalation
+([03](03-artifact-lifecycle.md) / [ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)),
+same pause + summary shape but **not** round-counted; or a role reports it cannot
 proceed without owner input. On every pause the orchestrator ensures
 `status/handoff.md` reflects the next step.
+
+The infrastructure-blocked escalation is **detect-on-failure only** — loom cannot
+poll account limit state, so it reacts to a spend/usage/quota limit, 429, 5xx,
+classifier-unavailable error, or a workflow whose sub-agents crashed on such. On
+detection the orchestrator does **not** treat the result as a valid FAIL / `ran-clean`
+/ finding set, does **not** consume a round-limit count, **halts** rather than
+retry-looping into the same limit, **write-ahead checkpoints** (ADR 0013), and
+pauses + summarizes to the owner (naming the block and how to resume). The full
+contract lives in [03](03-artifact-lifecycle.md) (*Infrastructure-blocked
+escalation*); the degraded-review case is handled in *Automated review before a slice
+lands* above.
 
 ## One-off invocation
 

@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Approved
+Status: Plan Review
 
 Status is loom's dispatcher. Each gated artifact carries a `Status:` line; the
 orchestrator reads it (and git state) to decide which role to spawn next. **Every
@@ -229,3 +229,53 @@ that is sufficient to decide without re-reading the whole history. The summary
 The orchestrator ensures `status/handoff.md` reflects the paused state and the
 pending owner decision (consistent with the Human-checkpoints rule in
 [04](04-orchestrator.md)).
+
+## Infrastructure-blocked escalation (a sibling — not round-counted)
+
+The round-limit escalation above is one of **three** escalation types loom
+recognizes, all sharing the same **pause + summary** shape but firing on different
+triggers. The other two are ADR 0013's **starvation-loop escalation** (a cold
+restart that re-derives the same action with no new commit since — a no-progress
+wedge) and the **infrastructure-blocked escalation** defined here
+([ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)). Because this trigger
+reflects **account state, not the artifact's quality**, it lives beside the
+round-limit contract but is explicitly **not** round-counted.
+
+An **infrastructure block** is a role return, or a tool/workflow result, that
+matches an **infrastructure-failure signature** — any of:
+
+- an account **spend / usage / quota limit** reached;
+- a **rate-limit / HTTP 429**;
+- a **5xx** / transient upstream error;
+- a **safety-classifier-unavailable** error (a review or guard command whose
+  classifier could not run); or
+- a **partial workflow failure** — a multi-agent workflow (e.g. `/code-review`)
+  whose sub-agents crashed on one of the above limits, even if the workflow returns
+  a plausible-looking summary.
+
+Such a result is **not a valid outcome**: it is not a blind-eval FAIL, not a
+`ran-clean` review, and not a genuine finding set — the role or tool was killed by a
+limit outside loom's control rather than failing on the merits. On matching the
+signature the orchestrator MUST:
+
+1. **Not consume a round.** An infrastructure block **never** increments the
+   `Round:` counter toward the 5-FAIL threshold and never counts as a FAIL against
+   the artifact — it is not the artifact's fault. It also does not fabricate or
+   attribute any findings from the failed result.
+2. **Halt rather than retry-loop.** A blind retry re-hits the same limit and wastes
+   budget; the block clears by **owner action** (e.g. raising the limit, waiting out
+   a 429), not by re-attempting.
+3. **Write-ahead checkpoint** the current state to `status/handoff.md`
+   ([ADR 0013](../ADR/0013-starvation-loop-guards-cold-restart.md) rule 1) so a
+   resume once unblocked is lossless and picks up the exact pending action.
+4. **Pause + summarize to the owner**, naming (a) the **specific block** hit (which
+   limit / signature), (b) **where** it fired (which role or command, which artifact
+   + `Status:`), and (c) **how to resume** (e.g. raise the monthly limit, wait out a
+   429, then resume `/loom:run`).
+
+This escalation is **detect-on-failure only**: loom is a plugin with **no interface
+to account limit state** and **cannot poll or predict** a limit — it reacts to a
+block that has *already* fired, so it always takes at least one hit before it can
+pause. It is an orchestration rule, not a hook. See spec [04](04-orchestrator.md)
+(*Human checkpoints* and *Automated review before a slice lands* — the degraded-review
+case) for the orchestrator-side handling.
