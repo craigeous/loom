@@ -17,18 +17,17 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [infra-blocked-escalation-wiring-plan.md](infra-blocked-escalation-wiring-plan.md) — `Plan Review` —
-  ADR 0017 playbook wiring (pure-docs, no code). Wires the re-frozen infrastructure-blocked
-  escalation into the operational bodies: `references/orchestration.md` (new *Infrastructure-blocked
-  escalation* section — infra-signature set, not-a-valid-result/no-round-consumed/halt-not-retry/
-  write-ahead/pause+summary, detect-on-failure — plus degraded-run + false-clean-detection bullets in
-  the automated-review step), `agents/developer.md` (incremental-commit discipline SHOULD — commit
-  each gate-green sub-step, small `Edit`s over whole-file `Write`, dodges the 32k cap),
-  `references/review-findings.md` (degraded-run subsection + broadened `skipped: command-unavailable`
-  gloss; still exactly four tokens), and `commands/run.md` (driver-loop pointers). Acceptance =
-  rg-based doc consistency (terminology parity with specs 03/04, links resolve, four review tokens).
+(none)
 
 ## Archived plans
+
+- [archive/infra-blocked-escalation-wiring-plan.md](archive/infra-blocked-escalation-wiring-plan.md) — `Archived` —
+  ADR 0017 playbook wiring (pure-docs, no code). Wired the infrastructure-blocked escalation into
+  the operational bodies: `references/orchestration.md` (new *Infrastructure-blocked escalation*
+  section + degraded-run + false-clean-detection bullets in the automated-review step),
+  `agents/developer.md` (incremental-commit discipline SHOULD), `references/review-findings.md`
+  (degraded-run subsection + broadened `skipped: command-unavailable` gloss; still exactly four
+  tokens), and `commands/run.md` (driver-loop pointers). Code-eval PASS; landed.
 
 - [archive/multi-session-playbook-wiring-plan.md](archive/multi-session-playbook-wiring-plan.md) — `Archived` —
   slice W: wired the multi-session coordination model (ADR 0014/0015/0016) into the playbook

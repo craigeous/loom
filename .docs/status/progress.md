@@ -6,8 +6,20 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: multi-session coordination thread — COMPLETE end-to-end (ADR 0014/0015/0016 + spec 04 + `loom-coord.sh` + playbook wiring). No pending slices. Open: infra-blocked-escalation follow-up (see Open below).**
-- **Last action:** **`multi-session-playbook-wiring` slice landed** (code-eval PASS, pure-docs).
+- **Phase:** **M0–M4 complete. Post-M4: all threads complete — multi-session coordination (ADR 0014/0015/0016) + infra-blocked escalation (ADR 0017). No pending slices.**
+- **Last action:** **`infra-blocked-escalation-wiring` slice landed** (code-eval PASS, pure-docs).
+  ADR 0017 (infrastructure-blocked escalation) playbook wiring is **COMPLETE**. Wired the three-part
+  decision into the operational playbook: (1) `references/orchestration.md` — new *Infrastructure-blocked
+  escalation* section (third escalation type, sibling to round-limit and starvation-loop; infra-failure
+  signature set; not round-counted; halt-not-retry; write-ahead checkpoint; pause+summary to owner;
+  detect-on-failure only) + degraded-run + false-clean-detection bullets in the automated-review step;
+  (2) `agents/developer.md` — new *Incremental-commit discipline (ADR 0017)* SHOULD subsection (commit
+  each gate-green sub-step; small targeted `Edit`s over whole-file `Write`; reconciled with
+  single-slice-commit handoff; cite ADR 0003/0012); (3) `references/review-findings.md` — new degraded-run
+  subsection + broadened `skipped: command-unavailable` gloss; four-token contract preserved; (4)
+  `commands/run.md` — driver-loop pointers at steps d2 + f. This closes the deferred infra-blocked-escalation
+  Open follow-up (see Resolved below).
+- **Prior action:** **`multi-session-playbook-wiring` slice landed** (code-eval PASS, pure-docs).
   Slice W wired the multi-session coordination model into all four operational playbook bodies:
   `references/parallelism.md` (multi-session layer — git-CAS cross-session lock/claim + lease-freshness
   renewer + local-`main` worktree base — layered **on top of** ADR 0008; both models fully stated),
@@ -517,7 +529,9 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 0009 Unaligned-migrate sub-mode · 0010 automated review in code-review phase ·
 0011 `/code-review` command correction · 0012 thin orchestrator · 0013 write-ahead backstop ·
 0014 multi-session worktree coordination · 0015 lease-renewal heartbeat liveness ·
-0016 git-native `update-ref` CAS lock mechanism.
+0016 git-native `update-ref` CAS lock mechanism ·
+0017 infrastructure-blocked escalation (third escalation type; detect-on-failure; not round-counted;
+degraded-review honesty; developer incremental-commit discipline).
 
 ## Resolved build-time questions (M1)
 
@@ -547,12 +561,14 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
 
 ## Open
 
-**Infra-blocked escalation (follow-up, no ADR yet):** a future ADR/spec thread — the
-orchestrator should detect account limit/quota errors on a role return and pause gracefully
-(write-ahead checkpoint + owner summary) instead of mistaking a killed sub-agent for a
-result; plus instruct developer agents to commit incrementally (blast-radius lever). Motivated
-by this thread's 2 spend-limit hits + 2 output-cap crashes during the multi-session
-coordination work. Not a blocking item; queued for owner-directed planning.
+~~**Infra-blocked escalation (follow-up, no ADR yet)**~~ **RESOLVED.** ADR 0017 Accepted;
+spec 03 § "Infrastructure-blocked escalation" + spec 04 §§ "Human checkpoints" / "Automated
+review before a slice lands" re-frozen; playbook wired via `infra-blocked-escalation-wiring`
+slice (pure-docs, code-eval PASS). All four bodies updated: `orchestration.md` (new escalation
+section + degraded-run/false-clean bullets), `developer.md` (incremental-commit SHOULD),
+`review-findings.md` (degraded-run note + broadened gloss; four tokens preserved),
+`commands/run.md` (driver-loop pointers). The deferred follow-up from the multi-session
+coordination thread is now fully delivered.
 
 ~~OQ-A (parallel `.docs/` coordination)~~ **RESOLVED by ADR 0008** (hybrid model;
 living docs + slice-plans index main-only/orchestrator-serialized, per-slice

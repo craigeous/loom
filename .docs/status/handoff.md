@@ -16,6 +16,17 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: Infra-blocked escalation (ADR 0017) — COMPLETE.** The deferred follow-up from the
+  multi-session coordination thread is now fully delivered. ADR 0017 Accepted → spec 03
+  § "Infrastructure-blocked escalation" + spec 04 §§ "Human checkpoints" / "Automated review before
+  a slice lands" re-frozen → `infra-blocked-escalation-wiring` playbook slice landed (pure-docs,
+  code-eval PASS). Wired: `references/orchestration.md` (new *Infrastructure-blocked escalation*
+  section — infra-failure signature set, not-a-valid-result/no-round-consumed/halt-not-retry/
+  write-ahead/pause+summary, detect-on-failure — plus degraded-run + false-clean-detection bullets),
+  `agents/developer.md` (incremental-commit SHOULD), `references/review-findings.md` (degraded-run
+  note + broadened `skipped: command-unavailable` gloss; four-token contract preserved),
+  `commands/run.md` (driver-loop pointers). **No pending slices.**
+
 - **Post-M4: Multi-session coordination (ADR 0014/0015/0016) — COMPLETE end-to-end.** Full thread
   closed: ADR 0014 (cross-session lock + slice-lease protocol) → ADR 0015 (lease-renewal heartbeat
   liveness; `{pid, start-time}`-gated background renewer) → ADR 0016 (git-native `update-ref` CAS
@@ -24,9 +35,6 @@ source of truth; `roadmap.md` is milestone order.
   (pure-docs; wired `parallelism.md`, `orchestration.md`, `commands/run.md`, `SKILL.md` to the
   `loom-coord.sh` subcommand lifecycle). A cold orchestrator following the playbook will now
   `session-start`, `claim`, `lock-acquire`, `lock-verify`, and `session-end` via real subcommands.
-  **Open follow-up (no slice, no ADR yet):** infra-blocked-escalation — orchestrator should detect
-  account-limit/quota kills gracefully (checkpoint + owner summary); developers should commit
-  incrementally. See `progress.md` → Open.
 
 - **Post-M4: Thin orchestrator + context management (ADR 0012 + ADR 0013) — COMPLETE;
   mechanical backstop hook now live.** Owner-directed: make `sonnet` the default
@@ -243,15 +251,10 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-0. **NEXT ACTION — owner-directed.** The multi-session coordination feature is **COMPLETE
-   end-to-end**: ADR 0014/0015/0016 Accepted → spec 04 amended + re-Approved → `loom-coord.sh`
-   helper landed (shell-gated, 64/64) → playbook wiring landed (slice W, pure-docs). No pending
-   slices in this thread. One Open follow-up item queued (no slice yet, no ADR): the
-   **infra-blocked-escalation** pattern (orchestrator should detect account-limit/quota kills on
-   a sub-agent return, write-ahead checkpoint, and surface a graceful owner summary instead of
-   treating it as a normal result; instruct developers to commit incrementally — motivated by
-   this thread's 2 spend-limit hits + 2 output-cap crashes). See `progress.md` → Open for the
-   full note. **Future work is owner-directed** — new ADR/spec-driven features or
+0. **NEXT ACTION — owner-directed.** Both post-M4 threads are **COMPLETE**: multi-session
+   coordination (ADR 0014/0015/0016 → `loom-coord.sh` → playbook wiring) and infra-blocked
+   escalation (ADR 0017 → specs 03/04 amended → playbook wiring). **No pending slices. No open
+   follow-up items.** Future work is owner-directed — new ADR/spec-driven features or
    packaging/release.
 
 0. **COMPLETED — Slice W: `multi-session-playbook-wiring`.** Pure-docs: wired

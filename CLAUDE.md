@@ -140,6 +140,19 @@ after approval and change only via planning. Design decisions are in
   which is only a backstop — don't lower it to 60% (`orchestration.md` → *Restart
   safely*). The
   automated-review run step is the one in-window exception and is **write-and-forget**.
+- **Infrastructure-blocked escalation** (ADR 0017): a third escalation type (sibling to round-limit
+  and starvation-loop), triggered by an **infra-failure signature** — account spend/usage/quota limit,
+  rate-limit/429, 5xx, safety-classifier-unavailable, or a partial workflow failure (e.g. a
+  `/code-review` whose sub-agents crashed). Detection only; never round-counted; on detection: not a
+  valid result → halt, write-ahead checkpoint (ADR 0013), pause + summarize to owner. **Degraded-review
+  honesty**: a run whose finder/verify sub-agents crashed is INVALID (a false-clean), never `ran-clean`;
+  detect via failure indicators before trusting "no findings"; re-run when unblocked, else
+  `skipped: command-unavailable`. **Developer incremental-commit discipline** (SHOULD): commit each
+  gate-green sub-step; prefer small targeted `Edit`s over whole-file `Write` (avoids the 32k output-cap
+  crash). Wired in `references/orchestration.md` (escalation section + automated-review bullets),
+  `agents/developer.md` (incremental-commit SHOULD), and `references/review-findings.md` (degraded-run
+  note + broadened `skipped: command-unavailable` gloss; four-token contract preserved). Single source:
+  spec 03 § "Infrastructure-blocked escalation" + spec 04.
 - When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
 
 ## Project conventions
