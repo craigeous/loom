@@ -17,7 +17,13 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-(none)
+- [claude-md-slim-down-plan.md](claude-md-slim-down-plan.md) — `Plan Review` —
+  apply + enforce the Approved spec-08 § "Shape and Concision Discipline": rewrite
+  loom's root `CLAUDE.md` 197 → ~90 lines (collapse the 132-line Repo-layout section
+  to a ~25-line pointer index, coverage preserved) and wire enforcement — a
+  "CLAUDE.md shape" Hygiene check in `references/code-eval-rubric.md` (flags
+  restatement / over-bound / lost coverage on finalize diffs) + a one-clause pointer
+  in `agents/developer.md` finalize step 2. Pure-docs (review `skipped: docs-only`).
 
 ## Archived plans
 
