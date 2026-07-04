@@ -1,6 +1,6 @@
 # CLAUDE.md slim-down — apply + enforce the shape & concision discipline
 
-Status: Draft
+Status: Plan Review
 Lifecycle: Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 08-playbook.md (§ "Shape and Concision Discipline"), 03-artifact-lifecycle.md (finalize pass step 2)
 Target research: 2026-07-03-claude-md-digest-discipline.md (Approved — the target blueprint)
@@ -40,8 +40,14 @@ code** → automated review is `skipped: docs-only`.
   so it covers both bounds).
 - No change to the four inclusion/exclusion categories, the gate commands, the
   read-first list content, or any reference-file body. Coverage is **preserved, not
-  reduced** — every currently-named reference/component/gate/invariant must still be
-  pointed to.
+  reduced** — every currently-named reference file, component, and gate must still be
+  pointed to. Two bare ADR cross-refs — **ADR 0001** (current line 104) and **ADR
+  0002** (current line 123) — are **intentionally not re-tagged**: this is
+  point-don't-restate compression, not lost coverage, because the concept each carries
+  survives verbatim elsewhere in `CLAUDE.md` (ADR 0001 "only the orchestrator spawns"
+  in the unchanged "What loom is" paragraph) or in an on-demand reference (ADR 0002's
+  tier detail in `orchestration.md`/spec 08 § Model tiers). No component/reference/gate
+  pointer is dropped.
 
 ## Files touched
 
@@ -50,7 +56,13 @@ code** → automated review is `skipped: docs-only`.
 | `/Users/craig/git/loom/CLAUDE.md` | Full rewrite to ~90 lines: stable top + pointer index + compact conventions + gate + update-note. |
 | `/Users/craig/git/loom/plugins/loom/skills/loom-playbook/references/code-eval-rubric.md` | Add a "CLAUDE.md shape (finalize diffs)" check under **Hygiene**. |
 | `/Users/craig/git/loom/plugins/loom/agents/developer.md` | Finalize pass step 2: add a one-clause pointer to spec-08 Shape and Concision Discipline. |
-| `/Users/craig/git/loom/.docs/slice-plans/README.md` | Add this plan to the Active-plans index (same commit). |
+
+The slice's committed diff touches **exactly these three files** plus this
+slice-plan's own `Status:` line — nothing else. The `slice-plans/README.md`
+Active→Archived index move is **not** part of this slice: per spec 08 § "Slice-plans
+index ownership under parallelism" the index is orchestrator-owned/main-only, and
+this plan's Active entry already exists (the orchestrator added it at slice creation).
+The developer must not touch it.
 
 ## New `CLAUDE.md` structure (target ~90 lines)
 
@@ -99,8 +111,11 @@ current multi-line bullet collapses to a single `**name** — clause (tag).` lin
 | keep-consistent line (157) | `When editing the playbook/agents, keep them consistent with .docs/spec/ + ADRs.` — kept as the index's closing invariant. |
 
 Net: Repo-layout 132 → ~25–30 lines; whole file 197 → ~90. Coverage is **complete** —
-16 pointers above correspond 1:1 to the 16 current Repo-layout bullets; the stable top,
-Project conventions, Gate, and Update-note are retained.
+the mapping is **≥1:1, finer where a current bullet bundled multiple components**:
+`CLAUDE.md` has 15 top-level Repo-layout bullets, and the `plugins/loom/hooks/` bullet
+(current line 35) is deliberately split into three explicit rows (the two hooks + the
+`hooks.json` discovery fact) so nothing collapses invisibly. The stable top, Project
+conventions, Gate, and Update-note are retained.
 
 ## Enforcement wiring
 
@@ -135,10 +150,11 @@ spec-08 pointer so the developer applies shape at write time:
 2. **Edit `references/code-eval-rubric.md`** — add bullet **A** under `## Hygiene`.
 3. **Edit `agents/developer.md`** — append clause **B** to finalize step 2's spec-08
    pointer sentence.
-4. **Edit `.docs/slice-plans/README.md`** — add this plan's entry to `## Active plans`
-   (replacing `(none)`).
-5. **Commit** all four files author-neutral (one handoff = one commit). Verify the
-   commit author per `commit-convention.md` ("Verify after committing").
+4. **Commit** the three files author-neutral (one handoff = one commit). Do **not**
+   touch `slice-plans/README.md` — the Active→Archived index move is the
+   orchestrator's finalize action on main, not a developer edit (spec 08 §
+   "Slice-plans index ownership under parallelism"). Verify the commit author per
+   `commit-convention.md` ("Verify after committing").
 
 ## Verification (doc-consistency — this is a pure-docs slice)
 
@@ -153,13 +169,18 @@ consistency, checked mechanically:
    `gate-learning.md`, `tooling.md`, `parallelism.md`, `migration-recipe.md`,
    `review-findings.md`, `orchestration.md`, `git-identity-guard.sh`,
    `precompact-write-ahead-backstop.sh`, `loom-coord`, `gates/rust.md`,
-   `gates/shell.md`, `marketplace.json`.
+   `gates/shell.md`, `marketplace.json`. Plus the structural-layout tokens, so the
+   check also proves the repo-shape facts survive: `plugins/loom/`, `.docs/`,
+   `hooks.json`.
 3. **Invariants / read-first / gate intact.** `## Read first` still lists the 4
    entry-point docs; `## Gate` still names `format → lint → test` + the Rust and Shell
    commands + the gate-learning pointer; `## Project conventions` retains the four
    durable-memory bullets; the "keep consistent with `.docs/spec/` + ADRs" line
    survives. The relevant ADR tags (0003, 0008, 0009, 0010, 0011, 0012, 0013, 0017,
-   plus 0014/0015/0016) each still appear at least once.
+   plus 0014/0015/0016) each still appear at least once. ADR 0001 and 0002 are
+   **expected to be absent as bare tags** (intentional compression per Out of scope —
+   their concepts survive in prose/reference, not as a re-tagged pointer); their
+   absence is not a coverage regression.
 4. **Links resolve.** Every path/file the index names exists on the real tree
    (`plugins/loom/skills/loom-playbook/references/<name>`, `gates/<name>`,
    `plugins/loom/hooks/<name>`, `plugins/loom/bin/loom-coord`).
