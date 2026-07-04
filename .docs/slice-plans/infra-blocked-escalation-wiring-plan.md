@@ -1,6 +1,6 @@
 # Infrastructure-blocked escalation — playbook wiring (ADR 0017)
 
-Status: In Progress
+Status: Implemented
 Lifecycle: Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 03-artifact-lifecycle.md (§ "Infrastructure-blocked escalation"), 04-orchestrator.md (§ "Human checkpoints", § "Automated review before a slice lands")
 Target ADR: 0017-infrastructure-blocked-escalation.md (Approved)
@@ -220,6 +220,13 @@ Acceptance is **doc consistency**, checked mechanically with `rg` (not by eye), 
 
 ## Notes
 
-<Clarification requests between roles, dated. A role asks here and sets status to Needs Clarification;
-the answering role replies here and the status is restored. Resolutions are marked, not deleted.
-(Formal verdicts live in evaluations/, not here.)>
+**Gate evidence (pure-docs; automated review: skipped: docs-only):**
+
+1. Token count: `rg -c '...' review-findings.md` → `4`. No fifth token (`rg -n 'skipped: (limit|degraded|infra)' ...` → empty).
+2. New section: `rg -n '^## Infrastructure-blocked escalation' orchestration.md` → line 255. NOT round-counted + detect-on-failure: confirmed (lines 291, 296).
+3. Terminology parity: spend/usage/quota, 429, 5xx, classifier-unavailable, partial workflow failure — all present (lines 215, 226, 227, 266–271, 283). `finder count of 0 with failures present` — line 227.
+4. Degraded-run wiring: `Degraded runs are not clean` + `false-clean` + `INVALID` in review-findings.md lines 87/90/92. `limit-crashed` gloss — line 128.
+5. Developer discipline: `Incremental-commit discipline` + `SHOULD` + `32k` + `ADR 0017` — all present in developer.md.
+6. run.md pointers: `false-clean` at line 82 (d2), `infrastructure block` at line 91 (f).
+7. Cross-links: all relative `.md` links in the four edited files resolve (python3 verification → OK).
+8. No frozen-artifact or code file touched: `git diff --name-only` lists only the 4 playbook bodies + the slice-plan. No `.docs/spec/`, no `.docs/ADR/`, no `.sh`/`.bats`.
