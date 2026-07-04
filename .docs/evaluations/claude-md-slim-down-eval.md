@@ -48,6 +48,43 @@ Round-1 findings — all resolved (confirmed against the diff):
 
 None — all Round-1 findings resolved.
 
+## Code review (landing) — PASS, Round 1
+
+Blind review of the implemented slice at commit `b59b9f8` (base `01c7154`);
+`git diff 01c7154 b59b9f8` touches exactly the four intended files (`CLAUDE.md`,
+`references/code-eval-rubric.md`, `agents/developer.md`, and this plan's own
+`Status:` line). No new FAIL in the code-review phase → the counter holds at
+Round 1.
+
+Verified mechanically against the plan's acceptance + spec 08 § "Shape and
+Concision Discipline" + the new rubric "CLAUDE.md shape" check:
+
+- **Discipline met.** `wc -l CLAUDE.md` = **85** (≤ ~100; target 80–100). The
+  132-line "Repo layout" restatement section is gone, replaced by a `## Map`
+  pointer index of one-clause `**name** — purpose (tag)` lines — point-don't-restate
+  holds, no restatement paragraph survives. Both zones present: stable top
+  (Read-first 4-item list + one-paragraph "What loom is" + core invariants + Gate)
+  and the pointer index. Gate section retained in full (`format → lint → test` +
+  Rust + Shell + gate-learning pointer). Project conventions (4 bullets) and the
+  keep-consistent invariant intact.
+- **Coverage preserved.** Every prior reference/component/gate/hook token still
+  pointed to (`rg -F` ≥ 1 each): the ten `references/*.md`, both hooks, `loom-coord`,
+  `gates/rust.md`, `gates/shell.md`, `marketplace.json`, and structural tokens
+  `plugins/loom/`, `.docs/`, `hooks.json`. All 16 named paths resolve on the tree.
+  ADR tags 0003/0008/0009/0010/0011/0012/0013/0014/0015/0016/0017 all present;
+  ADR 0001/0002 intentionally compressed per plan Out-of-scope (concepts survive in
+  prose) — allowed, not lost coverage.
+- **Enforcement wiring correct.** The `code-eval-rubric.md` bullet sits under
+  `## Hygiene` (after Playbook conformance), flags restatement / over-bound
+  (`wc -l`) / lost-coverage, single-sources to spec 08 and `severity.md`, and marks
+  itself a separate dimension from the gate — points, does not restate. The
+  `developer.md` finalize step-2 pointer is a one-clause extension; no contradiction.
+- **Scope + review.** No `.docs/spec/` or `.docs/ADR/` edit; no shell/bats files →
+  no gate applies. Automated review `skipped: docs-only` is correct and correctly
+  recorded; nothing to adjudicate. Commit author is a real identity (not a fallback).
+
+Verdict: **PASS** → land.
+
 ## Notes
 
 No regression in the core of the plan, re-confirmed intact:
