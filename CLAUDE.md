@@ -48,8 +48,9 @@ after approval and change only via planning. Design decisions are in
     background renewer (ADR 0015); fails **closed** (inverse of the guard hooks). Subcommands:
     `lock-acquire`/`lock-release`/`lock-verify`; `claim`/`renew`/`release-claim`/`reclaim`/`list-claims`;
     `session-start`/`session-bootstrap`/`session-end`; `cleanup`. The shell gate now covers
-    `plugins/loom/lib/` as well as `plugins/loom/hooks/`. Operational playbook-body wiring
-    (`parallelism.md`/`orchestration.md`/`run.md`) lands in **slice W** (pending).
+    `plugins/loom/lib/` as well as `plugins/loom/hooks/`. Playbook wiring is **complete**
+    (slice W landed): `parallelism.md`, `orchestration.md`, `run.md`, and `SKILL.md` all
+    describe where and how the orchestrator calls `loom-coord.sh` subcommands.
   - The Rust gate loom *imposes on managed projects* is in
     `plugins/loom/skills/loom-playbook/gates/rust.md`.
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
@@ -77,12 +78,15 @@ after approval and change only via planning. Design decisions are in
 - **Recommended tooling + mechanical-check discipline**: `plugins/loom/skills/loom-playbook/references/tooling.md`
   — CLI/LSP toolkit by role (all optional with fallback); verify invariants with `rg -U`/`yq`/`ast-grep`,
   not by eye. Cross-linked from `SKILL.md`, both eval rubrics, and the three agent files.
-- **Parallelism behavior body** (M3): `plugins/loom/skills/loom-playbook/references/parallelism.md`
-  is the single authoritative worktree-per-slice operational body (ADR 0008):
-  create→work→land→cleanup, the `.docs/` coordination model (living docs +
-  slice-plans index orchestrator-owned/main-only/serialized; slice branches carry
-  only disjoint plan/eval/code), concurrency safety, and the slicer-independence
-  rule.
+- **Parallelism behavior body** (M3 + multi-session): `plugins/loom/skills/loom-playbook/references/parallelism.md`
+  is the single authoritative worktree-per-slice operational body. It presents BOTH
+  layers: the **ADR 0008** single-orchestrator worktree model (create→work→land→cleanup,
+  `.docs/` coordination model, concurrency safety, slicer-independence rule) AND the
+  **ADR 0014/0015/0016 multi-session lock/claim/lease-renewal layer** via
+  `plugins/loom/lib/loom-coord.sh` (cross-session `refs/loom/lock` + per-slice
+  `refs/loom/claims/<slice>` git-CAS mutex; lease-freshness liveness + `{pid,start-time}`-gated
+  background renewer; three locked shared-`main` writes: claim / lease-renew / land).
+  The multi-session layer is an extension layered on top of ADR 0008, not a replacement.
 - **Migration recipe** (ADR 0009): `plugins/loom/skills/loom-playbook/references/migration-recipe.md`
   is the reusable Unaligned-migrate recipe (ADR 0009 §5/§7): ordered, idempotent
   cross-reference rewrite (specific-before-generic; negative lookbehind against

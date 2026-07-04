@@ -17,18 +17,18 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [multi-session-playbook-wiring-plan.md](multi-session-playbook-wiring-plan.md) — `Plan Review` —
-  slice W: fold the now-landed multi-session coordination model (spec 04 § "Multi-session
-  coordination"; ADR 0014/0015/0016) into the playbook operational bodies so the orchestrator
-  actually uses `plugins/loom/lib/loom-coord.sh`. Pure-docs (no code — `loom-coord.sh` frozen):
-  edits `references/parallelism.md` (multi-session model layered on ADR 0008; git-CAS lock/claim
-  + renewer; local-`main` worktree base; git-CAS "losing CAS = clean retry"),
-  `references/orchestration.md` (new *Multi-session coordination* driver-loop section +
-  cold-restart `session-bootstrap` note), `commands/run.md` + `SKILL.md` (pointers). Carries the
-  {orchestrator action → `loom-coord` subcommand + exit-code} mapping. Automated review
-  skipped: docs-only; gate = doc consistency.
+(none)
 
 ## Archived plans
+
+- [archive/multi-session-playbook-wiring-plan.md](archive/multi-session-playbook-wiring-plan.md) — `Archived` —
+  slice W: wired the multi-session coordination model (ADR 0014/0015/0016) into the playbook
+  operational bodies. Pure-docs: `references/parallelism.md` (multi-session layer — git-CAS
+  lock/claim + renewer + local-`main` worktree base — layered on ADR 0008),
+  `references/orchestration.md` (new *Multi-session coordination* driver-loop section +
+  cold-restart `session-bootstrap` note), `commands/run.md` + `SKILL.md` (pointers). Carries
+  the {orchestrator action → `loom-coord` subcommand + exit-code} mapping. Completes the
+  multi-session coordination thread end-to-end.
 
 - [archive/multi-session-lock-helper-plan.md](archive/multi-session-lock-helper-plan.md) — `Archived` —
   ADR 0014/0015/0016: loom's **first non-hook CLI helper** `plugins/loom/lib/loom-coord.sh`

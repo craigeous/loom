@@ -16,6 +16,18 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: Multi-session coordination (ADR 0014/0015/0016) — COMPLETE end-to-end.** Full thread
+  closed: ADR 0014 (cross-session lock + slice-lease protocol) → ADR 0015 (lease-renewal heartbeat
+  liveness; `{pid, start-time}`-gated background renewer) → ADR 0016 (git-native `update-ref` CAS
+  substrate; ABA-safe) → spec 04 amended + re-Approved → `loom-coord.sh` helper landed (shell-gated,
+  gate green 64/64, code-eval PASS round 0) → **Slice W (`multi-session-playbook-wiring`) landed**
+  (pure-docs; wired `parallelism.md`, `orchestration.md`, `commands/run.md`, `SKILL.md` to the
+  `loom-coord.sh` subcommand lifecycle). A cold orchestrator following the playbook will now
+  `session-start`, `claim`, `lock-acquire`, `lock-verify`, and `session-end` via real subcommands.
+  **Open follow-up (no slice, no ADR yet):** infra-blocked-escalation — orchestrator should detect
+  account-limit/quota kills gracefully (checkpoint + owner summary); developers should commit
+  incrementally. See `progress.md` → Open.
+
 - **Post-M4: Thin orchestrator + context management (ADR 0012 + ADR 0013) — COMPLETE;
   mechanical backstop hook now live.** Owner-directed: make `sonnet` the default
   orchestrator and keep its context flat so it drives long sessions without filling up.
@@ -231,17 +243,24 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-0. **NEXT ACTION — Slice W: fold multi-session coordination model into playbook bodies.**
-   The design layer is COMPLETE (ADR 0014/0015/0016 Accepted; spec 04 `### Multi-session
-   coordination` subsection updated + re-Approved; `loom-coord.sh` helper LANDED). The
-   remaining work is **pure-docs wiring**: author `parallelism.md`, `orchestration.md`,
-   and `commands/run.md` to describe where the orchestrator calls `loom-coord.sh`
-   subcommands in the loop, how it names worktrees (must embed session-id), and the
-   lease-freshness/renewer obligation. Pure-docs slice → auto-review skip. Plan→eval→
-   implement→code-eval→finalize. Also log the deferred **infra-blocked-escalation
-   `.docs/` follow-up** (owner idea: a `.docs/` mechanism for recording when a slice
-   is blocked by infra limits, not developer error, so the orchestrator can route
-   appropriately — carry as an Open item in progress.md).
+0. **NEXT ACTION — owner-directed.** The multi-session coordination feature is **COMPLETE
+   end-to-end**: ADR 0014/0015/0016 Accepted → spec 04 amended + re-Approved → `loom-coord.sh`
+   helper landed (shell-gated, 64/64) → playbook wiring landed (slice W, pure-docs). No pending
+   slices in this thread. One Open follow-up item queued (no slice yet, no ADR): the
+   **infra-blocked-escalation** pattern (orchestrator should detect account-limit/quota kills on
+   a sub-agent return, write-ahead checkpoint, and surface a graceful owner summary instead of
+   treating it as a normal result; instruct developers to commit incrementally — motivated by
+   this thread's 2 spend-limit hits + 2 output-cap crashes). See `progress.md` → Open for the
+   full note. **Future work is owner-directed** — new ADR/spec-driven features or
+   packaging/release.
+
+0. **COMPLETED — Slice W: `multi-session-playbook-wiring`.** Pure-docs: wired
+   `parallelism.md`, `orchestration.md`, `commands/run.md`, `SKILL.md` to describe
+   the full `loom-coord.sh` subcommand lifecycle. Archived.
+
+0. **COMPLETED — multi-session worktree coordination (ADR 0014/0015/0016).** `loom-coord.sh`
+   helper LANDED (code-eval PASS round 0, gate green 64/64). See item 0 history below for
+   the full thread. Original item:
 
 0. **COMPLETED — multi-session worktree coordination (ADR 0014/0015/0016).** `loom-coord.sh`
    helper LANDED (code-eval PASS round 0, gate green 64/64). See item 0 history below for

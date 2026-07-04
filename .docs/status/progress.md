@@ -6,8 +6,22 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: multi-session worktree coordination (ADR 0014/0015/0016) helper — LANDED. Next: slice W (playbook wiring).**
-- **Last action:** **`multi-session-lock-helper` slice landed** (code-eval PASS round 0, gate green 64/64).
+- **Phase:** **M0–M4 complete. Post-M4: multi-session coordination thread — COMPLETE end-to-end (ADR 0014/0015/0016 + spec 04 + `loom-coord.sh` + playbook wiring). No pending slices. Open: infra-blocked-escalation follow-up (see Open below).**
+- **Last action:** **`multi-session-playbook-wiring` slice landed** (code-eval PASS, pure-docs).
+  Slice W wired the multi-session coordination model into all four operational playbook bodies:
+  `references/parallelism.md` (multi-session layer — git-CAS cross-session lock/claim + lease-freshness
+  renewer + local-`main` worktree base — layered **on top of** ADR 0008; both models fully stated),
+  `references/orchestration.md` (new "Multi-session coordination" driver-loop section with
+  `session-start`/`claim`/`lock-acquire`/`lock-verify`/`session-end` obligations mapped to
+  `loom-coord.sh` subcommands + exit-code branches; cold-restart `session-bootstrap` note added to
+  "Restart safely"), `commands/run.md` (concise driver-loop pointer to `loom-coord.sh`),
+  `SKILL.md` (parallelism.md bullet extended to name the multi-session layer). The entire
+  **multi-session coordination thread is now COMPLETE end-to-end**: ADR 0014/0015/0016 Accepted →
+  spec 04 amended + Approved → `loom-coord.sh` helper landed (shell-gated, code-eval PASS round 0,
+  gate green 64/64) → playbook wiring landed (slice W). A cold orchestrator following the playbook
+  will now use `session-start`, `claim`, `lock-acquire`, `lock-verify`, and `session-end` via real
+  `loom-coord` subcommands.
+- **Prior action:** **`multi-session-lock-helper` slice landed** (code-eval PASS round 0, gate green 64/64).
   `plugins/loom/lib/loom-coord.sh` is loom's **first non-hook CLI helper** — the multi-session coordination
   mechanism: git-`update-ref` CAS lock on `refs/loom/lock` + per-slice claim refs on `refs/loom/claims/<sha1>`
   + lease-freshness liveness (ADR 0015) + `{pid,start-time}`-gated background renewer (U3); shell-gated,
@@ -532,6 +546,13 @@ eval + role separation · 0005 frozen specs · 0006 self-marketplace (subdir lay
   wrapped-token was retired in commit a85885f).
 
 ## Open
+
+**Infra-blocked escalation (follow-up, no ADR yet):** a future ADR/spec thread — the
+orchestrator should detect account limit/quota errors on a role return and pause gracefully
+(write-ahead checkpoint + owner summary) instead of mistaking a killed sub-agent for a
+result; plus instruct developer agents to commit incrementally (blast-radius lever). Motivated
+by this thread's 2 spend-limit hits + 2 output-cap crashes during the multi-session
+coordination work. Not a blocking item; queued for owner-directed planning.
 
 ~~OQ-A (parallel `.docs/` coordination)~~ **RESOLVED by ADR 0008** (hybrid model;
 living docs + slice-plans index main-only/orchestrator-serialized, per-slice
