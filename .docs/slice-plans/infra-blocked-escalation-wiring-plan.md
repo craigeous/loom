@@ -1,6 +1,6 @@
 # Infrastructure-blocked escalation — playbook wiring (ADR 0017)
 
-Status: Approved
+Status: In Progress
 Lifecycle: Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 03-artifact-lifecycle.md (§ "Infrastructure-blocked escalation"), 04-orchestrator.md (§ "Human checkpoints", § "Automated review before a slice lands")
 Target ADR: 0017-infrastructure-blocked-escalation.md (Approved)
