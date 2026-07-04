@@ -1,6 +1,6 @@
 # Research: CLAUDE.md Digest Discipline — Lean Maps vs. Restatement Mirrors
 
-Status: Draft
+Status: Research Review
 Date: 2026-07-03
 Topic: How loom should enforce "point-don't-restate" discipline and size bounds for CLAUDE.md, an always-loaded entry point
 
@@ -12,8 +12,8 @@ loom's root `CLAUDE.md` has drifted from a lean entry-point map into a bloated r
 
 - **Current size**: 197 lines (at Anthropic's < 200 target, but bloated internally)
 - **Repo layout section** (lines 27–158): 132 lines = **67% of entire file**
-- **Buried signal**: "Read first" (4 lines) and "Gate" (19 lines)—the essential navigation—lie buried under restatement
-- **The restatement pattern**: Each "Repo layout" bullet restates—in full paragraph form—the very reference file it names (examples: `init-detection.md` logic repeated in 3 lines; `parallelism.md` entire ADR 0008 + multi-session coordination story expanded to 10 lines; `orchestration.md` context-discipline + 60%-restart rule elaborated to 22 lines). [1][2]
+- **Buried signal**: "Read first" (4 lines) and "Gate" (21 lines)—the essential navigation—lie buried under restatement
+- **The restatement pattern**: Each "Repo layout" bullet restates—in full paragraph form—the very reference file it names (examples: `init-detection.md` logic repeated in 3 lines; `parallelism.md` entire ADR 0008 + multi-session coordination story expanded to 9 lines; `orchestration.md` context-discipline + cold-restart rule elaborated to 22 lines). [1][2]
 - **The cost**: Every agent session loads this 197-line file into context, consuming tokens that compete with actual work. Anthropic's guidance is explicit: "If your CLAUDE.md is too long, Claude ignores half of it because important rules get lost in the noise." [3]
 
 ### Prior Art: Anthropic Official Guidance
@@ -36,11 +36,11 @@ Three-zone structure:
 - Current: "The **shippable plugin** lives in `plugins/loom/` (`commands/` — `/loom:run` plus one-off `/loom:<role>` commands; `agents/`; `skills/loom-playbook/`; `hooks/` — PreToolUse guard scripts…" (4 lines)
   → Target: "**`plugins/loom/`** — shippable plugin (commands, agents, skills, hooks); components namespaced `loom:<name>`." (1 line)
 
-- Current: 10-line paragraph restating ADR 0008 + 0014–0016 multi-session coordination
+- Current: 9-line paragraph restating ADR 0008 + 0014–0016 multi-session coordination
   → Target: "**`references/parallelism.md`** — worktree-per-slice ops + multi-session coordination (ADR 0008, 0014–0016)." (1 line)
 
-- Current: 22-line paragraph restating context discipline + 60% restart + write-ahead + ADR 0012
-  → Target: "**`orchestration.md`** — orchestrator context discipline + cold restart + ~60% trigger (ADR 0012)." (1 line)
+- Current: 22-line paragraph restating context discipline + cold restart + write-ahead + ADR 0012 and ADR 0013
+  → Target: "**`orchestration.md`** — orchestrator context discipline + cold restart + ~60% trigger (ADR 0012, ADR 0013)." (1 line)
 
 **Result**: Repo layout collapses from 132 → ~25 lines; total file: 197 → ~90 lines. High-value navigation now visible; entry point becomes a map, not a reference mirror. [1][2]
 
@@ -74,7 +74,7 @@ It must stay a lean map, not a reference mirror:
    that CLAUDE.md points to.
 ```
 
-This enforces the always-loaded discipline that Anthropic's guidance prescribes and aligns spec 08 (currently silent on shape) with loom's own context-budget discipline (ADR 0012 thin orchestrator, operationalized at ~60% trigger). [4][5][6][7]
+This enforces the always-loaded discipline that Anthropic's guidance prescribes. ADR 0012 establishes the thin-orchestrator context-budget discipline and cold-restart-as-answer decision; ADR 0013 operationalizes the ~60% cold-restart trigger and starvation-loop guards. Together, they form loom's answer to context pressure and align with the shape constraints proposed here. [4][5][6][7][8]
 
 ### Trade-offs & Open Questions
 
@@ -84,7 +84,7 @@ This enforces the always-loaded discipline that Anthropic's guidance prescribes 
 
 3. **Same target for managed-project CLAUDE.md?** Yes. spec 08 applies the curated-digest boundary to both loom's root and managed projects. Managed projects' CLAUDE.md should stay < 200 lines and use point-don't-restate rule. Managed projects typically have fewer features to index, so this is naturally easier. [5][6]
 
-4. **How to enforce "always-loaded" constraint?** Sonnet is context-aware (token signal after each call); loom's orchestrator monitors this for ~60% cold-restart trigger. For managed projects, CLAUDE.md is checked into git, so discipline is developer-side hygiene. This is not a technical constraint to solve; spec rule + culture solves it. [7]
+4. **How to enforce "always-loaded" constraint?** Sonnet is context-aware (token signal after each call); loom's orchestrator monitors this via ADR 0013's ~60% cold-restart trigger. For managed projects, CLAUDE.md is checked into git, so discipline is developer-side hygiene. This is not a technical constraint to solve; spec rule + culture solves it. [8]
 
 ## Sources
 
@@ -92,8 +92,8 @@ This enforces the always-loaded discipline that Anthropic's guidance prescribes 
 
 [2] Current `/Users/craig/git/loom/CLAUDE.md` — specific restatement examples:
    - `init-detection.md` bullet (lines 57–59): restates Greenfield/Unaligned/Initialized classifier logic
-   - `parallelism.md` bullet (lines 82–90): restates ADR 0008 + ADR 0014–0016 coordination across 10 lines
-   - `orchestration.md` bullet (lines 122–143): restates context discipline + 60% restart + ADR 0012 across 22 lines
+   - `parallelism.md` bullet (lines 82–90): restates ADR 0008 + ADR 0014–0016 coordination across 9 lines
+   - `orchestration.md` bullet (lines 122–143): restates context discipline + cold restart + ADR 0012 and ADR 0013 across 22 lines
    - `infrastructure-blocked-escalation` bullet (lines 144–156): restates degraded-review + ADR 0017 across 13 lines
    - Plus 6 similar full-paragraph restatement bullets
 
@@ -101,15 +101,16 @@ This enforces the always-loaded discipline that Anthropic's guidance prescribes 
 
 [4] Anthropic Claude Code best practices (https://code.claude.com/docs/en/best-practices) — section "Write an effective CLAUDE.md": "Keep it concise. For each line, ask: 'Would removing this cause Claude to make mistakes?' If not, cut it." → "Bloated CLAUDE.md files cause Claude to ignore your actual instructions!" Also covers inclusion test (what to include vs. exclude).
 
-[5] loom spec 08 — Playbook, section "CLAUDE.md auto-propagation (the curated digest)" (`.docs/spec/08-playbook.md` lines 69–106): defines inclusion categories (durable conventions, repo-layout facts, gate definitions, read-first pointers) and explicit exclusion (per-slice history), but contains no shape/size discipline or "point-don't-restate" rule.
+[5] loom spec 08 — Playbook, section "CLAUDE.md auto-propagation (the curated digest)" (`.docs/spec/08-playbook.md` lines 69–105): defines inclusion categories (durable conventions, repo-layout facts, gate definitions, read-first pointers) and explicit exclusion (per-slice history), but contains no shape/size discipline or "point-don't-restate" rule.
 
 [6] loom spec 03 — Artifact Lifecycle & Status State Machine, finalize pass step 2 (`.docs/spec/03-artifact-lifecycle.md` lines 69–96): curation boundary definition and CLAUDE.md update rule; also silent on shape discipline.
 
-[7] ADR 0012 — Thin Orchestrator, Context-Aware Cold Restart (`.docs/ADR/0012-thin-orchestrator-context-aware-cold-restart.md`): establishes context-budget discipline and ~60% restart trigger; loom's answer to always-loaded context pressure.
+[7] ADR 0012 — Thin Orchestrator: `sonnet` Default + Bounded Role-Return Contract (`.docs/ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md`): establishes context-budget discipline and the cold-restart-as-answer decision.
+
+[8] ADR 0013 — Starvation-Loop Guards for the Orchestrator Cold-Restart (`.docs/ADR/0013-starvation-loop-guards-cold-restart.md`): operationalizes the ~60% cold-restart trigger and write-ahead backstop.
 
 ## Open Questions
 
 - Should spec 08 be amended as part of a broader playbook-evolution slice, or is this a standalone spec change? (Out of scope for research; planner decides.)
 - How will evaluators detect restatement vs. pointer on blind review of finalize CLAUDE.md diffs? (Possible rubric detail for plan-eval or code-eval to scope.)
 - If a managed project's CLAUDE.md grows past < 200 lines (e.g., many custom stacks, many gate definitions), what is the right escalation path? (Not addressed; open for future planning.)
-
