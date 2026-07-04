@@ -1,6 +1,6 @@
 # Multi-Session Playbook Wiring
 
-Status: Plan Review
+Status: Approved
 Lifecycle: Draft → **Plan Review** → Approved → In Progress → Implemented → (code review) → Landed → Archived
 Target specs: 04-orchestrator.md → "Multi-session coordination (ADR 0014, ADR 0015, ADR 0016)"; ADR 0014 (model) / ADR 0015 (lease-freshness + renewer) / ADR 0016 (git-`update-ref` CAS substrate)
 
