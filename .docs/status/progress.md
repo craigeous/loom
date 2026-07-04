@@ -7,7 +7,19 @@ The status source of truth and decision index for building loom.
 ## Current state
 
 - **Phase:** **M0–M4 complete. Post-M4: all threads complete — multi-session coordination (ADR 0014/0015/0016) + infra-blocked escalation (ADR 0017). No pending slices.**
-- **Last action:** **`infra-blocked-escalation-wiring` slice landed** (code-eval PASS, pure-docs).
+- **Last action:** **`claude-md-slim-down` slice landed** (code-eval PASS, pure-docs). The
+  **CLAUDE.md-digest-discipline thread is COMPLETE**: research note
+  `2026-07-03-claude-md-digest-discipline.md` (Approved) → spec 08 § "Shape and Concision
+  Discipline" + spec 03 finalize-step pointer (Approved, earlier) → this slice rewrote loom's
+  root `CLAUDE.md` 197 → 85 lines (132-line Repo-layout section collapsed to a ~25-line
+  one-clause pointer index; coverage fully preserved — every reference file, component, gate,
+  and ADR tag accounted for) and wired enforcement: a "CLAUDE.md shape (finalize diffs only)"
+  Hygiene bullet in `references/code-eval-rubric.md` (flags restatement / over-bound /
+  lost-coverage on finalize diffs, per spec 08; severity via `severity.md`) + a one-clause
+  pointer to spec 08 § "Shape and Concision Discipline" in `agents/developer.md` finalize step 2.
+  The discipline applies to both loom's own root `CLAUDE.md` (~100-line bound) and managed-project
+  `CLAUDE.md` (~200-line bound). No spec/ADR edits.
+- **Prior action:** **`infra-blocked-escalation-wiring` slice landed** (code-eval PASS, pure-docs).
   ADR 0017 (infrastructure-blocked escalation) playbook wiring is **COMPLETE**. Wired the three-part
   decision into the operational playbook: (1) `references/orchestration.md` — new *Infrastructure-blocked
   escalation* section (third escalation type, sibling to round-limit and starvation-loop; infra-failure

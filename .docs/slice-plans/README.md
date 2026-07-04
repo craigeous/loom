@@ -17,15 +17,18 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [claude-md-slim-down-plan.md](claude-md-slim-down-plan.md) — `Plan Review` —
-  apply + enforce the Approved spec-08 § "Shape and Concision Discipline": rewrite
-  loom's root `CLAUDE.md` 197 → ~90 lines (collapse the 132-line Repo-layout section
-  to a ~25-line pointer index, coverage preserved) and wire enforcement — a
-  "CLAUDE.md shape" Hygiene check in `references/code-eval-rubric.md` (flags
-  restatement / over-bound / lost coverage on finalize diffs) + a one-clause pointer
-  in `agents/developer.md` finalize step 2. Pure-docs (review `skipped: docs-only`).
+*(none)*
 
 ## Archived plans
+
+- [archive/claude-md-slim-down-plan.md](archive/claude-md-slim-down-plan.md) — `Archived` —
+  apply + enforce the Approved spec-08 § "Shape and Concision Discipline": rewrote loom's
+  root `CLAUDE.md` 197 → 85 lines (collapsed 132-line Repo-layout to ~25-line one-clause
+  pointer index; coverage preserved) and wired enforcement — a "CLAUDE.md shape" Hygiene
+  bullet in `references/code-eval-rubric.md` (flags restatement / over-bound / lost coverage
+  on finalize diffs) + a spec-08 Shape and Concision pointer in `agents/developer.md` finalize
+  step 2. Pure-docs (review `skipped: docs-only`). Completes the CLAUDE.md-digest-discipline
+  thread.
 
 - [archive/infra-blocked-escalation-wiring-plan.md](archive/infra-blocked-escalation-wiring-plan.md) — `Archived` —
   ADR 0017 playbook wiring (pure-docs, no code). Wired the infrastructure-blocked escalation into

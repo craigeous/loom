@@ -16,6 +16,16 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Post-M4: CLAUDE.md Shape and Concision Discipline — COMPLETE.** Research note
+  `2026-07-03-claude-md-digest-discipline.md` (Approved) → spec 08 § "Shape and Concision
+  Discipline" + spec 03 finalize-step pointer (frozen) → `claude-md-slim-down` slice landed
+  (code-eval PASS, pure-docs): loom's root `CLAUDE.md` rewrote 197 → 85 lines; 132-line
+  Repo-layout section collapsed to ~25-line one-clause pointer index (coverage preserved);
+  enforcement wired into `code-eval-rubric.md` (CLAUDE.md-shape Hygiene bullet) +
+  `agents/developer.md` finalize step 2 (spec-08 Shape and Concision pointer). Applies to
+  both loom's own root CLAUDE.md (~100-line bound) and managed-project CLAUDE.md (~200-line
+  bound). **No pending slices. No open follow-up items.**
+
 - **Post-M4: Infra-blocked escalation (ADR 0017) — COMPLETE.** The deferred follow-up from the
   multi-session coordination thread is now fully delivered. ADR 0017 Accepted → spec 03
   § "Infrastructure-blocked escalation" + spec 04 §§ "Human checkpoints" / "Automated review before
@@ -251,9 +261,10 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Immediate next steps
 
-0. **NEXT ACTION — owner-directed.** Both post-M4 threads are **COMPLETE**: multi-session
-   coordination (ADR 0014/0015/0016 → `loom-coord.sh` → playbook wiring) and infra-blocked
-   escalation (ADR 0017 → specs 03/04 amended → playbook wiring). **No pending slices. No open
+0. **NEXT ACTION — owner-directed.** All post-M4 threads are **COMPLETE**: multi-session
+   coordination (ADR 0014/0015/0016 → `loom-coord.sh` → playbook wiring), infra-blocked
+   escalation (ADR 0017 → specs 03/04 amended → playbook wiring), and CLAUDE.md Shape and
+   Concision Discipline (spec 08 → `claude-md-slim-down` slice). **No pending slices. No open
    follow-up items.** Future work is owner-directed — new ADR/spec-driven features or
    packaging/release.
 
