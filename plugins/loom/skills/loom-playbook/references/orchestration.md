@@ -210,6 +210,24 @@ review before a slice lands" (the run step),
 - **Degradation.** If a command is unavailable in the environment, skip it and
   record `skipped: command-unavailable` in the artifact — never silently claim a
   clean review (ADR 0010 §7).
+- **Degraded runs are invalid, never clean.** A `/code-review` / `/security-review`
+  run whose **finder or verify sub-agents failed on an infrastructure limit**
+  (spend/usage/quota, 429, 5xx, safety-classifier-unavailable) is **INVALID** — a
+  "no findings" result from finders that never executed is a **false-clean**, not a
+  clean review. Such a run is **never recorded `ran-clean`** and **never fed to the
+  blind code-evaluator**; it is an instance of the infrastructure-blocked escalation
+  above → same pause + summary. **Re-run** the command once unblocked; if it
+  genuinely cannot be re-run, record the existing **`skipped: command-unavailable`**
+  token (never a fifth token, never `ran-clean`). See ADR 0017 + spec 04 §
+  "Automated review before a slice lands".
+- **False-clean detection — how.** Before trusting any "no findings" (or "no findings
+  survived verification") result as `ran-clean`, **inspect the workflow result for a
+  sub-agent / finder failure indicator**: a non-empty failures list, error signatures
+  matching the infrastructure set (spend/usage/quota, 429, 5xx,
+  classifier-unavailable), or a **finder count of 0 with failures present**. Any
+  such indicator → treat as a degraded run (above), **INVALID**, not `ran-clean`.
+  Only a "no findings" result from finders that **actually executed and completed**
+  is recorded `ran-clean`.
 - **Not the gate.** This is a new, separate review dimension — **not** part of
   the `format → lint → test` gate, which is unchanged (ADR 0010 §8).
 
@@ -233,6 +251,53 @@ At **5** FAILs the orchestrator **stops and escalates = pause + summary** to the
 See [spec 03 `## Round limits`](../../../../../.docs/spec/03-artifact-lifecycle.md)
 — especially the **Escalation contract (pause + summary)** subsection — for what the
 summary must contain and the owner-driven reset rule.
+
+## Infrastructure-blocked escalation
+
+Authority: spec [04](../../../../../.docs/spec/04-orchestrator.md) § "Human
+checkpoints" + § "Automated review before a slice lands", spec
+[03](../../../../../.docs/spec/03-artifact-lifecycle.md) § "Infrastructure-blocked
+escalation" (the canonical contract), and
+[ADR 0017](../../../../../.docs/ADR/0017-infrastructure-blocked-escalation.md).
+
+**Infrastructure-failure signature.** When a role return or a tool/workflow result
+matches any of these, it is an infrastructure block, not a valid result:
+
+- an account **spend / usage / quota limit** reached;
+- a **rate-limit / HTTP 429**;
+- a **5xx** / transient upstream error;
+- a **safety-classifier-unavailable** error; or
+- a **partial workflow failure** — a multi-agent workflow (e.g. `/code-review`)
+  whose **sub-agents crashed on one of the above limits**, even if the workflow
+  returns a plausible-looking summary.
+
+**On detection — four ordered MUSTs:**
+
+1. **Not a valid result, no round consumed.** An infrastructure block is not a
+   blind-eval FAIL, not `ran-clean`, and not a genuine finding set. The orchestrator
+   does **not** count a round-limit FAIL against the artifact (`Round:` counter
+   toward the 5-FAIL threshold stays unchanged), and does **not** fabricate or
+   attribute findings from it.
+2. **Halt, do not retry-loop.** Stop spawning further roles rather than retrying
+   straight back into the same limit. The block clears by **owner action** (e.g.
+   raise the monthly limit, wait out a 429) — not by re-attempting.
+3. **Write-ahead checkpoint.** Commit the current state to `status/handoff.md` per
+   ADR 0013 rule 1, so a resume once unblocked is **lossless** and picks up the
+   exact pending action.
+4. **Pause + summary to the owner**, naming: (a) the **specific block** hit (which
+   limit / signature); (b) **where** it fired (which role or command, which artifact
+   + `Status:`); and (c) **how to resume**.
+
+**Detect-on-failure only.** loom has no interface to account limit state and cannot
+poll or predict a limit; it always takes one hit before it can pause. This is an
+**orchestration rule, not a hook** (hooks are tool-event driven and cannot see
+account state).
+
+**Sibling to the other escalations, but NOT round-counted.** This is a sibling to
+the spec-03 5-FAIL round-limit escalation and to ADR 0013's starvation-loop
+escalation — same pause + summary shape, different trigger. It is explicitly **not
+round-counted** because the trigger reflects account state, not the artifact's
+quality.
 
 ## Parallelism
 
