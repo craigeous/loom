@@ -304,7 +304,7 @@ quality.
 Worktree-per-slice parallelism is **active** — orchestrator-spawned background
 agents, each in its own worktree on its own branch, governed by
 [ADR 0008](../../../../../.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md).
-The owner opts in. Multi-session coordination via `loom-coord.sh` is active when the
+The owner opts in. Multi-session coordination via the `loom-coord` CLI is active when the
 owner runs multiple `/loom:run` sessions concurrently (see *Multi-session
 coordination* below). See [`parallelism.md`](parallelism.md) for the complete
 operational body: create→work→land→cleanup workflow (with multi-session lock/claim
@@ -324,7 +324,8 @@ Full operational body: [`parallelism.md`](parallelism.md) → *Multi-session
 coordination*.* Opt-in: a single-session run may skip coordination entirely.
 
 When the owner runs multiple `/loom:run` sessions concurrently, each session uses
-`plugins/loom/lib/loom-coord.sh` to serialize writes to the shared `main` checkout.
+the `loom-coord` CLI (bare command on `$PATH`; ships at `plugins/loom/bin/loom-coord`)
+to serialize writes to the shared `main` checkout.
 The orchestrator's driver-loop obligations:
 
 **At session kickoff:**

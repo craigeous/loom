@@ -1,6 +1,7 @@
 #!/bin/sh
 # shellcheck disable=SC3043  # local is supported by all real sh implementations
-# loom-coord.sh — Multi-session lock/claim coordination helper (ADR 0014)
+# loom-coord — Multi-session lock/claim coordination helper (ADR 0014)
+# Ships in the plugin's bin/ (on $PATH when loom is enabled); invoke as the bare command `loom-coord`.
 #
 # Hand-invoked CLI helper (NOT a hook — not registered in hooks.json).
 # Serializes N independent /loom:run sessions writing to the shared main

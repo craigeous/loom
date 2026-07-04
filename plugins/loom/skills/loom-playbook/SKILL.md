@@ -75,8 +75,9 @@ archived on landing. On conflict, the spec wins.
   uniquely-named plan/eval/code), concurrency safety (git-CAS cross-session
   coordination via `refs/loom/lock` + `refs/loom/claims/<slice>`, lease-freshness
   liveness, `index.lock` backoff, crash cleanup, one-branch-per-slice), and the
-  slicer-independence rule. The coordination CLI is
-  `plugins/loom/lib/loom-coord.sh` (subcommands: `session-start`, `lock-acquire`,
+  slicer-independence rule. The coordination CLI is the `loom-coord` executable
+  (shipped at `plugins/loom/bin/loom-coord`, on `$PATH` when the plugin is enabled —
+  invoke as the bare command `loom-coord`; subcommands: `session-start`, `lock-acquire`,
   `claim`, `lock-verify`, `lock-release`, `session-end`, and more — see the file's
   header for the full surface and exit codes).
 

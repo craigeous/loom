@@ -40,17 +40,18 @@ after approval and change only via planning. Design decisions are in
     `precompact-write-ahead-backstop.sh` (PreCompact write-ahead backstop, ADR 0013 §Decision 5
     — blocks `manual` compaction when `.docs/` has not advanced since the last compaction marker;
     never-wedge on `auto`).
-  - **`plugins/loom/lib/`** — loom's **first non-hook CLI helper**: `loom-coord.sh` — the
-    multi-session coordination mechanism (ADR 0014/0015/0016). **Not a hook** (not in
-    `hooks.json`); the orchestrator/session calls it directly. Mechanism: git-`update-ref` CAS
+  - **`plugins/loom/bin/`** — loom's **first non-hook CLI helper**: the `loom-coord` executable — the
+    multi-session coordination mechanism (ADR 0014/0015/0016). Shipped in `bin/` so Claude Code puts it
+    **on `$PATH`** when the plugin is enabled; the orchestrator/session invokes it as the **bare command
+    `loom-coord`** (not a hook — not in `hooks.json`). Mechanism: git-`update-ref` CAS
     lock on `refs/loom/lock` + per-slice claim refs on `refs/loom/claims/<sha1>` (ABA-safe by
     construction; git owns atomicity — ADR 0016); lease-freshness liveness + `{pid,start-time}`-gated
     background renewer (ADR 0015); fails **closed** (inverse of the guard hooks). Subcommands:
     `lock-acquire`/`lock-release`/`lock-verify`; `claim`/`renew`/`release-claim`/`reclaim`/`list-claims`;
     `session-start`/`session-bootstrap`/`session-end`; `cleanup`. The shell gate now covers
-    `plugins/loom/lib/` as well as `plugins/loom/hooks/`. Playbook wiring is **complete**
+    `plugins/loom/bin/` as well as `plugins/loom/hooks/`. Playbook wiring is **complete**
     (slice W landed): `parallelism.md`, `orchestration.md`, `run.md`, and `SKILL.md` all
-    describe where and how the orchestrator calls `loom-coord.sh` subcommands.
+    describe where and how the orchestrator calls the `loom-coord` subcommands.
   - The Rust gate loom *imposes on managed projects* is in
     `plugins/loom/skills/loom-playbook/gates/rust.md`.
 - **Init-mode classifier** (M2): `plugins/loom/skills/loom-playbook/references/init-detection.md`
@@ -82,8 +83,8 @@ after approval and change only via planning. Design decisions are in
   is the single authoritative worktree-per-slice operational body. It presents BOTH
   layers: the **ADR 0008** single-orchestrator worktree model (create→work→land→cleanup,
   `.docs/` coordination model, concurrency safety, slicer-independence rule) AND the
-  **ADR 0014/0015/0016 multi-session lock/claim/lease-renewal layer** via
-  `plugins/loom/lib/loom-coord.sh` (cross-session `refs/loom/lock` + per-slice
+  **ADR 0014/0015/0016 multi-session lock/claim/lease-renewal layer** via the
+  `plugins/loom/bin/loom-coord` executable (cross-session `refs/loom/lock` + per-slice
   `refs/loom/claims/<slice>` git-CAS mutex; lease-freshness liveness + `{pid,start-time}`-gated
   background renewer; three locked shared-`main` writes: claim / lease-renew / land).
   The multi-session layer is an extension layered on top of ADR 0008, not a replacement.
@@ -174,7 +175,7 @@ slice is considered `Implemented`. Verified gates ship in
 `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`
 
 **Shell gate** (`gates/shell.md`) — the first *learned* gate, covers all POSIX-sh in
-`plugins/loom/hooks/` and `plugins/loom/lib/` (path-generic). Example invocation on a file:
+`plugins/loom/hooks/` and `plugins/loom/bin/` (path-generic). Example invocation on a file:
 - format: `shfmt -i 4 -d <file.sh>`
 - lint: `shellcheck <file.sh>`
 - test: `bats <file.bats>`

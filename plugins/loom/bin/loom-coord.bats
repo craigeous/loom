@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# Test suite for loom-coord.sh (ADR 0014 multi-session coordination helper).
+# Test suite for the loom-coord helper (ADR 0014 multi-session coordination).
 # Each test uses an isolated temp git repo so state writes never touch loom's .git/.
 # The code evaluator re-runs this suite as the shell gate's TEST step.
 bats_require_minimum_version 1.5.0
 
-COORD="${BATS_TEST_DIRNAME}/loom-coord.sh"
+COORD="${BATS_TEST_DIRNAME}/loom-coord"
 
 # ---------------------------------------------------------------------------
 # Helpers

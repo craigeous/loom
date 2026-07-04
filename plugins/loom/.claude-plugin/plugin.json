@@ -1,6 +1,5 @@
 {
   "name": "loom",
-  "version": "0.1.0",
   "description": "Spec-driven dev loop with five blind-reviewed roles and an orchestrator",
   "author": { "name": "Craig", "email": "craigeous@gmail.com" },
   "homepage": "https://github.com/craigeous/loom",

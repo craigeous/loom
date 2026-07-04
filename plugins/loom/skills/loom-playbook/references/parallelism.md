@@ -14,7 +14,8 @@ This body also operationalizes the **multi-session coordination layer**
 ([ADR 0014](../../../../../.docs/ADR/0014-multi-session-worktree-coordination.md) /
 [ADR 0015](../../../../../.docs/ADR/0015-lease-renewal-heartbeat-liveness.md) /
 [ADR 0016](../../../../../.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md)) via
-`plugins/loom/lib/loom-coord.sh`. That layer is **layered on top of — not replacing
+the `loom-coord` executable (`plugins/loom/bin/loom-coord`, on `$PATH` when the plugin
+is enabled). That layer is **layered on top of — not replacing
 —** the single-orchestrator model: ADR 0008's disjoint-file and worktree-isolation
 guarantees are fully preserved. The multi-session layer adds only **cross-session
 serialization of the shared-`main` critical section** (claim registration and
@@ -376,7 +377,7 @@ driver-loop obligations.*
 
 Each top-level `/loom:run` session is its own thin orchestrator that owns its slice
 worktrees (branched from local `main`). Multiple sessions can run concurrently. The
-cross-session coordination is entirely via git refs and `loom-coord.sh`:
+cross-session coordination is entirely via git refs and the `loom-coord` CLI:
 
 - **Lock** (`refs/loom/lock`): cross-session mutex for the shared-`main` critical
   section. Managed by `git update-ref` CAS — ABA-safe; losing CAS = clean retry.
