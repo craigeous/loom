@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Draft
+Status: Plan Review
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -9,85 +9,96 @@ Improvement slice: `ci-baseline` (M0)
 
 ## Context
 
-This is the first implementation slice in the repository improvement program. Its
-single purpose is to make the repository's present behavior reproducibly checkable
-before safety or architecture work changes that behavior.
+This is the first implementation slice in M0. It makes the current repository
+reproducibly checkable and lands the minimum release-owned dual-client metadata,
+compatibility, and installed-root contracts that later M0 adapter smokes need. It
+does **not** complete ADR 0019's M0 client-behavior obligation: clean install,
+workflow/role launch, hook activation, helper resolution, and uninstall remain a
+named, release-blocking M0 follow-up after their adapters exist. Schema-valid Codex
+metadata is not install or behavior evidence.
 
 ### Verified starting point
 
-The following facts were checked against the repository and installed floor clients
-while planning:
-
 - `shfmt -i 4 -d`, ShellCheck, `sh -n`, and all **103 existing Bats tests** pass.
-  The observed build-tool versions are shfmt 3.13.1, ShellCheck 0.11.0, and Bats
-  1.13.0. The count is a baseline fact, not a value to encode in the gate.
-- `claude --version` is 2.1.216. `claude plugin validate plugins/loom --strict`
-  fails because `plugins/loom/commands/run.md` line 3 is not valid YAML; it also
-  warns that `plugins/loom/.claude-plugin/plugin.json` has no version.
-- `codex --version` is 0.144.6. That CLI exposes install/list/remove operations but
-  no `plugin validate` command. Codex metadata therefore needs pinned repository
-  schema validation now; clean isolated install and behavioral validation remain a
-  later adapter/release slice.
-- The tree has no `scripts/check`, no `.github/workflows/`, no Codex manifest at
-  `plugins/loom/.codex-plugin/plugin.json`, and no Codex catalog at
-  `.agents/plugins/marketplace.json`.
-- The three shipped executables (`plugins/loom/bin/loom-coord` and the two
-  `plugins/loom/hooks/*.sh` files) still declare `#!/bin/sh`; `loom-coord` suppresses
-  SC3043 for its non-POSIX `local` use. ADR 0019 instead requires
-  `#!/usr/bin/env bash` and Bash 3.2+.
+  Observed versions are shfmt 3.13.1, ShellCheck 0.11.0, and Bats 1.13.0. The count
+  is a planning fact, never a gate constant.
+- `claude --version` is 2.1.216. The exact command
+  `claude plugin validate plugins/loom --strict` fails because the unquoted
+  `argument-hint` in `plugins/loom/commands/run.md` is invalid YAML and warns that
+  the Claude manifest lacks a version.
+- `codex --version` is 0.144.6. It has marketplace/plugin add, list, upgrade, and
+  remove commands but no `plugin validate`; a pinned local contract is therefore
+  required for static validation, while an isolated floor-client smoke remains
+  independently required.
+- There is no `scripts/check`, CI workflow, Codex manifest/catalog, compatibility
+  matrix, or installed-root binding metadata in the tree.
+- The three shipped executables declare `#!/bin/sh`, while ADR 0019 requires
+  `#!/usr/bin/env bash` and Bash 3.2+. More importantly, the existing Bats suites
+  explicitly invoke those executables with `sh`; a shebang edit or `bash -n` alone
+  would not prove runtime compatibility.
+- The repository is public. GitHub's hosted-runner table, checked 2026-07-21,
+  identifies standard `macos-14` as arm64 and standard `macos-15-intel` as x86-64;
+  `ubuntu-22.04` and `ubuntu-24.04` are x86-64. The plan uses those actual labels,
+  not the paid `macos-14-large` label. Source:
+  <https://docs.github.com/en/actions/reference/runners/github-hosted-runners>.
 
 ### Slice decisions
 
-1. `scripts/check` is the only documented local gate entry point. It runs stages in
-   a stable order, stops at the first failure, prints the failed stage, and uses
-   repository-relative discovery so it works from any current directory.
-2. The build/test tool contract is exact: shfmt 3.13.1, ShellCheck 0.11.0, Bats
-   1.13.0, Claude Code 2.1.216, Node 22.17.0, Ajv 8.17.1, YAML 2.8.0, and
-   markdown-it 14.1.0, plus the schema digests recorded by this slice. Production
-   floors remain Bash 3.2, Git 2.34, and jq 1.6; a newer conforming Git or jq is
-   allowed because these are runtime floors, not build-tool pins.
-3. Product metadata introduced here uses `0.2.0`, the version already decided by
-   ADR 0019/spec 10. This does not create a release, tag, changelog, or release asset.
-4. Claude's floor CLI is the authoritative strict Claude package validator. Codex
-   0.144.6 has no equivalent, so checked-in schemas plus repository cross-checks are
-   the M0 authority for Codex JSON shape. Both are run locally and in CI.
-5. The link gate checks actual Markdown link nodes in living authority, active
-   planning/status, root instructions, README, and shipped plugin Markdown. It
-   excludes `.docs/evaluations/**` and `.docs/slice-plans/archive/**`, which are
-   historical evidence/snapshots, and records any unavoidable broken link in an
-   exact allowlist with a reason. It must not silently ignore a directory outside
-   those two exclusions.
-6. CI covers Ubuntu 22.04, Ubuntu 24.04, and macOS 14. macOS runs the whole gate with
-   system `/bin/bash` (the 3.2 floor); Ubuntu runs it with its Bash 5.x. This provides
-   the floor/current shell evidence without making Homebrew Bash a macOS runtime
-   dependency.
+1. `scripts/check` is the one documented local gate. It uses repository-relative
+   discovery, stable stage order, first-failure reporting, and no hard-coded test
+   count.
+2. Exact test-tool pins remain shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0,
+   Claude Code 2.1.216, Node 22.17.0, Ajv 8.17.1, YAML 2.8.0,
+   markdown-it 14.1.0, and github-slugger 2.0.0. Bash/Git/jq are runtime
+   contracts: Bash 3.2+, Git 2.34+, and jq 1.6+.
+3. All introduced product/release-contract metadata uses exact version `0.2.0`.
+   This slice does not create a tag, changelog, license, release, or claim that
+   v0.2.0 is publishable.
+4. The release-owned compatibility matrix records the complete required v0.2.0
+   client surfaces and exact profile mapping from spec 10. The gate proves that
+   declaration is internally consistent; it does not prove those surfaces work.
+5. Every malformed JSON or JSON-Schema test input is checked in with an inert
+   suffix such as `.json.in`. Malformed frontmatter is `.md.in`. A Bats helper
+   materializes those seeds under `mktemp -d`, with production filenames, only for
+   the duration of that test. Consequently no negative fixture can match the real
+   tree's tracked `*.json` or shipped-frontmatter scans.
+6. Bats is launched by the selected absolute Bash, and every test invocation of a
+   shipped Loom script uses that same absolute Bash. A canary proves the Bats
+   process and an executable child report the expected `BASH_VERSION`; syntax-only
+   evidence is insufficient.
+7. CI covers both supported Ubuntu LTS hosts and both macOS architectures. The
+   macOS jobs use system `/bin/bash` 3.2 with a controlled invocation; Ubuntu jobs
+   use runner `/usr/bin/bash` 5.x. Thus the suite actually executes under the floor
+   and current Bash lines.
+8. Link checking parses Markdown nodes, excludes only the two named historical
+   trees, and uses github-slugger for stable local-fragment IDs. Its negative
+   behavior receives its own regression fixtures.
 
 ### Explicitly out of scope
 
-- M1 identifier containment, lock ownership/races, schema CAS, destructive cleanup,
-  or any other coordinator/hook safety behavior.
-- M3 local-review machinery, reviewer prompts, review isolation, or publication.
-- The eight Codex workflow skills, shared-role extraction, hook wire adapters,
-  compatibility/profile matrix, installed-root binding, project-instruction renderer,
+- M1 coordinator/hook safety work, including identifier containment, lock races,
+  schema CAS, destructive cleanup, or any hook-policy behavior change.
+- Shared-role extraction, the eight future Codex workflow skills, hook wire
+  adapters/fixtures, installed-root bootstrap code, project-instruction rendering,
   or `loom doctor`.
-- Claude or Codex marketplace add/install, invocation/role/hook/helper behavior,
-  upgrade, uninstall, and fresh-clone end-to-end smoke. The missing Codex validate
-  command is not replaced by a false CLI check; these behavioral smokes remain
-  mandatory before release.
-- Release automation, `LICENSE`, `CHANGELOG.md`, tag/release assets, migration notes,
-  or publishing `v0.2.0`.
-- Full spec-08 mechanical invariants (status transitions, digest rendering, protocol
-  fixtures, doctor, and adapter behavior) and broad documentation/status refresh.
-- Editing any `.docs/spec/`, `.docs/ADR/`, `.docs/status/`, `.docs/evaluations/`,
-  archived plan, or `.docs/slice-plans/README.md` in this implementation slice.
+- Claude/Codex marketplace add or plugin install; workflow/skill discovery and
+  invocation; cold-role launch; hook trust/activation; effective model selection;
+  helper execution; upgrade; uninstall; and fresh-clone end-to-end behavior. These
+  form the subsequent `client-floor-adapter-smoke` M0 slice and must be green before
+  M0 can be called complete.
+- Release automation, `LICENSE`, `CHANGELOG.md`, migration notes, a Git tag, release
+  assets derived from a tag, or publication of v0.2.0.
+- Full spec-08 mechanical invariants whose product artifacts do not yet exist.
+- Editing frozen specs, ADRs, status/evaluation files, archived plans, or the
+  slice-plan index.
 
-Only validation blockers required by the stages below may change existing product
-files. In particular, changing a hook's input field, output, fail direction, parsing,
-or state behavior is forbidden here.
+Only validation blockers and shell-invocation changes named below may alter existing
+product behavior. In particular, no hook input field, output encoding, fail direction,
+state transition, or coordinator algorithm changes in this slice.
 
 ## Files in the implementation diff
 
-The developer may add or edit only these paths (fixture children are grouped):
+The developer may add or edit only these paths (grouped globs denote children):
 
 - `.github/workflows/check.yml`
 - `.gitignore`
@@ -95,323 +106,397 @@ The developer may add or edit only these paths (fixture children are grouped):
 - `.claude-plugin/marketplace.json`
 - `plugins/loom/.codex-plugin/plugin.json` (new)
 - `plugins/loom/.claude-plugin/plugin.json`
+- `plugins/loom/adapters/compatibility/v0.2.0.json` (new)
+- `plugins/loom/adapters/roots/claude-plugin-root-v1.json` (new)
+- `plugins/loom/adapters/roots/codex-skill-source-v1.json` (new)
+- `plugins/loom/adapters/fixtures/v0.2.0/metadata/**` (new release-owned fixtures)
+- `plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json` (new)
+- `plugins/loom/schemas/loom-installed-root-binding-v1.schema.json` (new)
 - `plugins/loom/commands/run.md`
 - `plugins/loom/bin/loom-coord`
+- `plugins/loom/bin/loom-coord.bats`
 - `plugins/loom/hooks/git-identity-guard.sh`
+- `plugins/loom/hooks/git-identity-guard.bats`
 - `plugins/loom/hooks/precompact-write-ahead-backstop.sh`
+- `plugins/loom/hooks/precompact-write-ahead-backstop.bats`
 - `plugins/loom/skills/loom-playbook/gates/shell.md`
 - `scripts/check` (new)
+- `scripts/run-bats-under` (new)
 - `scripts/check-toolchain.json` (new)
 - `scripts/check-tools/package.json` and `scripts/check-tools/package-lock.json`
-  (new, test-only validator/Claude dependencies)
-- `scripts/schemas/*.schema.json` (new pinned schema snapshots)
+  (new)
+- `scripts/schemas/*.schema.json` (new pinned client/frontmatter schemas)
 - `scripts/validate-repository.mjs` (new)
-- `scripts/tests/metadata-validation.bats` (new)
-- `scripts/tests/fixtures/metadata/**` (new)
+- `scripts/tests/repository-validation.bats` (new)
+- `scripts/tests/shell-runtime.bats` (new)
+- `scripts/tests/fixtures/**` (new; negative sources use inert suffixes)
 - `scripts/validation/relative-link-allowlist.txt` (new)
 - `README.md`
 - `CLAUDE.md`
 
-If an external schema cannot legally be checked in, replace its schema file with a
-small checked-in repository-contract schema derived from the documented floor-client
-fields and record the upstream URL/version/digest in `scripts/check-toolchain.json`.
-Do not fetch a floating schema during `scripts/check`.
+If an upstream client schema cannot legally be vendored, use a narrow repository-
+contract schema derived from the floor client's documented/observed fields and mark
+that provenance honestly. Never label a locally derived Codex schema as an official
+Codex validator, and never fetch a floating schema during the gate.
 
 ## Steps
 
-### 1. Add red metadata and gate-contract tests first
+### 1. Add red validator and runtime-contract tests
 
-Create `scripts/tests/metadata-validation.bats` and the minimal fixture trees under
-`scripts/tests/fixtures/metadata/`. The tests invoke
-`scripts/validate-repository.mjs --root <fixture>` so they do not recursively invoke
-the full `scripts/check` gate.
+Create `scripts/tests/repository-validation.bats`. Its helper copies a valid fixture
+tree to a unique `mktemp -d`, applies one inert overlay by renaming `.json.in` to
+`.json`, `.md.in` to `.md`, or `.allowlist.in` to the live allowlist name, runs the
+validator against that temporary root, and removes the root in `teardown`. The
+checked-in negative-source directory itself must contain **zero** files ending in
+`.json` and zero shipped-frontmatter paths ending in `.md`; add an assertion for
+that invariant.
 
-Required cases are:
+Required metadata/contract cases are:
 
-1. a valid two-manifest/two-catalog tree passes;
-2. malformed JSON fails and names the file;
+1. a valid two-manifest/two-catalog tree plus compatibility matrix, both root
+   bindings, and release-owned metadata fixtures passes;
+2. malformed JSON and malformed JSON Schema each fail and name the materialized
+   file;
 3. missing, unterminated, or invalid YAML frontmatter fails and names the file;
-4. an unknown frontmatter key or missing required `description`/agent `name` fails;
-5. an unknown manifest/catalog field rejected by the pinned client schema fails;
-6. either catalog source escaping the repository or resolving to a different physical
-   plugin root fails;
+4. unknown frontmatter keys and missing command `description`/agent `name` fail;
+5. unknown manifest, catalog, compatibility, or root-binding fields fail through
+   an `additionalProperties: false` schema;
+6. catalog source escape, symlink escape, or a source resolving to a different
+   physical plugin root fails;
 7. duplicate manifest/catalog/component names fail;
-8. name, exact SemVer, source identity, or supported shared metadata drift between
-   the two manifests/catalogs fails;
-9. a catalog referencing a missing client manifest fails; and
-10. the real repository initially fails for the known `run.md` frontmatter, missing
-    Claude version, and missing Codex metadata, then passes after Steps 3–4.
+8. name, exact SemVer, source identity, release provenance, profile mapping, client
+   floor, schema version, or binding-reference drift fails;
+9. a catalog missing its client manifest, a matrix/root reference to a missing
+   file, or a release fixture differing from its live metadata fails; and
+10. a dedicated real-tree test invokes `scripts/validate-repository.mjs --metadata`
+    at the Git root and passes after implementation, proving tracked negative seeds
+    do not poison the production `*.json` gate.
 
-Run the targeted test once before implementing the validator and record the expected
-red result in the implementation handoff. Do not assert `103` or any final Bats count;
-the new cases legitimately increase it.
+The same suite covers link behavior with temporary `.md` trees:
 
-### 2. Pin the validation inputs and tool contract
+1. valid relative targets and valid local/cross-file fragments pass;
+2. a missing target and a bad fragment fail with source and target;
+3. broken links beneath exactly `.docs/evaluations/**` and
+   `.docs/slice-plans/archive/**` are ignored, while the same link beneath a
+   similarly named or any other directory fails;
+4. malformed, duplicate, and stale allowlist records fail; and
+5. one exact live broken link may pass only with a nonempty reason, while an
+   allowlisted code-block pseudo-link remains stale because code blocks are not
+   Markdown link nodes.
 
-Add `scripts/check-toolchain.json` as the single machine-readable tool contract. It
-must contain:
+Create `scripts/tests/shell-runtime.bats` as the canary. It asserts its own
+`BASH_VERSION` equals `LOOM_EXPECTED_BASH_VERSION`, invokes a tiny
+`#!/usr/bin/env bash` fixture directly through the controlled PATH, and asserts the
+child reports the same interpreter version. Run the new targeted suites before
+implementation and record their expected red state. Do not assert 103 or any final
+test total.
 
-- exact versions for shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0, Claude Code
-  2.1.216, Node 22.17.0, Ajv 8.17.1, YAML 2.8.0, and markdown-it 14.1.0;
-- Bash/Git/jq production floors from ADR 0019;
-- supported CI OS/shell lanes;
-- for every vendored schema: client, floor client version, upstream provenance URL
-  or documented local provenance, retrieval date, and SHA-256 of the checked-in
-  bytes; and
-- release artifact URL and SHA-256 per supported OS/architecture for any tool that
-  CI downloads directly.
+### 2. Pin the toolchain, schemas, and release-owned static adapter contracts
 
-Add `scripts/check-tools/package.json` and its generated lockfile for only the
-test-time JavaScript dependencies needed to parse YAML, apply JSON Schema, and invoke
-Claude Code 2.1.216 locally. Every direct dependency is exact (no `^`, `~`, `latest`,
-or tag range), the lockfile is committed, and install commands use the lockfile with
-install scripts disabled unless the pinned Claude package demonstrably requires its
-own install script. Keep the resulting `node_modules/` and repo-local tool cache out
-of Git via `.gitignore`.
+Add `scripts/check-toolchain.json` as the single machine-readable check contract.
+It records:
 
-Vendor these immutable, `additionalProperties: false` schema snapshots:
+- the exact tool/dependency versions in Slice decision 2;
+- Bash/Git/jq production floors;
+- the four CI runner/architecture/shell expectations in Step 8;
+- the full `actions/checkout` commit pin
+  `11bd71901bbe5b1630ceea73d27597364c9af683`;
+- for every downloaded archive/binary, the immutable release URL and SHA-256 for
+  each used OS/architecture;
+- for every vendored schema and release-owned fixture, its purpose, client/floor or
+  local schema version, provenance URL/document, retrieval date, and SHA-256; and
+- explicit `kind: upstream` versus `kind: derived-local` provenance so a local
+  Codex contract cannot be mistaken for client-supplied validation.
 
-- `scripts/schemas/claude-plugin-2.1.216.schema.json`;
-- `scripts/schemas/claude-marketplace-2.1.216.schema.json`;
-- `scripts/schemas/codex-plugin-0.144.6.schema.json`;
-- `scripts/schemas/codex-marketplace-0.144.6.schema.json`;
-- `scripts/schemas/command-frontmatter-v1.schema.json`;
-- `scripts/schemas/agent-frontmatter-v1.schema.json`; and
-- `scripts/schemas/skill-frontmatter-v1.schema.json`.
+Add an exact-dependency `scripts/check-tools/package.json` and generated lockfile.
+Use lockfile installation and disable install scripts unless the exact Claude package
+demonstrably requires one. Ignore only the repository-local tool/download/npm caches.
 
-Schema filenames include the client/floor or local schema version. The schemas must
-permit client-only differences required by each format, but must not permit unknown
-fields. The lockfile and schema digests make the contract reproducible; CI must fail
-if a digest no longer matches.
+Vendor immutable, closed client/frontmatter schemas in `scripts/schemas/`:
 
-### 3. Implement repository metadata, frontmatter, and link validation
+- `claude-plugin-2.1.216.schema.json`;
+- `claude-marketplace-2.1.216.schema.json`;
+- `codex-plugin-0.144.6.schema.json`;
+- `codex-marketplace-0.144.6.schema.json`;
+- `command-frontmatter-v1.schema.json`;
+- `agent-frontmatter-v1.schema.json`; and
+- `skill-frontmatter-v1.schema.json`.
+
+Add release-owned schemas under `plugins/loom/schemas/` for the compatibility matrix
+and both root-binding documents. Both use a stable `$id`, exact schema discriminator,
+required fields, constrained enums/patterns, and `additionalProperties: false` at
+every object boundary.
+
+Create these static release contracts:
+
+- `plugins/loom/adapters/compatibility/v0.2.0.json` records product `0.2.0`, matrix
+  schema `loom-compatibility-matrix/v1`, exact client floors 2.1.216/0.144.6, the
+  required workflows `run`, `research`, `plan`, `eval-plan`, `develop`, `eval-code`,
+  `status`, and `init`; roles `researcher`, `planner`, `plan-evaluator`, `developer`,
+  and `code-evaluator`; hook-wire fixture version `hook-wire-v1`; and both installed-
+  root binding IDs/paths. Its profile map is literal, not paraphrased:
+
+  | Profile | Consumers | Claude selector | Codex model | Codex effort |
+  |---|---|---|---|---|
+  | Economy | researcher | `haiku` | `gpt-5.6-terra` | `low` |
+  | Standard | developer; orchestrator | `sonnet` | `gpt-5.6` | `medium` |
+  | Deep review | planner; plan evaluator; code evaluator | `opus` | `gpt-5.6` | `high` |
+
+  The Claude entries omit reasoning effort. This is a required-surface contract,
+  not a passing behavior report; `hook-wire-v1` is an exact future fixture-version
+  identifier here, not evidence that the deferred hook adapters already exist.
+- `claude-plugin-root-v1.json` declares `claude-plugin-root/v1`, client `claude`,
+  injected `CLAUDE_PLUGIN_ROOT`, physical-root/manifest name+version validation,
+  direct `bin/` containment, and the current allowlisted helper `loom-coord`.
+- `codex-skill-source-v1.json` declares `codex-skill-source/v1`, client `codex`, the
+  absolute `skills/<skill>/SKILL.md` suffix/ascend rule, canonical manifest/skill and
+  direct-`bin/` checks, forbidden workflow-root guesses (`CLAUDE_PLUGIN_ROOT`,
+  `PLUGIN_ROOT`, `CODEX_HOME`, and `PATH`), plus the hook-only `PLUGIN_ROOT` binding
+  and `./hooks/hooks.json` path. It does not add bootstrap code.
+- `plugins/loom/adapters/fixtures/v0.2.0/metadata/**` contains valid, release-owned
+  manifest/catalog/matrix/root-binding fixture inputs. The validator proves these
+  fixtures stay schema-valid and semantically equal to the live metadata they model.
+  All malformed overlays remain test-only inert seeds under `scripts/tests/fixtures`.
+
+The gate verifies every recorded digest before consuming a schema or fixture.
+
+### 3. Implement repository metadata, contract, frontmatter, and link validation
 
 Create `scripts/validate-repository.mjs`. It accepts `--root` (default: Git root)
-and exactly one of `--metadata`, `--links`, or `--all`; prints one diagnostic per
-violation; and exits nonzero if any violation exists. It must use `git ls-files` for
-the real repository so caches and untracked dependencies cannot enter validation.
+and exactly one of `--metadata`, `--links`, or `--all`, prints one deterministic
+diagnostic per violation, and returns nonzero if any exists. For the real repository
+it obtains the candidate set only from `git ls-files -z`; for temporary non-Git test
+roots it performs a deterministic, symlink-safe filesystem walk. In either mode only
+the production suffix/location rules below are eligible, so `.json.in`, `.md.in`,
+and `.allowlist.in` are inert.
 
-Its checks are exactly:
+Metadata mode must:
 
-- parse every tracked `*.json` as JSON;
-- extract and YAML-parse frontmatter only from tracked
-  `plugins/loom/commands/*.md`, `plugins/loom/agents/*.md`, and
-  `plugins/loom/skills/**/SKILL.md`, then validate the parsed object against the
-  matching pinned schema;
-- validate both manifests and both catalogs against their pinned schemas;
-- require product name `loom`, exact SemVer `0.2.0`, and compatible shared
-  description/license/repository identity across manifests and every supported
-  catalog release field;
-- reject duplicate component names, unknown fields, absent manifest/catalog files,
-  wrong catalog locations, source path escape/symlink escape, and any catalog source
-  that does not resolve to the one physical `plugins/loom/` root;
-- parse Markdown with the pinned Markdown parser and validate repository-relative
-  file links (and local fragments when the parser exposes stable heading IDs) in all
-  tracked `*.md` except the two historical directories decided above; and
-- load exact exceptions from `scripts/validation/relative-link-allowlist.txt`, where
-  each non-comment line contains file, line/link target, and reason. Fail on a new
-  broken link, a malformed/duplicate exception, or a stale exception that no longer
-  matches. Do not populate the allowlist with parser false positives or code-block
-  text.
+- JSON-parse every tracked real-tree `*.json`;
+- YAML-parse frontmatter only in `plugins/loom/commands/*.md`,
+  `plugins/loom/agents/*.md`, and `plugins/loom/skills/**/SKILL.md`, then validate it
+  with the corresponding pinned schema;
+- validate both live manifests, both catalogs, the compatibility matrix, both root
+  bindings, and all release-owned fixtures against their pinned schema;
+- require product `loom`, exact SemVer `0.2.0`, compatible description/license/
+  repository/release identity, exact client floors/profile mapping, unique component
+  names, and resolvable matrix-to-binding/schema/fixture references;
+- reject wrong catalog locations, path/symlink escapes, and either catalog source
+  resolving anywhere except the one physical `plugins/loom/` root; and
+- compare each release-owned metadata fixture with its corresponding live semantic
+  object so neither can drift unnoticed.
 
-The validator does not inspect status transitions, protocol fixtures, digest parity,
-role behavior, or install behavior in this slice.
+Links mode parses actual Markdown link nodes with markdown-it, derives repeated
+GitHub-style heading IDs with github-slugger, percent-decodes fragments safely, and
+validates repository-relative files and local/cross-file fragments in every tracked
+`*.md` except exactly the two historical trees in Slice decision 8. The allowlist
+format is tab-separated source path, exact link target, and nonempty reason. Reject a
+new broken link, malformed/duplicate entry, or stale entry. Do not interpret fenced/
+inline code or plain URL-like text as links.
 
-### 4. Make only the metadata changes needed for a green baseline
+### 4. Make the known Claude fix and add dual-client metadata
 
-Apply these narrowly scoped fixes:
+Apply only these metadata changes:
 
-- In `plugins/loom/commands/run.md`, quote the entire `argument-hint` scalar so the
-  existing human-readable hint is valid YAML; do not change the command body.
-- Add `"version": "0.2.0"` to
-  `plugins/loom/.claude-plugin/plugin.json`. Add the schema-supported release field
-  to `.claude-plugin/marketplace.json` if Claude's pinned marketplace schema supports
-  it; never invent a field the client rejects.
-- Create `plugins/loom/.codex-plugin/plugin.json` with the common name/version/
-  description/license/repository metadata and only Codex-0.144.6-supported fields.
-  Its skills pointer may expose only the currently existing `skills/` tree; this
-  slice must not fabricate the eight future workflow skills.
-- Create `.agents/plugins/marketplace.json` using the Codex 0.144.6 local-source
-  shape and exact `./plugins/loom` path. Keep client-specific policy/interface fields
-  minimal. If that schema has no catalog version field, the cross-check obtains the
-  version from the referenced manifest rather than adding an invalid field.
+- Quote the complete existing `argument-hint` scalar in
+  `plugins/loom/commands/run.md`; do not change its body.
+- Add `"version": "0.2.0"` to the Claude manifest. Add only the release/version
+  field supported by the pinned Claude marketplace schema, and require the catalog
+  entry to agree with the manifest.
+- Create the Codex 0.144.6 manifest with name/version/description/license/repository
+  identity and only fields allowed by the pinned local floor contract. It may point
+  only at currently existing components; do not fabricate the eight future skills.
+- Create the Codex catalog at `.agents/plugins/marketplace.json`, with exact local
+  source `./plugins/loom` and schema-supported v0.2.0 provenance. If the client shape
+  has no version field, represent version provenance only through the referenced
+  manifest/compatibility matrix rather than inventing a field.
 
-After these edits, both the positive real-repository metadata test and
-`claude plugin validate plugins/loom --strict` must pass with no error or warning.
-The Codex result is correctly described as **schema-valid metadata scaffold**, not a
-successful install or functioning adapter.
+The real-tree metadata test, fixture suite, and
+`claude plugin validate plugins/loom --strict` must then pass with no error or
+warning. Report the Codex result only as a schema-valid metadata scaffold.
 
-### 5. Migrate the shipped shell declaration to Bash 3.2 without behavior changes
+### 5. Migrate declarations and test execution to actual Bash
 
-In `plugins/loom/bin/loom-coord`,
-`plugins/loom/hooks/git-identity-guard.sh`, and
-`plugins/loom/hooks/precompact-write-ahead-backstop.sh`:
+In the three shipped executables, change the first line to
+`#!/usr/bin/env bash`; remove `loom-coord`'s SC3043 suppression and obsolete POSIX/
+“real sh” justification; make no behavior rewrite.
 
-- change only the first line to `#!/usr/bin/env bash`;
-- remove `loom-coord`'s SC3043 suppression and its “POSIX”/“real sh” justification;
-  and
-- make no functional rewrite merely to use newer Bash features.
+Mechanically update the three existing Bats suites so every invocation of
+`loom-coord`, `git-identity-guard.sh`, or `precompact-write-ahead-backstop.sh` uses
+the required absolute `LOOM_TEST_BASH`, including no-jq/PATH-isolation cases. Utility
+subshells that are not executing a shipped Loom file may remain `sh`, but no product
+test may invoke a shipped file through `sh` or `/bin/sh`. The suite must fail early
+if `LOOM_TEST_BASH` is unset, non-absolute, non-executable, or differs from the
+expected version.
 
-Run each existing Bats suite before and after the shebang-only change. The same
-behavior and exit/output assertions must pass under Bash 3.2 and Bash 5.x. Any test
-failure that requires logic changes stops this slice for replanning; it is not license
-to fold M1 fixes into M0.
+Create `scripts/run-bats-under`, compatible with Bash 3.2. Given an absolute shell,
+expected version regex, and the exact discovered test list, it:
 
-Update `plugins/loom/skills/loom-playbook/gates/shell.md` only enough to declare Bash
-3.2+, remove the `/bin/sh` detection/“POSIX-sh” wording, name `bash -n`, and point
-Loom's concrete repository gate to `scripts/check`. Update the corresponding Gate
-paragraph in `CLAUDE.md` from POSIX shell to Bash 3.2+ and the same one-command
-pointer. Do not otherwise refresh the instruction digest or create the future root
-`AGENTS.md` renderer output.
+1. resolves the physical shell and rejects a mismatch;
+2. creates a temporary `bin/bash` symlink to it and prepends that directory to PATH;
+3. exports `LOOM_TEST_BASH`, `LOOM_EXPECTED_BASH_VERSION`, and the physical path;
+4. invokes the pinned Bats entrypoint as `"$selected_bash" "$bats_entry" ...`, so
+   Bats' `#!/usr/bin/env bash` cannot select Homebrew Bash; and
+5. orders the runtime-canary file first and runs the complete discovered list once.
+
+Run the unchanged behavioral assertions before and after the interpreter-only edits.
+Any failure requiring product logic changes stops for replanning. Update
+`gates/shell.md` and the root `CLAUDE.md` Gate paragraph only enough to declare Bash
+3.2+, use `bash -n`, and point to `scripts/check`.
 
 ### 6. Add the single ordered local gate
 
-Create executable `scripts/check` with `#!/usr/bin/env bash`, Bash-3.2-compatible
-syntax, strict error handling, a trap that identifies the failed stage, and root
-resolution based on the script's physical repository location. Using only the
-documented bootstrap prerequisites (`curl`, `tar`, and a SHA-256 utility), it
-self-provisions the exact build tools into an ignored repository cache from the
-locked URLs and verifies them before execution. It must reject an unsupported
-OS/architecture, a Bash below 3.2, Git below 2.34, jq below 1.6, or an incorrect
-pinned/cached build-tool version with an actionable diagnostic.
+Create executable, Bash-3.2-compatible `scripts/check`. It resolves the repository
+from its physical script path, uses strict error handling and a failed-stage trap,
+provisions exact tools into an ignored repository cache from the locked URLs, verifies
+SHA-256 before extraction/use, and rejects unsupported OS/architecture or below-floor
+Bash/Git/jq with actionable diagnostics.
 
-Run these stages in this exact order:
+Run these stages in exact order:
 
-1. verify `scripts/check-toolchain.json`, package lock, and all schema SHA-256 values;
-2. install/use the locked test-only validator/Claude dependencies in the ignored
-   repository cache, then run `scripts/validate-repository.mjs --metadata`;
-3. run `shfmt -i 4 -d -ln bash` over tracked shipped `.sh` files, tracked executable
-   extensionless Bash files, and `scripts/check` (NUL-safe discovery, stable sort);
-4. run ShellCheck in Bash mode over the same production/check script set;
-5. run the selected lane's Bash with `-n` over that same set;
-6. discover every tracked `*.bats` file NUL-safely, run `bats --count` on the exact
-   discovered list, print `Discovered <n> Bats tests`, then run the same list once;
-7. run `scripts/validate-repository.mjs --links`;
-8. run `claude plugin validate plugins/loom --strict` using the locked 2.1.216 binary
-   and fail on warnings as well as errors; and
-9. run `git diff --check`, `git diff --cached --check`, and, when
-   `LOOM_DIFF_BASE` is set by CI, `git diff --check "$LOOM_DIFF_BASE...HEAD"`.
+1. validate `scripts/check-toolchain.json` and the package lock, then verify every
+   schema, fixture, action, and downloaded-tool digest/pin;
+2. install the locked JavaScript dependencies and run metadata validation;
+3. run `shfmt -i 4 -d -ln bash` over NUL-safe, stable-sorted tracked shipped `.sh`,
+   tracked executable extensionless Bash files, and check scripts;
+4. run ShellCheck in Bash mode over the same script set;
+5. run the selected `LOOM_TEST_BASH -n` over that same set;
+6. discover tracked `*.bats` NUL-safely, run pinned `bats --count` on that exact list,
+   print `Discovered <n> Bats tests`, then call `scripts/run-bats-under` on the same
+   list (the canary proves the actual runtime);
+7. run link validation;
+8. run the locked Claude 2.1.216 strict validator and fail on warnings or errors; and
+9. run working/index `git diff --check` plus range checking when CI supplies
+   `LOOM_DIFF_BASE`.
 
-The metadata and link stages are two modes of one validator, not duplicate
-implementations. Bats files are executed by Bats but are not sent raw to `bash -n`,
-because Bats syntax is preprocessed. No count is hard-coded, and no stage is silently
-skipped because a client/tool is missing.
+`scripts/check` defaults `LOOM_TEST_BASH` to its own physical interpreter for a local
+run. CI always sets it explicitly. Bats files are not passed raw to `bash -n` because
+Bats preprocesses their syntax. No stage silently skips a missing client/tool.
 
-### 7. Document the check and support boundary, without a broad README rewrite
+### 7. Document the check and support/evidence boundary
 
-Edit `README.md` in three contained places:
+Make only these contained documentation edits:
 
-- add `scripts/check` and the two client metadata locations to the repository-layout
-  block;
-- add a short **Development check** section naming the exact pinned build tools and
-  one command, `scripts/check`; and
-- add a short **Supported runtime** section: Ubuntu 22.04/24.04 x86-64, macOS 14+
-  on Apple silicon and x86-64 where the selected client supports it, Bash 3.2+,
-  Git 2.34+, jq 1.6+, Claude Code floor 2.1.216, and Codex CLI floor 0.144.6. State
-  explicitly that native Windows, PowerShell, Git Bash/MSYS2, Cygwin, and WSL are
-  unsupported in v0.2.
+- In `README.md`, add `scripts/check`, both client metadata locations, the
+  compatibility matrix, and root bindings to the layout; add a short Development
+  check section with the exact pins and one command; and add the approved Ubuntu,
+  macOS architecture, Bash/Git/jq, client-floor, and unsupported-Windows boundary.
+- Correct the optional Claude validation example to
+  `claude plugin validate plugins/loom --strict`.
+- State that checked Codex metadata/compatibility/root contracts are static
+  scaffolding, not install, hook, role, workflow, or helper evidence.
 
-Correct the existing optional validation example to the real CLI form
-`claude plugin validate plugins/loom --strict`. Do not advertise Codex install or
-workflow behavior until its isolated behavior matrix exists. Do not update milestone
-status/history in this slice.
+Do not advertise Codex behavior, refresh milestone history, or broaden the README.
 
-### 8. Add pinned Ubuntu/macOS CI
+### 8. Add an executable four-host CI matrix
 
-Create `.github/workflows/check.yml`, triggered for pull requests and pushes to
-`main`, with least-privilege read-only contents permissions and concurrency
-cancellation by ref. Pin every third-party action to a full commit SHA.
+Create `.github/workflows/check.yml` for pull requests and pushes to `main`, with
+read-only contents permission, ref-based concurrency cancellation, full-history
+checkout, and only `actions/checkout` pinned to the full SHA in Step 2. Use this
+explicit matrix:
 
-Use an explicit matrix with these required cells:
+| Runner label | Asserted host | Selected shell | Runtime evidence |
+|---|---|---|---|
+| `ubuntu-22.04` | Linux x86-64, Ubuntu 22.04 | `/usr/bin/bash`, major 5 | supported LTS + current Bash line |
+| `ubuntu-24.04` | Linux x86-64, Ubuntu 24.04 | `/usr/bin/bash`, major 5 | supported LTS + current Bash line |
+| `macos-14` | Darwin arm64, macOS 14 | `/bin/bash`, `3.2.57` | minimum macOS family + Apple silicon + Bash floor |
+| `macos-15-intel` | Darwin x86-64, macOS 15 | `/bin/bash`, `3.2.57` | supported macOS Intel + Bash floor |
 
-| Runner | Gate shell | Evidence |
-|---|---|---|
-| `ubuntu-22.04` | runner `/usr/bin/bash` (5.x) | supported LTS + current Bash line |
-| `ubuntu-24.04` | runner `/usr/bin/bash` (5.x) | supported LTS + current Bash line |
-| `macos-14` | system `/bin/bash` (3.2) | supported macOS family + Bash floor |
+Each job fails before the gate unless `uname -s`, `uname -m`, OS release, the
+selected shell's physical path, and `BASH_VERSION` match its row. It computes a
+nonzero event base into `LOOM_DIFF_BASE`, then invokes:
 
-Each cell checks out full history, prints OS/architecture, computes `LOOM_DIFF_BASE`
-from the event's nonzero base SHA, and invokes the chosen Bash as `scripts/check`'s
-interpreter. `scripts/check` installs the exact locked tools and verifies downloaded
-checksums; the workflow must not duplicate that logic or use floating Homebrew/apt
-versions or a floating `latest` action/tool tag. The workflow does not install Codex
-or run an install smoke in this slice; it validates the pinned Codex metadata schemas
-through `scripts/check`.
+```text
+LOOM_TEST_BASH=<absolute row shell> \
+LOOM_EXPECTED_BASH_VERSION=<row regex> \
+<absolute row shell> scripts/check
+```
+
+The logs must show the canary's Bats-shell and executable-child shell versions, not
+just `bash --version` or syntax output. The controlled Bats launcher prevents
+`#!/usr/bin/env bash` from resolving a Homebrew Bash on macOS.
+
+The labels above are standard hosted labels for this public repository as verified
+from GitHub's current official runner table. Because `macos-14` is in deprecation,
+if it or `macos-15-intel` is unavailable when implemented, stop and replan against
+the then-current official table; do not substitute an unconfigured larger or
+self-hosted label and do not mark an absent cell allowed-to-fail.
 
 ## Red-to-green proof
 
-The implementation handoff must record these transitions:
+The implementation handoff records:
 
-1. **Metadata red:** the targeted new Bats suite fails against the initial repository
-   for invalid `run.md`, absent Claude version, and missing Codex files.
-2. **Claude red:** the exact strict command reports the current YAML error and version
-   warning.
-3. **Metadata green:** all positive/negative metadata fixtures pass and the real tree
-   passes schema/cross/path/frontmatter/link validation.
-4. **Claude green:** strict validation exits zero with no warning.
-5. **Shell green:** all pre-existing behavioral tests still pass after the three
-   shebang changes under the macOS Bash 3.2 lane and Ubuntu Bash 5.x lanes.
-6. **Unified green:** `scripts/check` exits zero locally and in every required CI
-   cell, prints its discovered Bats count dynamically, and `git diff --check` is
-   clean for the implementation range.
+1. **Known Claude red:** the exact strict command reports the current `run.md` YAML
+   error and missing-version warning.
+2. **Validator red:** targeted new tests fail before validator/contracts exist.
+3. **Fixture-isolation green:** all negative cases fail only in their temporary
+   roots; `git ls-files '*.json'` contains no malformed fixture; the explicit
+   real-tree metadata test is green.
+4. **Static adapter green:** both manifests/catalogs, matrix, root bindings, and
+   release fixtures pass schema/digest/referential/drift checks; this is not logged
+   as client install or behavior success.
+5. **Claude green:** strict validation exits zero with no warning.
+6. **Link green:** positive/negative target, fragment, exclusion, and allowlist
+   tests pass, followed by the real-tree link gate.
+7. **Actual-shell green:** logs from macOS show Bats and its child under Bash 3.2.57;
+   Ubuntu logs show both under Bash 5.x. All pre-existing behavioral assertions pass.
+8. **Unified green:** `scripts/check` succeeds locally, cwd-independently, and in
+   all four required CI cells, with dynamic test count and clean range diff check.
 
 ## Verification
 
 ### Local
 
-From a fresh clone with only the documented bootstrap and production prerequisites:
+From a fresh clone with documented bootstrap/production prerequisites:
 
 ```bash
 scripts/check
-```
-
-Also prove cwd independence once:
-
-```bash
 (cd /tmp && /absolute/path/to/loom/scripts/check)
 ```
 
-Expected: identical stages and a zero exit. Before committing, run
-`git diff --check` and confirm the diff contains only the file set listed above.
+Also run the targeted validator suite with one malformed `.json.in` materialized and
+show that the subsequent real-root `--metadata` invocation remains green. Before
+committing, run `git diff --check`, inspect `git status --short`, and prove the diff
+contains only the file set above.
 
 ### CI
 
-All three matrix cells must be green and retain logs showing:
-
-- OS/architecture and actual Bash version;
-- exact shfmt, ShellCheck, Bats, Claude, Node, Git, and jq versions;
-- schema digest verification;
-- the dynamic Bats test count and passing result;
-- strict Claude validation; and
-- range-aware whitespace validation.
-
-The macOS log is the Bash 3.2 floor evidence. At least one Ubuntu log must show Bash
-5.x. A green JSON/schema result is not recorded as a Codex install/behavior result.
+All four required jobs must be green. Retained logs show host OS/architecture, actual
+selected Bash and canary child versions, exact pinned tools, schema/fixture digests,
+dynamic Bats count, real-tree metadata/link results, strict Claude validation, and
+range-aware whitespace validation. A missing/queued-unavailable architecture cell is
+not success.
 
 ## Acceptance criteria
 
-- A fresh clone reproduces the complete M0 gate through the one documented
-  `scripts/check` command.
-- The exact build tools and schemas are pinned/reproducible, while production Git/jq
-  are enforced as floors.
-- Both client manifests/catalogs are syntactically, schema, path, and cross-version
-  validated; Claude strict validation is green; Codex behavior is not overclaimed.
-- All shipped executables declare Bash and remain compatible with Bash 3.2; all
-  existing Bats behavior remains green.
-- Relative links in the declared living/shipped scope are checked with narrow,
-  reviewable historical treatment.
-- Ubuntu 22.04, Ubuntu 24.04, and macOS 14 CI run the same local gate, including Bash
-  floor/current evidence and dynamic test-count reporting.
-- The implementation changes no M1/M3 behavior, frozen specs/ADRs, status/index docs,
-  release assets, or broad documentation outside the two necessary support/gate
-  pointers.
+- A fresh clone reproduces the complete baseline gate with `scripts/check`.
+- Exact build tools, client/frontmatter schemas, product schemas, and release-owned
+  fixtures are pinned and digest-checked; runtime floors are enforced.
+- Both manifests/catalogs and the v0.2.0 compatibility/root-binding scaffolding are
+  schema/path/cross-version/drift validated without overclaiming Codex behavior.
+- No tracked malformed JSON/schema/frontmatter input matches production scans, and
+  an executable test proves the real-tree metadata gate stays green alongside every
+  negative case.
+- Link regression tests cover targets, fragments, exact exclusions, and malformed,
+  duplicate, live, and stale allowlist entries.
+- The shipped scripts declare Bash, and Bats plus every tested Loom script actually
+  run under Bash 3.2 on macOS and Bash 5.x on Ubuntu.
+- CI is required on Ubuntu 22.04/24.04 x86-64, macOS Apple silicon, and macOS Intel,
+  using verified hosted labels with no allowed failure.
+- No M1/M3 behavior, frozen authority, status/index artifact, or release publication
+  work enters the diff.
+- The handoff explicitly leaves M0 incomplete until `client-floor-adapter-smoke`
+  supplies the clean install/loading/invocation/role/hook/helper/uninstall evidence
+  mandated by ADR 0019 and spec 10.
 
 ## Notes
 
-- Follow-up required before release: implement the complete Claude and Codex isolated
-  install/invocation/role/hook/helper/upgrade/uninstall matrices required by spec 10.
-  This plan deliberately provides the stable validation entry point and metadata
-  scaffolding they will extend.
-- Follow-up mechanical checks from spec 08 must be added incrementally with the slice
-  that introduces their underlying artifacts; M0 must not pretend absent review,
-  evaluation, digest, doctor, or landing protocols are already validated.
+- Required next M0 slice: `client-floor-adapter-smoke`, after the workflow, role,
+  hook-wire, and root-bootstrap adapters exist. It runs both exact floor clients in
+  isolated homes through clean marketplace/plugin loading, explicit invocation,
+  cold-role non-delegation, hook fixtures/trust, effective profiles, absolute helper
+  resolution, and uninstall. Neither this plan nor its green gate waives that work.
+- Upgrade and fresh-clone release-candidate evidence remains at the spec-10 release
+  gate; no v0.2 artifact is published before M0-M7 are green.
+- Later slices add spec-08 checks with the artifacts they introduce; this baseline
+  does not pretend absent review/evaluation/doctor/landing protocols are validated.
