@@ -18,7 +18,7 @@ case "$selected_bash" in
     exit 2
     ;;
 esac
-[ -x "$selected_bash" ] || {
+[ -L "$selected_bash" ] || [ -x "$selected_bash" ] || {
     printf 'run-bats-under: shell is not executable: %s\n' "$selected_bash" >&2
     exit 2
 }
@@ -27,8 +27,32 @@ esac
     exit 2
 }
 
-shell_dir=$(CDPATH='' cd -- "$(dirname -- "$selected_bash")" && pwd -P)
-physical_bash="$shell_dir/$(basename -- "$selected_bash")"
+resolve_executable() {
+    resolver_candidate="$1"
+    resolver_hops=0
+    while [ -L "$resolver_candidate" ]; do
+        resolver_hops=$((resolver_hops + 1))
+        if [ "$resolver_hops" -gt 40 ]; then
+            printf 'run-bats-under: shell symlink chain is too deep or cyclic: %s\n' "$1" >&2
+            return 1
+        fi
+        resolver_link=$(readlink "$resolver_candidate") || return 1
+        case "$resolver_link" in
+        /*) resolver_candidate="$resolver_link" ;;
+        *) resolver_candidate="$(dirname -- "$resolver_candidate")/$resolver_link" ;;
+        esac
+        resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+        resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    done
+    resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+    resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    [ -f "$resolver_candidate" ] && [ ! -L "$resolver_candidate" ] && [ -x "$resolver_candidate" ] || return 1
+    printf '%s\n' "$resolver_candidate"
+}
+physical_bash=$(resolve_executable "$selected_bash") || {
+    printf 'run-bats-under: cannot resolve selected shell to a regular executable: %s\n' "$selected_bash" >&2
+    exit 2
+}
 # shellcheck disable=SC2016
 actual_version=$("$physical_bash" -c 'printf %s "$BASH_VERSION"')
 version_number=${actual_version%%(*}

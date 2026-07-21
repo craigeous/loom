@@ -91,6 +91,44 @@ launcher() {
     [[ "$output" == *"below required 3.2"* ]]
 }
 
+@test "launcher resolves a terminal selected-shell symlink" {
+    ln -s "$LOOM_TEST_BASH_PHYSICAL" "$SHELL_TEST_ROOT/terminal-bash"
+    launcher "$SHELL_TEST_ROOT/terminal-bash" "$LOOM_EXPECTED_BASH_VERSION" "$FAKE_BATS" "$CANARY"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Selected Bash: $LOOM_TEST_BASH_PHYSICAL"* ]]
+}
+
+@test "launcher resolves relative multihop symlinks before links are retargeted" {
+    mkdir -p "$SHELL_TEST_ROOT/links/sub"
+    ln -s "$LOOM_TEST_BASH_PHYSICAL" "$SHELL_TEST_ROOT/links/sub/terminal"
+    ln -s sub/terminal "$SHELL_TEST_ROOT/links/selected"
+    retarget_bats="$SHELL_TEST_ROOT/retarget-bats"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'rm "$RELINK_SELECTED" "$RELINK_TERMINAL"' \
+        'ln -s /bin/false "$RELINK_SELECTED"' \
+        'ln -s /bin/false "$RELINK_TERMINAL"' \
+        'printf "%s\n" "$LOOM_TEST_BASH_PHYSICAL" "$BASH_VERSION" "$(bash -c '\''printf %s "$BASH_VERSION"'\'')" >"$LAUNCHER_RECORD"' >"$retarget_bats"
+    chmod +x "$retarget_bats"
+    export RELINK_SELECTED="$SHELL_TEST_ROOT/links/selected"
+    export RELINK_TERMINAL="$SHELL_TEST_ROOT/links/sub/terminal"
+    launcher "$SHELL_TEST_ROOT/links/selected" "$LOOM_EXPECTED_BASH_VERSION" "$retarget_bats" "$CANARY"
+    [ "$status" -eq 0 ]
+    mapfile=()
+    while IFS= read -r line; do mapfile+=("$line"); done <"$LAUNCHER_RECORD"
+    [ "${mapfile[0]}" = "$LOOM_TEST_BASH_PHYSICAL" ]
+    [[ "${mapfile[1]}" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+    [[ "${mapfile[2]}" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+}
+
+@test "launcher rejects a selected-shell symlink loop" {
+    ln -s loop-b "$SHELL_TEST_ROOT/loop-a"
+    ln -s loop-a "$SHELL_TEST_ROOT/loop-b"
+    launcher "$SHELL_TEST_ROOT/loop-a" '.*' "$FAKE_BATS" "$CANARY"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"too deep or cyclic"* ]]
+}
+
 @test "launcher rejects a missing runtime canary" {
     launcher "$LOOM_TEST_BASH" '.*' "$FAKE_BATS" "$OTHER"
     [ "$status" -eq 2 ]

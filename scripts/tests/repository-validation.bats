@@ -237,6 +237,92 @@ links() {
     [[ "$output" == *"codex-skill-source-v1.json: schema / must NOT have additional properties"* ]]
 }
 
+@test "each Claude installed-root requirement fails independently when omitted" {
+    for field in binding inputMustBeAbsolute invocationMustBeAbsolute canonicalizeInput canonicalRootRequired manifest manifestMustBeCanonical manifestMustBeRegularFile expectedName expectedVersion helperDirectory helperDirectoryMustBeDirectChild allowedHelpers helperMustBeRegularFile helperMustBeExecutable; do
+        make_metadata_root
+        mutate_json plugins/loom/adapters/roots/claude-plugin-root-v1.json "del(.$field)"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"plugins/loom/adapters/roots/claude-plugin-root-v1.json: schema "* ]]
+    done
+}
+
+@test "each Codex installed-root requirement fails independently when omitted" {
+    for field in inputMustBeAbsolute invocationMustBeAbsolute skillSuffix skillMustBeCanonical skillMustBeRegularFile skillIdentitySource skillIdentityMustMatchDirectory pluginRootAscent pluginRootMustBeCanonical ascendToManifest manifestMustBeCanonical manifestMustBeRegularFile expectedName expectedVersion helperDirectory helperDirectoryMustBeDirectChild allowedHelpers helperMustBeRegularFile helperMustBeExecutable forbiddenWorkflowRootGuesses hookBinding hookManifest; do
+        make_metadata_root
+        mutate_json plugins/loom/adapters/roots/codex-skill-source-v1.json "del(.$field)"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"plugins/loom/adapters/roots/codex-skill-source-v1.json: schema "* ]]
+    done
+}
+
+@test "installed-root constants reject false or substituted declarations independently" {
+    for record in \
+        'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.inputMustBeAbsolute=false' \
+        'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.manifest="other.json"' \
+        'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.allowedHelpers=["other"]' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.skillSuffix="SKILL.md"' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.pluginRootAscent=".."' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.skillIdentitySource="directory"' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.helperDirectory="../bin"'; do
+        relative=${record%%|*}
+        filter=${record#*|}
+        make_metadata_root
+        mutate_json "$relative" "$filter"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"$relative: schema "* ]]
+    done
+}
+
+@test "catalog-shaped tracked JSON is rejected outside exact live and release-fixture paths" {
+    for record in \
+        '.claude-plugin/marketplace.json|plugins/loom/catalog-copy.json' \
+        '.agents/plugins/marketplace.json|plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace-copy.json'; do
+        source=${record%%|*}
+        destination=${record#*|}
+        make_metadata_root
+        cp "$TEST_ROOT/$source" "$TEST_ROOT/$destination"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"$destination: catalog-shaped JSON is not at an authorized live or release-fixture path"* ]]
+    done
+}
+
+@test "null false zero and empty string receive schema diagnostics as metadata values" {
+    for record in \
+        'plugins/loom/.claude-plugin/plugin.json|null' \
+        '.claude-plugin/marketplace.json|false' \
+        'plugins/loom/.codex-plugin/plugin.json|0' \
+        '.agents/plugins/marketplace.json|""' \
+        'plugins/loom/adapters/compatibility/v0.2.0.json|null' \
+        'plugins/loom/adapters/roots/claude-plugin-root-v1.json|false' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|0' \
+        'plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json|""'; do
+        relative=${record%%|*}
+        value=${record#*|}
+        make_metadata_root
+        printf '%s\n' "$value" >"$TEST_ROOT/$relative"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"$relative: schema / must be object"* ]]
+    done
+}
+
+@test "null false zero and empty string receive deterministic referenced-schema diagnostics" {
+    for value in null false 0 '""'; do
+        make_metadata_root
+        printf '%s\n' "$value" >"$TEST_ROOT/scripts/schemas/codex-plugin-0.144.6.schema.json"
+        metadata
+        [ "$status" -ne 0 ]
+        expected_type=string
+        case "$value" in null) expected_type=null ;; false) expected_type=boolean ;; 0) expected_type=number ;; esac
+        [[ "$output" == *"scripts/schemas/codex-plugin-0.144.6.schema.json: invalid JSON Schema: expected object, got $expected_type"* ]]
+        [[ "$output" != *"product name, exact SemVer"* ]]
+    done
+}
+
 @test "catalog source escape fails" {
     make_metadata_root
     "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1],x=JSON.parse(fs.readFileSync(f));x.plugins[0].source="../outside";fs.writeFileSync(f,JSON.stringify(x))' "$TEST_ROOT/.agents/plugins/marketplace.json"
@@ -792,6 +878,12 @@ mutate_contract() {
     [ "$status" -ne 0 ]
 }
 
+@test "workflow selected-shell physical resolver deletion fails" {
+    rewrite_workflow '          physical_shell=$(resolve_executable "$SELECTED_BASH")' '          physical_shell="$SELECTED_BASH"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
 @test "toolchain runner deletion fails closed" {
     mutate_contract 'del(.runners[3])'
     contract_check
@@ -893,6 +985,16 @@ mutate_contract() {
     [[ "$output" == *"selected LOOM_TEST_BASH 3.1.99 is below required 3.2"* ]]
 }
 
+@test "gate resolves terminal and relative multihop selected-Bash symlinks" {
+    ensure_contract_root
+    mkdir -p "$TEST_ROOT/bash-links/sub"
+    ln -s "$LOOM_TEST_BASH_PHYSICAL" "$TEST_ROOT/bash-links/sub/terminal"
+    ln -s sub/terminal "$TEST_ROOT/bash-links/selected"
+    run env LOOM_CHECK_BASH_ONLY=1 LOOM_TEST_BASH="$TEST_ROOT/bash-links/selected" LOOM_EXPECTED_BASH_VERSION="$LOOM_EXPECTED_BASH_VERSION" /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Selected Bash floor check passed"* ]]
+}
+
 prepare_cached_downloads() {
     ensure_contract_root
     case "$(uname -s):$(uname -m)" in
@@ -911,6 +1013,57 @@ provision_check() {
     run env LOOM_CHECK_PROVISION_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
 }
 
+run_signal_case() {
+    signal_name="$1"
+    expected_status="$2"
+    ensure_contract_root
+    pause="$TEST_ROOT/pause"
+    success="$TEST_ROOT/success"
+    log="$TEST_ROOT/check.log"
+    run env SIGNAL_NAME="$signal_name" EXPECTED_STATUS="$expected_status" PAUSE_PATH="$pause" SUCCESS_PATH="$success" LOG_PATH="$log" \
+        "$LOOM_NODE" -e '
+          const fs = require("fs"), { spawn } = require("child_process");
+          const log = fs.openSync(process.env.LOG_PATH, "w");
+          const child = spawn("/bin/bash", [process.argv[1]], {
+            env: { ...process.env, LOOM_CHECK_TEST_PAUSE: process.env.PAUSE_PATH,
+              LOOM_CHECK_TEST_SUCCESS_MARKER: process.env.SUCCESS_PATH }, stdio: ["ignore", log, log]
+          });
+          let attempts = 0, sent = false;
+          const timer = setInterval(() => {
+            attempts += 1;
+            if (fs.existsSync(`${process.env.PAUSE_PATH}.ready`)) {
+              sent = child.kill(`SIG${process.env.SIGNAL_NAME}`);
+              clearInterval(timer);
+            } else if (attempts >= 200) {
+              clearInterval(timer); child.kill("SIGKILL");
+            }
+          }, 25);
+          child.on("exit", (code, signal) => {
+            clearInterval(timer); fs.closeSync(log);
+            console.log(`code=${code} signal=${signal || "none"} sent=${sent}`);
+            process.exit(sent && code === Number(process.env.EXPECTED_STATUS) ? 0 : 1);
+          });
+        ' "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 0 ]
+    [ -e "$pause.ready" ]
+    run_dir=$(cat "$pause.run-dir")
+    [ ! -e "$run_dir" ]
+    [ ! -e "$success" ]
+    ! grep -F 'All checks passed' "$log"
+}
+
+@test "gate HUP cleanup is deterministic and exits 129 without success" {
+    run_signal_case HUP 129
+}
+
+@test "gate INT cleanup is deterministic and exits 130 without success" {
+    run_signal_case INT 130
+}
+
+@test "gate TERM cleanup is deterministic and exits 143 without success" {
+    run_signal_case TERM 143
+}
+
 @test "fresh provisioning ignores a poisoned persistent extracted-tool tree" {
     prepare_cached_downloads
     mkdir -p "$TEST_ROOT/.check-cache/tools/node/bin"
@@ -923,6 +1076,17 @@ provision_check() {
     run find "$TEST_ROOT/.check-cache" -maxdepth 1 -name 'run.*' -print
     [ "$status" -eq 0 ]
     [ -z "$output" ]
+}
+
+@test "Bats version probing cannot execute a poisoned ambient bash" {
+    prepare_cached_downloads
+    mkdir -p "$TEST_ROOT/fake-bin"
+    marker="$TEST_ROOT/ambient-bash-executed"
+    printf '%s\n' '#!/bin/sh' ": >'$marker'" 'exit 97' >"$TEST_ROOT/fake-bin/bash"
+    chmod +x "$TEST_ROOT/fake-bin/bash"
+    run env PATH="$TEST_ROOT/fake-bin:$PATH" LOOM_TEST_BASH="$LOOM_TEST_BASH_PHYSICAL" LOOM_EXPECTED_BASH_VERSION="$LOOM_EXPECTED_BASH_VERSION" LOOM_CHECK_PROVISION_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 0 ]
+    [ ! -e "$marker" ]
 }
 
 @test "cache-root symlink is rejected without touching its owned target" {

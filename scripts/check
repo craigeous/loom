@@ -9,12 +9,21 @@ DOWNLOADS="$CACHE/downloads"
 CURRENT_STAGE="bootstrap"
 RUN_DIR=""
 
-cleanup() {
-    status=$?
-    trap - EXIT HUP INT TERM
+cleanup_run_dir() {
     if [ -n "$RUN_DIR" ] && [ -d "$RUN_DIR" ] && [ ! -L "$RUN_DIR" ]; then
         rm -rf -- "$RUN_DIR"
     fi
+}
+cleanup() {
+    status=$?
+    trap - EXIT ERR HUP INT TERM
+    cleanup_run_dir
+    exit "$status"
+}
+interrupted() {
+    status="$1"
+    trap - EXIT ERR HUP INT TERM
+    cleanup_run_dir
     exit "$status"
 }
 failed() {
@@ -22,7 +31,10 @@ failed() {
     printf 'FAILED stage %s (exit %s)\n' "$CURRENT_STAGE" "$status" >&2
     exit "$status"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'interrupted 129' HUP
+trap 'interrupted 130' INT
+trap 'interrupted 143' TERM
 trap failed ERR
 
 stage() {
@@ -49,6 +61,28 @@ version_at_least() {
     [ "$actual_major" -gt "$required_major" ] || {
         [ "$actual_major" -eq "$required_major" ] && [ "$actual_minor" -ge "$required_minor" ]
     }
+}
+resolve_executable() {
+    resolver_candidate="$1"
+    resolver_hops=0
+    while [ -L "$resolver_candidate" ]; do
+        resolver_hops=$((resolver_hops + 1))
+        if [ "$resolver_hops" -gt 40 ]; then
+            printf 'selected Bash symlink chain is too deep or cyclic: %s\n' "$1" >&2
+            return 1
+        fi
+        resolver_link=$(readlink "$resolver_candidate") || return 1
+        case "$resolver_link" in
+        /*) resolver_candidate="$resolver_link" ;;
+        *) resolver_candidate="$(dirname -- "$resolver_candidate")/$resolver_link" ;;
+        esac
+        resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+        resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    done
+    resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+    resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    [ -f "$resolver_candidate" ] && [ ! -L "$resolver_candidate" ] && [ -x "$resolver_candidate" ] || return 1
+    printf '%s\n' "$resolver_candidate"
 }
 sha256() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -296,6 +330,10 @@ grep -F 'EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}'
 # shellcheck disable=SC2016
 grep -F 'test "$actual_head" = "$EXPECTED_HEAD"' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
 grep -F "printf 'Exact HEAD: %s\\n' \"\$actual_head\"" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+# shellcheck disable=SC2016
+grep -F 'physical_shell=$(resolve_executable "$SELECTED_BASH")' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+# shellcheck disable=SC2016
+grep -F 'LOOM_TEST_BASH="$physical_shell"' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
 expected_rows=$(jq -r '.runners[] | [.label,.os,.architecture,.release,.shell,.versionRegex] | join("\t")' "$CONTRACT")
 actual_rows=$(workflow_rows)
 [ "$actual_rows" = "$expected_rows" ] || {
@@ -337,6 +375,11 @@ RUN_DIR=$(mktemp -d "$CACHE/run.XXXXXX")
 chmod 700 "$RUN_DIR"
 mkdir -m 700 "$RUN_DIR/downloads" "$RUN_DIR/tools"
 TOOLS="$RUN_DIR/tools"
+if [ -n "${LOOM_CHECK_TEST_PAUSE:-}" ]; then
+    printf '%s\n' "$RUN_DIR" >"$LOOM_CHECK_TEST_PAUSE.run-dir"
+    : >"$LOOM_CHECK_TEST_PAUSE.ready"
+    while [ ! -e "$LOOM_CHECK_TEST_PAUSE.release" ]; do sleep 1; done
+fi
 
 bash_version=${BASH_VERSION%%(*}
 git_version=$(git --version | awk '{print $3}')
@@ -354,8 +397,10 @@ version_at_least "$jq_version" "$(jq -r .runtimeFloors.jq "$CONTRACT")" || {
     exit 1
 }
 
-running_bash_dir=$(CDPATH='' cd -- "$(dirname -- "$BASH")" && pwd -P)
-running_bash="$running_bash_dir/$(basename -- "$BASH")"
+running_bash=$(resolve_executable "$BASH") || {
+    printf 'running Bash cannot be resolved to a regular executable: %s\n' "$BASH" >&2
+    exit 1
+}
 selected_bash=${LOOM_TEST_BASH:-$running_bash}
 case "$selected_bash" in
 /*) ;;
@@ -366,6 +411,10 @@ case "$selected_bash" in
 esac
 [ -x "$selected_bash" ] || {
     printf 'LOOM_TEST_BASH is not executable: %s\n' "$selected_bash" >&2
+    exit 1
+}
+selected_bash=$(resolve_executable "$selected_bash") || {
+    printf 'LOOM_TEST_BASH cannot be resolved to a regular executable: %s\n' "${LOOM_TEST_BASH:-$running_bash}" >&2
     exit 1
 }
 # shellcheck disable=SC2016
@@ -420,7 +469,11 @@ for consumed_tool in "$SHFMT" "$SHELLCHECK" "$NODE" "$NPM_CLI" "$BATS"; do secur
 [ "$("$SHELLCHECK" --version | awk '/version:/ {print $2}')" = "0.11.0" ]
 [ "$("$NODE" --version)" = "v22.17.0" ]
 [ "$("$NODE" "$NPM_CLI" --version)" = "10.9.2" ]
-[ "$(bash "$BATS" --version 2>/dev/null || true)" = "Bats 1.13.0" ]
+BATS_PROBE_DIR="$RUN_DIR/bats-probe/bin"
+mkdir -m 700 "$RUN_DIR/bats-probe"
+mkdir -m 700 "$BATS_PROBE_DIR"
+ln -s "$selected_bash" "$BATS_PROBE_DIR/bash"
+[ "$(PATH="$BATS_PROBE_DIR:$PATH" "$selected_bash" "$BATS" --version 2>/dev/null || true)" = "Bats 1.13.0" ]
 
 if [ "${LOOM_CHECK_PROVISION_ONLY:-0}" = 1 ]; then
     printf '\nFresh authenticated tool provisioning passed\n'
@@ -498,4 +551,5 @@ if [ -n "${LOOM_DIFF_BASE:-}" ]; then
     git -C "$REPOSITORY_ROOT" cat-file -e "$LOOM_DIFF_BASE^{commit}"
     git -C "$REPOSITORY_ROOT" diff --check "$LOOM_DIFF_BASE...HEAD"
 fi
+if [ -n "${LOOM_CHECK_TEST_SUCCESS_MARKER:-}" ]; then : >"$LOOM_CHECK_TEST_SUCCESS_MARKER"; fi
 printf '\nAll checks passed\n'

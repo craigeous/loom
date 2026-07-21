@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -581,3 +581,34 @@ not success.
 - Required external handoff: retarget the draft PR to remote base `b28a747`, push
   the final exact head, and retain successful exact-head logs for all four required
   runner cells. This local revision makes no remote CI success claim.
+
+### Developer revision after diagnostic Round 3 (2026-07-21)
+
+- The installed-root documents, shared closed schema, release fixtures, digest
+  contract, semantic equality check, and isolated mutations now cover absolute
+  inputs/invocations, canonical physical inputs/roots/manifests, the exact Codex
+  `skills/<skill>/SKILL.md` suffix and `../..` ascent, manifest/skill identity,
+  direct `bin/` containment, the sole `loom-coord` helper, and its regular-file and
+  executable requirements. These remain static declarations, not bootstrap code.
+- Metadata discovery rejects catalog-shaped tracked JSON outside the two exact live
+  paths and two named release fixtures. A distinct JSON-read failure sentinel keeps
+  valid `null`, `false`, `0`, and `""` inputs in schema validation, produces
+  deterministic file-specific target/schema diagnostics, and prevents semantic
+  validation after structural failure.
+- The launcher, gate, and workflow assertion completely resolve final and multihop
+  relative Bash symlinks with a bounded loop check. Regressions cover terminal and
+  multihop links, retargeting/removing the original links after resolution, and
+  loop rejection. Bats version probing uses the resolved selected Bash with a
+  private selected-shell PATH; a poisoned ambient `bash` is never executed.
+- Gate cleanup is attached to `EXIT`; HUP, INT, and TERM have separate handlers
+  that deterministically return 129, 130, and 143. Focused process-controlled
+  checks verified each status, private-run cleanup, and absence of the success
+  marker.
+- Both complete local gates passed all 226 dynamically discovered tests: system
+  Bash 3.2.57 and resolved Homebrew Bash 5.3.9. Metadata, link validation, shfmt,
+  ShellCheck, Bash syntax, pinned Claude strict validation, and diff whitespace
+  stages also passed in both lanes.
+- Required external handoff: push the final exact commit only after orchestration
+  approval and retain successful exact-head logs for `ubuntu-22.04`,
+  `ubuntu-24.04`, `macos-14` arm64, and `macos-15-intel` x86-64. This developer did
+  not push and makes no remote CI success claim.

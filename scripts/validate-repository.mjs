@@ -130,19 +130,25 @@ function discover() {
 
 const files = discover();
 const json = new Map();
+const JSON_READ_FAILURE = Symbol("JSON_READ_FAILURE");
 function readJson(relative) {
   if (json.has(relative)) return json.get(relative);
   const text = readText(relative);
-  if (text === null) { json.set(relative, null); return null; }
+  if (text === null) { json.set(relative, JSON_READ_FAILURE); return JSON_READ_FAILURE; }
   try {
     const value = JSON.parse(text);
     json.set(relative, value);
     return value;
   } catch (error) {
     report(relative, `invalid JSON: ${error.message}`);
-    json.set(relative, null);
-    return null;
+    json.set(relative, JSON_READ_FAILURE);
+    return JSON_READ_FAILURE;
   }
+}
+function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+function jsonType(value) { return value === null ? "null" : Array.isArray(value) ? "array" : typeof value; }
+function isCatalogShaped(value) {
+  return isObject(value) && typeof value.name === "string" && isObject(value.owner) && Array.isArray(value.plugins);
 }
 function deepEqual(left, right) {
   if (Object.is(left, right)) return true;
@@ -162,7 +168,21 @@ function deepEqual(left, right) {
 async function validateMetadata() {
   let structurallyValid = true;
   for (const relative of files.filter((file) => file.endsWith(".json"))) {
-    if (readJson(relative) === null) structurallyValid = false;
+    if (readJson(relative) === JSON_READ_FAILURE) structurallyValid = false;
+  }
+
+  const authorizedCatalogs = new Set([
+    ".claude-plugin/marketplace.json",
+    ".agents/plugins/marketplace.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json"
+  ]);
+  for (const relative of files.filter((file) => file.endsWith(".json"))) {
+    const value = readJson(relative);
+    if (value !== JSON_READ_FAILURE && isCatalogShaped(value) && !authorizedCatalogs.has(relative)) {
+      report(relative, "catalog-shaped JSON is not at an authorized live or release-fixture path");
+      structurallyValid = false;
+    }
   }
 
   const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
@@ -170,7 +190,12 @@ async function validateMetadata() {
   const schemaFiles = files.filter((file) => file.endsWith(".schema.json"));
   for (const relative of schemaFiles) {
     const schema = readJson(relative);
-    if (!schema) { structurallyValid = false; continue; }
+    if (schema === JSON_READ_FAILURE) { structurallyValid = false; continue; }
+    if (!isObject(schema)) {
+      report(relative, `invalid JSON Schema: expected object, got ${jsonType(schema)}`);
+      structurallyValid = false;
+      continue;
+    }
     try { ajv.addSchema(schema); }
     catch (error) { report(relative, `invalid JSON Schema: ${error.message}`); structurallyValid = false; }
   }
@@ -206,7 +231,7 @@ async function validateMetadata() {
     if (!schemaResults.get(live)) continue;
     const left = readJson(fixture);
     const right = readJson(live);
-    if (left && right && !deepEqual(left, right)) report(fixture, `release fixture differs from ${live}`);
+    if (!deepEqual(left, right)) report(fixture, `release fixture differs from ${live}`);
   }
 
   const frontmatter = [
@@ -243,14 +268,14 @@ function validateJson(target, schemaPath, ajv) {
   }
   const value = readJson(target);
   const schema = readJson(schemaPath);
-  if (!value || !schema) return false;
+  if (value === JSON_READ_FAILURE || schema === JSON_READ_FAILURE || !isObject(schema)) return false;
   return validateValue(target, value, schemaPath, ajv);
 }
 function validateValue(target, value, schemaPath, ajv) {
   let validator;
   try {
     const schema = readJson(schemaPath);
-    if (!schema) return false;
+    if (schema === JSON_READ_FAILURE || !isObject(schema)) return false;
     validator = ajv.getSchema(schema.$id) || ajv.compile(schema);
   } catch (error) {
     report(schemaPath, `invalid JSON Schema: ${error.message}`);
@@ -330,8 +355,29 @@ function semanticMetadata() {
     if (!node) report(matrixPath, `root binding reference is missing or unsafe: ${binding.path}`);
     else if (readJson(binding.path)?.schema !== binding.id) report(binding.path, `binding-reference drift from ${binding.id}`);
   }
+  const expectedRoots = [
+    {
+      schema: "claude-plugin-root/v1", client: "claude", binding: "CLAUDE_PLUGIN_ROOT",
+      inputMustBeAbsolute: true, invocationMustBeAbsolute: true, canonicalizeInput: true,
+      canonicalRootRequired: true, manifest: ".claude-plugin/plugin.json", manifestMustBeCanonical: true,
+      manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
+      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord"],
+      helperMustBeRegularFile: true, helperMustBeExecutable: true
+    },
+    {
+      schema: "codex-skill-source/v1", client: "codex", inputMustBeAbsolute: true,
+      invocationMustBeAbsolute: true, skillSuffix: "skills/<skill>/SKILL.md", skillMustBeCanonical: true,
+      skillMustBeRegularFile: true, skillIdentitySource: "frontmatter.name", skillIdentityMustMatchDirectory: true,
+      pluginRootAscent: "../..", pluginRootMustBeCanonical: true, ascendToManifest: ".codex-plugin/plugin.json",
+      manifestMustBeCanonical: true, manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
+      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord"],
+      helperMustBeRegularFile: true, helperMustBeExecutable: true,
+      forbiddenWorkflowRootGuesses: ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"],
+      hookBinding: "PLUGIN_ROOT", hookManifest: "./hooks/hooks.json"
+    }
+  ];
   for (const [index, binding] of roots.entries()) {
-    if (binding.expectedName !== "loom" || binding.expectedVersion !== "0.2.0") report(rootPaths[index], "root binding manifest identity drift");
+    if (!deepEqual(binding, expectedRoots[index])) report(rootPaths[index], "installed-root contract drift");
   }
 }
 function validateCatalogSource(catalogPath, source) {

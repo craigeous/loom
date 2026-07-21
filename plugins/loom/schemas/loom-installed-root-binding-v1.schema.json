@@ -1,16 +1,84 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/craigeous/loom/schemas/loom-installed-root-binding-v1.schema.json",
+  "$defs": {
+    "allowedHelpers": {
+      "type": "array",
+      "const": ["loom-coord"]
+    }
+  },
   "oneOf": [
     {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema", "client", "binding", "manifest", "expectedName", "expectedVersion", "helperDirectory", "allowedHelpers"],
-      "properties": { "schema": { "const": "claude-plugin-root/v1" }, "client": { "const": "claude" }, "binding": { "const": "CLAUDE_PLUGIN_ROOT" }, "manifest": { "const": ".claude-plugin/plugin.json" }, "expectedName": { "const": "loom" }, "expectedVersion": { "const": "0.2.0" }, "helperDirectory": { "const": "bin" }, "allowedHelpers": { "type": "array", "uniqueItems": true, "items": { "enum": ["loom-coord"] }, "minItems": 1, "maxItems": 1 } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "client", "binding", "inputMustBeAbsolute", "invocationMustBeAbsolute",
+        "canonicalizeInput", "canonicalRootRequired", "manifest", "manifestMustBeCanonical",
+        "manifestMustBeRegularFile", "expectedName", "expectedVersion", "helperDirectory",
+        "helperDirectoryMustBeDirectChild", "allowedHelpers", "helperMustBeRegularFile",
+        "helperMustBeExecutable"
+      ],
+      "properties": {
+        "schema": { "const": "claude-plugin-root/v1" },
+        "client": { "const": "claude" },
+        "binding": { "const": "CLAUDE_PLUGIN_ROOT" },
+        "inputMustBeAbsolute": { "const": true },
+        "invocationMustBeAbsolute": { "const": true },
+        "canonicalizeInput": { "const": true },
+        "canonicalRootRequired": { "const": true },
+        "manifest": { "const": ".claude-plugin/plugin.json" },
+        "manifestMustBeCanonical": { "const": true },
+        "manifestMustBeRegularFile": { "const": true },
+        "expectedName": { "const": "loom" },
+        "expectedVersion": { "const": "0.2.0" },
+        "helperDirectory": { "const": "bin" },
+        "helperDirectoryMustBeDirectChild": { "const": true },
+        "allowedHelpers": { "$ref": "#/$defs/allowedHelpers" },
+        "helperMustBeRegularFile": { "const": true },
+        "helperMustBeExecutable": { "const": true }
+      }
     },
     {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema", "client", "skillSuffix", "ascendToManifest", "expectedName", "expectedVersion", "helperDirectory", "forbiddenWorkflowRootGuesses", "hookBinding", "hookManifest"],
-      "properties": { "schema": { "const": "codex-skill-source/v1" }, "client": { "const": "codex" }, "skillSuffix": { "const": "skills/<skill>/SKILL.md" }, "ascendToManifest": { "const": ".codex-plugin/plugin.json" }, "expectedName": { "const": "loom" }, "expectedVersion": { "const": "0.2.0" }, "helperDirectory": { "const": "bin" }, "forbiddenWorkflowRootGuesses": { "type": "array", "uniqueItems": true, "items": { "enum": ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"] }, "minItems": 4, "maxItems": 4 }, "hookBinding": { "const": "PLUGIN_ROOT" }, "hookManifest": { "const": "./hooks/hooks.json" } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "client", "inputMustBeAbsolute", "invocationMustBeAbsolute", "skillSuffix",
+        "skillMustBeCanonical", "skillMustBeRegularFile", "skillIdentitySource",
+        "skillIdentityMustMatchDirectory", "pluginRootAscent", "pluginRootMustBeCanonical",
+        "ascendToManifest", "manifestMustBeCanonical", "manifestMustBeRegularFile", "expectedName",
+        "expectedVersion", "helperDirectory", "helperDirectoryMustBeDirectChild", "allowedHelpers",
+        "helperMustBeRegularFile", "helperMustBeExecutable", "forbiddenWorkflowRootGuesses",
+        "hookBinding", "hookManifest"
+      ],
+      "properties": {
+        "schema": { "const": "codex-skill-source/v1" },
+        "client": { "const": "codex" },
+        "inputMustBeAbsolute": { "const": true },
+        "invocationMustBeAbsolute": { "const": true },
+        "skillSuffix": { "const": "skills/<skill>/SKILL.md" },
+        "skillMustBeCanonical": { "const": true },
+        "skillMustBeRegularFile": { "const": true },
+        "skillIdentitySource": { "const": "frontmatter.name" },
+        "skillIdentityMustMatchDirectory": { "const": true },
+        "pluginRootAscent": { "const": "../.." },
+        "pluginRootMustBeCanonical": { "const": true },
+        "ascendToManifest": { "const": ".codex-plugin/plugin.json" },
+        "manifestMustBeCanonical": { "const": true },
+        "manifestMustBeRegularFile": { "const": true },
+        "expectedName": { "const": "loom" },
+        "expectedVersion": { "const": "0.2.0" },
+        "helperDirectory": { "const": "bin" },
+        "helperDirectoryMustBeDirectChild": { "const": true },
+        "allowedHelpers": { "$ref": "#/$defs/allowedHelpers" },
+        "helperMustBeRegularFile": { "const": true },
+        "helperMustBeExecutable": { "const": true },
+        "forbiddenWorkflowRootGuesses": {
+          "type": "array",
+          "const": ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"]
+        },
+        "hookBinding": { "const": "PLUGIN_ROOT" },
+        "hookManifest": { "const": "./hooks/hooks.json" }
+      }
     }
   ]
 }
