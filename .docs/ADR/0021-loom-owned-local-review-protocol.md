@@ -1,6 +1,6 @@
 # 0021 — Loom-Owned Local Review Protocol
 
-Status: Draft
+Status: Plan Review
 Date: 2026-07-21
 
 ## Context
@@ -100,13 +100,20 @@ when the failure is safely retryable; pause under ADR 0017 for infrastructure fa
 otherwise return the slice for correction. “No valid findings were produced” is never
 translated to `ran-clean`.
 
-### 4. Loom owns three cold finder roles; the evaluator alone decides PASS/FAIL
+### 4. Loom owns three auxiliary advisory review workers; the evaluator alone decides PASS/FAIL
 
-The root orchestrator launches separate cold, non-delegating roles for correctness,
-tests, and security against the same prepared run. Each has read-only access to the
-prepared inputs and a distinct writable output directory. Finders produce structured
-claims only: they do not edit code, approve work, determine the aggregate validity, or
-write the final evaluation.
+The root orchestrator launches separate cold, non-delegating auxiliary review workers
+for correctness, tests, and security against the same prepared run. These workers are
+finder procedures within the review protocol, not logical lifecycle roles: ADR 0018's
+role set remains exactly researcher, planner, plan evaluator, developer, and code
+evaluator. A finder worker has no artifact `Status:` transition, mediated-handoff,
+approval, lifecycle, or verdict authority, and it cannot delegate. Client adapters may
+launch a worker through a generic agent facility, but that launch mechanism does not
+promote the worker into Loom's role hierarchy or capability-profile table.
+
+Each worker has read-only access to the prepared inputs and a distinct writable output
+directory. Finders produce structured claims only: they do not edit code, approve work,
+determine aggregate validity, change lifecycle state, or write the final evaluation.
 
 After deterministic validation, `loom-review assemble` creates the existing
 identity-neutral `.docs/evaluations/<slice>-review-findings.md` companion artifact with
@@ -142,14 +149,15 @@ handling are deterministic gates.
   `/security-review` are no longer Loom dependencies. ADR 0011's correction from an
   empty working tree to an exact committed range is preserved and strengthened as
   mandatory full `base_sha`/`head_sha` protocol inputs.
-- **Partially supersedes ADR 0017's review terminal-state wording.** Its infrastructure
-  detection, false-clean prohibition, pause/checkpoint, and rerun requirements remain
-  in force and now apply mechanically to finder states. Its allowance to end an
-  applicable degraded review as `skipped: command-unavailable` is replaced: a shipped
-  Loom finder/helper failure remains invalid until repaired and rerun.
+- **Does not supersede ADR 0017.** ADR 0017's infrastructure-failure detection,
+  invalid/false-clean prohibition, pause and checkpoint, and mandatory rerun once
+  unblocked remain fully in force and apply mechanically to finder workers and helper
+  stages. The terminal `skipped: command-unavailable` mechanism removed here belongs
+  to ADR 0010 and was preserved by ADR 0011; ADR 0017 never authorized an
+  infrastructure-degraded run to use that terminal state.
 - Specs 02, 04, and 05 and the playbook require later planner-authored amendments;
-  helpers, schemas, prompts, agents, fixtures, and tests follow as separate slices. No
-  external command is removed in this decision pass.
-- Loom owns review reproducibility and update cadence, at the cost of three additional
-  role assets and versioned protocol maintenance. Cost-driven reductions require a
-  later reviewed protocol/profile decision backed by M8 evidence.
+  helpers, schemas, prompts, finder workers/adapters, fixtures, and tests follow as
+  separate slices. No external command is removed in this decision pass.
+- Loom owns review reproducibility and update cadence, at the cost of three auxiliary
+  finder prompt/worker assets and versioned protocol maintenance. Cost-driven
+  reductions require a later reviewed protocol/profile decision backed by M8 evidence.
