@@ -1,6 +1,6 @@
 # 0020 — Remote Publication Is the Landing Authority
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-07-21
 
 ## Context
