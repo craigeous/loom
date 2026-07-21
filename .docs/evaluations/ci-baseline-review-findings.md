@@ -166,5 +166,3 @@ these findings in the companion evaluation record.
 - Claim: The Bash-selection temporary directory is leaked on every test run because exec replaces the shell before its EXIT cleanup trap can run.
 - Evidence: Lines 52-55 create a private temporary directory and install an EXIT/HUP/INT/TERM trap to remove it. Line 63 uses exec for Bats, permanently replacing the shell; successful or failed Bats completion returns directly from the replacement process, so the original shell never executes its EXIT trap. Gate evidence confirms this path runs once per complete check.
 - Suggested verification: Count ${TMPDIR:-/tmp}/loom-bash.* directories before and after one gate invocation and confirm the current count increases. Invoke Bats without exec, capture its status, remove the exact mktemp directory, clear traps, and return that status; add a regression test that the directory is gone on success, failure, and signal handling.
-
-
