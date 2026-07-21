@@ -1,6 +1,6 @@
 # 0022 — Controlled-Input Independent Evaluation and Its Isolation Boundary
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-07-21
 
 ## Context
