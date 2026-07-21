@@ -47,6 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -72,6 +73,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BASE: ${{ github.event.before }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           HOME: ${{ runner.temp }}/loom-check-home
           GIT_CONFIG_NOSYSTEM: "1"
           GIT_CONFIG_GLOBAL: /dev/null
@@ -86,6 +88,9 @@ jobs:
             echo 'credential-bearing Git configuration is visible to the gate' >&2
             exit 1
           fi
+          actual_head=$(git rev-parse HEAD)
+          test "$actual_head" = "$EXPECTED_HEAD"
+          printf 'Exact HEAD: %s\n' "$actual_head"
           test "$(uname -s)" = "$EXPECTED_HOST"
           test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
           case "$EXPECTED_HOST" in

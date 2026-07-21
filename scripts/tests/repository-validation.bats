@@ -12,14 +12,45 @@ setup_file() {
     [ -x "$LOOM_NODE" ]
 }
 
+setup() {
+    TEST_ROOT=""
+    OUTSIDE_ROOT=""
+    TEST_TEMP_PARENT="${TMPDIR:-/tmp}"
+    OWNED_ROOTS=()
+}
+
+make_owned_root() {
+    local purpose="$1" created
+    created="$(mktemp -d "$TEST_TEMP_PARENT/loom-ci-test.$purpose.XXXXXX")"
+    case "$created" in
+    "$TEST_TEMP_PARENT"/loom-ci-test."$purpose".*) ;;
+    *) return 1 ;;
+    esac
+    [ -d "$created" ] && [ ! -L "$created" ]
+    : >"$created/.loom-ci-test-owned"
+    OWNED_ROOTS+=("$created")
+    NEW_OWNED_ROOT="$created"
+}
+
 teardown() {
-    if [ -n "${TEST_ROOT:-}" ] && [ -d "$TEST_ROOT" ]; then
-        rm -rf "$TEST_ROOT"
-    fi
+    local owned
+    if [ "${#OWNED_ROOTS[@]}" -eq 0 ]; then return; fi
+    for owned in "${OWNED_ROOTS[@]}"; do
+        case "$owned" in
+        "$TEST_TEMP_PARENT"/loom-ci-test.*) ;;
+        *) printf 'refusing to clean unowned test path: %s\n' "$owned" >&2; return 1 ;;
+        esac
+        [ -d "$owned" ] && [ ! -L "$owned" ] && [ -f "$owned/.loom-ci-test-owned" ] || {
+            printf 'refusing to clean invalid test root: %s\n' "$owned" >&2
+            return 1
+        }
+        rm -rf -- "$owned"
+    done
 }
 
 make_metadata_root() {
-    TEST_ROOT="$(mktemp -d)"
+    make_owned_root metadata
+    TEST_ROOT="$NEW_OWNED_ROOT"
     mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
     cp -R "$REPOSITORY_ROOT/plugins/loom" "$TEST_ROOT/plugins/loom"
     cp "$REPOSITORY_ROOT/.claude-plugin/marketplace.json" "$TEST_ROOT/.claude-plugin/marketplace.json"
@@ -55,9 +86,15 @@ mutate_json() {
 }
 
 make_link_root() {
-    TEST_ROOT="$(mktemp -d)"
+    make_owned_root links
+    TEST_ROOT="$NEW_OWNED_ROOT"
     mkdir -p "$TEST_ROOT/scripts/validation" "$TEST_ROOT/docs"
     : >"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+}
+
+make_outside_root() {
+    make_owned_root outside
+    OUTSIDE_ROOT="$NEW_OWNED_ROOT"
 }
 
 links() {
@@ -151,8 +188,6 @@ links() {
         metadata
         [ "$status" -ne 0 ]
         [[ "$output" == *".claude-plugin/marketplace.json: schema "*"must NOT have additional properties"* ]]
-        rm -rf "$TEST_ROOT"
-        TEST_ROOT=""
     done
 }
 
@@ -163,8 +198,6 @@ links() {
         metadata
         [ "$status" -ne 0 ]
         [[ "$output" == *"plugins/loom/.codex-plugin/plugin.json: schema "*"must NOT have additional properties"* ]]
-        rm -rf "$TEST_ROOT"
-        TEST_ROOT=""
     done
 }
 
@@ -175,8 +208,6 @@ links() {
         metadata
         [ "$status" -ne 0 ]
         [[ "$output" == *".agents/plugins/marketplace.json: schema "*"must NOT have additional properties"* ]]
-        rm -rf "$TEST_ROOT"
-        TEST_ROOT=""
     done
 }
 
@@ -187,8 +218,6 @@ links() {
         metadata
         [ "$status" -ne 0 ]
         [[ "$output" == *"compatibility/v0.2.0.json: schema "*"must NOT have additional properties"* ]]
-        rm -rf "$TEST_ROOT"
-        TEST_ROOT=""
     done
 }
 
@@ -392,21 +421,63 @@ links() {
     [[ "$output" == *"claude-manifest.json: release fixture differs"* ]]
 }
 
+@test "release fixture equality ignores object member order" {
+    make_metadata_root
+    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1],value=JSON.parse(fs.readFileSync(f));const reordered=Object.fromEntries(Object.entries(value).reverse());fs.writeFileSync(f,JSON.stringify(reordered))' \
+        "$TEST_ROOT/plugins/loom/.codex-plugin/plugin.json"
+    metadata
+    [ "$status" -eq 0 ]
+}
+
+@test "release fixture equality preserves array order" {
+    make_metadata_root
+    mutate_json plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json '.workflows |= reverse'
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"compatibility.json: release fixture differs"* ]]
+}
+
+@test "schema-valid manifest homepage drift fails shared identity" {
+    make_metadata_root
+    mutate_json plugins/loom/.codex-plugin/plugin.json '.homepage="https://example.com/loom"'
+    cp "$TEST_ROOT/plugins/loom/.codex-plugin/plugin.json" "$TEST_ROOT/plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json"
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"plugins/loom/.codex-plugin/plugin.json: manifest identity differs from Claude manifest"* ]]
+}
+
 @test "schema-invalid metadata path stops before outside semantic reads" {
     make_metadata_root
-    sentinel="$(dirname "$TEST_ROOT")/outside-sentinel.json"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/outside-sentinel.json"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     mutate_json plugins/loom/adapters/compatibility/v0.2.0.json '.rootBindings[0].path="../../outside-sentinel.json"'
     metadata
     [ "$status" -ne 0 ]
     [[ "$output" == *"compatibility/v0.2.0.json: schema /rootBindings/0/path must match pattern"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
+}
+
+@test "outside-root sentinels use unique cleanup-owned directories" {
+    make_outside_root
+    first_root="$OUTSIDE_ROOT"
+    make_outside_root
+    second_root="$OUTSIDE_ROOT"
+    [ "$first_root" != "$second_root" ]
+    (printf 'first\n' >"$first_root/sentinel") &
+    first_pid=$!
+    (printf 'second\n' >"$second_root/sentinel") &
+    second_pid=$!
+    wait "$first_pid"
+    wait "$second_pid"
+    [ "$(cat "$first_root/sentinel")" = first ]
+    [ "$(cat "$second_root/sentinel")" = second ]
 }
 
 @test "JSON symlink is rejected before parsing outside content" {
     make_metadata_root
-    sentinel="$(dirname "$TEST_ROOT")/json-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/json-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     rm "$TEST_ROOT/plugins/loom/.claude-plugin/plugin.json"
     ln -s "$sentinel" "$TEST_ROOT/plugins/loom/.claude-plugin/plugin.json"
@@ -414,12 +485,12 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"plugin.json: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "frontmatter symlink is rejected before reading outside content" {
     make_metadata_root
-    sentinel="$(dirname "$TEST_ROOT")/frontmatter-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/frontmatter-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     rm "$TEST_ROOT/plugins/loom/commands/run.md"
     ln -s "$sentinel" "$TEST_ROOT/plugins/loom/commands/run.md"
@@ -427,12 +498,12 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"commands/run.md: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "schema symlink is rejected before reading outside content" {
     make_metadata_root
-    sentinel="$(dirname "$TEST_ROOT")/schema-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/schema-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     rm "$TEST_ROOT/scripts/schemas/command-frontmatter-v1.schema.json"
     ln -s "$sentinel" "$TEST_ROOT/scripts/schemas/command-frontmatter-v1.schema.json"
@@ -440,12 +511,12 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"command-frontmatter-v1.schema.json: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "release fixture symlink is rejected before reading outside content" {
     make_metadata_root
-    sentinel="$(dirname "$TEST_ROOT")/fixture-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/fixture-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     fixture="$TEST_ROOT/plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json"
     rm "$fixture"
@@ -454,14 +525,24 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"claude-manifest.json: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "real tree metadata passes while inert seeds remain tracked" {
-    TEST_ROOT="$REPOSITORY_ROOT"
-    metadata
+    run "$LOOM_NODE" "$VALIDATOR" --root "$REPOSITORY_ROOT" --metadata
     [ "$status" -eq 0 ]
-    TEST_ROOT=""
+}
+
+@test "forced real-tree validator failure leaves the checkout intact" {
+    make_owned_root forced-validator
+    fake_validator="$NEW_OWNED_ROOT/fail-validator"
+    printf '%s\n' '#!/bin/sh' 'exit 19' >"$fake_validator"
+    chmod +x "$fake_validator"
+    before="$(sha256sum "$REPOSITORY_ROOT/CLAUDE.md" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$REPOSITORY_ROOT/CLAUDE.md" | awk '{print $1}')"
+    run "$fake_validator" --root "$REPOSITORY_ROOT" --metadata
+    [ "$status" -eq 19 ]
+    [ -d "$REPOSITORY_ROOT/.git" ] || git -C "$REPOSITORY_ROOT" rev-parse --git-dir >/dev/null
+    after="$(sha256sum "$REPOSITORY_ROOT/CLAUDE.md" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$REPOSITORY_ROOT/CLAUDE.md" | awk '{print $1}')"
+    [ "$after" = "$before" ]
 }
 
 @test "valid relative targets and local and cross-file fragments pass" {
@@ -506,19 +587,20 @@ links() {
 
 @test "Markdown source symlink is rejected before reading outside content" {
     make_link_root
-    sentinel="$(dirname "$TEST_ROOT")/markdown-source-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/markdown-source-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     ln -s "$sentinel" "$TEST_ROOT/docs/source.md"
     links
     [ "$status" -ne 0 ]
     [[ "$output" == *"docs/source.md: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "Markdown target symlink is rejected before reading outside content" {
     make_link_root
-    sentinel="$(dirname "$TEST_ROOT")/markdown-target-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/markdown-target-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     printf '[target](target.md#secret)\n' >"$TEST_ROOT/docs/source.md"
     ln -s "$sentinel" "$TEST_ROOT/docs/target.md"
@@ -527,12 +609,12 @@ links() {
     [[ "$output" == *"docs/target.md: unsafe path contains symlink"* ]]
     [[ "$output" == *"docs/source.md: missing or unsafe relative-link target: target.md#secret"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "allowlist symlink is rejected before reading outside content" {
     make_link_root
-    sentinel="$(dirname "$TEST_ROOT")/allowlist-sentinel"
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/allowlist-sentinel"
     printf 'DO_NOT_DISCLOSE\n' >"$sentinel"
     rm "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
     ln -s "$sentinel" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
@@ -540,7 +622,6 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"relative-link-allowlist.txt: unsafe path contains symlink"* ]]
     [[ "$output" != *"DO_NOT_DISCLOSE"* ]]
-    rm -f "$sentinel"
 }
 
 @test "missing targets and fragments name source and target" {
@@ -576,6 +657,16 @@ links() {
     [[ "$output" == *"stale allowlist"* ]]
 }
 
+@test "live allowlist entry with empty reason is rejected and does not suppress the link" {
+    make_link_root
+    printf '[live](missing.md)\n' >"$TEST_ROOT/docs/main.md"
+    printf 'docs/main.md\tmissing.md\t\n' >"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    links
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"malformed allowlist record"* ]]
+    [[ "$output" == *"docs/main.md: missing or unsafe relative-link target: missing.md"* ]]
+}
+
 @test "one exact live broken link is allowlisted but code-block pseudo-link is stale" {
     make_link_root
     printf '%s\n' '[live](missing.md)' '```' '[pseudo](fake.md)' '```' >"$TEST_ROOT/docs/main.md"
@@ -584,4 +675,321 @@ links() {
     [ "$status" -ne 0 ]
     [[ "$output" == *$'stale allowlist record: docs/main.md\tfake.md'* ]]
     [[ "$output" != *$'stale allowlist record: docs/main.md\tmissing.md'* ]]
+}
+
+make_contract_root() {
+    make_owned_root contract
+    TEST_ROOT="$NEW_OWNED_ROOT"
+    mkdir -p "$TEST_ROOT/scripts/check-tools" "$TEST_ROOT/.github/workflows"
+    cp "$REPOSITORY_ROOT/scripts/check" "$TEST_ROOT/scripts/check"
+    cp "$REPOSITORY_ROOT/scripts/check-toolchain.json" "$TEST_ROOT/scripts/check-toolchain.json"
+    cp "$REPOSITORY_ROOT/scripts/check-tools/package-lock.json" "$TEST_ROOT/scripts/check-tools/package-lock.json"
+    cp "$REPOSITORY_ROOT/.github/workflows/check.yml" "$TEST_ROOT/.github/workflows/check.yml"
+    while IFS= read -r vendored; do
+        mkdir -p "$TEST_ROOT/$(dirname "$vendored")"
+        cp "$REPOSITORY_ROOT/$vendored" "$TEST_ROOT/$vendored"
+    done < <(jq -r '.vendored[].path' "$REPOSITORY_ROOT/scripts/check-toolchain.json")
+}
+
+ensure_contract_root() {
+    [ -n "$TEST_ROOT" ] || make_contract_root
+}
+
+contract_check() {
+    ensure_contract_root
+    run env LOOM_CHECK_CONTRACT_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+}
+
+rewrite_workflow() {
+    ensure_contract_root
+    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1],old=process.argv[2],next=process.argv[3];const text=fs.readFileSync(f,"utf8");if(!text.includes(old))process.exit(2);fs.writeFileSync(f,text.replace(old,next))' \
+        "$TEST_ROOT/.github/workflows/check.yml" "$1" "$2"
+}
+
+mutate_contract() {
+    ensure_contract_root
+    expression="$1"
+    jq "$expression" "$TEST_ROOT/scripts/check-toolchain.json" >"$TEST_ROOT/contract.next"
+    mv "$TEST_ROOT/contract.next" "$TEST_ROOT/scripts/check-toolchain.json"
+}
+
+@test "exact workflow and toolchain contract passes" {
+    contract_check
+    [ "$status" -eq 0 ]
+}
+
+@test "workflow runner row deletion fails" {
+    ensure_contract_root
+    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-15-intel\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"workflow runner matrix differs"* ]]
+}
+
+@test "workflow runner label mutation fails" {
+    rewrite_workflow '          - runner: ubuntu-22.04' '          - runner: ubuntu-20.04'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow host mutation fails" {
+    rewrite_workflow '            host: Linux' '            host: Other'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow architecture mutation fails" {
+    rewrite_workflow '            architecture: x86_64' '            architecture: arm64'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow release mutation fails" {
+    rewrite_workflow '            release: "22.04"' '            release: "20.04"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow selected shell mutation fails" {
+    rewrite_workflow '            shell: /usr/bin/bash' '            shell: /bin/bash'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow Bash regex mutation fails" {
+    rewrite_workflow "            bash_regex: '^5\\.'" "            bash_regex: '^4\\.'"
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow checkout action pin mutation fails" {
+    rewrite_workflow 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' 'actions/checkout@0000000000000000000000000000000000000000'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow exact-head checkout ref mutation fails" {
+    rewrite_workflow '          ref: ${{ github.event.pull_request.head.sha || github.sha }}' '          ref: ${{ github.sha }}'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow exact-head environment mutation fails" {
+    rewrite_workflow '          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}' '          EXPECTED_HEAD: ${{ github.sha }}'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow exact-head assertion mutation fails" {
+    rewrite_workflow '          test "$actual_head" = "$EXPECTED_HEAD"' '          test -n "$actual_head"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "workflow exact-head log deletion fails" {
+    rewrite_workflow "          printf 'Exact HEAD: %s\\n' \"\$actual_head\"" '          true'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "toolchain runner deletion fails closed" {
+    mutate_contract 'del(.runners[3])'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "exact tool version mutation fails closed" {
+    mutate_contract '.tools.node="22.18.0"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "runtime floor mutation fails closed" {
+    mutate_contract '.runtimeFloors.bash="3.1"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "checkout contract pin mutation fails closed" {
+    mutate_contract '.actions.checkout=("0" * 40)'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "package-lock contract digest mutation fails closed" {
+    mutate_contract '.packageLockSha256=("0" * 64)'
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"package-lock digest drift"* ]]
+}
+
+@test "unexpected toolchain top-level field fails closed" {
+    mutate_contract '.unexpected=true'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "required download deletion fails closed" {
+    mutate_contract 'del(.downloads[0])'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "download platform mutation fails closed" {
+    mutate_contract '.downloads[0].platform="other"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "download URL mutation fails closed" {
+    mutate_contract '.downloads[0].url="https://example.invalid/tool"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "download digest mutation fails closed on an unselected platform" {
+    mutate_contract '.downloads[1].sha256=("0" * 64)'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "required vendored asset deletion fails closed" {
+    mutate_contract 'del(.vendored[0])'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "vendored asset path mutation fails closed" {
+    mutate_contract '.vendored[0].path="scripts/schemas/alternate.json"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "vendored provenance omission fails closed" {
+    mutate_contract 'del(.vendored[0].provenance)'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "vendored provenance kind mutation fails closed" {
+    mutate_contract '.vendored[0].kind="unknown"'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "vendored digest mutation fails closed" {
+    mutate_contract '.vendored[0].sha256=("0" * 64)'
+    contract_check
+    [ "$status" -ne 0 ]
+}
+
+@test "gate independently rejects a selected Bash below 3.2" {
+    ensure_contract_root
+    fake_shell="$TEST_ROOT/bash-3.1"
+    printf '%s\n' '#!/bin/sh' 'printf %s "3.1.99"' >"$fake_shell"
+    chmod +x "$fake_shell"
+    run env LOOM_CHECK_BASH_ONLY=1 LOOM_TEST_BASH="$fake_shell" LOOM_EXPECTED_BASH_VERSION='^3\\.1' /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"selected LOOM_TEST_BASH 3.1.99 is below required 3.2"* ]]
+}
+
+prepare_cached_downloads() {
+    ensure_contract_root
+    case "$(uname -s):$(uname -m)" in
+    Darwin:arm64) platform=darwin-arm64 ;;
+    Darwin:x86_64) platform=darwin-x86_64 ;;
+    Linux:x86_64) platform=linux-x86_64 ;;
+    *) return 1 ;;
+    esac
+    mkdir -p "$TEST_ROOT/.check-cache/downloads"
+    for tool in shfmt shellcheck node bats; do
+        cp "$REPOSITORY_ROOT/.check-cache/downloads/$tool-$platform" "$TEST_ROOT/.check-cache/downloads/$tool-$platform"
+    done
+}
+
+provision_check() {
+    run env LOOM_CHECK_PROVISION_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+}
+
+@test "fresh provisioning ignores a poisoned persistent extracted-tool tree" {
+    prepare_cached_downloads
+    mkdir -p "$TEST_ROOT/.check-cache/tools/node/bin"
+    marker="$TEST_ROOT/executed"
+    printf '%s\n' '#!/bin/sh' ": >'$marker'" 'printf v22.17.0' >"$TEST_ROOT/.check-cache/tools/node/bin/node"
+    chmod +x "$TEST_ROOT/.check-cache/tools/node/bin/node"
+    provision_check
+    [ "$status" -eq 0 ]
+    [ ! -e "$marker" ]
+    run find "$TEST_ROOT/.check-cache" -maxdepth 1 -name 'run.*' -print
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "cache-root symlink is rejected without touching its owned target" {
+    ensure_contract_root
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/value"
+    printf 'unchanged\n' >"$sentinel"
+    ln -s "$OUTSIDE_ROOT" "$TEST_ROOT/.check-cache"
+    provision_check
+    [ "$status" -ne 0 ]
+    [ "$(cat "$sentinel")" = unchanged ]
+}
+
+@test "cached-download symlink is rejected without overwriting its target" {
+    prepare_cached_downloads
+    make_outside_root
+    sentinel="$OUTSIDE_ROOT/sentinel"
+    printf 'unchanged\n' >"$sentinel"
+    rm "$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
+    ln -s "$sentinel" "$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
+    provision_check
+    [ "$status" -ne 0 ]
+    [ "$(cat "$sentinel")" = unchanged ]
+}
+
+@test "owner-controlled cache modes are repaired before use" {
+    prepare_cached_downloads
+    chmod 755 "$TEST_ROOT/.check-cache" "$TEST_ROOT/.check-cache/downloads"
+    chmod 666 "$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
+    provision_check
+    [ "$status" -eq 0 ]
+    case "$(uname -s)" in
+    Darwin) [ "$(stat -f %Lp "$TEST_ROOT/.check-cache")" = 700 ]; [ "$(stat -f %Lp "$TEST_ROOT/.check-cache/downloads/shfmt-$platform")" = 600 ] ;;
+    *) [ "$(stat -c %a "$TEST_ROOT/.check-cache")" = 700 ]; [ "$(stat -c %a "$TEST_ROOT/.check-cache/downloads/shfmt-$platform")" = 600 ] ;;
+    esac
+}
+
+@test "unexpected cache ownership is rejected" {
+    prepare_cached_downloads
+    mkdir -p "$TEST_ROOT/fake-bin"
+    printf '%s\n' '#!/bin/sh' 'if [ "$1" = -u ]; then printf "999999\\n"; else exec /usr/bin/id "$@"; fi' >"$TEST_ROOT/fake-bin/id"
+    chmod +x "$TEST_ROOT/fake-bin/id"
+    run env PATH="$TEST_ROOT/fake-bin:$PATH" LOOM_CHECK_PROVISION_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsafe cache directory owner"* ]]
+}
+
+@test "cache rewrite race never executes unauthenticated bytes" {
+    prepare_cached_downloads
+    cache_file="$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
+    good_file="$TEST_ROOT/shfmt.good"
+    bad_file="$TEST_ROOT/shfmt.bad"
+    marker="$TEST_ROOT/unauthenticated-executed"
+    cp "$cache_file" "$good_file"
+    printf '%s\n' '#!/bin/sh' ": >'$marker'" 'printf v3.13.1' >"$bad_file"
+    stop_file="$TEST_ROOT/stop-race"
+    (
+        while [ ! -e "$stop_file" ]; do
+            cp "$bad_file" "$cache_file" 2>/dev/null || :
+            cp "$good_file" "$cache_file" 2>/dev/null || :
+        done
+    ) &
+    race_pid=$!
+    provision_check
+    race_status=$status
+    : >"$stop_file"
+    wait "$race_pid"
+    [ "$race_status" -eq 0 ] || [[ "$output" == *"digest mismatch"* ]]
+    [ ! -e "$marker" ]
 }

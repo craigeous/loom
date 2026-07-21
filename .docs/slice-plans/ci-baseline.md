@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -558,5 +558,26 @@ not success.
   and pinned Claude strict validation, then failed the final range-wide
   `git diff --check` on three pre-existing evaluation-file EOF blank lines.
 - This failed attempt is not CI success. The three reported EOF-only defects are
-  corrected in this revision; all four required cells must rerun on the new exact
+  restored byte-for-byte to slice base `b28a747` and therefore removed from the
+  implementation diff. The root orchestrator must retarget the draft PR to that
+  remote authority base, and all four required cells must rerun on the new exact
   head before remote CI evidence can be claimed.
+
+### Developer revision after code-evaluation Round 2 (2026-07-21)
+
+- Pull-request and push jobs now checkout, assert, and log the exact event head
+  before repository-controlled code. Credential scrubbing remains in front of the
+  gate, and isolated workflow mutations cover the ref, expected SHA, assertion,
+  log, action pin, and every runner field.
+- Every cache hit is copied to a private run-owned snapshot and authenticated there
+  before use; fresh-download publication uses a separate inode. Cache ownership,
+  modes, symlinks, concurrent rewriting, and cleanup have isolated regressions.
+- Metadata equality is object-order-insensitive while retaining array order;
+  homepage identity, empty allowlist reasons, cleanup ownership, unique parallel
+  sentinels, and every closed toolchain class have direct regression coverage.
+- The launcher and toolchain regressions now live only in the two approved test
+  files. Both complete local gates passed all 211 dynamically discovered tests on
+  Bash 3.2.57 and Bash 5.3.9, with every other ordered stage green.
+- Required external handoff: retarget the draft PR to remote base `b28a747`, push
+  the final exact head, and retain successful exact-head logs for all four required
+  runner cells. This local revision makes no remote CI success claim.

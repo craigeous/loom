@@ -66,6 +66,24 @@ secure_directory() {
     if [ ! -d "$directory" ]; then
         mkdir -m 700 "$directory"
     fi
+    expected_owner=$(id -u)
+    case "$(uname -s)" in
+    Darwin)
+        actual_owner=$(stat -f %u "$directory")
+        actual_mode=$(stat -f %Lp "$directory")
+        ;;
+    *)
+        actual_owner=$(stat -c %u "$directory")
+        actual_mode=$(stat -c %a "$directory")
+        ;;
+    esac
+    [ "$actual_owner" = "$expected_owner" ] || {
+        printf 'unsafe cache directory owner for %s: expected %s, got %s\n' "$directory" "$expected_owner" "$actual_owner" >&2
+        return 1
+    }
+    if [ "$actual_mode" != 700 ]; then
+        chmod 700 "$directory"
+    fi
     physical=$(CDPATH='' cd -- "$directory" && pwd -P)
     case "$physical" in
     "$REPOSITORY_ROOT"/.check-cache | "$REPOSITORY_ROOT"/.check-cache/*) ;;
@@ -74,6 +92,27 @@ secure_directory() {
         return 1
         ;;
     esac
+}
+secure_cache_file() {
+    candidate="$1"
+    expected_owner=$(id -u)
+    case "$(uname -s)" in
+    Darwin)
+        actual_owner=$(stat -f %u "$candidate")
+        actual_mode=$(stat -f %Lp "$candidate")
+        ;;
+    *)
+        actual_owner=$(stat -c %u "$candidate")
+        actual_mode=$(stat -c %a "$candidate")
+        ;;
+    esac
+    [ "$actual_owner" = "$expected_owner" ] || {
+        printf 'unsafe cached download owner for %s: expected %s, got %s\n' "$candidate" "$expected_owner" "$actual_owner" >&2
+        return 1
+    }
+    if [ "$actual_mode" != 600 ]; then
+        chmod 600 "$candidate"
+    fi
 }
 secure_regular_file() {
     candidate="$1"
@@ -124,15 +163,23 @@ fetch() {
         return 1
     fi
     if [ -f "$destination" ]; then
-        actual=$(sha256 "$destination")
-        [ "$actual" = "$expected" ] || {
-            printf 'cached %s digest mismatch: expected %s, got %s\n' "$destination" "$expected" "$actual" >&2
+        secure_cache_file "$destination"
+        snapshot="$RUN_DIR/downloads/${tool}-${platform}.snapshot"
+        (umask 077 && cp "$destination" "$snapshot")
+        [ ! -L "$snapshot" ] && [ -f "$snapshot" ] || {
+            printf 'cannot create private cache snapshot: %s\n' "$snapshot" >&2
             return 1
         }
-        printf '%s' "$destination"
+        chmod 600 "$snapshot"
+        actual=$(sha256 "$snapshot")
+        [ "$actual" = "$expected" ] || {
+            printf 'private snapshot digest mismatch for %s: expected %s, got %s\n' "$destination" "$expected" "$actual" >&2
+            return 1
+        }
+        printf '%s' "$snapshot"
         return
     fi
-    temporary="$RUN_DIR/downloads/${tool}-${platform}.partial"
+    temporary="$RUN_DIR/downloads/${tool}-${platform}.download"
     printf 'Downloading pinned %s for %s\n' "$tool" "$platform" >&2
     (umask 077 && curl -fL --retry 3 --proto '=https' -o "$temporary" "$url")
     actual=$(sha256 "$temporary")
@@ -140,15 +187,18 @@ fetch() {
         printf '%s digest mismatch: expected %s, got %s\n' "$temporary" "$expected" "$actual" >&2
         return 1
     }
-    # A hard-link publication is atomic and cannot overwrite a racing pathname.
-    if ! ln "$temporary" "$destination" 2>/dev/null; then
+    # Publish a separate inode: the authenticated private download remains stable
+    # even if another process rewrites the shared cache after publication.
+    publication="$RUN_DIR/downloads/${tool}-${platform}.publish"
+    (umask 077 && cp "$temporary" "$publication")
+    chmod 600 "$publication"
+    if ! ln "$publication" "$destination" 2>/dev/null; then
         [ -f "$destination" ] && [ ! -L "$destination" ] && [ "$(sha256 "$destination")" = "$expected" ] || {
             printf 'cannot publish authenticated download safely: %s\n' "$destination" >&2
             return 1
         }
     fi
-    rm -f -- "$temporary"
-    printf '%s' "$destination"
+    printf '%s' "$temporary"
 }
 validate_archive_names() {
     archive="$1"
@@ -193,7 +243,7 @@ workflow_rows() {
 }
 
 stage "toolchain contract and pinned digests"
-for command_name in bash curl git jq tar awk; do require_command "$command_name"; done
+for command_name in bash curl git id jq stat tar awk; do require_command "$command_name"; done
 jq -e '
   . == {
     contract:"loom-check-toolchain/v1", productVersion:"0.2.0",
@@ -239,6 +289,13 @@ checkout_pin=$(jq -r .actions.checkout "$CONTRACT")
 [ "$(grep -c 'uses:' "$REPOSITORY_ROOT/.github/workflows/check.yml")" -eq 1 ]
 grep -F "uses: actions/checkout@$checkout_pin" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
 grep -F 'persist-credentials: false' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+# shellcheck disable=SC2016
+grep -F 'ref: ${{ github.event.pull_request.head.sha || github.sha }}' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+# shellcheck disable=SC2016
+grep -F 'EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+# shellcheck disable=SC2016
+grep -F 'test "$actual_head" = "$EXPECTED_HEAD"' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+grep -F "printf 'Exact HEAD: %s\\n' \"\$actual_head\"" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
 expected_rows=$(jq -r '.runners[] | [.label,.os,.architecture,.release,.shell,.versionRegex] | join("\t")' "$CONTRACT")
 actual_rows=$(workflow_rows)
 [ "$actual_rows" = "$expected_rows" ] || {
