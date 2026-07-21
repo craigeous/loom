@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
@@ -23,7 +23,9 @@ remote publication receipts.
 | `Draft` | authoring/revision | researcher or planner |
 | `Research Review` | research ready for source evaluation | plan evaluator |
 | `Plan Review` | ADR/spec/plan ready for evaluation | plan evaluator |
+| `Accepted` | ADR accepted and immutable | none; later ADR may supersede it |
 | `Approved` | planning artifact accepted | developer for a slice |
+| `Living` | operational artifact maintained in place outside gated review | deterministic finalizer |
 | `In Progress` | slice implementation/revision active | developer |
 | `Implemented` | developer gate green; exact committed head awaits review/evaluation | orchestrator |
 | `Ready to Publish` | code evaluation passed; claim and evidence retained pending publication | orchestrator/publisher |
@@ -32,7 +34,8 @@ remote publication receipts.
 | `Needs Clarification` | prior transition paused on a recorded question | authoritative clarifier |
 | `Abandoned` | deliberately stopped and retained for history | none |
 
-Only these exact tokens are valid. Review finder states and evaluation validity are
+Only these exact tokens are valid. `Accepted` is reserved for ADRs; approved research,
+specs, and plans use `Approved`. Review finder states and evaluation validity are
 protocol fields, not artifact statuses.
 
 ## Research and planning
@@ -43,10 +46,15 @@ Research: Draft -> Research Review -> Approved
                          v
                        Draft
 
-ADR/spec/plan: Draft -> Plan Review -> Approved
+ADR:       Draft -> Plan Review -> Accepted
                               | FAIL
                               v
                             Draft
+
+Spec/plan: Draft -> Plan Review -> Approved
+                               | FAIL
+                               v
+                             Draft
 ```
 
 An accepted ADR is immutable. An approved spec is frozen and can re-enter the
@@ -68,16 +76,18 @@ Approved -> In Progress -> Implemented
                        v           v
                  In Progress  Ready to Publish
                                       |
-                    candidate rebuild / integrated checks as needed
+                    build/rebuild one checked candidate containing
+                    prospective Landed text and the plan already at
+                    archive/<name> with prospective Archived status
                                       |
-                    configured remote publication + verification
+                    configured remote publication + fresh verification
+                                      |
+                    record local untracked receipt
                                       |
                                       v
-                                   Landed
+                    Landed slice + published Archived plan authoritative
                                       |
-                              local cleanup complete
-                                      v
-                                   Archived
+                         release claim; idempotent local cleanup
 ```
 
 For a pure-documentation slice the review companion records `skipped: docs-only` and
@@ -111,7 +121,8 @@ candidate:
 - progress, handoff, and roadmap changes;
 - canonical project-instructions and both generated instruction adapters when the
   curated digest changed; and
-- candidate/publication metadata required by spec 04.
+- tracked finalization metadata required by spec 04. The pre-publication candidate
+  manifest is local untracked recovery state, not another candidate artifact.
 
 It runs the integrated gate against the exact candidate. Any review/evaluation whose
 judgment could be affected by integration is rerun against the candidate. Immediately
@@ -122,16 +133,23 @@ rebuild from the new SHA and rerun all affected checks; never force-push or trus
 The candidate may contain prospective `Landed`/`Archived` text so the final status and
 code arrive in one target update. That text has no operational authority while local.
 Until remote verification, the recoverable source state remains `Ready to Publish`.
+The plan move into `slice-plans/archive/`, its `Archived` token, and related index
+changes are all candidate contents. Fresh verification makes that already-published
+archive state authoritative; no second tracked finalization commit is permitted.
 
 ### `Landed` and cleanup
 
 `Landed` means the explicitly configured mode completed, a fresh remote read proves
 the target contains the exact result SHA, and a publication receipt bound to slice,
-candidate, evidence, mode, and target has been recorded. A local merge, green test,
-provider response, push exit, or local status line is insufficient.
+candidate, evidence, mode, and target has been recorded only in the local untracked
+coordinator/recovery state defined by spec [01](01-concepts.md). A local merge, green
+test, provider response, push exit, or local status line is insufficient.
 
-Only verified publication releases the claim and begins idempotent cleanup. If the
-remote update succeeded before a crash, recovery verifies containment, reconstructs
+The receipt is written after verification and requires no target update. Only verified
+publication plus that receipt releases the claim and begins idempotent local cleanup;
+the published archived plan already exists before cleanup starts. Cleanup never edits
+tracked lifecycle state. If the remote update succeeded before a crash, recovery
+verifies containment, reconstructs
 the receipt, and completes cleanup without republishing. If containment cannot be
 proved, recovery pauses for the owner. Updating a clean local target branch afterward
 is optional cache maintenance and cannot change landing truth.

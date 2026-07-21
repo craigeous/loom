@@ -1,13 +1,14 @@
 # 01 — Concepts & `.docs/` Layout
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
 ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md),
 [0005](../ADR/0005-specs-frozen-after-approval.md),
 [0018](../ADR/0018-shared-core-and-client-adapters.md),
-[0020](../ADR/0020-remote-publication-is-the-landing-authority.md), and
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
+[0021](../ADR/0021-loom-owned-local-review-protocol.md), and
 [0022](../ADR/0022-controlled-input-independent-evaluation.md).
 
 ## Managed-project memory
@@ -29,9 +30,9 @@ Every Loom-managed project commits this layout:
     └── project-instructions.md # canonical client-neutral instruction digest
 ```
 
-Loom dogfoods the same layout. Runtime coordination and per-run isolation data live
-under the repository's common Git directory or fresh temporary roots, never as
-undeclared tracked state.
+Loom dogfoods the same layout. Runtime coordination, candidate/publication recovery,
+and per-run isolation data live under the repository's common Git directory or fresh
+temporary roots, never as undeclared tracked state.
 
 ## Artifact classes
 
@@ -71,12 +72,27 @@ binds its artifact/input hashes and, where applicable, `head_sha` and `evidence_
 publication binds initial/final remote bases and candidate/result SHA. A dirty
 checkout, local `main`, `origin/HEAD`, or a PR number is never an implicit substitute.
 
+Publication uses two distinct local, untracked records beneath the repository's
+resolved common Git directory:
+
+- `.git/loom/publications/<slice-id>/candidate.json` is the versioned
+  pre-publication manifest. It binds the intended candidate, remote bases, mode, and
+  gate/review/evaluation evidence before any publish attempt.
+- `.git/loom/publications/<slice-id>/receipt.json` is created or reconstructed only
+  after a fresh remote read verifies the published result. It binds that verified
+  outcome to the candidate manifest.
+
+Here and in other specs, `.git/loom/` means the common Git directory returned by Git,
+not necessarily a literal directory in a linked worktree. Both files are validated
+coordinator/recovery state and remain untracked. A receipt never enters the candidate,
+`.docs/`, or any later target-branch update.
+
 ## Status as dispatcher
 
 Gated artifacts carry one legal `Status:` token. The orchestrator combines those
 tokens with validated coordination state, evaluation manifests, review-run state,
-and remote publication receipts. A tracked status assertion alone cannot prove
-`Landed`; the configured remote plus receipt is authoritative. See spec
+and the local untracked publication receipt. A tracked status assertion alone cannot
+prove `Landed`; the configured remote plus receipt is authoritative. See spec
 [03](03-artifact-lifecycle.md).
 
 ## Isolation workspaces are not project artifacts
@@ -85,7 +101,9 @@ Local-review runs and evaluator exports are fresh per-run directories outside th
 managed checkout. They exclude `.git`, credentials, transcripts, and unrelated
 history; immutable inputs are read-only and outputs are confined to run-specific
 directories. Disposable writable gate copies are destroyed after evidence is
-recorded. Only validated normalized findings, verdicts, and receipts enter `.docs/`.
+recorded. Only validated normalized findings and verdicts enter `.docs/`. Candidate
+manifests and post-verification receipts remain in the local untracked
+coordinator/recovery state defined above.
 
 ## Naming and linkage
 

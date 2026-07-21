@@ -1,13 +1,16 @@
 # 10 — Packaging, Compatibility & Release
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
 ADRs [0006](../ADR/0006-distribution-self-marketplace.md),
 [0007](../ADR/0007-namespaced-command-surface.md),
-[0018](../ADR/0018-shared-core-and-client-adapters.md), and
-[0019](../ADR/0019-supported-runtime-and-release-contract.md), informed by the
+[0018](../ADR/0018-shared-core-and-client-adapters.md),
+[0019](../ADR/0019-supported-runtime-and-release-contract.md),
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
+[0021](../ADR/0021-loom-owned-local-review-protocol.md), and
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), informed by the
 [approved dual-platform research](../research/2026-07-21-dual-platform-plugin-architecture.md).
 
 ## One distribution, two catalogs
@@ -23,6 +26,7 @@ loom/
 ├── plugins/loom/
 │   ├── .claude-plugin/plugin.json           # Claude manifest
 │   ├── .codex-plugin/plugin.json            # Codex manifest
+│   ├── adapters/                             # versioned client bindings/matrix
 │   ├── commands/                            # thin Claude /loom:* adapters
 │   ├── agents/                              # five thin Claude lifecycle-role adapters
 │   ├── skills/
@@ -114,6 +118,58 @@ supported. Newer versions become supported only after CI or release-candidate
 compatibility evidence passes. `loom doctor` blocks supported-mode claims it cannot
 substantiate.
 
+## Versioned compatibility and capability mapping
+
+The release-owned matrix is
+`plugins/loom/adapters/compatibility/v0.2.0.json`, validated by
+`plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json`. It records product
+version, matrix schema, exact client floors, supported surfaces, hook-wire fixture
+version, installed-root binding version, and the profile map. For v0.2.0 the effective
+map is exactly:
+
+| Loom profile | Consumers | Claude selector | Codex `model` | Codex `model_reasoning_effort` |
+|---|---|---|---|---|
+| Economy | researcher | `haiku` | `gpt-5.6-terra` | `low` |
+| Standard | developer; orchestrator | `sonnet` | `gpt-5.6` | `medium` |
+| Deep review | planner; plan evaluator; code evaluator | `opus` | `gpt-5.6` | `high` |
+
+The Claude reasoning field is absent because its adapter exposes tier selectors, not a
+portable reasoning-effort control. The Codex launcher must set both TOML keys for every
+cold role invocation; inheriting a session model or effort is nonconforming. A missing,
+unavailable, renamed, or silently substituted selector fails launch and supported-mode
+doctor checks. Changing any table value requires a reviewed matrix change, full floor
+revalidation, and a product release; roles and shared skills do not carry duplicate
+vendor mappings.
+
+## Installed-root and helper binding
+
+The matrix binds Claude to `claude-plugin-root/v1`, defined at
+`plugins/loom/adapters/roots/claude-plugin-root-v1.json`, and Codex to
+`codex-skill-source/v1`, defined at
+`plugins/loom/adapters/roots/codex-skill-source-v1.json`.
+
+- **Claude.** The adapter reads the client-injected `CLAUDE_PLUGIN_ROOT`, resolves its
+  physical absolute directory, validates the installed Claude manifest name/version,
+  and invokes only an allowlisted executable below its `bin/` by absolute path.
+- **Codex workflows.** Codex supplies the absolute source path of the selected
+  `skills/<skill>/SKILL.md` when it discovers/loads that skill. The adapter passes that
+  path to the bootstrap. The bootstrap requires an absolute path ending in the exact
+  selected `skills/<skill>/SKILL.md`, resolves the physical skill directory and then
+  its `../..` directory as the installed plugin root, and validates that the same
+  canonical skill path and `.codex-plugin/plugin.json` name/version exist beneath that
+  root. It then canonicalizes `bin/<allowlisted-helper>`, proves the result remains
+  directly below `<root>/bin`, requires a regular executable, and invokes that absolute
+  path. It does not read `CLAUDE_PLUGIN_ROOT`, `PLUGIN_ROOT`, `CODEX_HOME`, or `PATH`.
+- **Codex hooks.** The manifest uses a root-relative `./hooks/hooks.json`; hook commands
+  may use Codex's hook-process-only `PLUGIN_ROOT` to invoke the shared hook dispatcher
+  absolutely. That environment binding is not reused by skills or workflow helpers.
+
+There is one physical `bin/`, one set of shared skills, and one helper implementation.
+Adapters may contain only binding metadata/bootstrap logic; copying helpers or workflow
+bodies into client directories is a conformance failure. Any missing source-path
+metadata, containment mismatch, manifest/version mismatch, non-executable helper, or
+symlink escape fails closed with a root-resolution error.
+
 ## Validation matrix
 
 One documented local `scripts/check` reproduces all client-neutral checks and any
@@ -123,17 +179,23 @@ locally available adapter checks. CI and release candidates cover:
   Bash tests, link checks, and `git diff --check`;
 - Claude strict manifest/catalog validation plus isolated marketplace add, install,
   explicit workflow discovery/invocation, five-role launch/non-delegation, hook
-  fixtures, absolute helper resolution, upgrade, and uninstall;
+  fixtures, effective tier selection, `claude-plugin-root/v1` absolute helper
+  resolution, upgrade, and uninstall;
 - Codex JSON/schema/path validation plus isolated marketplace add, plugin add/list,
   explicit skill discovery/invocation, generic cold-role launch/non-delegation, hook
-  trust and fixtures, absolute helper resolution, upgrade, and uninstall; and
+  trust and fixtures, exact model/reasoning selection for every profile,
+  `codex-skill-source/v1` resolution from every explicit workflow skill, absolute
+  helper invocation, upgrade, and uninstall; and
 - client-neutral coordination, local-review, isolated-evaluation, recorder, landing,
   doctor, and protocol compatibility suites.
 
 Codex has no assumed equivalent of `claude plugin validate`; schema validation plus a
-clean isolated install/behavior smoke is mandatory. Both floor versions are tested.
-Failure in either required adapter blocks release; no silent minimum-version increase
-or model fallback is allowed.
+clean isolated install/behavior smoke is mandatory. Tests inspect the effective child
+launch configuration, not only requested values, and negative fixtures prove missing
+models, efforts, skill-source paths, manifests, and escaped helpers fail closed. Both
+floor versions are tested. Failure in either required adapter blocks release; no silent
+minimum-version increase, model fallback, inherited reasoning setting, environment-only
+Codex root guess, or bare helper lookup is allowed.
 
 ## SemVer and protocol versions
 

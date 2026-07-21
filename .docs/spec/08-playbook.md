@@ -1,13 +1,15 @@
 # 08 — Shared Playbook, Instructions, Hooks, and Helpers
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
 ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md),
 [0005](../ADR/0005-specs-frozen-after-approval.md),
+[0013](../ADR/0013-starvation-loop-guards-cold-restart.md),
 [0018](../ADR/0018-shared-core-and-client-adapters.md),
 [0019](../ADR/0019-supported-runtime-and-release-contract.md),
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
 [0021](../ADR/0021-loom-owned-local-review-protocol.md), and
 [0022](../ADR/0022-controlled-input-independent-evaluation.md).
 
@@ -123,14 +125,36 @@ adapters read `trigger` with the only accepted values `manual` and `auto`; the o
 `compaction_trigger` field is not recognized as current input. Client-only supplemental
 fields may be recorded in adapter fixtures but cannot alter shared state transitions.
 
-For a blocked `PreCompact` event:
+The only supported `PreToolUse` target is the shell tool named `Bash`, with a string at
+`tool_input.command`. A policy block produces one UTF-8, control-character-free,
+single-line reason of at most 512 bytes. Adapters emit exactly these command-hook wire
+results; `<reason-json>` means that same reason encoded as a JSON string value:
 
-- Claude emits the documented Claude block result (exit 2 with reason or validated
-  Claude `decision: "block"` JSON according to the pinned fixture).
-- Codex emits validated JSON with `continue: false` and `stopReason`.
+| Client/event | Policy allows | Policy blocks |
+|---|---|---|
+| Claude `PreToolUse` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
+| Claude `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
+| Codex `PreToolUse` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":<reason-json>}}\n` |
+| Codex `PreCompact` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"continue":false,"stopReason":<reason-json>}\n` |
 
-`PreToolUse` normalization accepts the documented shell tool and
-`tool_input.command`; client-specific decision encoding remains in the adapter.
+No adapter may substitute another documented encoding. In particular, Claude does not
+emit block JSON, Codex `PreToolUse` does not use the older top-level
+`decision: "block"` shape or `continue: false`, and Codex `PreCompact` does not use
+exit 2. Missing/wrong-typed required fields, an unknown `trigger`, invalid JSON, or a
+reason that violates the bound fails closed through the same client/event block result;
+the fixed reason is `Loom hook input invalid for <event>.` or
+`Loom hook policy returned an invalid reason.` as applicable.
+
+The versioned fixtures are
+`plugins/loom/hooks/fixtures/hook-wire-v1/<client>/<event>/<case>.{input.json,stdout,stderr,exit}`
+and validate against
+`plugins/loom/schemas/loom-hook-wire-fixture-v1.schema.json`. The `.stdout` and
+`.stderr` files are exact bytes, including the one required trailing LF for nonempty
+output; `.exit` contains the decimal status plus LF. The only path values are clients
+`claude` and `codex`, events `pre-tool-use` and `pre-compact`, and cases `allow`,
+`block`, and `malformed`. Conformance runs the same policy outcome through both
+adapters and byte-compares all three outputs.
+
 Identity policy fails closed on recognized mutation tokens and a post-command verifier
 detects any advanced HEAD with wrong author/committer identity. This is defense in
 depth, not a complete shell parser or security boundary.
@@ -189,7 +213,8 @@ The local `scripts/check` entry point and CI validate at least:
   future milestones) and README status agreement;
 - canonical-digest schema/hash and both instruction renderings;
 - Bash syntax at the floor, shfmt, ShellCheck, Bats, and Git diff whitespace;
-- hook current-event fixtures and client-specific blocking results;
+- every `hook-wire-v1` allow/block/malformed fixture with byte-exact exit, stdout,
+  and stderr results for both clients and both supported events;
 - local-review/evaluation/recorder protocol fixtures and failure cases; and
 - active client adapter install, invocation, role hierarchy, helper resolution, and
   uninstall/upgrade matrix where applicable.
