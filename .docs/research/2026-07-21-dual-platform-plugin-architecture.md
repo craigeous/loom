@@ -1,6 +1,6 @@
 # Research: Dual-platform plugin architecture
 
-Status: Research Review
+Status: Draft
 Date: 2026-07-21
 Topic: Portability boundaries for executing the repository improvement program while supporting both Claude Code and Codex from one Loom codebase.
 
