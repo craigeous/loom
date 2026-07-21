@@ -73,3 +73,66 @@ the pinned local/CI baseline, migrates the existing shipped scripts and their te
 the declared Bash runtime without product-logic changes, lands the minimum static
 dual-client scaffolding needed by later adapters, and supplies mechanical proof for
 each previously missing negative or cross-platform case.
+
+---
+
+## Code evaluation — bootstrap Round 1
+
+Verdict: FAIL
+Round: 1
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-8c5effd`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `8c5effd0f0ce58d0c4c276abd49b9d6da715cb27`
+- Manifest SHA-256: `a67057e53e76db58ad320e372da7b4f4b9a8f05a1fe2bbacc1bb487c4ee9bbfa`
+- Aggregate findings SHA-256: `9b381e0860016feb37b2c0076200f0654ff8f78ed59e977814d73277b98f4622`
+- Evaluator verdict SHA-256: `7b85e660cb8e8e3ba10cd452df22c0cd6e98dabd779e0b398cd52eb775dcc4f8`
+
+### Gate rerun
+
+- `bash-3.2`: PASS, exit 0, 123 dynamically discovered Bats tests; stdout SHA-256 `3fbd1a5a33c2ece8a4cc2b8a081fcbdae91e67fd495f76ef5c89fe57fedb601f`, stderr SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+- `bash-5`: PASS, exit 0, 123 dynamically discovered Bats tests; stdout SHA-256 `8739717985043beb8d7554b0a088a323d787ebdf45c24adcc079b304d791a5b2`, stderr SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+### Advisory-finding adjudication
+
+- [MAJOR] `COR-1` — confirmed: scripts/check validates tool values and the checkout pin but never compares check-toolchain.json .runners with the workflow matrix, so row deletion or self-consistent row drift remains locally green.
+- [BLOCKER] `COR-2` — confirmed: ShellCheck, Node, and Bats extraction is skipped when predictable cached paths exist, and only executable-controlled version text is checked before use; this violates the required digest-before-use contract and permits arbitrary cached code execution.
+- [MAJOR] `COR-3` — confirmed: The 3.2 floor is checked against the interpreter running scripts/check, while the separately selected syntax/Bats shell is checked only against a caller-supplied regex and has no independent floor enforcement.
+- [MAJOR] `COR-4` — confirmed: headingSlugs passes raw inline Markdown source to github-slugger; a linked heading therefore receives a different slug from its rendered GitHub heading text and valid fragments are rejected.
+- [MAJOR] `COR-5` — confirmed: The required command-description, product-name, source-identity, and release-provenance negative cases are not independently exercised; these are explicit plan cases, so the omission is more than a hygiene nit.
+- [BLOCKER] `TST-1` — confirmed: The implementation notes explicitly state that the four required workflow cells were not dispatched. The plan's CI verification and acceptance criteria require all four cells green and treat a missing cell as failure.
+- [MAJOR] `TST-2` — confirmed: The additionalProperties test mutates only four of seven release contracts, only at top level, and accepts one generic diagnostic, leaving required contracts and nested object boundaries unproved.
+- [MAJOR] `TST-3` — confirmed: Composite mutations and a generic drift assertion can remain green when individual invariants regress; required name, provenance, schema, and binding ID/path drift cases lack independent proof.
+- [MAJOR] `TST-4` — confirmed: No retained test covers duplicate GitHub heading suffixes, encoded path/fragment values, Unicode encoding, or malformed percent encodings despite the plan explicitly requiring repeated IDs and safe decoding.
+- [MAJOR] `TST-5` — confirmed: This independently reports the same mechanical gap as COR-1: no gate or mutation test proves the exact four workflow rows and all row fields agree with the toolchain contract.
+- [MAJOR] `TST-6` — confirmed: Repository tests never invoke run-bats-under directly, so its relative/non-executable shell, wrong-version, missing-entrypoint, missing-canary, and canary-first branches can regress undetected.
+- [BLOCKER] `SEC-1` — confirmed: The persistent ignored cache is trusted by predictable pathname and self-reported version after its first extraction, allowing a prior branch or process to execute arbitrary code during a trusted check.
+- [BLOCKER] `SEC-2` — confirmed: The cache, download, tool, and destination paths receive no lstat/realpath containment checks; curl, cp, and extraction can follow poisoned symlinks and overwrite files outside the repository.
+- [BLOCKER] `SEC-3` — confirmed: Schema errors do not stop semanticMetadata, and metadata-controlled root-binding paths are joined and read without containment; schema-invalid input can therefore dereference and potentially disclose an outside file.
+- [BLOCKER] `SEC-4` — confirmed: Tracked candidates and non-Git walk symlinks are read with ordinary readFile/stat calls without physical containment, contradicting the plan's symlink-safe validation boundary and allowing outside-root reads.
+- [MAJOR] `SEC-5` — confirmed: actions/checkout retains its credential by default while the next step runs PR-controlled dynamically discovered Bats files and other executable tooling; contents:read reduces impact but does not remove the exposed credential.
+- [MINOR] `SEC-6` — confirmed: exec replaces run-bats-under before its EXIT trap can execute, so each run leaks its private loom-bash temporary directory; this is confirmed hygiene/resource leakage but does not independently block landing.
+
+### Evaluator-originated findings
+
+- [MAJOR] `EVAL-1` at `scripts/validate-repository.mjs:207` — The validator does not enforce the exact two root-binding IDs and canonical paths required by the compatibility contract. The matrix schema permits any two unique id/path objects matching a broad roots filename pattern, including duplicate IDs with different paths. semanticMetadata only reads each supplied path and compares the referenced file's schema to that supplied ID; it never compares the pair to the required claude-plugin-root-v1.json and codex-skill-source-v1.json mapping. A self-consistent alternate binding file can therefore pass. Required change: Validate the matrix rootBindings as the exact unordered pair of required ID/path objects and add isolated mutations for duplicate ID, swapped ID/path, and alternate same-schema paths.
+- [MAJOR] `EVAL-2` at `scripts/check:76` — The toolchain contract validation is not closed over the required download and vendored-asset sets. The jq assertion checks versions, digest shapes, and provenance-kind values but not exact download tuples, exact vendored paths/count, required provenance fields, or completeness. Later loops verify only entries that remain listed, so deleting a required platform archive, schema, or fixture record can silently remove its digest check while the stage passes on an unaffected host. Required change: Validate exact required download platform/tool tuples and exact vendored asset paths plus required provenance fields, and add omission/mutation tests for every class.
+
+### Required changes
+
+- Replace the persistent executable cache trust model with fresh private extraction or independently pinned hashes for every consumed extracted artifact; reject symlinks and prove physical containment before all cache reads/writes and atomic publication.
+- Obtain and retain successful logs for the exact head in all four required GitHub Actions cells: ubuntu-22.04, ubuntu-24.04, macos-14 arm64, and macos-15-intel x86_64.
+- Mechanically compare the workflow matrix to the exact check-toolchain.json runner set and test row deletion plus mutation of every row field.
+- Enforce Bash >=3.2 independently on the selected LOOM_TEST_BASH, add direct launcher rejection/order/cleanup tests, and remove the exec-caused temporary-directory leak.
+- Build heading slugs from rendered inline text and add duplicate-heading, encoded path/fragment, Unicode, malformed-encoding, and inline-markup fragment tests.
+- Split metadata/schema negative cases into one mutation per invariant, covering every manifest, catalog, matrix, binding, nested additionalProperties boundary, command description, agent name, identity/provenance field, schema version, reference, and fixture drift.
+- Stop semantic validation of schema-invalid metadata; reject symlinks and enforce lexical plus physical root containment before every JSON, frontmatter, Markdown, link-target, schema, fixture, and metadata-derived read.
+- Set checkout persist-credentials: false and scrub credential-bearing Git configuration/environment before executing repository-controlled tests and tooling.
+- Enforce the exact root-binding ID/path pair and make check-toolchain.json validation closed over all required runners, downloads, vendored assets, digests, and provenance fields.
+
+### Assessment
+
+[object Object]
