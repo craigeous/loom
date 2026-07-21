@@ -1,22 +1,23 @@
 # Evaluation: 03 — Artifact Lifecycle & Status State Machine
 
-Verdict: FAIL
+Verdict: PASS
 Round: 2
-Reviewed against: accepted ADRs 0018–0022; approved research; already-approved amended sibling specs; prior verdict; exact revision diff `a1f7995..009bb79`; plan-evaluation rubric and severity rules.
+Reviewed against: listed ADR authority 0003, 0005, 0013, 0017, and 0020–0022; approved sibling specs 01, 02, and 04; prior verdict; exact revision diff `aa86f6d..d35324b`; plan-evaluation rubric and severity rules.
 
 ## Findings
 
-- [BLOCKER] The revised lifecycle correctly records the receipt only after remote
-  verification, but frozen amended spec 02 still places “publication-receipt changes”
-  in the disposable integration candidate. Those contracts cannot both implement the
-  ADR-0020 publication boundary, leaving landing and cleanup ordering ambiguous.
+No BLOCKER, MAJOR, or MINOR findings.
 
 ## Required changes (for FAIL)
 
-1. Amend spec 02 to remove the publication receipt from candidate preparation and
-   align it with this spec's post-verification, untracked receipt/recovery flow.
+None.
 
 ## Notes
 
-The prior legal-status-vocabulary and archive-ordering blockers are fully resolved in
-this revision. No other blocker was found.
+The prior cross-spec receipt blocker is resolved by the exact revision diff. The
+lifecycle now makes the full ADR-0020 order explicit and cross-consistent: the root
+orchestrator's deterministic helper builds the final tracked `Landed`/`Archived`
+candidate, publishes it once, verifies it with a fresh remote read, records the
+untracked common-Git-dir receipt afterward, and only then releases the claim and runs
+idempotent local cleanup. No lifecycle role publishes, and cleanup cannot alter the
+already-published tracked final state.
