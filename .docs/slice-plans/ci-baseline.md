@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: In Progress
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -612,3 +612,28 @@ not success.
   approval and retain successful exact-head logs for `ubuntu-22.04`,
   `ubuntu-24.04`, `macos-14` arm64, and `macos-15-intel` x86-64. This developer did
   not push and makes no remote CI success claim.
+
+### Valid bootstrap merits Round 1 (2026-07-21)
+
+- The protected transition ref was initialized and freshly verified at
+  `367584c3b3d0423af04194171e35c827d069a744` before this run. The three earlier
+  review/evaluation rounds predated that latch and remain invalid diagnostics; they
+  do not authorize publication or consume merits rounds.
+- Exact implementation head `c92464aefb6189f40227abd0904d20d2efb7debe`
+  and tree `c4573aae54abb81ba524f52c3e93a7e57301ca56` passed both complete local gates
+  with 226 tests. GitHub Actions run `29865566135` passed all four required exact-head
+  cells with the same count and final success marker.
+- Sealed manifest `bfe36caa897196f3995dac8524e987d4c0efa526a3606ba44e550370f093cb65`
+  produced aggregate findings
+  `e0d404fdcd357e5bfd62c058b8c4026226722d49d4ad4676a59329193717e61d`.
+  Independent evaluator verdict
+  `8a5afa8f17899fcee81bfb373b5ebfbd7f1612d0a7f9471a836a979024ccb281`
+  is `FAIL`, Round 1, requiring Round 2.
+- The evaluator's authoritative strictly sequential reruns both passed 226/226 on
+  clean unchanged exact trees. Earlier concurrent attempts are retained only as
+  infrastructure diagnostics because deterministic global test paths collided.
+- Round 2 must close the two confirmed BLOCKERs and six MAJOR gaps: semantic,
+  comment-safe workflow validation; fail-closed explicit-root Git/non-Git discovery;
+  both exact README client floors; standalone positive allowlist suppression; all
+  three unknown-frontmatter-key cases; the complete validator CLI contract; and final
+  exact-head cwd-independent gate evidence for both local Bash lanes.

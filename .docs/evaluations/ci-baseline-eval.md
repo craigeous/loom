@@ -8,6 +8,12 @@ the current repository; prior verdict; exact revision diff `8495b84..1d46f27`;
 current GitHub-hosted runner architecture labels; plan-evaluation rubric and
 severity rules.
 
+> Bootstrap authority correction: the three earlier code-evaluation sections labeled
+> bootstrap Round 1 through Round 3 predate the protected transition ref required by
+> ADR 0023. They remain auditable diagnostic history, but did not authorize
+> publication and do not consume merits rounds. The first valid code evaluation is
+> explicitly labeled Valid merits Round 1 below.
+
 ## Findings
 
 Round-1 findings — all resolved (confirmed against the revision diff):
@@ -276,3 +282,87 @@ Required next round: 4
 Exact-head CI, scope, documentation, both evaluator gate reruns, and the transparent retained harness note passed. Authority, correctness, security, portability, and test sufficiency failed because uncovered blockers remain.
 
 Harness note: The retained exit-128 run completed all 211 tests and product validation, then failed only at the optional LOOM_DIFF_BASE object check because the synthetic one-commit evidence copy intentionally omitted the real base object. The documented no-override developer gates passed, both evaluator reruns passed, and the sealed four-job CI evidence executed the real b28a74754e2ee016a035fa085f0d91de66057f62 to 89b7679ce52832fa00bc2513c059ce4aae73cbbe range successfully. The retained failure is honest provenance and does not weaken the exact-head or real-range evidence.
+
+---
+
+## Code evaluation — valid bootstrap merits Round 1
+
+Verdict: FAIL
+Round: 1
+Required next round: 2
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-c92464a-valid-r1`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c92464aefb6189f40227abd0904d20d2efb7debe`
+- Head tree: `c4573aae54abb81ba524f52c3e93a7e57301ca56`
+- Transition-state tip: `367584c3b3d0423af04194171e35c827d069a744`
+- Manifest SHA-256: `bfe36caa897196f3995dac8524e987d4c0efa526a3606ba44e550370f093cb65`
+- Aggregate findings SHA-256: `e0d404fdcd357e5bfd62c058b8c4026226722d49d4ad4676a59329193717e61d`
+- Evaluator verdict SHA-256: `8a5afa8f17899fcee81bfb373b5ebfbd7f1612d0a7f9471a836a979024ccb281`
+- Exact-head CI run: `29865566135`, all four required jobs successful with
+  `1..226` and `All checks passed`.
+
+### Authoritative evaluator gate rerun
+
+The evaluator retained two infrastructure-only attempts as invalid diagnostics: one
+shared-copy concurrency attempt, then one separate-copy attempt whose concurrently
+running coordinator tests collided through deterministic global temporary paths.
+ADR 0023 section 8 permits a failed infrastructure stage to restart when every input
+remains hash-identical. The authoritative rerun therefore used fresh lane-specific
+copies strictly sequentially:
+
+- Bash 3.2: PASS, exit 0, 226/226 tests, clean exact tree before and after; stdout
+  SHA-256 `7cb6e690a23f5bb78966c5dfa56c08a8579002d77f31a78e9a5726b552e843e8`,
+  stderr SHA-256 `958b4ca21249222452fa0d36f3d1301f753e482c91b98a0d3ceaddba921ca653`.
+- Bash 5.3: PASS, exit 0, 226/226 tests, clean exact tree before and after; stdout
+  SHA-256 `72397d8782160cf9344729443054eae3fa8195e276f37dbbb02c131210dae79d`,
+  stderr SHA-256 `d9c1d388c5ceb720b1ce546a2f966e98c7d1eecc0a4d2c45233ca328a1796e28`.
+
+### Advisory-finding adjudication
+
+- [MAJOR] `COR-R1-1` — confirmed: an explicit non-Git root nested in a worktree can
+  inherit the ancestor Git root and silently discover no inputs instead of using the
+  required filesystem walk.
+- [MAJOR] `COR-R1-2` — confirmed: README names Claude Code `2.1.216` but omits the
+  exact Codex CLI `0.144.6` floor required by ADR 0019/spec 10.
+- [MAJOR] `TEST-001` — confirmed: the composite allowlist test does not prove that a
+  lone exact live entry suppresses the underlying broken-link diagnostic and passes.
+- [MAJOR] `TEST-002` — confirmed: unknown-key coverage proves command closure only,
+  not the required agent and skill frontmatter boundaries.
+- [MAJOR] `TEST-003` — confirmed: no retained tests cover default-root discovery,
+  `--all`, missing mode, or repeated/mixed modes.
+- [MAJOR] `EVIDENCE-001` — confirmed: cwd-independent evidence predates the final
+  226-test exact tree.
+- [BLOCKER] `SEC-R1-001` — confirmed: workflow security and revision invariants are
+  checked with comment-spoofable literal searches rather than YAML semantics.
+- [BLOCKER] `SEC-R1-002` — confirmed: a real-repository Git discovery error falls
+  back to untracked filesystem input instead of failing closed.
+
+No evaluator-originated finding was added.
+
+### Required changes
+
+- Distinguish an explicit canonical Git root from a non-Git root before discovery;
+  use tracked files only for the former, walk only a positively established non-Git
+  root, and fail closed on Git errors without reading untracked canaries.
+- State and mechanically test both exact client floors in README.
+- Add a standalone positive live-allowlist test that requires exit zero and no
+  broken-link diagnostic.
+- Add independent unknown-key cases for command, agent, and skill frontmatter.
+- Cover default-root resolution, `--all`, missing mode, and repeated/mixed modes with
+  deterministic CLI diagnostics.
+- Replace literal workflow searches with pinned semantic YAML validation or an exact
+  verified workflow contract, including comment, duplicate-key, and relocation
+  attacks.
+- Retain final exact-head cwd-independent full-gate evidence under both local Bash
+  lanes.
+
+### Assessment
+
+The transition latch, exact revision bindings, hosted matrix, and authoritative
+sequential gate reruns are valid and green. They are necessary but insufficient:
+two confirmed trust-boundary BLOCKERs and six confirmed MAJOR gaps require merits
+Round 2, so the slice returns to `In Progress`.

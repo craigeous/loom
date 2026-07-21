@@ -4,6 +4,11 @@ Identity-neutral capture of the three cold advisory workers run against the seal
 bootstrap export for the exact implementation commit. The code evaluator adjudicates
 these findings in the companion evaluation record.
 
+> Bootstrap authority correction: the three sections labeled Round 1 through Round 3
+> below predate the required protected transition ref and are retained only as invalid
+> diagnostic history. They did not authorize publication and do not consume merits
+> rounds. The first valid bootstrap review is explicitly labeled Valid merits Round 1.
+
 - Evidence mode: `loom-repository-bootstrap/v1`
 - Conformance: degraded bootstrap; not loom-local-review/v1
 - Isolation: not established under ADR 0022
@@ -365,3 +370,129 @@ these findings in the companion evaluation record.
 - Claim: HUP, INT, or TERM can make an interrupted gate exit successfully, allowing incomplete validation to be represented as a passing command.
 - Evidence: The new cleanup handler saves `$?` and exits with that value (lines 12-18), while line 25 installs it directly for EXIT, HUP, INT, and TERM. For a signal delivered after a successful command or between commands, `$?` is 0 rather than a signal-specific failure status. Running the same trap pattern under /bin/bash with `:; kill -TERM $$` printed `cleanup-status=0` and the process exited 0. The handler can therefore terminate before later validation stages without communicating failure through the process status.
 - Suggested verification: Use a cleanup-only EXIT trap and separate HUP/INT/TERM handlers that exit with fixed nonzero statuses (for example 129, 130, and 143). Add a regression harness that pauses the gate at a deterministic sentinel, sends each signal, and asserts a nonzero signal-specific status, removal of the private run directory, and absence of the final success marker.
+
+---
+
+# Valid bootstrap review — ci-baseline merits Round 1
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Aggregate state: `bootstrap-ran-with-findings`
+- Run: `ci-baseline-b28a747-c92464a-valid-r1`
+- Merits round: `1`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c92464aefb6189f40227abd0904d20d2efb7debe`
+- Head tree: `c4573aae54abb81ba524f52c3e93a7e57301ca56`
+- Transition-state tip: `367584c3b3d0423af04194171e35c827d069a744`
+- Manifest SHA-256: `bfe36caa897196f3995dac8524e987d4c0efa526a3606ba44e550370f093cb65`
+- Sealed input-inventory SHA-256: `71e70ce12f7fd9f2cdc0dbf31cafaff94954e008d1b06e13c594083a8d33ce78`
+- Aggregate findings SHA-256: `e0d404fdcd357e5bfd62c058b8c4026226722d49d4ad4676a59329193717e61d`
+
+All three required cold workers completed with matching bindings. Their input
+inventory remained unchanged and every location below intersects the exact diff.
+
+## COR-R1-1 — proposed MAJOR
+
+- Worker: `correctness`
+- Location: `scripts/validate-repository.mjs:111`
+- Confidence: `0.99`
+- Claim: A non-Git validation root nested inside another Git worktree is misclassified
+  as a real Git root, allowing discovery to return an empty tracked set and skip its
+  JSON, frontmatter, and Markdown inputs.
+- Evidence: `git -C <root> ls-files -z` searches parent directories. A nested,
+  untracked fixture directory therefore succeeds with no paths, so the deterministic
+  filesystem walk is never selected.
+- Suggested verification: Compare the canonical `git rev-parse --show-toplevel` with
+  the canonical explicit root before using tracked discovery, and add nested-root
+  regressions for malformed metadata, frontmatter, and links.
+
+## COR-R1-2 — proposed MAJOR
+
+- Worker: `correctness`
+- Location: `README.md:92`
+- Confidence: `0.99`
+- Claim: The documented support boundary omits the required exact Codex CLI `0.144.6`
+  floor.
+- Evidence: The development section names Claude Code `2.1.216` but describes only a
+  generic supported Loom client for production. ADR 0019 and spec 10 define both exact
+  v0.2 floors.
+- Suggested verification: State both exact floors while retaining the static Codex
+  scaffolding limitation, and mechanically assert both values in README.
+
+## TEST-001 — proposed MAJOR
+
+- Worker: `tests`
+- Location: `scripts/tests/repository-validation.bats:756`
+- Confidence: `0.99`
+- Claim: The allowlist regression can pass without proving that one exact live entry
+  suppresses its broken-link diagnostic.
+- Evidence: The existing test expects failure because a second record is stale and
+  checks only that the live record is not reported stale. It does not require the live
+  allowlisted link by itself to exit zero without a broken-target diagnostic.
+- Suggested verification: Split the positive live-entry case from the stale
+  code-block case and mutation-test the suppression path.
+
+## TEST-002 — proposed MAJOR
+
+- Worker: `tests`
+- Location: `scripts/tests/repository-validation.bats:144`
+- Confidence: `0.96`
+- Claim: Unknown-key rejection is tested only for command frontmatter, leaving agent
+  and skill schema closure unproved.
+- Evidence: The agent negative case removes a required name and no skill test injects
+  an additional field.
+- Suggested verification: Add independent command, agent, and skill unknown-key cases
+  with file-specific additional-properties diagnostics.
+
+## TEST-003 — proposed MAJOR
+
+- Worker: `tests`
+- Location: `scripts/validate-repository.mjs:18`
+- Confidence: `0.98`
+- Claim: The validator CLI contract lacks regression coverage for default-root
+  resolution, `--all`, and rejection of missing or repeated modes.
+- Evidence: Retained tests always pass an explicit root and only exercise
+  `--metadata` or `--links`.
+- Suggested verification: Add nested-cwd default-root, valid and failing `--all`, no
+  mode, and repeated/mixed-mode cases with deterministic exit-2 diagnostics.
+
+## EVIDENCE-001 — proposed MAJOR
+
+- Worker: `tests`
+- Location: `.docs/slice-plans/ci-baseline.md:512`
+- Confidence: `0.94`
+- Claim: Cwd-independent full-gate evidence is stale relative to the reviewed exact
+  head.
+- Evidence: The retained cwd-independent run covered the earlier 123-test tree. The
+  final exact-tree local and hosted gates ran 226 tests from their checkout roots.
+- Suggested verification: From an unrelated cwd, run the final exact-head gate by
+  absolute path under both supported local Bash lanes and retain command, cwd, trees,
+  exit, and logs.
+
+## SEC-R1-001 — proposed BLOCKER
+
+- Worker: `security`
+- Location: `scripts/check:325`
+- Confidence: `0.99`
+- Claim: Security-sensitive workflow settings are validated by substring search, so
+  unsafe YAML semantics can pass the toolchain-contract stage.
+- Evidence: `persist-credentials: true # persist-credentials: false` enables checkout
+  credentials while satisfying the current `grep`; adjacent ref/head assertions are
+  similarly comment-spoofable or relocatable.
+- Suggested verification: Validate the workflow with a pinned YAML parser or an exact
+  verified workflow digest, and add inline-comment, commented-out, duplicate-key, and
+  relocated-string mutations.
+
+## SEC-R1-002 — proposed BLOCKER
+
+- Worker: `security`
+- Location: `scripts/validate-repository.mjs:110`
+- Confidence: `0.97`
+- Claim: A Git discovery failure in a real repository silently downgrades to an
+  unrestricted filesystem walk and consumes untracked inputs.
+- Evidence: Every `git ls-files` failure enters the non-Git fallback without first
+  distinguishing a real worktree whose tracked-file trust query failed.
+- Suggested verification: Positively establish the explicit root is non-Git before
+  walking; fail closed for any Git discovery error in a detected worktree, with an
+  unread untracked canary regression.
