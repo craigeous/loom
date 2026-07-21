@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Plan Review
+Status: Draft
 
 ## Authority
 

@@ -1,6 +1,6 @@
 # 05 — Controlled-Input Independent Evaluation
 
-Status: Plan Review
+Status: Draft
 
 ## Authority
 

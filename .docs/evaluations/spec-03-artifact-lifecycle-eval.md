@@ -2,7 +2,9 @@
 
 Verdict: PASS
 Round: 2
-Reviewed against: listed ADR authority 0003, 0005, 0013, 0017, and 0020–0022; approved sibling specs 01, 02, and 04; prior verdict; exact revision diff `aa86f6d..d35324b`; plan-evaluation rubric and severity rules.
+Reviewed against: accepted ADR 0023; retained production authority in accepted ADRs
+0020–0022; sibling specs 04–05; prior verdict; exact amendment diff
+`80499f1^..80499f1`; plan-evaluation rubric and severity rules.
 
 ## Findings
 
@@ -14,10 +16,11 @@ None.
 
 ## Notes
 
-The prior cross-spec receipt blocker is resolved by the exact revision diff. The
-lifecycle now makes the full ADR-0020 order explicit and cross-consistent: the root
-orchestrator's deterministic helper builds the final tracked `Landed`/`Archived`
-candidate, publishes it once, verifies it with a fresh remote read, records the
-untracked common-Git-dir receipt afterward, and only then releases the claim and runs
-idempotent local cleanup. No lifecycle role publishes, and cleanup cannot alter the
-already-published tracked final state.
+The amendment preserves the production lifecycle and introduces only ADR 0023's
+repository-local exception. It carries the exact closed M0–M5 slice set, degraded
+non-v1/non-isolated provenance, exact committed-input/gate/three-worker/independent-
+evaluator requirements, protected append-only transition authority, intent-before-
+publication and settlement-before-release ordering, closed remote-direct bridge,
+stale-base and rewind fail-close rules, progressive retirement, and terminal full
+sunset. It does not expose bootstrap evidence or publication to managed projects or
+released Loom.
