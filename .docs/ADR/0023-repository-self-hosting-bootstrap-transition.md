@@ -1,6 +1,6 @@
 # 0023 — Repository Self-Hosting Bootstrap Transition
 
-Status: Plan Review
+Status: Draft
 Date: 2026-07-21
 
 ## Context
