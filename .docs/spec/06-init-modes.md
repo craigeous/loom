@@ -1,155 +1,129 @@
 # 06 — Init Modes
 
-Status: Approved
+Status: Plan Review
 
-When loom starts in a repo it first determines which of three modes applies, by
-checking for `.docs/` and loom markers.
+## Authority
+
+ADRs [0005](../ADR/0005-specs-frozen-after-approval.md),
+[0009](../ADR/0009-unaligned-migrate-sub-mode.md),
+[0018](../ADR/0018-shared-core-and-client-adapters.md),
+[0019](../ADR/0019-supported-runtime-and-release-contract.md), and
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md).
+
+Initialization is a shared workflow invoked through the active client adapter. It
+detects before mutating, validates the selected client/host, creates the canonical
+project digest, renders both instruction adapters, establishes the gate, and records
+remote publication configuration.
 
 ## Detection
 
+```text
+no .docs + empty/near-empty repository       -> Greenfield
+no Loom-shaped .docs + existing repository   -> Unaligned
+  no pre-existing docs spine                 -> Unaligned-bare
+  pre-existing docs spine                    -> Unaligned-migrate
+Loom-shaped .docs                            -> Initialized
 ```
-if no .docs/ and repo is empty/near-empty   → Greenfield
-elif no .docs/ (or .docs/ not loom-shaped)  → Unaligned
-    if a pre-existing docs spine is present  → Unaligned-migrate
-    else                                     → Unaligned-bare
-else                                        → Initialized
-```
 
-Within **Unaligned**, detection distinguishes the two sub-modes (see §2) by
-**signalling** whether the repo already carries a **pre-existing docs spine** — a
-non-`.docs/` methodology under `docs/`, `doc/`, `documentation/`, or a similar path:
+A pre-existing docs spine is an established non-`.docs/` methodology under `docs/`,
+`doc/`, `documentation/`, or a detected equivalent. Detection is read-only and reports
+its evidence. Exact heuristics are versioned playbook policy.
 
-- **no pre-existing docs spine** → **Unaligned-bare**.
-- **a pre-existing docs spine present** → **Unaligned-migrate** (migration is the
-  likely intent). Detection records the observation ("a non-loom docs spine exists
-  at `<path>`") and steers the acting body toward the migrate sub-mode rather than
-  back-fill.
+Before supported-mode operation, initialization/doctor verifies Bash 3.2+, Git 2.34+,
+jq 1.6+, supported OS/architecture, active client/version, adapter components, helper
+resolution, and hook trust/activity. Unknown or below-minimum clients are errors, not
+silent compatibility mode.
 
-The exact heuristics — which paths are scanned, what counts as a "spine" — are
-playbook detail (the follow-on `init-detection.md` slice), not spec text. Detection
-remains **read-only**: it mutates nothing, only observes and steers. The distinguishing
-fact is the presence of a pre-existing docs spine, not the language or size of the
-repo.
+## Common configured outputs
 
-## 1. Greenfield — blank/new project
+Every successful Greenfield or alignment flow establishes:
 
-Start from nothing, like a fresh design conversation.
+- the `.docs/` layout from spec 01;
+- `.docs/status/project-instructions.md` in schema
+  `loom-project-instructions/v1`;
+- a generated Loom-owned block in both root `CLAUDE.md` and root `AGENTS.md`,
+  preserving owner content outside marked blocks;
+- one verified or explicitly `UNVERIFIED` format → lint → test gate;
+- remote name, full target ref, and explicit landing mode;
+- supported active-client adapter state without requiring the other client to be
+  locally installed; and
+- initialized coordination/protocol schema versions.
 
-- Create the `.docs/` structure and seed `status/` empty of design content —
-  the roadmap, progress, and handoff files carry no project decisions, only
-  scaffold metadata (e.g. a phase / next-step marker pointing at the first
-  owner step). "Empty" here means no prior design/project content, not a
-  zero-byte file.
-- Apply the **playbook**: write a project `CLAUDE.md`, establish the gate (see
-  *Gate establishment* below).
-- Begin with the owner: research → ADRs → specs → slice-plans, per scope.
+Neither instruction adapter is authoritative. Missing files, mismatched hashes,
+semantic conflict, or manual divergence of a Loom-owned block fails validation and
+`loom doctor` until regenerated from the canonical digest.
 
-## 2. Unaligned — existing project, not loom-managed
+## 1. Greenfield
 
-An **alignment/migration pass**, not a config interview. loom imposes its
-conventions on the project. Unaligned is **not one job**: it splits into two named
-sub-modes by whether a pre-existing docs spine exists (see *Detection*). The
-authority for this split is [ADR 0009](../ADR/0009-unaligned-migrate-sub-mode.md).
+- Create the `.docs/` skeleton with status files containing scaffold metadata and the
+  first owner action, but no invented product decisions.
+- Create the canonical digest and both instruction adapters.
+- Learn/verify the gate and publication configuration with the owner.
+- Begin owner-directed research → ADR → spec → slice planning within declared scope.
 
-### 2a. Unaligned-bare — existing repo, no real docs spine
+## 2a. Unaligned-bare
 
-A non-empty repo with **no pre-existing docs spine** — loom is the first
-methodology the project has ever had. This is the established Unaligned behavior,
-unchanged; the job is **descriptive back-fill**.
+For an existing repository without a docs spine:
 
-- Study the repo: languages, build/test/lint tooling, existing docs, structure.
-- Create `.docs/` and apply the playbook.
-- Establish the gate (below).
-- **Descriptive back-fill only.** Draft initial `spec/` that *describes what the
-  system currently is* — a map of the existing project so future loops have
-  authoritative context. Back-fill does **not** make decisions or propose
-  changes; any ADRs or changes require a real planning phase. The back-filled
-  specs are **new** artifacts, so they enter at `Draft` and pass through normal
-  `Draft → Plan Review → Approved`. (This "new specs enter at Draft → review" rule
-  applies to **Unaligned-bare only** — see 2b.)
-- Seed `status/` with current state and an initial roadmap.
+- inspect languages, structure, tooling, CI, and existing documentation;
+- create the common configured outputs;
+- draft **descriptive** initial specs mapping what exists, without smuggling in design
+  changes or new decisions;
+- route those new specs through `Draft → Plan Review → Approved`; and
+- seed roadmap/progress/handoff from verified current state.
 
-### 2b. Unaligned-migrate — existing repo with a pre-existing docs spine
+Any desired change discovered during back-fill requires normal planning authority.
 
-A repo that **already has a docs spine** — a loom-shaped-equivalent methodology
-under another path (e.g. `docs/`, `doc/`, `documentation/`). The job is
-**reconciliation/migration, NOT back-fill**: there is nothing to describe that the
-existing tree does not already describe better. loom maps existing artifacts onto
-loom roles, moves them into `.docs/`, rewrites cross-references, and **retains each
-artifact's prior status**.
+## 2b. Unaligned-migrate
 
-- **Named owner gate — migrate / thin-pointer / abort.** Before any files move,
-  loom surfaces an explicit, required owner decision point (not the generic
-  "ambiguity → ask" fall-through). loom does not pick; the owner must answer. Each
-  option's consequence is stated:
-  - **Migrate** — move and reconcile the existing tree into `.docs/`. The old tree
-    stops being authoritative; future runs detect **Initialized**.
-  - **Thin-pointer** — leave the old tree authoritative and place a pointer at
-    `.docs/`. Consequence: **future runs re-detect Unaligned** (loom does not yet
-    honor the pointer); the owner accepts living with re-detection.
-  - **Abort** — make no changes. Consequence: the repo is **re-detected as
-    Unaligned on every run**.
-- **Status preservation — migration is not a re-review trigger.** A migrated
-  pre-existing spec **keeps the status it already had**. Already-authoritative
-  specs are **not** forced back to `Draft` and **not** re-litigated through blind
-  plan-eval. Migration is a mechanical relocation of settled design, not a new
-  planning cycle, so it does not re-open review of in-production specs. The
-  back-fill "new specs enter at `Draft` → review" rule (2a) applies to
-  Unaligned-bare only; it never applied to artifacts that already carry a status.
-  This is consistent with ADR 0005: the spec lifecycle is untouched — migration
-  preserves each artifact's existing point in it.
-- **Runs inline in `/loom:init`.** A pure migration has **no specs to author**, so
-  — unlike Unaligned-bare's back-fill — there is **no planner/evaluator role-spawn
-  in the migration itself**. `/loom:init` performs the migration inline: it runs
-  detection, presents the owner gate, and — on *migrate* — executes the
-  reconciliation (move, rewrite cross-references, preserve status) and
-  seeds/reconciles `status/`, then hands back **Initialized**. Subsequent design
-  work begins normally through `/loom:run` once the repo is Initialized.
-- **The migration recipe lives in the playbook.** The ordered, idempotent
-  cross-reference rewrite, the numbered-spine → `spec/` + `status/` split, and the
-  operational preconditions are a reusable recipe that belongs in the playbook —
-  see ADR 0009 for its load-bearing properties. The recipe **text** is a playbook
-  reference authored in a follow-on slice, **not** spec text.
+For an existing methodology spine, initialization presents a mandatory owner gate:
 
-Goal (both sub-modes): leave the project loom-shaped and ready to resume as
-`Initialized`.
+- **Migrate:** move/reconcile into `.docs/`, rewrite links, preserve prior statuses,
+  establish common configured outputs, and become Initialized.
+- **Thin-pointer:** leave the old spine authoritative; future runs continue to detect
+  Unaligned because Loom does not treat the pointer as initialized authority.
+- **Abort:** make no changes and remain Unaligned.
 
-## 3. Initialized — loom already present
+Loom never chooses on the owner's behalf. A migration is a mechanical relocation, not
+a planning re-review: pre-existing artifact statuses are preserved. It runs inline in
+the init workflow with the ordered idempotent migration recipe; no planner/evaluator is
+spawned merely to move already-authoritative files.
 
-Resume. Present the owner a menu derived from current `.docs/` + git state, e.g.:
+Migration preconditions include a safe worktree state, explicit treatment of untracked
+files, NUL-safe path traversal, specific-before-generic link rewrites, two-directional
+link validation, living-versus-archived boundaries, and no destructive action outside
+validated roots.
 
-- Continue an in-flight slice-plan (`Plan Review`, `In Progress`, `Implemented`).
-- Review pending research / ADRs / specs.
-- Start a new slice from the roadmap.
-- Run research on a topic.
-- Show status.
+## 3. Initialized
 
-The menu reflects real status so the owner picks up where things stand, then
-declares scope + claimed gates and the driver loop runs.
+Initialization becomes a resume/realignment check. It derives a menu from actual
+statuses, exact Git/coordination state, configured remote target/mode, publication
+receipts, and `Ready to Publish` recovery—not from local `main` history alone. Options
+include pending research/planning evaluation, an in-flight slice, local-review or
+evaluation recovery, publication recovery, a new roadmap slice, and status.
+
+It re-applies compatible playbook changes idempotently and regenerates both instruction
+blocks from the canonical digest. Clean derived changes apply automatically; conflicts
+or ambiguous owner content produce a recommendation and owner decision. Loom never
+overwrites owner-controlled text outside marked blocks.
 
 ## Gate establishment
 
-The gate is the `format → lint → test` sequence the developer must pass before
-review. loom resolves concrete commands by detecting the toolchain:
+The gate is ordered format → lint → test. Rust is the only initially verified bundled
+gate. For another stack, init inspects repository tooling/CI, proposes exact commands,
+gets owner confirmation, runs them green once, records them in the canonical digest,
+and adds the reusable definition to the playbook through Loom's own reviewed change
+process. Until the first green run the gate is `UNVERIFIED` and blocks `Implemented`.
 
-- **Rust is the only *verified* gate** and ships in the playbook:
-  `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`.
-- **For a stack with no known gate, gate creation is an init responsibility.**
-  loom inspects the project's tooling (config files, scripts, CI), proposes the
-  format/lint/test commands, confirms with the owner, and **writes them into the
-  project's `CLAUDE.md`**. It then **records the new gate back into the playbook**
-  so the next project on that stack inherits a known gate. loom *learns* gates
-  over time.
-- A detected-but-unverified gate is marked as such until it has actually run
-  green at least once.
+The chosen gate must also be reproducible by the isolated evaluation runner with pinned
+environment/tool versions and prepared offline dependencies. A developer-only command
+that the evaluator cannot rerun is not a valid supported gate.
 
-## Playbook re-application (idempotent)
+## Publication configuration
 
-Re-running alignment re-applies the **current** playbook, picking up improvements
-since the last init. Merge strategy (Q10):
-
-- **Auto-apply** changes that merge cleanly and don't conflict with
-  project-specific content.
-- For anything that **conflicts or is ambiguous**, loom **recommends** an action
-  and lets the **owner decide** — it never silently clobbers project-specific
-  edits.
+Initialization records a remote name and full target ref (normally `origin` and
+`refs/heads/main`) plus exactly one of `remote-direct`, `pr-per-slice`, or
+`merge-queue`. `remote-direct` is available only for an eligible target; provider
+modes require an installed conforming adapter. Missing credentials/protection do not
+authorize mode fallback. Offline work may progress through `Ready to Publish`, but
+cannot be called `Landed`.
