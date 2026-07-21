@@ -1,6 +1,6 @@
 # 10 — Packaging, Compatibility & Release
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

@@ -1,6 +1,6 @@
 # 01 — Concepts & `.docs/` Layout
 
-Status: Plan Review
+Status: Draft
 
 ## Authority
 
