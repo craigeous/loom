@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
@@ -28,8 +28,8 @@ remote publication receipts.
 | `Living` | operational artifact maintained in place outside gated review | deterministic finalizer |
 | `In Progress` | slice implementation/revision active | developer |
 | `Implemented` | developer gate green; exact committed head awaits review/evaluation | orchestrator |
-| `Ready to Publish` | code evaluation passed; claim and evidence retained pending publication | orchestrator/publisher |
-| `Landed` | configured remote result independently verified and receipt recorded | deterministic cleanup |
+| `Ready to Publish` | code evaluation passed; claim and evidence retained pending publication | orchestrator via landing helper |
+| `Landed` | configured remote result independently verified and receipt recorded | orchestrator via deterministic cleanup |
 | `Archived` | completed/abandoned plan stored under `archive/` | none |
 | `Needs Clarification` | prior transition paused on a recorded question | authoritative clarifier |
 | `Abandoned` | deliberately stopped and retained for history | none |
@@ -80,7 +80,9 @@ Approved -> In Progress -> Implemented
                     prospective Landed text and the plan already at
                     archive/<name> with prospective Archived status
                                       |
-                    configured remote publication + fresh verification
+                    atomic configured-mode remote publication
+                                      |
+                    fresh verification against remote authority
                                       |
                     record local untracked receipt
                                       |
@@ -112,9 +114,10 @@ None of these conditions permits a `Landed` assertion or silent mode fallback.
 
 ### Candidate finalization and integrated evidence
 
-The landing flow fetches the configured remote target, creates a disposable
-integration worktree at its exact SHA, integrates only the slice, and prepares in the
-candidate:
+The root orchestrator owns dispatch and recovery for landing and invokes the
+deterministic landing helper; neither publication nor cleanup belongs to a lifecycle
+role. The helper fetches the configured remote target, creates a disposable integration
+worktree at its exact SHA, integrates only the slice, and prepares in the candidate:
 
 - the slice change and final plan/evaluation evidence;
 - archived plan and slice-index transition;
@@ -136,6 +139,13 @@ Until remote verification, the recoverable source state remains `Ready to Publis
 The plan move into `slice-plans/archive/`, its `Archived` token, and related index
 changes are all candidate contents. Fresh verification makes that already-published
 archive state authoritative; no second tracked finalization commit is permitted.
+
+The ordering is strict: build and check the atomic candidate with final tracked
+`Landed`/`Archived` state; publish it atomically through the configured mode; verify
+the candidate/result by a fresh read of the configured remote authority; write or
+reconstruct the untracked common-Git-dir receipt; then release the claim and perform
+idempotent local cleanup. No producing or evaluating role performs those steps, and
+no receipt or cleanup change is added to the candidate.
 
 ### `Landed` and cleanup
 
@@ -188,8 +198,8 @@ itself never mutates the checkout.
 | `Implemented`, docs-only | export and launch code evaluator with explicit skip companion |
 | `Implemented`, code-bearing, no valid review | prepare/launch/validate/assemble local review |
 | `Implemented`, valid review | export and launch code evaluator |
-| `Ready to Publish` | build/rebuild, check, publish, verify, receipt |
-| remotely verified result with incomplete receipt/cleanup | recover receipt and cleanup |
+| `Ready to Publish` | orchestrator invokes helper to build/check, publish, verify, receipt, then clean up |
+| remotely verified result with incomplete receipt/cleanup | orchestrator invokes helper to recover receipt, then clean up |
 | `Needs Clarification` | recorded authoritative clarifier |
 | rejected `Draft`/`In Progress` within scope | producing role |
 

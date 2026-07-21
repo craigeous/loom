@@ -1,6 +1,6 @@
 # 01 — Concepts & `.docs/` Layout
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
@@ -86,6 +86,24 @@ Here and in other specs, `.git/loom/` means the common Git directory returned by
 not necessarily a literal directory in a linked worktree. Both files are validated
 coordinator/recovery state and remain untracked. A receipt never enters the candidate,
 `.docs/`, or any later target-branch update.
+
+The root orchestrator owns publication dispatch and recovery; it is not a lifecycle
+role and delegates no part of this sequence to a producing or evaluating role. Its
+deterministic landing helper performs one ordered protocol:
+
+1. Build and check one atomic candidate containing all final tracked state, including
+   the prospective `Landed` assertion and the plan move/status to `Archived`.
+2. Publish that candidate atomically through the configured mode as one remote target
+   transition.
+3. Independently verify the candidate/result against a fresh read of the configured
+   remote publication authority.
+4. Only after verification, write or reconstruct `receipt.json` in the common
+   Git-directory state above.
+5. Release the claim and perform idempotent local cleanup without changing tracked
+   lifecycle state.
+
+The tracked final state is merely prospective in the local candidate. It becomes
+authoritative only when steps 2 through 4 succeed in that order.
 
 ## Status as dispatcher
 

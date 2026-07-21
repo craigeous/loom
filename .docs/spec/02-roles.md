@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -11,6 +11,7 @@ ADRs [0001](../ADR/0001-plugin-architecture-and-orchestrator.md),
 [0012](../ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md),
 [0017](../ADR/0017-infrastructure-blocked-escalation.md),
 [0018](../ADR/0018-shared-core-and-client-adapters.md),
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
 [0021](../ADR/0021-loom-owned-local-review-protocol.md), and
 [0022](../ADR/0022-controlled-input-independent-evaluation.md).
 
@@ -142,9 +143,31 @@ developer sets `Needs Clarification` with evidence when repair requires a distin
 scope. It should commit coherent, gate-green substeps to limit infrastructure-loss
 blast radius, while preserving a clean reviewable head.
 
-Final living-doc, instruction-adapter, archive/index, and publication-receipt changes
-are prepared by the deterministic landing flow in the disposable integration
+Final tracked living-doc, instruction-adapter, archive/index, and `Landed`/`Archived`
+changes are prepared by the deterministic landing flow in the disposable integration
 candidate. They are not an unconstrained post-PASS developer edit to local `main`.
+The developer never prepares, writes, or commits a publication receipt.
+
+## Orchestrator and deterministic landing flow
+
+The root orchestrator owns post-PASS dispatch, publication recovery, and completion;
+it remains outside the five lifecycle roles. It invokes the deterministic landing
+helper rather than assigning publication or cleanup to the developer, an evaluator,
+or another lifecycle role. The helper performs this exact ordered sequence:
+
+1. Build and check one atomic candidate containing the final tracked `Landed` state
+   and the plan already moved to `archive/` with final `Archived` status.
+2. Publish the candidate atomically through the configured mode as one remote target
+   transition.
+3. Independently verify the candidate/result with a fresh read of the configured
+   remote publication authority.
+4. Only after verification, write or reconstruct the untracked publication receipt
+   under `.git/loom/publications/<slice-id>/` in the resolved common Git directory.
+5. Release the claim and perform idempotent local cleanup.
+
+The receipt is coordinator/recovery state, not candidate content, a tracked
+finalization change, or a role handoff commit. Local cleanup never changes the tracked
+`Landed`/`Archived` state already delivered by the single remote update.
 
 ## Code evaluator — Deep review
 
