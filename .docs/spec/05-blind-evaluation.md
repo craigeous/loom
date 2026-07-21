@@ -1,6 +1,6 @@
 # 05 — Controlled-Input Independent Evaluation
 
-Status: Draft
+Status: Plan Review
 
 ## Authority
 
@@ -102,9 +102,80 @@ The ADR 0023 ratification verdict additionally records
 `bootstrap-ratification: degraded` and requires the existing explicit owner gate; it
 does not retroactively authorize its own evaluation.
 
-The bootstrap package binds full ancestor `base_sha` and committed `head_sha`,
-`head_sha^{tree}`, exact full-index binary/mode/rename diff, ordered source inventory,
-approved plan and authority, rubric, and SHA-256 for every input. It records the exact
+### Planning-artifact path
+
+Bootstrap planning evaluation is distinct from the code-bearing path below. Its
+package shape covers a research note at `Research Review` and an ADR, spec amendment,
+or slice-plan at `Plan Review`, while ADR 0023's closed allowlist still determines
+whether a run may start. Under this transition, only ADR 0023's degraded ratification
+and a slice-plan solely authorizing one listed slice are eligible; type coverage does
+not admit research, another ADR, or a spec amendment.
+
+Except for ADR 0023's one-time pre-acceptance ratification, every new or resumed plan
+run freshly validates the protected remote transition history, current tip and phase,
+configured-target containment, eligible slice entry, and progressive component state.
+The ratification binds the proposed ADR commit/blob and cannot itself initialize the
+post-acceptance state; its valid degraded verdict plus explicit owner acceptance are
+preconditions to the transition root, which then binds the accepted ADR commit/blob.
+A current publication intent or missing, unprotected, divergent, rewound, malformed,
+wrong-program, unavailable, or terminal transition state fails closed.
+
+The root prepares a fresh planning package outside the managed checkout. Its manifest
+binds the normalized repository-relative artifact path; artifact type and review
+status; full reviewed commit object ID; the artifact's Git blob object ID at that
+commit and SHA-256 of its bytes; and each type-specific authority, rubric, and severity
+input by normalized path, authority role, Git blob object ID, and SHA-256. When the
+plan rubric requires current repository facts, it additionally binds one full
+`evidence_sha`, its tree ID, and a complete sanitized tracked-path inventory and
+hashes. Re-review also binds the prior verdict and exact artifact-revision diff. The
+manifest records a unique run ID, its own SHA-256, creation time, launch mechanism,
+evidence mode, and the validated transition-state tip when one exists.
+
+Only those recorded objects are materialized as read-only inputs. Producer transcripts
+and reasoning, credentials, status history, unrelated evaluations, and original Git
+identity/history are excluded. After verifying the inventory, the root launches one
+fresh cold, non-delegating plan evaluator distinct from the artifact author/producer
+and the root orchestrator. It receives only the package path, evaluation type, and bounded
+instruction, has no managed-checkout write path, and may write only to a unique
+confined output directory and private scratch. No developer gate, correctness/test/
+security finder, local-review companion, code evaluator, or code gate rerun participates
+in this path.
+
+The plan evaluator writes exactly one identity-neutral verdict in its confined output
+and echoes the run ID, manifest hash,
+artifact path, reviewed commit/blob IDs, authority/rubric/evidence hashes, PASS/FAIL,
+round, severity findings, and required changes for FAIL. It never writes `.docs/`,
+commits, or changes lifecycle state. The root re-verifies immutable inputs and output
+confinement, then mechanically validates eligibility, transition-state binding,
+schema, uniqueness, completeness, and every echoed hash. It copies a valid verdict to
+the expected evaluation path without changing the merits, applies only the legal
+spec-03 status transition, and commits the verdict/status author-neutrally. ADR 0023's
+ratification PASS remains owner-gated in `Plan Review`. Root-copy is permitted only
+while `evaluation-recorder` remains available. Retirement of `evaluation-workspace`
+makes the production exporter mandatory; retirement of `evaluation-recorder` makes
+the production recorder mandatory and reaches the terminal full sunset. Neither may
+fall back to this path.
+
+Every bootstrap planning verdict prominently records:
+
+```text
+Evidence mode: loom-repository-bootstrap/v1
+Conformance: degraded ADR 0023 bootstrap planning evaluation
+Isolation: not established under ADR 0022
+```
+
+ADR 0023's ratification verdict also records
+`bootstrap-ratification: degraded`. Missing or invalid authority/evidence, mutation,
+missing/duplicate/truncated/malformed/cross-run/hash-mismatched output, escape from
+output confinement, or recording failure is invalid/infrastructure-blocked—not PASS,
+clean, or a merits FAIL—and cannot advance status or consume a round. Only
+hash-identical inputs may resume; changed inputs require a wholly new run.
+
+### Code-bearing path
+
+The code-bearing bootstrap package binds full ancestor `base_sha` and committed
+`head_sha`, `head_sha^{tree}`, exact full-index binary/mode/rename diff, ordered source
+inventory, approved plan and authority, rubric, and SHA-256 for every input. It records the exact
 developer gate command, environment/tool versions, timing, exit, stdout/stderr hashes,
 and output after running against source verified to match `head_sha`. The package is
 materialized outside the managed checkout from the commit, never the worktree, and
