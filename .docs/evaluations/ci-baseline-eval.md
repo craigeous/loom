@@ -218,3 +218,61 @@ Confirmed advisory findings: 11; rejected: 0; evaluator-originated: 1.
 - The exact diff contains both unrelated evaluation edits and two developer test paths outside the approved allowlist.
 
 Round rule: One prior durable code-evaluation FAIL counts as failure 1; this valid FAIL is Round 2 and requires Round 3.
+
+---
+
+## Code evaluation — bootstrap Round 3
+
+Verdict: FAIL
+Round: 3
+Required next round: 4
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-89b7679-r3`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `89b7679ce52832fa00bc2513c059ce4aae73cbbe`
+- Manifest SHA-256: `fea4f5dcc0e5a28761266156645735f01d8f854db5c815045a50939a4abd0fe5`
+- Aggregate findings SHA-256: `d47c3cfedabc581e8ccdd7f02ad81f08bd647baa4efccd8bac89a3b922141276`
+- Evaluator verdict SHA-256: `c9d075d40c95a00b30aab76cfafd2cc98eb75177e4c2eb234192623375290f41`
+
+### Gate rerun
+
+- `bash-3.2`: PASS, exit 0, 211/211 Bats; stdout SHA-256 `74708a23a12bd796e9e107d731d1f977165c0a3626ecab3f80261ede5481a1a6`, stderr SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+- `bash-5.3`: PASS, exit 0, 211/211 Bats; stdout SHA-256 `4f10754916c64b7581c363c75a1b45cd279455eacfcc2224316f6767ef00d6cd`, stderr SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+### Advisory-finding adjudication
+
+- [BLOCKER] `COR-R3-1` — confirmed: Plan step 2 and spec 10 require the release-owned bindings to declare physical/canonical root and skill checks, exact Codex ascent, helper allowlisting, direct-bin containment, and regular executable enforcement. The Codex object and the closed schema cannot represent most of these guarantees; the Claude object likewise omits several required declarations. This is a required static contract, not deferred bootstrap implementation.
+- [BLOCKER] `COR-R3-2` — confirmed: The plan explicitly requires wrong catalog locations to fail. Validation parses arbitrary tracked JSON but schema-binds and semantically inspects only the two expected catalog paths, so an additional catalog-shaped JSON at a wrong path is accepted. No regression covers this required case.
+- [BLOCKER] `COR-R3-3` — confirmed: run-bats-under canonicalizes only the parent directory and retains a terminal executable symlink. It then reports and exports that unresolved path as physical, contrary to plan step 5, and permits retargeting between the version check and execution.
+- [BLOCKER] `TST-R3-001` — confirmed: readJson uses null for both valid JSON null and errors; validateJson silently returns false for every falsy value; structurallyValid then suppresses semantic validation while process failure depends only on diagnostics. Required metadata or schemas replaced by null, false, zero, or an empty string can therefore produce no diagnostic and a zero exit.
+- [BLOCKER] `TST-R3-002` — confirmed: scripts/check line 423 executes the pinned Bats entrypoint through bare PATH-resolved bash before the controlled launcher and canary. This contradicts the selected absolute Bash contract and permits an ambient PATH shim to run and spoof the probe.
+- [BLOCKER] `TST-R3-003` — confirmed: The final Bash path component is not canonicalized in the launcher, check, or workflow assertion, and the tests do not exercise terminal-symlink resolution or retargeting.
+- [BLOCKER] `TST-R3-004` — confirmed: Schema validity and fixture equality only prove consistency of an under-specified installed-root object. Required absolute-source, physical/canonical, helper allowlist, direct-containment, regular-file, executable, and absolute-invocation declarations are missing.
+- [BLOCKER] `SEC-R3-001` — confirmed: scripts/check installs cleanup directly for EXIT, HUP, INT, and TERM; cleanup exits with the prior command status. A signal arriving after a successful command can therefore stop later stages and exit 0.
+
+### Evaluator corroboration
+
+- [BLOCKER] `EV-R3-001` at `plugins/loom/adapters/roots/codex-skill-source-v1.json:4` — The release-owned installed-root binding schema and documents omit required safety semantics.
+- [BLOCKER] `EV-R3-002` at `scripts/validate-repository.mjs:178` — Catalog-shaped JSON at a wrong repository location is not rejected.
+- [BLOCKER] `EV-R3-003` at `scripts/run-bats-under:30` — Selected Bash resolution does not canonicalize the terminal executable symlink.
+- [BLOCKER] `EV-R3-004` at `scripts/validate-repository.mjs:133` — Well-formed falsy JSON can suppress semantic validation and still exit successfully.
+- [BLOCKER] `EV-R3-005` at `scripts/check:423` — The Bats version probe executes ambient PATH bash outside the selected-shell contract.
+- [BLOCKER] `EV-R3-006` at `scripts/check:25` — Gate signal traps can convert an interrupted, incomplete run into exit 0.
+
+### Required changes
+
+- Extend both installed-root binding documents, their closed schema, release fixtures, pinned digests, semantic validation, and isolated mutation tests to encode every required absolute-input, exact-ascent, physical/canonical manifest and skill, helper allowlist, direct-bin containment, regular-file, executable, and absolute-invocation guarantee.
+- Detect and reject catalog-shaped tracked JSON outside the two live catalog paths and their specifically authorized release-fixture paths; add wrong-location regressions for both client catalog shapes.
+- Use an explicit parse-failure sentinel and always emit file-specific diagnostics for valid falsy JSON and invalid/falsy schemas or targets; add independent null, false, zero, and empty-string mutations for required metadata classes and referenced schemas.
+- Resolve the complete selected Bash executable, including terminal and multi-hop symlinks, before version checking, exporting, linking, or invocation; reuse that portable resolver in scripts/check and CI and add terminal-symlink/retarget regressions.
+- Run the Bats version probe as the selected absolute Bash, and add a poisoned-PATH regression proving a fake bash is never executed.
+- Separate cleanup-only EXIT handling from HUP, INT, and TERM handlers with fixed nonzero statuses; test each signal at a deterministic gate sentinel and require cleanup plus absence of the success marker.
+
+### Assessment
+
+Exact-head CI, scope, documentation, both evaluator gate reruns, and the transparent retained harness note passed. Authority, correctness, security, portability, and test sufficiency failed because uncovered blockers remain.
+
+Harness note: The retained exit-128 run completed all 211 tests and product validation, then failed only at the optional LOOM_DIFF_BASE object check because the synthetic one-commit evidence copy intentionally omitted the real base object. The documented no-override developer gates passed, both evaluator reruns passed, and the sealed four-job CI evidence executed the real b28a74754e2ee016a035fa085f0d91de66057f62 to 89b7679ce52832fa00bc2513c059ce4aae73cbbe range successfully. The retained failure is honest provenance and does not weaken the exact-head or real-range evidence.

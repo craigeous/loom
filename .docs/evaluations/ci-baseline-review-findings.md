@@ -279,3 +279,89 @@ these findings in the companion evaluation record.
 - Claim: Pull-request CI does not attest the exact head commit bound into the bootstrap manifest; it checks GitHub's synthetic merge commit instead, so the supplied green CI evidence is not exact-revision evidence for head 700a1176940fb3f2713113d02816e66b745bc064.
 - Evidence: The checkout step at line 48 does not set ref, and the workflow never compares the checked-out HEAD to github.event.pull_request.head.sha. All four supplied job logs state 'HEAD is now at a8ee9ed Merge 700a1176940fb3f2713113d02816e66b745bc064 into c7bd84d997afb32f6159628eb840a9dd8d2d3dca', while manifest.json binds head_sha 700a1176940fb3f2713113d02816e66b745bc064. Thus a passing status can depend on target-branch content absent from the reviewed head, contrary to ADR 0023's exact committed-input/gate-evidence binding and the plan's exact-head remote execution requirement.
 - Suggested verification: For pull_request, checkout ref github.event.pull_request.head.sha (and github.sha for push), export the expected full SHA, and fail before repository-controlled code unless git rev-parse HEAD exactly equals it. Rerun all four cells and verify each log records HEAD 700a1176940fb3f2713113d02816e66b745bc064. If merge-candidate coverage is also desired, run it as a separately identified job rather than presenting it as exact-head evidence.
+
+---
+
+# Bootstrap review Round 3 — ci-baseline
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Aggregate state: `bootstrap-ran-with-findings`
+- Run: `ci-baseline-b28a747-89b7679-r3`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `89b7679ce52832fa00bc2513c059ce4aae73cbbe`
+- Manifest SHA-256: `fea4f5dcc0e5a28761266156645735f01d8f854db5c815045a50939a4abd0fe5`
+- Aggregate findings SHA-256: `d47c3cfedabc581e8ccdd7f02ad81f08bd647baa4efccd8bac89a3b922141276`
+
+## COR-R3-1 — proposed BLOCKER
+
+- Worker: `correctness`
+- Location: `plugins/loom/adapters/roots/codex-skill-source-v1.json:4`
+- Confidence: `0.98`
+- Claim: The release-owned installed-root documents do not declare the complete binding semantics required by the approved plan and spec 10, so the static adapter contract is incomplete.
+- Evidence: The Codex document records only a skill suffix, a manifest pathname, name/version, helper directory, forbidden environment guesses, and hook fields. It does not declare that the supplied skill path must be absolute, that the skill and plugin root are physically canonicalized, the exact ../.. ascent, canonical skill/manifest checks, an allowlist containing loom-coord, direct-child bin containment, or regular/executable-file checks. The Claude document likewise has no physical-root, absolute-invocation, direct-child-containment, or regular/executable declarations. The closed schema at plugins/loom/schemas/loom-installed-root-binding-v1.schema.json:12 permits exactly these incomplete fields, so those required guarantees cannot be represented. This conflicts with ci-baseline Step 2 and spec 10's installed-root/helper binding contract; this slice's stated purpose is to land that complete static contract even though bootstrap code is deferred.
+- Suggested verification: Extend both binding documents and their closed schema to encode every required resolution, canonicalization, containment, manifest/skill, executable, and helper-allowlist rule; update release fixtures and pinned digests; then add isolated schema/semantic mutations proving omission or drift of each rule fails.
+
+## COR-R3-2 — proposed BLOCKER
+
+- Worker: `correctness`
+- Location: `scripts/validate-repository.mjs:178`
+- Confidence: `0.99`
+- Claim: Metadata validation does not reject catalogs placed at a wrong repository location, despite the plan explicitly requiring wrong catalog locations to fail.
+- Evidence: discover() includes every tracked JSON file, but the general JSON loop only parses it. schemaBindings validates the two expected live catalog paths and semanticMetadata reads only those same paths; no code classifies and rejects an additional catalog-shaped JSON object elsewhere. Consequently, copying the valid Codex catalog to a wrong location such as .agents/marketplace.json leaves the expected files valid and adds only another parseable JSON file, so --metadata remains green. The required regression suite also has source/path/symlink tests but no wrong-location case. This is an explicit required validator behavior and acceptance case, not merely missing defensive coverage.
+- Suggested verification: In a temporary metadata root, copy each valid live catalog to representative wrong locations while retaining the correct catalog and require a deterministic wrong-location diagnostic. Implement an allowlist of the two live catalog paths plus their named release-fixture paths, rejecting any other catalog-shaped tracked JSON object.
+
+## COR-R3-3 — proposed MAJOR
+
+- Worker: `correctness`
+- Location: `scripts/run-bats-under:30`
+- Confidence: `0.97`
+- Claim: The Bash launcher claims to resolve and export a physical shell path but resolves only the containing directory, leaving an executable symlink unresolved.
+- Evidence: Lines 30-31 apply pwd -P to dirname(selected_bash) and then append the original basename. pwd -P resolves symlinks in directory components, not a symlink at the executable itself. The resulting physical_bash can therefore still be a symlink; line 80 creates another symlink to it, and lines 83-85 export that unresolved name as LOOM_TEST_BASH and LOOM_TEST_BASH_PHYSICAL. scripts/check:357-359 and the CI assertion use the same directory-only pattern. This violates Step 5's explicit physical-shell resolution requirement and leaves a retarget window between the version probe and Bats/child execution. Existing launcher tests cover relative, non-executable, wrong-version, and cleanup cases but not a selected executable symlink.
+- Suggested verification: Add a test selecting a multi-hop symlink to the supported Bash and assert the launcher logs/exports the final regular executable path; retarget or remove the original symlink after resolution and prove Bats plus the env-bash child still use the resolved target. Use the same portable executable-resolution helper in scripts/check and the workflow assertion.
+
+## TST-R3-001 — proposed BLOCKER
+
+- Worker: `tests`
+- Location: `scripts/validate-repository.mjs:135`
+- Confidence: `high`
+- Claim: Well-formed falsy JSON values can make metadata validation skip all semantic checks and still exit successfully.
+- Evidence: readJson returns the parsed value directly, using null both for valid JSON null and for parse/read failure (lines 133-145). The initial scan only flips structurallyValid when the value is null and emits no diagnostic (lines 163-166); schema loading likewise treats a falsy schema as invalid without reporting it (lines 170-175); and validateJson returns false without a diagnostic for any falsy target or schema, including null, false, 0, or an empty string (lines 236-247). semanticMetadata is then skipped when structurallyValid is false (line 233), while process failure depends only on diagnostics.length (lines 440-441). Thus replacing a required manifest, catalog, matrix, binding, fixture, or schema with JSON null can leave diagnostics empty and print a passing result. The malformed-JSON tests exercise syntax errors, not well-formed falsy JSON values.
+- Suggested verification: In an owned metadata fixture root, replace each required metadata class and a referenced schema independently with null (and representative false/0/empty-string values), require a file-specific schema/type diagnostic and nonzero exit, and use a distinct parse-failure sentinel so parsed JSON null is never conflated with an error.
+
+## TST-R3-002 — proposed BLOCKER
+
+- Worker: `tests`
+- Location: `scripts/check:423`
+- Confidence: `high`
+- Claim: The gate launches the pinned Bats entrypoint through ambient PATH bash before the controlled launcher, contradicting the selected-absolute-Bash contract and leaving that execution outside the canary proof.
+- Evidence: Line 423 runs `bash "$BATS" --version`; this is the only bare-shell launch and can resolve a different or attacker-supplied PATH executable. The selected absolute Bash is not used until the count and controlled launcher at lines 478-480, and the runtime canary runs only inside that later launch. A PATH shim can therefore execute and spoof the Bats version before any version/canary check, while all current launcher tests and the four CI canary logs remain green. The plan requires Bats to be launched by the selected absolute Bash and says no stage may silently skip a missing or mismatched tool.
+- Suggested verification: Use `"$selected_bash" "$BATS" --version` for the version probe. Add a gate fixture that prepends a marker-writing fake `bash` to PATH, runs provisioning/version verification with a valid absolute selected shell, and proves the fake PATH shell is never executed.
+
+## TST-R3-003 — proposed MAJOR
+
+- Worker: `tests`
+- Location: `scripts/run-bats-under:30`
+- Confidence: `high`
+- Claim: The launcher does not resolve a terminal Bash symlink even though it exports and reports the result as the physical shell path.
+- Evidence: Lines 30-31 canonicalize only dirname(selected_bash) with pwd -P and then append the original basename. If the selected executable itself is a symlink, physical_bash is still that symlink. The launcher version-checks it, exports it as LOOM_TEST_BASH_PHYSICAL, and creates another symlink to it (lines 33, 80, and 83-85), so a final-component retarget between the check and launch can select different bytes. scripts/check lines 357-358 and the workflow lines 101-103 use the same parent-only construction. Existing rejection/canary/cleanup tests cover relative, non-executable, below-floor, mismatch, order, failure, and signals, but never a terminal symlink or retarget. This does not invalidate the supplied CI cells because their fixed /bin/bash and /usr/bin/bash paths produced the required versions, but it leaves the documented local launcher contract unproved.
+- Suggested verification: Resolve the complete executable path, including the final symlink, into an immutable canonical path before checking or invoking it. Add a test that selects a terminal symlink, verifies the exported/logged physical path is the real target, and retargets the original link after resolution without changing the interpreter used by Bats and its child.
+
+## TST-R3-004 — proposed BLOCKER
+
+- Worker: `tests`
+- Location: `plugins/loom/adapters/roots/codex-skill-source-v1.json:4`
+- Confidence: `high`
+- Claim: The Codex installed-root object and its closed schema omit required safety declarations, so schema/fixture equality cannot prove the planned root-binding contract.
+- Evidence: The plan requires codex-skill-source/v1 to declare an absolute selected `skills/<skill>/SKILL.md` input, the exact suffix/ascend rule, canonical skill and manifest checks, canonical direct-bin containment, an allowlisted helper, and regular-executable enforcement. The object contains skillSuffix, ascendToManifest, expected identity, and helperDirectory, but has no absolute-input requirement, explicit canonicalization/containment checks, allowedHelpers value, or regular/executable requirement (lines 4-9). The corresponding schema closes the object to exactly this incomplete key set (loom-installed-root-binding-v1.schema.json lines 11-13), its release fixture merely mirrors it, and semantic validation checks only expectedName/expectedVersion after schema validation (validate-repository.mjs lines 333-335). Consequently the green root-binding, schema, digest, and fixture-drift evidence proves consistency of an under-specified object, not the required contract.
+- Suggested verification: Extend the versioned Codex root-binding object and closed schema with explicit absolute-source, suffix/ascend, canonical skill/manifest, helper allowlist, direct-bin containment, regular-file, executable, and absolute-invocation requirements; update the release fixture/digest and add one isolated rejection test per required field or enum. Apply equivalent explicit physical/direct-containment declarations to the Claude binding where the schema currently relies only on field names.
+
+## SEC-R3-001 — proposed medium
+
+- Worker: `security`
+- Location: `scripts/check:25`
+- Confidence: `high`
+- Claim: HUP, INT, or TERM can make an interrupted gate exit successfully, allowing incomplete validation to be represented as a passing command.
+- Evidence: The new cleanup handler saves `$?` and exits with that value (lines 12-18), while line 25 installs it directly for EXIT, HUP, INT, and TERM. For a signal delivered after a successful command or between commands, `$?` is 0 rather than a signal-specific failure status. Running the same trap pattern under /bin/bash with `:; kill -TERM $$` printed `cleanup-status=0` and the process exited 0. The handler can therefore terminate before later validation stages without communicating failure through the process status.
+- Suggested verification: Use a cleanup-only EXIT trap and separate HUP/INT/TERM handlers that exit with fixed nonzero statuses (for example 129, 130, and 143). Add a regression harness that pauses the gate at a deterministic sentinel, sends each signal, and asserts a nonzero signal-specific status, removal of the private run directory, and absence of the final success marker.
