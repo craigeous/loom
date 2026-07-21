@@ -1,0 +1,82 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            host: Linux
+            architecture: x86_64
+            release: "22.04"
+            shell: /usr/bin/bash
+            bash_regex: '^5\.'
+          - runner: ubuntu-24.04
+            host: Linux
+            architecture: x86_64
+            release: "24.04"
+            shell: /usr/bin/bash
+            bash_regex: '^5\.'
+          - runner: macos-14
+            host: Darwin
+            architecture: arm64
+            release: "14"
+            shell: /bin/bash
+            bash_regex: '^3\.2\.57'
+          - runner: macos-15-intel
+            host: Darwin
+            architecture: x86_64
+            release: "15"
+            shell: /bin/bash
+            bash_regex: '^3\.2\.57'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Assert runner and run the pinned gate
+        env:
+          EXPECTED_HOST: ${{ matrix.host }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+          EXPECTED_RELEASE: ${{ matrix.release }}
+          SELECTED_BASH: ${{ matrix.shell }}
+          EXPECTED_BASH_REGEX: ${{ matrix.bash_regex }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "$EXPECTED_HOST"
+          test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          case "$EXPECTED_HOST" in
+            Linux) . /etc/os-release; test "$VERSION_ID" = "$EXPECTED_RELEASE" ;;
+            Darwin) test "$(sw_vers -productVersion | cut -d. -f1)" = "$EXPECTED_RELEASE" ;;
+          esac
+          test -x "$SELECTED_BASH"
+          physical_dir=$(CDPATH= cd -- "$(dirname -- "$SELECTED_BASH")" && pwd -P)
+          physical_shell="$physical_dir/$(basename -- "$SELECTED_BASH")"
+          test "$physical_shell" = "$SELECTED_BASH"
+          actual_version=$($SELECTED_BASH -c 'printf %s "$BASH_VERSION"')
+          [[ "$actual_version" =~ $EXPECTED_BASH_REGEX ]]
+          printf 'Host: %s %s %s; shell: %s (%s)\n' "$EXPECTED_HOST" "$EXPECTED_ARCHITECTURE" "$EXPECTED_RELEASE" "$physical_shell" "$actual_version"
+          if test "$EVENT_NAME" = pull_request; then LOOM_DIFF_BASE="$PR_BASE"; else LOOM_DIFF_BASE="$PUSH_BASE"; fi
+          if test -z "$LOOM_DIFF_BASE" || test "$LOOM_DIFF_BASE" = 0000000000000000000000000000000000000000; then LOOM_DIFF_BASE=$(git rev-parse HEAD^); fi
+          git cat-file -e "$LOOM_DIFF_BASE^{commit}"
+          export LOOM_DIFF_BASE
+          LOOM_TEST_BASH="$SELECTED_BASH" LOOM_EXPECTED_BASH_VERSION="$EXPECTED_BASH_REGEX" "$SELECTED_BASH" scripts/check

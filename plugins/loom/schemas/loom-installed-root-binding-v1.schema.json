@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/schemas/loom-installed-root-binding-v1.schema.json",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "client", "binding", "manifest", "expectedName", "expectedVersion", "helperDirectory", "allowedHelpers"],
+      "properties": { "schema": { "const": "claude-plugin-root/v1" }, "client": { "const": "claude" }, "binding": { "const": "CLAUDE_PLUGIN_ROOT" }, "manifest": { "const": ".claude-plugin/plugin.json" }, "expectedName": { "const": "loom" }, "expectedVersion": { "const": "0.2.0" }, "helperDirectory": { "const": "bin" }, "allowedHelpers": { "type": "array", "uniqueItems": true, "items": { "enum": ["loom-coord"] }, "minItems": 1, "maxItems": 1 } }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "client", "skillSuffix", "ascendToManifest", "expectedName", "expectedVersion", "helperDirectory", "forbiddenWorkflowRootGuesses", "hookBinding", "hookManifest"],
+      "properties": { "schema": { "const": "codex-skill-source/v1" }, "client": { "const": "codex" }, "skillSuffix": { "const": "skills/<skill>/SKILL.md" }, "ascendToManifest": { "const": ".codex-plugin/plugin.json" }, "expectedName": { "const": "loom" }, "expectedVersion": { "const": "0.2.0" }, "helperDirectory": { "const": "bin" }, "forbiddenWorkflowRootGuesses": { "type": "array", "uniqueItems": true, "items": { "enum": ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"] }, "minItems": 4, "maxItems": 4 }, "hookBinding": { "const": "PLUGIN_ROOT" }, "hookManifest": { "const": "./hooks/hooks.json" } }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # git-identity-guard.sh — PreToolUse hook guard (ADR 0003)
 #
 # Blocks git commands that override the uniform commit identity.

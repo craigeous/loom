@@ -6,6 +6,14 @@ bats_require_minimum_version 1.5.0
 
 COORD="${BATS_TEST_DIRNAME}/loom-coord"
 
+setup_file() {
+    : "${LOOM_TEST_BASH:?LOOM_TEST_BASH is required}"
+    : "${LOOM_EXPECTED_BASH_VERSION:?LOOM_EXPECTED_BASH_VERSION is required}"
+    case "$LOOM_TEST_BASH" in /*) ;; *) return 1 ;; esac
+    [ -x "$LOOM_TEST_BASH" ]
+    [[ "$($LOOM_TEST_BASH -c 'printf %s "$BASH_VERSION"')" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -25,7 +33,7 @@ make_repo() {
 # coord <subcommand> [args...] — run the helper inside REPO
 # Sets $status and $output (bats run convention)
 coord() {
-    run sh "$COORD" "$@"
+    run "$LOOM_TEST_BASH" "$COORD" "$@"
 }
 
 # coord_session <session-id> <subcommand> [args...] — run with --session
@@ -34,7 +42,7 @@ coord_session() {
     shift
     run env LOOM_LOCK_TTL="${LOOM_LOCK_TTL:-30}" \
         LOOM_LOCK_RETRIES="${LOOM_LOCK_RETRIES:-5}" \
-        sh "$COORD" "$@" --session "$sid"
+        "$LOOM_TEST_BASH" "$COORD" "$@" --session "$sid"
 }
 
 # state_dir — path to .git/loom/ in REPO
@@ -171,7 +179,7 @@ EOF
 @test "L1 lock-acquire on free lock: exit 0, holder session-id == self" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-L1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-L1"
     [ "$status" -eq 0 ]
     [ "$output" = "acquired" ]
     [ "$(holder_sid)" = "ses-L1" ]
@@ -186,7 +194,7 @@ EOF
     make_repo
     cd "$REPO"
     make_live_holder "ses-live-L2" >/dev/null
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-contender-L2"
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-contender-L2"
     [ "$status" -eq 3 ]
     [ "$(holder_sid)" = "ses-live-L2" ]
     teardown
@@ -200,7 +208,7 @@ EOF
     make_repo
     cd "$REPO"
     make_dead_holder "ses-dead-L3" "0"
-    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-contender-L3"
+    run env LOOM_LOCK_TTL=0 LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-contender-L3"
     [ "$status" -eq 0 ]
     [ "$output" = "acquired" ]
     [ "$(holder_sid)" = "ses-contender-L3" ]
@@ -218,7 +226,7 @@ EOF
     cd "$REPO"
     # Fresh holder stamp (ts=now) with a generous TTL — must not be cleared
     make_live_holder "ses-live-L4"
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-contender-L4"
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-contender-L4"
     [ "$status" -eq 3 ]
     [ "$(holder_sid)" = "ses-live-L4" ]
     teardown
@@ -242,12 +250,12 @@ EOF
         # TTL=5 makes the dead holder (epoch=0) stale (elapsed >> 5) while
         # keeping a freshly-won lock (epoch≈now, elapsed≈0) safe from re-reclaim.
         (
-            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 sh "$COORD" lock-acquire --session "ses-A-L5"
+            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-A-L5"
             echo "A:$?"
         ) >"$BATS_TEST_TMPDIR/out_A_$i" 2>&1 &
         local pid_a=$!
         (
-            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 sh "$COORD" lock-acquire --session "ses-B-L5"
+            env LOOM_LOCK_TTL=5 LOOM_LOCK_RETRIES=5 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-B-L5"
             echo "B:$?"
         ) >"$BATS_TEST_TMPDIR/out_B_$i" 2>&1 &
         local pid_b=$!
@@ -297,18 +305,18 @@ EOF
 @test "L6 second lock-acquire returns 3 while first is held; lock-verify confirms" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-A-L6"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-A-L6"
     [ "$status" -eq 0 ]
 
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" lock-acquire --session "ses-B-L6"
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-B-L6"
     [ "$status" -eq 3 ]
 
     # lock-verify A → held (0); lock-verify B → 5
-    run sh "$COORD" lock-verify --session "ses-A-L6"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-A-L6"
     [ "$status" -eq 0 ]
     [ "$output" = "held" ]
 
-    run sh "$COORD" lock-verify --session "ses-B-L6"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-B-L6"
     [ "$status" -eq 5 ]
     teardown
 }
@@ -320,14 +328,14 @@ EOF
 @test "L7a lock-verify while A holds: A→0 (held), B→5" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-A-L7"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-A-L7"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" lock-verify --session "ses-A-L7"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-A-L7"
     [ "$status" -eq 0 ]
     [ "$output" = "held" ]
 
-    run sh "$COORD" lock-verify --session "ses-B-L7"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-B-L7"
     [ "$status" -eq 5 ]
 
     # Verify no change to holder after lock-verify
@@ -338,7 +346,7 @@ EOF
 @test "L7b lock-verify with no lock: exit 5" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" lock-verify --session "ses-A-L7b"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-A-L7b"
     [ "$status" -eq 5 ]
     teardown
 }
@@ -347,7 +355,7 @@ EOF
     local notrepo
     notrepo="$(mktemp -d)"
     cd "$notrepo"
-    run sh "$COORD" lock-verify --session "ses-A-L7c"
+    run "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-A-L7c"
     [ "$status" -eq 10 ]
     rm -rf "$notrepo"
 }
@@ -359,10 +367,10 @@ EOF
 @test "L8 lock-release by non-holder: exit 5, lock intact" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-A-L8"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-A-L8"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" lock-release --session "ses-other-L8"
+    run "$LOOM_TEST_BASH" "$COORD" lock-release --session "ses-other-L8"
     [ "$status" -eq 5 ]
     [ "$(holder_sid)" = "ses-A-L8" ]
     teardown
@@ -376,14 +384,14 @@ EOF
     make_repo
     cd "$REPO"
     # A acquires the lock
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-A-L9"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-A-L9"
     [ "$status" -eq 0 ]
 
     # Force-replace the ref (simulates stale-steal by ses-B-L9)
     make_live_holder "ses-B-L9"
 
     # A tries to release — should exit 5 (ref now belongs to B)
-    run sh "$COORD" lock-release --session "ses-A-L9"
+    run "$LOOM_TEST_BASH" "$COORD" lock-release --session "ses-A-L9"
     [ "$status" -eq 5 ]
     # Lock still held by B
     [ "$(holder_sid)" = "ses-B-L9" ]
@@ -398,10 +406,10 @@ EOF
     make_repo
     cd "$REPO"
     # Acquire lock first
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-C1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-C1"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" claim slice-X --session "ses-C1"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-X --session "ses-C1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed slice-X"* ]]
 
@@ -434,7 +442,7 @@ EOF
     touch "$REPO/.git/loom/session-ses-us-C2/checkpoint"
     touch "$REPO/.git/loom/session-ses-us-C2/held-claims"
 
-    run sh "$COORD" claim slice-Y --session "ses-us-C2"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-Y --session "ses-us-C2"
     [ "$status" -eq 4 ]
     # Claim ref still names peer
     [ "$(claim_sid "slice-Y")" = "ses-peer-C2" ]
@@ -448,11 +456,11 @@ EOF
 @test "C3 claim own already-held slice: idempotent exit 0" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-C3"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-C3"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-Z --session "ses-C3"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-Z --session "ses-C3"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-Z --session "ses-C3"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-Z --session "ses-C3"
     [ "$status" -eq 0 ]
     teardown
 }
@@ -468,7 +476,7 @@ EOF
     mkdir -p "$REPO/.git/loom/session-ses-C4"
     touch "$REPO/.git/loom/session-ses-C4/checkpoint"
     touch "$REPO/.git/loom/session-ses-C4/held-claims"
-    run sh "$COORD" claim slice-W --session "ses-C4"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-W --session "ses-C4"
     [ "$status" -eq 5 ]
     teardown
 }
@@ -480,15 +488,15 @@ EOF
 @test "R1 renew: epoch advances and pid overwritten" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-R1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-R1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-R --session "ses-R1"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-R --session "ses-R1"
     [ "$status" -eq 0 ]
 
     local before_epoch
     before_epoch=$(claim_ts "slice-R")
     sleep 1
-    run sh "$COORD" renew slice-R --session "ses-R1"
+    run "$LOOM_TEST_BASH" "$COORD" renew slice-R --session "ses-R1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewed slice-R"* ]]
 
@@ -501,11 +509,11 @@ EOF
 @test "R1b renew by non-owner: exit 5" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-R1b-owner"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-R1b-owner"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-R1b --session "ses-R1b-owner"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-R1b --session "ses-R1b-owner"
     [ "$status" -eq 0 ]
-    run sh "$COORD" renew slice-R1b --session "ses-R1b-other"
+    run "$LOOM_TEST_BASH" "$COORD" renew slice-R1b --session "ses-R1b-other"
     [ "$status" -eq 5 ]
     teardown
 }
@@ -517,12 +525,12 @@ EOF
 @test "RC1 release-claim: removes registry line and held-claims entry" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-RC1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-RC1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-RC --session "ses-RC1"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-RC --session "ses-RC1"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" release-claim slice-RC --session "ses-RC1"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim slice-RC --session "ses-RC1"
     [ "$status" -eq 0 ]
     [ -z "$(claim_ref_sha "slice-RC")" ]
     run ! grep -qxF "slice-RC" "$REPO/.git/loom/session-ses-RC1/held-claims"
@@ -544,10 +552,10 @@ EOF
     plant_claim_ref "slice-RCL" "$dead_sid" "0"
 
     # Our session acquires the lock
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-RCL1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-us-RCL1"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" reclaim slice-RCL --session "ses-us-RCL1"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-RCL --session "ses-us-RCL1"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-RCL" ]
     [ "$(claim_sid "slice-RCL")" = "ses-us-RCL1" ]
@@ -564,10 +572,10 @@ EOF
 
     plant_claim_ref "slice-RCLb" "$live_sid" "$(date +%s)"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-RCL1b"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-us-RCL1b"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" reclaim slice-RCLb --session "ses-us-RCL1b"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-RCLb --session "ses-us-RCL1b"
     [ "$status" -eq 6 ]
     [ "$(claim_sid "slice-RCLb")" = "$live_sid" ]
     teardown
@@ -580,7 +588,7 @@ EOF
 @test "S1 session-start prints uuid and creates session dir" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" session-start
+    run "$LOOM_TEST_BASH" "$COORD" session-start
     [ "$status" -eq 0 ]
     local sid="$output"
     [ -n "$sid" ]
@@ -593,11 +601,11 @@ EOF
 @test "S1b checkpoint write/read round-trip" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" session-start --session "ses-S1b"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-S1b"
     [ "$status" -eq 0 ]
-    run sh "$COORD" checkpoint-write "next: implement slice-foo" --session "ses-S1b"
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-write "next: implement slice-foo" --session "ses-S1b"
     [ "$status" -eq 0 ]
-    run sh "$COORD" checkpoint-read --session "ses-S1b"
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-read --session "ses-S1b"
     [ "$status" -eq 0 ]
     [ "$output" = "next: implement slice-foo" ]
     teardown
@@ -606,11 +614,11 @@ EOF
 @test "S1c claim updates held-claims in session dir" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" session-start --session "ses-S1c"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-S1c"
     [ "$status" -eq 0 ]
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-S1c"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-S1c"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-S1c --session "ses-S1c"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-S1c --session "ses-S1c"
     [ "$status" -eq 0 ]
     grep -qxF "slice-S1c" "$REPO/.git/loom/session-ses-S1c/held-claims"
     teardown
@@ -630,15 +638,15 @@ EOF
     wt_path="$(cd "$REPO/.." && pwd)/wt-${sid}"
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
-    run sh "$COORD" session-start --session "$sid"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
     [ "$status" -eq 0 ]
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "$sid"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "$sid"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-SB1a --session "$sid"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-SB1a --session "$sid"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-SB1b --session "$sid"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-SB1b --session "$sid"
     [ "$status" -eq 0 ]
-    run sh "$COORD" lock-release --session "$sid"
+    run "$LOOM_TEST_BASH" "$COORD" lock-release --session "$sid"
     [ "$status" -eq 0 ]
 
     # Record old epoch
@@ -648,7 +656,7 @@ EOF
     sleep 1
 
     # Cold-restart: call session-bootstrap (simulates new pid from fresh process)
-    run sh "$COORD" session-bootstrap --session "$sid"
+    run "$LOOM_TEST_BASH" "$COORD" session-bootstrap --session "$sid"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewed slice-SB1a"* ]]
     [[ "$output" == *"renewed slice-SB1b"* ]]
@@ -695,7 +703,7 @@ EOF
     # Also plant a stale dead-holder lock
     make_dead_holder "$dead_sid" "0"
 
-    run env LOOM_LOCK_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     [[ "$output" == *"swept 1"* ]]
 
@@ -717,7 +725,7 @@ EOF
     local notrepo
     notrepo="$(mktemp -d)"
     cd "$notrepo"
-    run sh "$COORD" lock-acquire --session "ses-FC1"
+    run "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-FC1"
     [ "$status" -eq 10 ]
     [ "$status" -ne 0 ]
     rm -rf "$notrepo"
@@ -727,7 +735,7 @@ EOF
     local notrepo
     notrepo="$(mktemp -d)"
     cd "$notrepo"
-    run sh "$COORD" claim slice-FC1b --session "ses-FC1b"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-FC1b --session "ses-FC1b"
     [ "$status" -eq 10 ]
     rm -rf "$notrepo"
 }
@@ -739,7 +747,7 @@ EOF
 @test "U1 lock-acquire without --session: exit 1" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" lock-acquire
+    run "$LOOM_TEST_BASH" "$COORD" lock-acquire
     [ "$status" -eq 1 ]
     teardown
 }
@@ -747,7 +755,7 @@ EOF
 @test "U1b claim without --session: exit 1" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" claim slice-U1b
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-U1b
     [ "$status" -eq 1 ]
     teardown
 }
@@ -755,7 +763,7 @@ EOF
 @test "U1c unknown subcommand: exit 1" {
     make_repo
     cd "$REPO"
-    run sh "$COORD" nonexistent-subcommand --session "ses-U1c"
+    run "$LOOM_TEST_BASH" "$COORD" nonexistent-subcommand --session "ses-U1c"
     [ "$status" -eq 1 ]
     teardown
 }
@@ -776,9 +784,9 @@ EOF
     plant_claim_ref "auth-v2" "$sibling_sid" "$(date +%s)"
 
     # Our session acquires the lock and claims "v2" (a different slice)
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-v2-owner"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-v2-owner"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim v2 --session "ses-v2-owner"
+    run "$LOOM_TEST_BASH" "$COORD" claim v2 --session "ses-v2-owner"
     [ "$status" -eq 0 ]
 
     # "auth-v2" ref must still exist and name sibling
@@ -811,7 +819,7 @@ EOF
     mkdir -p "$REPO/.git/loom/session-ses-v2-b"
     printf 'v2\n' >"$REPO/.git/loom/session-ses-v2-b/held-claims"
 
-    run sh "$COORD" release-claim v2 --session "ses-v2-b"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim v2 --session "ses-v2-b"
     [ "$status" -eq 0 ]
 
     # "auth-v2" ref must still name the sibling
@@ -840,7 +848,7 @@ EOF
     # Plant a live holder so cleanup cannot acquire the lock
     make_live_holder "ses-lockowner-F2" >/dev/null
     # Force long TTL so cleanup won't try to reclaim
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -ne 0 ]
 
     # Claim ref SHAs must be identical (no mutations)
@@ -868,11 +876,11 @@ EOF
     plant_claim_ref "slice-F4" "$dead_sid" "0"
 
     # Acquire lock as our reclaimer and reclaim slice-F4
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-F4"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-reclaimer-F4"
     [ "$status" -eq 0 ]
 
     # reclaim must succeed: ses-foo is dead (not falsely alive via ses-foo-bar substring)
-    run sh "$COORD" reclaim slice-F4 --session "ses-reclaimer-F4"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-F4 --session "ses-reclaimer-F4"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-F4" ]
     # Claim ref now names reclaimer
@@ -901,7 +909,7 @@ EOF
     plant_claim_ref "slice-F6" "$dead_sid" "0"
 
     # Cleanup: stale lease → sweep → orphan worktree removal
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Stale claim must be swept
     [[ "$output" == *"swept 1"* ]]
@@ -932,7 +940,7 @@ EOF
     make_live_holder "ses-lockowner-F7" >/dev/null
 
     # session-end should exit non-zero (can't release claims) and preserve state
-    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 sh "$COORD" session-end --session "$our_sid"
+    run env LOOM_LOCK_TTL=9999 LOOM_LOCK_RETRIES=2 "$LOOM_TEST_BASH" "$COORD" session-end --session "$our_sid"
     [ "$status" -ne 0 ]
 
     # Claim ref must still name our session (not orphaned)
@@ -973,7 +981,7 @@ EOF
     plant_claim_ref "slice-R1" "$sid" "0"
 
     # Run cleanup with LOOM_LEASE_TTL=0 (any epoch is stale) and LOOM_HOLDERLESS_TTL=0
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Stale claim must be swept (not skipped)
     [[ "$output" == *"swept 1"* ]]
@@ -1000,11 +1008,11 @@ EOF
     local dead_sid="bar"
     plant_claim_ref "slice-R2" "$dead_sid" "0"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R2"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-reclaimer-R2"
     [ "$status" -eq 0 ]
 
     # reclaim must succeed: "bar" is dead (not falsely alive via "wt-foo-bar")
-    run sh "$COORD" reclaim slice-R2 --session "ses-reclaimer-R2"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-R2 --session "ses-reclaimer-R2"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-R2" ]
     [ "$(claim_sid "slice-R2")" = "ses-reclaimer-R2" ]
@@ -1029,11 +1037,11 @@ EOF
     local dead_sid='run[1]'
     plant_claim_ref "slice-R3" "$dead_sid" "0"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R3"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-reclaimer-R3"
     [ "$status" -eq 0 ]
 
     # reclaim must succeed: "run[1]" dead; must not be confused with live "run1"
-    run sh "$COORD" reclaim slice-R3 --session "ses-reclaimer-R3"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-R3 --session "ses-reclaimer-R3"
     [ "$status" -eq 0 ]
     [ "$output" = "reclaimed slice-R3" ]
     [ "$(claim_sid "slice-R3")" = "ses-reclaimer-R3" ]
@@ -1058,11 +1066,11 @@ EOF
 
     plant_claim_ref "slice-R6" "$live_sid" "$(date +%s)"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-reclaimer-R6"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-reclaimer-R6"
     [ "$status" -eq 0 ]
 
     # reclaim must fail: the session is live (space-safe parser finds its sid)
-    run sh "$COORD" reclaim slice-R6 --session "ses-reclaimer-R6"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-R6 --session "ses-reclaimer-R6"
     [ "$status" -eq 6 ]
     [ "$(claim_sid "slice-R6")" = "$live_sid" ]
 
@@ -1095,7 +1103,7 @@ EOF
 
     plant_claim_ref "slice-T3" "$sid" "0"
 
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 LOOM_LEASE_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     [[ "$output" == *"swept 1"* ]]
     [ -z "$(claim_ref_sha "slice-T3")" ]
@@ -1116,7 +1124,7 @@ EOF
     # Plant a corrupted blob: empty sid, numeric ts → "empty-sid guard" triggers
     plant_claim_ref_raw "slice-T5" "$(printf '\t1000\n')"
 
-    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 LOOM_HOLDERLESS_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # skipped counter must include the empty-sid ref (T5 fix)
     [[ "$output" == *"skipped 1"* ]]
@@ -1137,10 +1145,10 @@ EOF
     local peer_sid="ses-peer-LVF"
     plant_claim_ref "slice-LVF" "$peer_sid" "$(date +%s)"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVF"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-us-LVF"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" reclaim slice-LVF --session "ses-us-LVF"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-LVF --session "ses-us-LVF"
     [ "$status" -eq 6 ]
     [ "$(claim_sid "slice-LVF")" = "$peer_sid" ]
     teardown
@@ -1158,11 +1166,11 @@ EOF
 
     plant_claim_ref "slice-LVST" "$peer_sid" "0"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-LVST"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-us-LVST"
     [ "$status" -eq 0 ]
 
     # Reclaim must succeed: stale epoch = dead, regardless of worktree
-    run sh "$COORD" reclaim slice-LVST --session "ses-us-LVST"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-LVST --session "ses-us-LVST"
     [ "$status" -eq 0 ]
     [ "$(claim_sid "slice-LVST")" = "ses-us-LVST" ]
     teardown
@@ -1176,11 +1184,11 @@ EOF
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-RNW1"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-RNW1"
     [ "$status" -eq 0 ]
 
     local mypid=$$
-    run env LOOM_RENEW_INTERVAL=60 sh "$COORD" renewer-start "$mypid" --session "ses-RNW1"
+    run env LOOM_RENEW_INTERVAL=60 "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-RNW1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-started"* ]]
 
@@ -1191,12 +1199,12 @@ EOF
     kill -0 "$rpid" 2>/dev/null
 
     # Second renewer-start must be a no-op (duplicate suppression)
-    run env LOOM_RENEW_INTERVAL=60 sh "$COORD" renewer-start "$mypid" --session "ses-RNW1"
+    run env LOOM_RENEW_INTERVAL=60 "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-RNW1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-already-running"* ]]
 
     # Stop renewer
-    run sh "$COORD" renewer-stop --session "ses-RNW1"
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "ses-RNW1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-stopped"* ]]
     sleep 0.5
@@ -1210,11 +1218,11 @@ EOF
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-RNW2"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-RNW2"
     [ "$status" -eq 0 ]
 
     local mypid=$$
-    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW2"
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-RNW2"
     [ "$status" -eq 0 ]
 
     local rpid
@@ -1286,9 +1294,9 @@ EOF
     # A colon is illegal in git ref names; loom-coord must percent-encode it.
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-SC1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-SC1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim "slice:foo" --session "ses-SC1"
+    run "$LOOM_TEST_BASH" "$COORD" claim "slice:foo" --session "ses-SC1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed slice:foo"* ]]
     # Ref must exist under the hash-keyed path (V5: hash avoids invalid ref chars)
@@ -1296,11 +1304,11 @@ EOF
     # Claim sid correct
     [ "$(claim_sid "slice:foo")" = "ses-SC1" ]
     # Renew value-CAS works
-    run sh "$COORD" renew "slice:foo" --session "ses-SC1"
+    run "$LOOM_TEST_BASH" "$COORD" renew "slice:foo" --session "ses-SC1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewed slice:foo"* ]]
     # Release delete-CAS works
-    run sh "$COORD" release-claim "slice:foo" --session "ses-SC1"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim "slice:foo" --session "ses-SC1"
     [ "$status" -eq 0 ]
     [ -z "$(claim_ref_sha "slice:foo")" ]
     teardown
@@ -1309,13 +1317,13 @@ EOF
 @test "LC1 list-claims returns ref paths and blob content for active claims" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-LC1"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-LC1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-lc1a --session "ses-LC1"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-lc1a --session "ses-LC1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim slice-lc1b --session "ses-LC1"
+    run "$LOOM_TEST_BASH" "$COORD" claim slice-lc1b --session "ses-LC1"
     [ "$status" -eq 0 ]
-    run sh "$COORD" list-claims
+    run "$LOOM_TEST_BASH" "$COORD" list-claims
     [ "$status" -eq 0 ]
     # list-claims now outputs <original-slice-name>\t<sid>\t<ts> (V5 fix)
     [[ "$output" == *"slice-lc1a"* ]]
@@ -1330,11 +1338,11 @@ EOF
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-RNW3"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-RNW3"
     [ "$status" -eq 0 ]
 
     # Main session acquires the lock
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-RNW3"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-RNW3"
     [ "$status" -eq 0 ]
     local lock_sha_before
     lock_sha_before=$(git_lock_sha)
@@ -1342,7 +1350,7 @@ EOF
 
     # Start renewer with short cadences so the lock heartbeat fires quickly
     local mypid=$$
-    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 sh "$COORD" renewer-start "$mypid" --session "ses-RNW3"
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-RNW3"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-started"* ]]
 
@@ -1361,9 +1369,9 @@ EOF
     # Lock is still held by our session (sid unchanged)
     [ "$(holder_sid)" = "ses-RNW3" ]
 
-    run sh "$COORD" renewer-stop --session "ses-RNW3"
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "ses-RNW3"
     [ "$status" -eq 0 ]
-    run sh "$COORD" lock-release --session "ses-RNW3"
+    run "$LOOM_TEST_BASH" "$COORD" lock-release --session "ses-RNW3"
     [ "$status" -eq 0 ]
     teardown
 }
@@ -1382,12 +1390,12 @@ EOF
     # Plant a claim with empty ts field (tab-delimited: "sid\t\n")
     plant_claim_ref_raw "slice-U2" "$(printf '%s\t\n' "$peer_sid")"
 
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-us-U2"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-us-U2"
     [ "$status" -eq 0 ]
 
     # Pre-fix: empty epoch → $(( now - '' )) = now (huge) >> TTL → stale → reclaim OK (exit 0).
     # Post-fix: empty epoch → return 0 (fresh) → exit 6 (refused).
-    run sh "$COORD" reclaim slice-U2 --session "ses-us-U2"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-U2 --session "ses-us-U2"
     [ "$status" -eq 6 ]
     [ "$(claim_sid "slice-U2")" = "$peer_sid" ]
     teardown
@@ -1403,7 +1411,7 @@ EOF
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-U5"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-U5"
     [ "$status" -eq 0 ]
 
     local sess_dir="$REPO/.git/loom/session-ses-U5"
@@ -1419,7 +1427,7 @@ EOF
 
     # Pre-fix: rst empty → kill $spid unconditionally → sleep process dies.
     # Post-fix: rst empty → skip kill → sleep process survives.
-    run sh "$COORD" renewer-stop --session "ses-U5"
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "ses-U5"
     [ "$status" -eq 0 ]
     [[ "$output" == *"renewer-stopped"* ]]
 
@@ -1445,7 +1453,7 @@ EOF
     mkdir -p "$REPO/.git/loom/session-$peer_sid"
     touch "$REPO/.git/loom/session-$peer_sid/checkpoint"
 
-    run env LOOM_LOCK_TTL=0 sh "$COORD" cleanup
+    run env LOOM_LOCK_TTL=0 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Must be counted as skipped (R7 guard), not swept
     [[ "$output" == *"skipped 1"* ]]
@@ -1468,18 +1476,18 @@ EOF
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-V1-holder"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-V1-holder"
     [ "$status" -eq 0 ]
 
     # Acquire the lock
     run env LOOM_LOCK_TTL=3 LOOM_LOCK_RENEW_INTERVAL=1 LOOM_LOCK_RETRIES=3 \
-        sh "$COORD" lock-acquire --session "ses-V1-holder"
+        "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V1-holder"
     [ "$status" -eq 0 ]
 
     # Start renewer with 1s lock cadence (< 3s TTL)
     local mypid=$$
     run env LOOM_LOCK_TTL=3 LOOM_LOCK_RENEW_INTERVAL=1 \
-        sh "$COORD" renewer-start "$mypid" --session "ses-V1-holder"
+        "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-V1-holder"
     [ "$status" -eq 0 ]
 
     # Wait longer than the lock TTL (3s) so the lock WOULD expire without renewal
@@ -1487,14 +1495,14 @@ EOF
 
     # Peer tries to steal with TTL=3 (the lock timestamp is fresh due to renewal)
     run env LOOM_LOCK_TTL=3 LOOM_LOCK_RETRIES=2 \
-        sh "$COORD" lock-acquire --session "ses-V1-peer"
+        "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V1-peer"
     # Peer must fail — lock is kept fresh by the renewer
     [ "$status" -ne 0 ]
     [ "$(holder_sid)" = "ses-V1-holder" ]
 
-    run sh "$COORD" renewer-stop --session "ses-V1-holder"
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "ses-V1-holder"
     [ "$status" -eq 0 ]
-    run env LOOM_LOCK_TTL=3 sh "$COORD" lock-release --session "ses-V1-holder"
+    run env LOOM_LOCK_TTL=3 "$LOOM_TEST_BASH" "$COORD" lock-release --session "ses-V1-holder"
     [ "$status" -eq 0 ]
     teardown
 }
@@ -1523,7 +1531,7 @@ EOF
     git -C "$REPO" worktree add -q "$wt_path" HEAD
 
     # cleanup: stale claim → delete-CAS-first → succeeds → sweep ref + worktree
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" cleanup
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # delete-CAS succeeded → ref must be gone
     [ -z "$(claim_ref_sha "slice-V2")" ]
@@ -1575,7 +1583,7 @@ HOOK
 
     # cleanup: sees stale claim → delete-CAS → hook aborts (simulated renewal) →
     # "CAS refused" branch → claim and worktree must survive.
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" cleanup
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" cleanup
     [ "$status" -eq 0 ]
     # Hook aborted the CAS → claim ref must still exist
     [ -n "$(claim_ref_sha "slice-V2b")" ]
@@ -1608,9 +1616,9 @@ HOOK
     plant_claim_ref "slice-V3" "$holder_sid" "0"
 
     # Reclaim as a different session: stale claim → CAS-steal-first → succeeds
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V3-reclaimer"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V3-reclaimer"
     [ "$status" -eq 0 ]
-    run sh "$COORD" reclaim slice-V3 --session "ses-V3-reclaimer"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-V3 --session "ses-V3-reclaimer"
     [ "$status" -eq 0 ]
     # Reclaimer now owns the claim
     [ "$(claim_sid "slice-V3")" = "ses-V3-reclaimer" ]
@@ -1659,10 +1667,10 @@ HOOK
     chmod +x "$REPO/.git/hooks/reference-transaction"
 
     # lock-acquire touches refs/loom/lock — hook allows it
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V3b-reclaimer"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V3b-reclaimer"
     [ "$status" -eq 0 ]
     # reclaim: stale claim → value-CAS → hook aborts (simulated renewal) → exit 4
-    run sh "$COORD" reclaim slice-V3b --session "ses-V3b-reclaimer"
+    run "$LOOM_TEST_BASH" "$COORD" reclaim slice-V3b --session "ses-V3b-reclaimer"
     [ "$status" -eq 4 ]
     # Original holder still owns the claim (CAS was refused)
     [ "$(claim_sid "slice-V3b")" = "$holder_sid" ]
@@ -1679,29 +1687,29 @@ HOOK
     make_repo
     cd "$REPO"
 
-    run sh "$COORD" session-start --session "ses-V4"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-V4"
     [ "$status" -eq 0 ]
 
     run env LOOM_LOCK_TTL=30 LOOM_LOCK_RENEW_INTERVAL=1 LOOM_LOCK_RETRIES=3 \
-        sh "$COORD" lock-acquire --session "ses-V4"
+        "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V4"
     [ "$status" -eq 0 ]
 
     # Start renewer with 1s lock cadence so it heartbeats frequently
     local mypid=$$
     run env LOOM_LOCK_TTL=30 LOOM_LOCK_RENEW_INTERVAL=1 \
-        sh "$COORD" renewer-start "$mypid" --session "ses-V4"
+        "$LOOM_TEST_BASH" "$COORD" renewer-start "$mypid" --session "ses-V4"
     [ "$status" -eq 0 ]
 
     # Wait for at least one heartbeat so the lock SHA has changed since acquire
     sleep 2
 
     # Release must succeed despite the renewer having changed the SHA (V4 retry-loop)
-    run env LOOM_LOCK_TTL=30 sh "$COORD" lock-release --session "ses-V4"
+    run env LOOM_LOCK_TTL=30 "$LOOM_TEST_BASH" "$COORD" lock-release --session "ses-V4"
     [ "$status" -eq 0 ]
     # Lock must be gone
     [ -z "$(git_lock_sha)" ]
 
-    run sh "$COORD" renewer-stop --session "ses-V4"
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "ses-V4"
     teardown
 }
 
@@ -1712,13 +1720,13 @@ HOOK
 @test "V5a slice named 'foo.lock' can be claimed and released (hash-ref avoids .lock suffix)" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V5a"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V5a"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim "foo.lock" --session "ses-V5a"
+    run "$LOOM_TEST_BASH" "$COORD" claim "foo.lock" --session "ses-V5a"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed foo.lock"* ]]
     [ "$(claim_sid "foo.lock")" = "ses-V5a" ]
-    run sh "$COORD" release-claim "foo.lock" --session "ses-V5a"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim "foo.lock" --session "ses-V5a"
     [ "$status" -eq 0 ]
     [ -z "$(claim_ref_sha "foo.lock")" ]
     teardown
@@ -1727,13 +1735,13 @@ HOOK
 @test "V5b slice named 'a..b' can be claimed and released (hash-ref avoids double-dot)" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V5b"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V5b"
     [ "$status" -eq 0 ]
-    run sh "$COORD" claim "a..b" --session "ses-V5b"
+    run "$LOOM_TEST_BASH" "$COORD" claim "a..b" --session "ses-V5b"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed a..b"* ]]
     [ "$(claim_sid "a..b")" = "ses-V5b" ]
-    run sh "$COORD" release-claim "a..b" --session "ses-V5b"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim "a..b" --session "ses-V5b"
     [ "$status" -eq 0 ]
     [ -z "$(claim_ref_sha "a..b")" ]
     teardown
@@ -1746,14 +1754,14 @@ HOOK
 @test "V6 'Auth' and 'auth' are independent claims (hash-ref is case-sensitive)" {
     make_repo
     cd "$REPO"
-    run env LOOM_LOCK_RETRIES=3 sh "$COORD" lock-acquire --session "ses-V6"
+    run env LOOM_LOCK_RETRIES=3 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-V6"
     [ "$status" -eq 0 ]
 
-    run sh "$COORD" claim "Auth" --session "ses-V6"
+    run "$LOOM_TEST_BASH" "$COORD" claim "Auth" --session "ses-V6"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed Auth"* ]]
 
-    run sh "$COORD" claim "auth" --session "ses-V6"
+    run "$LOOM_TEST_BASH" "$COORD" claim "auth" --session "ses-V6"
     [ "$status" -eq 0 ]
     [[ "$output" == *"claimed auth"* ]]
 

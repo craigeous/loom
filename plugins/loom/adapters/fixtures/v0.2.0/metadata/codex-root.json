@@ -1,0 +1,3 @@
+{
+  "schema": "codex-skill-source/v1", "client": "codex", "skillSuffix": "skills/<skill>/SKILL.md", "ascendToManifest": ".codex-plugin/plugin.json", "expectedName": "loom", "expectedVersion": "0.2.0", "helperDirectory": "bin", "forbiddenWorkflowRootGuesses": ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"], "hookBinding": "PLUGIN_ROOT", "hookManifest": "./hooks/hooks.json"
+}

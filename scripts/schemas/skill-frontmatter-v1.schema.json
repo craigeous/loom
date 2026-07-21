@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://github.com/craigeous/loom/scripts/schemas/skill-frontmatter-v1.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["name", "description"],
+  "properties": { "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }, "description": { "type": "string", "minLength": 1 }, "license": { "type": "string" }, "compatibility": { "type": "string" }, "metadata": { "type": "object" }, "allowed-tools": { "type": ["string", "array"] } }
+}

@@ -5,16 +5,24 @@
 
 GUARD="${BATS_TEST_DIRNAME}/git-identity-guard.sh"
 
+setup_file() {
+    : "${LOOM_TEST_BASH:?LOOM_TEST_BASH is required}"
+    : "${LOOM_EXPECTED_BASH_VERSION:?LOOM_EXPECTED_BASH_VERSION is required}"
+    case "$LOOM_TEST_BASH" in /*) ;; *) return 1 ;; esac
+    [ -x "$LOOM_TEST_BASH" ]
+    [[ "$($LOOM_TEST_BASH -c 'printf %s "$BASH_VERSION"')" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+}
+
 # guard <json> -- runs the hook with the given stdin, sets $status/$output
 guard() {
-    run sh "$GUARD" <<<"$1"
+    run "$LOOM_TEST_BASH" "$GUARD" <<<"$1"
 }
 
 # guard_no_jq <json> -- runs the hook with a stub PATH that excludes jq,
 # forcing the grep/sed fallback branch (lines ~27-29 of the hook).
 guard_no_jq() {
     stub="$(mktemp -d)"
-    # NOTE: the interpreter is invoked by ABSOLUTE path (/bin/sh) so it does
+    # NOTE: the selected interpreter is invoked by absolute path so it does
     # NOT need to be on the stubbed PATH. Symlink only what the fallback branch
     # uses; deliberately omit jq so command -v jq fails (NO_JQ).
     for t in cat grep sed tr wc head; do
@@ -25,7 +33,7 @@ guard_no_jq() {
             }
         done
     done
-    run env PATH="$stub" /bin/sh "$GUARD" <<<"$1"
+    run env PATH="$stub" "$LOOM_TEST_BASH" "$GUARD" <<<"$1"
     rm -rf "$stub"
 }
 

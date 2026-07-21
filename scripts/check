@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+REPOSITORY_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)
+CONTRACT="$SCRIPT_DIR/check-toolchain.json"
+CACHE="$REPOSITORY_ROOT/.check-cache"
+DOWNLOADS="$CACHE/downloads"
+TOOLS="$CACHE/tools"
+CURRENT_STAGE="bootstrap"
+
+failed() {
+    status=$?
+    printf 'FAILED stage %s (exit %s)\n' "$CURRENT_STAGE" "$status" >&2
+    exit "$status"
+}
+trap failed ERR
+
+stage() {
+    CURRENT_STAGE="$1"
+    printf '\n==> %s\n' "$CURRENT_STAGE"
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || {
+        printf 'scripts/check requires %s to bootstrap pinned check tools\n' "$1" >&2
+        return 1
+    }
+}
+
+version_at_least() {
+    actual="$1" required="$2"
+    actual_major=${actual%%.*}
+    actual_rest=${actual#*.}
+    actual_minor=${actual_rest%%.*}
+    required_major=${required%%.*}
+    required_rest=${required#*.}
+    required_minor=${required_rest%%.*}
+    [ "$actual_major" -gt "$required_major" ] || { [ "$actual_major" -eq "$required_major" ] && [ "$actual_minor" -ge "$required_minor" ]; }
+}
+
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+download_field() {
+    tool="$1" platform="$2" field="$3"
+    jq -er --arg tool "$tool" --arg platform "$platform" --arg field "$field" \
+        '.downloads[] | select(.tool == $tool and (.platform == $platform or .platform == "all")) | .[$field]' "$CONTRACT"
+}
+
+fetch() {
+    tool="$1" platform="$2"
+    url=$(download_field "$tool" "$platform" url)
+    expected=$(download_field "$tool" "$platform" sha256)
+    destination="$DOWNLOADS/${tool}-${platform}"
+    if [ ! -f "$destination" ] || [ "$(sha256 "$destination")" != "$expected" ]; then
+        printf 'Downloading pinned %s for %s\n' "$tool" "$platform" >&2
+        curl -fL --retry 3 --proto '=https' -o "$destination" "$url"
+    fi
+    actual=$(sha256 "$destination")
+    [ "$actual" = "$expected" ] || {
+        printf '%s digest mismatch: expected %s, got %s\n' "$destination" "$expected" "$actual" >&2
+        return 1
+    }
+    printf '%s' "$destination"
+}
+
+stage "toolchain contract and pinned digests"
+for command_name in bash curl git jq tar awk; do require_command "$command_name"; done
+mkdir -p "$DOWNLOADS" "$TOOLS"
+jq -e '
+  .contract == "loom-check-toolchain/v1" and .productVersion == "0.2.0" and
+  .tools.shfmt == "3.13.1" and .tools.shellcheck == "0.11.0" and .tools.bats == "1.13.0" and
+  .tools.claude == "2.1.216" and .tools.node == "22.17.0" and .tools.ajv == "8.17.1" and
+  .tools.yaml == "2.8.0" and .tools["markdown-it"] == "14.1.0" and .tools["github-slugger"] == "2.0.0" and
+  .runtimeFloors == {bash:"3.2",git:"2.34",jq:"1.6"} and
+  .actions.checkout == "11bd71901bbe5b1630ceea73d27597364c9af683" and
+  ([.downloads[].sha256, .vendored[].sha256] | all(test("^[0-9a-f]{64}$"))) and
+  ([.vendored[].kind] | all(. == "upstream" or . == "derived-local"))
+' "$CONTRACT" >/dev/null
+checkout_pin=$(jq -r .actions.checkout "$CONTRACT")
+[ "$(grep -c 'uses:' "$REPOSITORY_ROOT/.github/workflows/check.yml")" -eq 1 ]
+grep -F "uses: actions/checkout@$checkout_pin" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
+[ "$(sha256 "$SCRIPT_DIR/check-tools/package-lock.json")" = "$(jq -r .packageLockSha256 "$CONTRACT")" ] || {
+    printf 'package-lock digest drift\n' >&2
+    exit 1
+}
+while IFS=$'\t' read -r expected vendored; do
+    [ -f "$REPOSITORY_ROOT/$vendored" ] || {
+        printf 'missing pinned file: %s\n' "$vendored" >&2
+        exit 1
+    }
+    [ "$(sha256 "$REPOSITORY_ROOT/$vendored")" = "$expected" ] || {
+        printf 'pinned file digest drift: %s\n' "$vendored" >&2
+        exit 1
+    }
+done < <(jq -r '.vendored[] | [.sha256, .path] | @tsv' "$CONTRACT")
+
+bash_version=${BASH_VERSION%%(*}
+git_version=$(git --version | awk '{print $3}')
+jq_version=$(jq --version | sed 's/^jq-//')
+version_at_least "$bash_version" "$(jq -r .runtimeFloors.bash "$CONTRACT")" || {
+    printf 'Bash %s is below required 3.2\n' "$bash_version" >&2
+    exit 1
+}
+version_at_least "$git_version" "$(jq -r .runtimeFloors.git "$CONTRACT")" || {
+    printf 'Git %s is below required 2.34\n' "$git_version" >&2
+    exit 1
+}
+version_at_least "$jq_version" "$(jq -r .runtimeFloors.jq "$CONTRACT")" || {
+    printf 'jq %s is below required 1.6\n' "$jq_version" >&2
+    exit 1
+}
+
+case "$(uname -s):$(uname -m)" in
+Darwin:arm64)
+    PLATFORM=darwin-arm64
+    NODE_DIR=node-v22.17.0-darwin-arm64
+    SHELLCHECK_DIR=shellcheck-v0.11.0
+    ;;
+Darwin:x86_64)
+    PLATFORM=darwin-x86_64
+    NODE_DIR=node-v22.17.0-darwin-x64
+    SHELLCHECK_DIR=shellcheck-v0.11.0
+    ;;
+Linux:x86_64)
+    PLATFORM=linux-x86_64
+    NODE_DIR=node-v22.17.0-linux-x64
+    SHELLCHECK_DIR=shellcheck-v0.11.0
+    ;;
+*)
+    printf 'Unsupported check host: %s %s\n' "$(uname -s)" "$(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+shfmt_archive=$(fetch shfmt "$PLATFORM")
+shellcheck_archive=$(fetch shellcheck "$PLATFORM")
+node_archive=$(fetch node "$PLATFORM")
+bats_archive=$(fetch bats "$PLATFORM")
+
+mkdir -p "$TOOLS/bin"
+cp "$shfmt_archive" "$TOOLS/bin/shfmt"
+chmod +x "$TOOLS/bin/shfmt"
+if [ ! -x "$TOOLS/$SHELLCHECK_DIR/shellcheck" ]; then tar -xJf "$shellcheck_archive" -C "$TOOLS"; fi
+if [ ! -x "$TOOLS/$NODE_DIR/bin/node" ]; then tar -xzf "$node_archive" -C "$TOOLS"; fi
+if [ ! -f "$TOOLS/bats-core-1.13.0/bin/bats" ]; then tar -xzf "$bats_archive" -C "$TOOLS"; fi
+ln -sf "$TOOLS/$SHELLCHECK_DIR/shellcheck" "$TOOLS/bin/shellcheck"
+NODE="$TOOLS/$NODE_DIR/bin/node"
+NPM_CLI="$TOOLS/$NODE_DIR/lib/node_modules/npm/bin/npm-cli.js"
+BATS="$TOOLS/bats-core-1.13.0/bin/bats"
+[ "$("$TOOLS/bin/shfmt" --version | sed 's/^v//')" = "3.13.1" ]
+[ "$("$TOOLS/bin/shellcheck" --version | awk '/version:/ {print $2}')" = "0.11.0" ]
+[ "$($NODE --version)" = "v22.17.0" ]
+[ "$($NODE "$NPM_CLI" --version)" = "10.9.2" ]
+[ "$(bash "$BATS" --version 2>/dev/null || true)" = "Bats 1.13.0" ]
+
+stage "locked JavaScript dependencies and metadata validation"
+PATH="$TOOLS/$NODE_DIR/bin:$PATH" "$NODE" "$NPM_CLI" ci --prefix "$SCRIPT_DIR/check-tools" --no-audit --no-fund
+if [ ! -e "$SCRIPT_DIR/node_modules" ]; then ln -s check-tools/node_modules "$SCRIPT_DIR/node_modules"; fi
+[ -L "$SCRIPT_DIR/node_modules" ] && [ "$(readlink "$SCRIPT_DIR/node_modules")" = "check-tools/node_modules" ]
+export LOOM_NODE="$NODE"
+"$NODE" "$SCRIPT_DIR/validate-repository.mjs" --root "$REPOSITORY_ROOT" --metadata
+
+script_files=()
+while IFS= read -r -d '' tracked; do script_files+=("$REPOSITORY_ROOT/$tracked"); done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.sh')
+while IFS= read -r -d '' record; do
+    metadata=${record%%$'\t'*}
+    tracked=${record#*$'\t'}
+    mode=${metadata%% *}
+    base=${tracked##*/}
+    case "$mode:$base" in 100755:*.*) ;; 100755:*)
+        if [ -f "$REPOSITORY_ROOT/$tracked" ] && head -1 "$REPOSITORY_ROOT/$tracked" | grep -q 'bash$'; then script_files+=("$REPOSITORY_ROOT/$tracked"); fi
+        ;;
+    esac
+done < <(git -C "$REPOSITORY_ROOT" ls-files --stage -z)
+for required_script in "$SCRIPT_DIR/check" "$SCRIPT_DIR/run-bats-under" "$REPOSITORY_ROOT/plugins/loom/bin/loom-coord"; do
+    found=false
+    for candidate in "${script_files[@]}"; do [ "$candidate" = "$required_script" ] && found=true; done
+    $found || script_files+=("$required_script")
+done
+
+stage "shfmt"
+"$TOOLS/bin/shfmt" -i 4 -d -ln bash "${script_files[@]}"
+
+stage "ShellCheck"
+"$TOOLS/bin/shellcheck" -s bash "${script_files[@]}"
+
+running_bash_dir=$(CDPATH='' cd -- "$(dirname -- "$BASH")" && pwd -P)
+running_bash="$running_bash_dir/$(basename -- "$BASH")"
+selected_bash=${LOOM_TEST_BASH:-$running_bash}
+case "$selected_bash" in /*) ;; *)
+    printf 'LOOM_TEST_BASH must be absolute\n' >&2
+    exit 1
+    ;;
+esac
+expected_bash=${LOOM_EXPECTED_BASH_VERSION:-^${BASH_VERSION%%.*}\.}
+stage "Bash syntax"
+"$selected_bash" -n "${script_files[@]}"
+
+stage "Bats tests"
+test_files=()
+while IFS= read -r -d '' tracked; do test_files+=("$REPOSITORY_ROOT/$tracked"); done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.bats')
+for required_test in "$SCRIPT_DIR/tests/shell-runtime.bats" "$SCRIPT_DIR/tests/repository-validation.bats"; do
+    found=false
+    for candidate in "${test_files[@]}"; do [ "$candidate" = "$required_test" ] && found=true; done
+    $found || test_files+=("$required_test")
+done
+test_count=$("$selected_bash" "$BATS" --count "${test_files[@]}")
+printf 'Discovered %s Bats tests\n' "$test_count"
+"$selected_bash" "$SCRIPT_DIR/run-bats-under" "$selected_bash" "$expected_bash" "$BATS" "${test_files[@]}"
+
+stage "relative links"
+"$NODE" "$SCRIPT_DIR/validate-repository.mjs" --root "$REPOSITORY_ROOT" --links
+
+stage "Claude strict plugin validation"
+CLAUDE="$SCRIPT_DIR/check-tools/node_modules/.bin/claude"
+[ -x "$CLAUDE" ] || {
+    printf 'locked Claude executable is missing\n' >&2
+    exit 1
+}
+"$CLAUDE" plugin validate "$REPOSITORY_ROOT/plugins/loom" --strict
+
+stage "diff whitespace"
+git -C "$REPOSITORY_ROOT" diff --check
+git -C "$REPOSITORY_ROOT" diff --cached --check
+if [ -n "${LOOM_DIFF_BASE:-}" ]; then
+    git -C "$REPOSITORY_ROOT" cat-file -e "$LOOM_DIFF_BASE^{commit}"
+    git -C "$REPOSITORY_ROOT" diff --check "$LOOM_DIFF_BASE...HEAD"
+fi
+printf '\nAll checks passed\n'

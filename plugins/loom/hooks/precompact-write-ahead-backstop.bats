@@ -7,6 +7,14 @@
 
 HOOK="${BATS_TEST_DIRNAME}/precompact-write-ahead-backstop.sh"
 
+setup_file() {
+    : "${LOOM_TEST_BASH:?LOOM_TEST_BASH is required}"
+    : "${LOOM_EXPECTED_BASH_VERSION:?LOOM_EXPECTED_BASH_VERSION is required}"
+    case "$LOOM_TEST_BASH" in /*) ;; *) return 1 ;; esac
+    [ -x "$LOOM_TEST_BASH" ]
+    [[ "$($LOOM_TEST_BASH -c 'printf %s "$BASH_VERSION"')" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -60,7 +68,7 @@ mk_json() {
 # Sets $status and $output (bats run convention)
 backstop() {
     local json="$1"
-    run sh "$HOOK" <<<"$json"
+    run "$LOOM_TEST_BASH" "$HOOK" <<<"$json"
 }
 
 # ---------------------------------------------------------------------------
@@ -187,7 +195,7 @@ backstop() {
 # ---------------------------------------------------------------------------
 
 @test "T8 empty stdin → status 0 (fail-open)" {
-    run sh "$HOOK" </dev/null
+    run "$LOOM_TEST_BASH" "$HOOK" </dev/null
     [ "$status" -eq 0 ]
 }
 
@@ -212,7 +220,7 @@ backstop() {
     GIT_PATH="$(command -v git)"
     ln -s "$GIT_PATH" "$stub/git"
     JSON="$(mk_json manual s9)"
-    run env PATH="$stub" /bin/sh "$HOOK" <<<"$JSON"
+    run env PATH="$stub" "$LOOM_TEST_BASH" "$HOOK" <<<"$JSON"
     rm -rf "$stub"
     [ "$status" -eq 2 ]
     rm -rf "$REPO"
@@ -228,7 +236,7 @@ backstop() {
     # Run from a completely different directory; the hook must use cwd from JSON
     OTHERDIR="$(mktemp -d)"
     JSON="$(mk_json manual s10)"
-    run sh -c "cd '$OTHERDIR' && sh '$HOOK'" <<<"$JSON"
+    run "$LOOM_TEST_BASH" -c "cd '$OTHERDIR' && '$LOOM_TEST_BASH' '$HOOK'" <<<"$JSON"
     # no-progress + manual → block (proves hook resolved REPO, not OTHERDIR)
     [ "$status" -eq 2 ]
     rm -rf "$OTHERDIR"

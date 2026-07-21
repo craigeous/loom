@@ -1,0 +1,10 @@
+{
+  "schema": "loom-compatibility-matrix/v1", "product": "loom", "version": "0.2.0", "clientFloors": { "claude": "2.1.216", "codex": "0.144.6" },
+  "workflows": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init"], "roles": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"], "hookWireFixtureVersion": "hook-wire-v1",
+  "rootBindings": [{ "id": "claude-plugin-root/v1", "path": "plugins/loom/adapters/roots/claude-plugin-root-v1.json" }, { "id": "codex-skill-source/v1", "path": "plugins/loom/adapters/roots/codex-skill-source-v1.json" }],
+  "profiles": [
+    { "profile": "Economy", "consumers": ["researcher"], "claude": { "selector": "haiku" }, "codex": { "model": "gpt-5.6-terra", "effort": "low" } },
+    { "profile": "Standard", "consumers": ["developer", "orchestrator"], "claude": { "selector": "sonnet" }, "codex": { "model": "gpt-5.6", "effort": "medium" } },
+    { "profile": "Deep review", "consumers": ["planner", "plan evaluator", "code evaluator"], "claude": { "selector": "opus" }, "codex": { "model": "gpt-5.6", "effort": "high" } }
+  ]
+}

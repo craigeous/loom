@@ -1,0 +1,3 @@
+{
+  "schema": "claude-plugin-root/v1", "client": "claude", "binding": "CLAUDE_PLUGIN_ROOT", "manifest": ".claude-plugin/plugin.json", "expectedName": "loom", "expectedVersion": "0.2.0", "helperDirectory": "bin", "allowedHelpers": ["loom-coord"]
+}

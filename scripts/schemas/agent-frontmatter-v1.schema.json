@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://github.com/craigeous/loom/scripts/schemas/agent-frontmatter-v1.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["name", "description", "model", "color", "tools"],
+  "properties": { "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }, "description": { "type": "string", "minLength": 1 }, "model": { "enum": ["haiku", "sonnet", "opus"] }, "color": { "type": "string", "minLength": 1 }, "tools": { "type": ["string", "array"] } }
+}

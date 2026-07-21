@@ -6,5 +6,6 @@
   "homepage": "https://github.com/craigeous/loom",
   "repository": "https://github.com/craigeous/loom",
   "license": "MIT",
-  "keywords": ["spec-driven", "agents", "orchestration", "code-review", "workflow"]
+  "keywords": ["spec-driven", "agents", "orchestration", "code-review", "workflow"],
+  "skills": "./skills/"
 }

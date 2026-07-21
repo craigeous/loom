@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 4 ]; then
+    printf 'usage: run-bats-under ABSOLUTE_BASH VERSION_REGEX BATS_ENTRY TEST...\n' >&2
+    exit 2
+fi
+
+selected_bash="$1"
+expected_regex="$2"
+bats_entry="$3"
+shift 3
+
+case "$selected_bash" in
+/*) ;;
+*)
+    printf 'run-bats-under: shell path must be absolute: %s\n' "$selected_bash" >&2
+    exit 2
+    ;;
+esac
+[ -x "$selected_bash" ] || {
+    printf 'run-bats-under: shell is not executable: %s\n' "$selected_bash" >&2
+    exit 2
+}
+[ -f "$bats_entry" ] || {
+    printf 'run-bats-under: Bats entrypoint is missing: %s\n' "$bats_entry" >&2
+    exit 2
+}
+
+shell_dir=$(CDPATH='' cd -- "$(dirname -- "$selected_bash")" && pwd -P)
+physical_bash="$shell_dir/$(basename -- "$selected_bash")"
+# shellcheck disable=SC2016
+actual_version=$("$physical_bash" -c 'printf %s "$BASH_VERSION"')
+if ! [[ "$actual_version" =~ $expected_regex ]]; then
+    printf 'run-bats-under: selected Bash %s version %s does not match %s\n' "$physical_bash" "$actual_version" "$expected_regex" >&2
+    exit 2
+fi
+
+runtime_canary=""
+tests=()
+for test_file in "$@"; do
+    case "$test_file" in
+    */scripts/tests/shell-runtime.bats | scripts/tests/shell-runtime.bats) runtime_canary="$test_file" ;;
+    *) tests+=("$test_file") ;;
+    esac
+done
+[ -n "$runtime_canary" ] || {
+    printf 'run-bats-under: runtime canary is missing from discovered tests\n' >&2
+    exit 2
+}
+
+runtime_dir=$(mktemp -d "${TMPDIR:-/tmp}/loom-bash.XXXXXX")
+trap 'rm -rf "$runtime_dir"' EXIT HUP INT TERM
+mkdir -p "$runtime_dir/bin"
+ln -s "$physical_bash" "$runtime_dir/bin/bash"
+
+export PATH="$runtime_dir/bin:$PATH"
+export LOOM_TEST_BASH="$physical_bash"
+export LOOM_EXPECTED_BASH_VERSION="$expected_regex"
+export LOOM_TEST_BASH_PHYSICAL="$physical_bash"
+
+printf 'Selected Bash: %s (%s)\n' "$physical_bash" "$actual_version"
+exec "$physical_bash" "$bats_entry" "$runtime_canary" "${tests[@]}"

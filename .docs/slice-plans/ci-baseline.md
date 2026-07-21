@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -490,6 +490,42 @@ not success.
   mandated by ADR 0019 and spec 10.
 
 ## Notes
+
+### Implementation gate evidence (2026-07-21)
+
+- Known Claude red reproduced before the fix: `claude plugin validate
+  plugins/loom --strict` exited 1 under Claude Code 2.1.216, reporting the
+  `commands/run.md` YAML parse error and the missing manifest-version warning.
+- Validator red reproduced against base `b28a74754e2ee016a035fa085f0d91de66057f62`
+  with the new targeted suite overlaid: the valid dual-client metadata test
+  exited 1 because `.agents/plugins/marketplace.json` and the release contracts
+  did not exist.
+- Fixture isolation: the filtered malformed-JSON test and subsequent real-tree
+  metadata test both passed; `scripts/validate-repository.mjs --metadata` then
+  passed at the Git root. `git ls-files` shows the four malformed sources only
+  with `.json.in`, `.md.in`, or `.allowlist.in` suffixes.
+- Floor gate: `LOOM_TEST_BASH=/bin/bash
+  LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash scripts/check` exited 0.
+  It dynamically discovered 123 Bats tests; the canary logged Bats and its
+  executable child at `3.2.57(1)-release`. Metadata, link, pinned Claude strict,
+  and working/index diff stages passed.
+- Current/cwd-independent gate: from `/tmp`,
+  `LOOM_TEST_BASH=/opt/homebrew/bin/bash
+  LOOM_EXPECTED_BASH_VERSION='^5\.3\.' /opt/homebrew/bin/bash
+  /Users/craig/git/loom-worktrees/ci-baseline/scripts/check` exited 0. The same
+  123 tests passed and both canary processes logged `5.3.9(1)-release`.
+- Locked strict validation printed `Validation passed` with no warning for
+  Claude Code 2.1.216. Static Codex metadata, compatibility, root bindings, and
+  release fixtures passed schema, digest, reference, path, and drift checks;
+  this is not Codex install or behavior evidence.
+- `.github/workflows/check.yml` declares all four required runner cells and the
+  gate verifies its full checkout-action pin against `check-toolchain.json`.
+  The workflow was not remotely dispatched because this handoff does not push or
+  publish; its jobs remain required CI evidence when the branch is published by
+  the orchestrator.
+- M0 remains incomplete until `client-floor-adapter-smoke` supplies the deferred
+  clean install, invocation, cold-role, hook, helper, upgrade, and uninstall
+  evidence for both exact client floors.
 
 - Required next M0 slice: `client-floor-adapter-smoke`, after the workflow, role,
   hook-wire, and root-bootstrap adapters exist. It runs both exact floor clients in
