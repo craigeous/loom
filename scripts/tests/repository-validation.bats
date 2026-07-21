@@ -51,10 +51,15 @@ teardown() {
 make_metadata_root() {
     make_owned_root metadata
     TEST_ROOT="$NEW_OWNED_ROOT"
+    populate_metadata_root
+}
+
+populate_metadata_root() {
     mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
     cp -R "$REPOSITORY_ROOT/plugins/loom" "$TEST_ROOT/plugins/loom"
     cp "$REPOSITORY_ROOT/.claude-plugin/marketplace.json" "$TEST_ROOT/.claude-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/.agents/plugins/marketplace.json" "$TEST_ROOT/.agents/plugins/marketplace.json"
+    cp "$REPOSITORY_ROOT/README.md" "$TEST_ROOT/README.md"
     cp -R "$REPOSITORY_ROOT/scripts/schemas" "$TEST_ROOT/scripts/schemas"
     mkdir -p "$TEST_ROOT/scripts/validation"
     cp "$REPOSITORY_ROOT/scripts/validation/relative-link-allowlist.txt" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
@@ -101,6 +106,46 @@ links() {
     run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --links
 }
 
+@test "default root resolution is stable from a nested working directory" {
+    run /bin/bash -c 'cd "$1" && "$2" "$3" --metadata' _ \
+        "$REPOSITORY_ROOT/plugins/loom/skills" "$LOOM_NODE" "$VALIDATOR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Repository metadata validation passed"* ]]
+}
+
+@test "all mode passes for the valid repository" {
+    run "$LOOM_NODE" "$VALIDATOR" --root "$REPOSITORY_ROOT" --all
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Repository all validation passed"* ]]
+}
+
+@test "all mode reports a failing metadata root" {
+    make_metadata_root
+    printf '{ invalid all-mode JSON\n' >"$TEST_ROOT/plugins/loom/.claude-plugin/plugin.json"
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"plugins/loom/.claude-plugin/plugin.json: invalid JSON"* ]]
+}
+
+@test "missing validation mode exits 2 with deterministic usage" {
+    run "$LOOM_NODE" "$VALIDATOR" --root "$REPOSITORY_ROOT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"validate-repository: exactly one of --metadata, --links, or --all is required"* ]]
+    [[ "$output" == *"usage: validate-repository.mjs [--root PATH] (--metadata|--links|--all)"* ]]
+}
+
+@test "repeated validation mode exits 2 with deterministic usage" {
+    run "$LOOM_NODE" "$VALIDATOR" --root "$REPOSITORY_ROOT" --metadata --metadata
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"validate-repository: unknown or repeated argument: --metadata"* ]]
+}
+
+@test "mixed validation modes exit 2 with deterministic usage" {
+    run "$LOOM_NODE" "$VALIDATOR" --root "$REPOSITORY_ROOT" --metadata --links
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"validate-repository: unknown or repeated argument: --links"* ]]
+}
+
 @test "negative seeds are inert and cannot match production scans" {
     run find "$REPOSITORY_ROOT/scripts/tests/fixtures" -type f \( -name '*.json' -o -name '*.md' \)
     [ "$status" -eq 0 ]
@@ -111,6 +156,54 @@ links() {
     make_metadata_root
     metadata
     [ "$status" -eq 0 ]
+}
+
+@test "explicit non-Git root nested in a parent worktree uses the safe filesystem walk" {
+    make_owned_root parent-worktree
+    parent_root="$NEW_OWNED_ROOT"
+    git -C "$parent_root" init -q
+    TEST_ROOT="$parent_root/untracked-validation-root"
+    populate_metadata_root
+    printf '{ invalid nested root JSON\n' >"$TEST_ROOT/plugins/loom/.claude-plugin/plugin.json"
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"plugins/loom/.claude-plugin/plugin.json: invalid JSON"* ]]
+}
+
+@test "tracked discovery failure in a real Git root fails closed without reading an untracked canary" {
+    make_metadata_root
+    git -C "$TEST_ROOT" init -q
+    git -C "$TEST_ROOT" add README.md
+    printf '{ UNTRACKED_CANARY_MUST_NOT_BE_READ\n' >"$TEST_ROOT/untracked-canary.json"
+    real_git="$(command -v git)"
+    mkdir "$TEST_ROOT/fake-bin"
+    printf '%s\n' '#!/bin/sh' 'if [ "$3" = ls-files ]; then exit 73; fi' "exec '$real_git' \"\$@\"" >"$TEST_ROOT/fake-bin/git"
+    chmod +x "$TEST_ROOT/fake-bin/git"
+    run env PATH="$TEST_ROOT/fake-bin:$PATH" "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"tracked Git discovery failed closed (73)"* ]]
+    [[ "$output" != *"untracked-canary.json"* ]]
+    [[ "$output" != *"UNTRACKED_CANARY_MUST_NOT_BE_READ"* ]]
+}
+
+@test "README states both exact client floors and the static Codex limitation" {
+    make_metadata_root
+    metadata
+    [ "$status" -eq 0 ]
+    [[ "$(<"$TEST_ROOT/README.md")" == *"Claude Code 2.1.216"* ]]
+    [[ "$(<"$TEST_ROOT/README.md")" == *"Codex CLI 0.144.6"* ]]
+    [[ "$(<"$TEST_ROOT/README.md")" == *"static scaffolding only"* ]]
+}
+
+@test "each README client floor fails metadata validation directly when drifted" {
+    for mutation in 's/Claude Code 2\.1\.216 and Codex CLI/Claude Code 2.1.215 and Codex CLI/' 's/Codex CLI 0\.144\.6\./Codex CLI 0.144.5./'; do
+        make_metadata_root
+        sed "$mutation" "$TEST_ROOT/README.md" >"$TEST_ROOT/README.next"
+        mv "$TEST_ROOT/README.next" "$TEST_ROOT/README.md"
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"README.md: missing exact supported client-floor statement: Claude Code 2.1.216 and Codex CLI 0.144.6"* ]]
+    done
 }
 
 @test "malformed JSON names the materialized file" {
@@ -147,6 +240,23 @@ links() {
     metadata
     [ "$status" -ne 0 ]
     [[ "$output" == *"plugins/loom/commands/develop.md: schema / must NOT have additional properties"* ]]
+}
+
+@test "unknown agent frontmatter key fails closed independently" {
+    make_metadata_root
+    printf '%s\n' '---' 'name: code-evaluator' 'description: x' 'model: opus' 'color: red' 'tools: Read' 'unknown: true' '---' >"$TEST_ROOT/plugins/loom/agents/code-evaluator.md"
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"plugins/loom/agents/code-evaluator.md: schema / must NOT have additional properties"* ]]
+}
+
+@test "unknown skill frontmatter key fails closed independently" {
+    make_metadata_root
+    skill_path="$(find "$TEST_ROOT/plugins/loom/skills" -name SKILL.md | head -n 1)"
+    printf '%s\n' '---' "name: $(basename "$(dirname "$skill_path")")" 'description: x' 'unknown: true' '---' >"$skill_path"
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"plugins/loom/skills/"*"/SKILL.md: schema / must NOT have additional properties"* ]]
 }
 
 @test "command missing description fails independently" {
@@ -763,6 +873,17 @@ links() {
     [[ "$output" != *$'stale allowlist record: docs/main.md\tmissing.md'* ]]
 }
 
+@test "one exact live allowlist entry passes and suppresses its broken-link diagnostic" {
+    make_link_root
+    printf '[live](missing.md)\n' >"$TEST_ROOT/docs/main.md"
+    printf '%s\n' $'docs/main.md\tmissing.md\tupstream historical pointer' >"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    links
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Repository links validation passed"* ]]
+    [[ "$output" != *"missing or unsafe relative-link target"* ]]
+    [[ "$output" != *"stale allowlist record"* ]]
+}
+
 make_contract_root() {
     make_owned_root contract
     TEST_ROOT="$NEW_OWNED_ROOT"
@@ -809,7 +930,35 @@ mutate_contract() {
     "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-15-intel\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
     contract_check
     [ "$status" -ne 0 ]
-    [[ "$output" == *"workflow runner matrix differs"* ]]
+    [[ "$output" == *"workflow exact-contract digest drift"* ]]
+}
+
+@test "workflow inline-comment spoof fails exact verified contract" {
+    rewrite_workflow '          persist-credentials: false' '          persist-credentials: true # persist-credentials: false'
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"workflow exact-contract digest drift"* ]]
+}
+
+@test "workflow commented-out security setting fails exact verified contract" {
+    rewrite_workflow '          ref: ${{ github.event.pull_request.head.sha || github.sha }}' '          # ref: ${{ github.event.pull_request.head.sha || github.sha }}'
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"workflow exact-contract digest drift"* ]]
+}
+
+@test "workflow duplicate key fails exact verified contract" {
+    rewrite_workflow '          fetch-depth: 0' $'          fetch-depth: 0\n          fetch-depth: 1'
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"workflow exact-contract digest drift"* ]]
+}
+
+@test "workflow relocated exact-head string fails exact verified contract" {
+    rewrite_workflow '          test "$actual_head" = "$EXPECTED_HEAD"' $'      # test "$actual_head" = "$EXPECTED_HEAD"\n          test -n "$actual_head"'
+    contract_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"workflow exact-contract digest drift"* ]]
 }
 
 @test "workflow runner label mutation fails" {

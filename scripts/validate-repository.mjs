@@ -15,10 +15,17 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 let root;
 let mode;
+let rootArgumentSeen = false;
 for (let index = 0; index < args.length; index += 1) {
-  if (args[index] === "--root" && index + 1 < args.length) root = path.resolve(args[++index]);
-  else if (["--metadata", "--links", "--all"].includes(args[index]) && !mode) mode = args[index].slice(2);
-  else usage(`unknown or repeated argument: ${args[index]}`);
+  if (args[index] === "--root") {
+    if (rootArgumentSeen) usage("unknown or repeated argument: --root");
+    if (index + 1 >= args.length || args[index + 1].startsWith("--")) usage("--root requires a path");
+    rootArgumentSeen = true;
+    root = path.resolve(args[++index]);
+  } else if (["--metadata", "--links", "--all"].includes(args[index])) {
+    if (mode) usage(`unknown or repeated argument: ${args[index]}`);
+    mode = args[index].slice(2);
+  } else usage(`unknown or repeated argument: ${args[index]}`);
 }
 if (!mode) usage("exactly one of --metadata, --links, or --all is required");
 if (!root) {
@@ -107,25 +114,73 @@ function readText(relative) {
   catch (error) { report(relative, `cannot read file safely (${error.code || error.message})`); return null; }
 }
 function discover() {
+  let hasRootGitMarker = false;
   try {
-    const output = execFileSync("git", ["-C", root, "ls-files", "-z"], { encoding: "buffer", stdio: ["ignore", "pipe", "ignore"] });
-    return output.toString("utf8").split("\0").filter(Boolean).sort();
-  } catch {
-    const found = [];
-    const walk = (directory) => {
-      for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
-        if (entry.name === ".git" || entry.name === ".check-cache" || entry.name === "node_modules") continue;
-        const full = path.join(directory, entry.name);
-        const relative = slash(path.relative(root, full));
-        const stat = fs.lstatSync(full);
-        if (stat.isSymbolicLink()) { found.push(relative); continue; }
-        if (stat.isDirectory()) walk(full);
-        else if (stat.isFile()) found.push(relative);
-      }
-    };
-    walk(root);
-    return found.sort();
+    const marker = fs.lstatSync(path.join(root, ".git"));
+    hasRootGitMarker = true;
+    if (!marker.isFile() && !marker.isDirectory()) {
+      report(".", "unsafe Git root marker is not a regular file or directory");
+      return [];
+    }
   }
+  catch (error) {
+    if (error.code !== "ENOENT") {
+      report(".", `cannot inspect Git root marker safely (${error.code || error.message})`);
+      return [];
+    }
+  }
+  let gitTopLevel;
+  try {
+    gitTopLevel = execFileSync("git", ["-C", root, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch (error) {
+    if (hasRootGitMarker) {
+      report(".", `tracked Git discovery failed closed (${error.status ?? error.code ?? "unknown"})`);
+      return [];
+    }
+  }
+  if (gitTopLevel) {
+    let canonicalTopLevel;
+    try { canonicalTopLevel = fs.realpathSync(gitTopLevel); }
+    catch (error) {
+      report(".", `cannot canonicalize detected Git root (${error.code || error.message})`);
+      return [];
+    }
+    if (canonicalTopLevel === root) {
+      try {
+        const output = execFileSync("git", ["-C", root, "ls-files", "-z"], {
+          encoding: "buffer", stdio: ["ignore", "pipe", "ignore"]
+        });
+        return output.toString("utf8").split("\0").filter(Boolean).sort();
+      } catch (error) {
+        report(".", `tracked Git discovery failed closed (${error.status ?? error.code ?? "unknown"})`);
+        return [];
+      }
+    }
+    if (hasRootGitMarker) {
+      report(".", "Git root marker does not resolve to the explicit canonical root");
+      return [];
+    }
+  }
+
+  // A root with no .git marker whose canonical top level is absent or different
+  // is positively outside the tracked-root trust boundary. Walk it without
+  // following symlinks; safeNode applies the same boundary again before reads.
+  const found = [];
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      if (entry.name === ".git" || entry.name === ".check-cache" || entry.name === "node_modules") continue;
+      const full = path.join(directory, entry.name);
+      const relative = slash(path.relative(root, full));
+      const stat = fs.lstatSync(full);
+      if (stat.isSymbolicLink()) { found.push(relative); continue; }
+      if (stat.isDirectory()) walk(full);
+      else if (stat.isFile()) found.push(relative);
+    }
+  };
+  walk(root);
+  return found.sort();
 }
 
 const files = discover();
@@ -214,6 +269,18 @@ async function validateMetadata() {
     const valid = validateJson(target, schemaPath, ajv);
     schemaResults.set(target, valid);
     if (!valid) structurallyValid = false;
+  }
+
+  const readme = readText("README.md");
+  if (readme !== null) {
+    if (!/The exact supported client floors are\s+Claude Code 2\.1\.216 and Codex CLI 0\.144\.6\./.test(readme)) {
+      report("README.md", "missing exact supported client-floor statement: Claude Code 2.1.216 and Codex CLI 0.144.6");
+      structurallyValid = false;
+    }
+    if (!readme.includes("static scaffolding only")) {
+      report("README.md", "missing static Codex scaffolding limitation");
+      structurallyValid = false;
+    }
   }
 
   const fixtureBindings = [

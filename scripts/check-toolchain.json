@@ -8,6 +8,24 @@
   "runtimeFloors": { "bash": "3.2", "git": "2.34", "jq": "1.6" },
   "actions": { "checkout": "11bd71901bbe5b1630ceea73d27597364c9af683" },
   "packageLockSha256": "a3e23f973383d493c006f9ef8676296ba36f75850f0695a4f6d88489d321b327",
+  "workflow": {
+    "path": ".github/workflows/check.yml",
+    "sha256": "e2a7e4a93afc811065c536d62e704d1e987341210ee245bef1ceb4d82b4b5c76",
+    "checkout": {
+      "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+      "ref": "${{ github.event.pull_request.head.sha || github.sha }}",
+      "fetchDepth": 0,
+      "persistCredentials": false
+    },
+    "exactHead": {
+      "environment": "${{ github.event.pull_request.head.sha || github.sha }}",
+      "read": "actual_head=$(git rev-parse HEAD)",
+      "assertion": "test \"$actual_head\" = \"$EXPECTED_HEAD\"",
+      "log": "printf 'Exact HEAD: %s\\n' \"$actual_head\"",
+      "resolvedShell": "physical_shell=$(resolve_executable \"$SELECTED_BASH\")",
+      "gate": "LOOM_TEST_BASH=\"$physical_shell\" LOOM_EXPECTED_BASH_VERSION=\"$EXPECTED_BASH_REGEX\" \"$physical_shell\" scripts/check"
+    }
+  },
   "runners": [
     { "label": "ubuntu-22.04", "os": "Linux", "architecture": "x86_64", "release": "22.04", "shell": "/usr/bin/bash", "versionRegex": "^5\\." },
     { "label": "ubuntu-24.04", "os": "Linux", "architecture": "x86_64", "release": "24.04", "shell": "/usr/bin/bash", "versionRegex": "^5\\." },

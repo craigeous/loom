@@ -257,25 +257,6 @@ extract_archive() {
         ;;
     esac
 }
-workflow_rows() {
-    awk '
-      /^        include:/ { inside=1; next }
-      inside && /^    steps:/ { if (seen) print row; finished=1; exit }
-      inside && /^          - runner:/ {
-        if (seen) print row
-        seen=1
-        value=$0; sub(/^.*runner:[[:space:]]*/, "", value); row=value
-        next
-      }
-      inside && seen && /^            (host|architecture|release|shell|bash_regex):/ {
-        value=$0; sub(/^.*:[[:space:]]*/, "", value)
-        if ((substr(value,1,1)=="\047" && substr(value,length(value),1)=="\047") || (substr(value,1,1)=="\"" && substr(value,length(value),1)=="\"")) value=substr(value,2,length(value)-2)
-        row=row "\t" value
-      }
-      END { if (inside && seen && !finished) print row }
-    ' "$REPOSITORY_ROOT/.github/workflows/check.yml"
-}
-
 stage "toolchain contract and pinned digests"
 for command_name in bash curl git id jq stat tar awk; do require_command "$command_name"; done
 jq -e '
@@ -284,7 +265,13 @@ jq -e '
     tools:{shfmt:"3.13.1",shellcheck:"0.11.0",bats:"1.13.0",claude:"2.1.216",node:"22.17.0",ajv:"8.17.1","ajv-formats":"3.0.1",yaml:"2.8.0","markdown-it":"14.1.0","github-slugger":"2.0.0"},
     runtimeFloors:{bash:"3.2",git:"2.34",jq:"1.6"},
     actions:{checkout:"11bd71901bbe5b1630ceea73d27597364c9af683"},
-    packageLockSha256:.packageLockSha256, runners:.runners, downloads:.downloads, vendored:.vendored
+    packageLockSha256:.packageLockSha256, workflow:.workflow, runners:.runners, downloads:.downloads, vendored:.vendored
+  } and
+  .workflow == {
+    path:".github/workflows/check.yml",
+    sha256:"e2a7e4a93afc811065c536d62e704d1e987341210ee245bef1ceb4d82b4b5c76",
+    checkout:{uses:"actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",ref:"${{ github.event.pull_request.head.sha || github.sha }}",fetchDepth:0,persistCredentials:false},
+    exactHead:{environment:"${{ github.event.pull_request.head.sha || github.sha }}",read:"actual_head=$(git rev-parse HEAD)",assertion:"test \"$actual_head\" = \"$EXPECTED_HEAD\"",log:"printf \u0027Exact HEAD: %s\\n\u0027 \"$actual_head\"",resolvedShell:"physical_shell=$(resolve_executable \"$SELECTED_BASH\")",gate:"LOOM_TEST_BASH=\"$physical_shell\" LOOM_EXPECTED_BASH_VERSION=\"$EXPECTED_BASH_REGEX\" \"$physical_shell\" scripts/check"}
   } and
   .runners == [
     {label:"ubuntu-22.04",os:"Linux",architecture:"x86_64",release:"22.04",shell:"/usr/bin/bash",versionRegex:"^5\\."},
@@ -319,25 +306,10 @@ jq -e '
     (.kind == "upstream" or .kind == "derived-local") and (.provenance | type == "string" and length > 0) and
     (.retrieved | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and (.sha256 | test("^[0-9a-f]{64}$"))] | all)
 ' "$CONTRACT" >/dev/null
-checkout_pin=$(jq -r .actions.checkout "$CONTRACT")
-[ "$(grep -c 'uses:' "$REPOSITORY_ROOT/.github/workflows/check.yml")" -eq 1 ]
-grep -F "uses: actions/checkout@$checkout_pin" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-grep -F 'persist-credentials: false' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-# shellcheck disable=SC2016
-grep -F 'ref: ${{ github.event.pull_request.head.sha || github.sha }}' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-# shellcheck disable=SC2016
-grep -F 'EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-# shellcheck disable=SC2016
-grep -F 'test "$actual_head" = "$EXPECTED_HEAD"' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-grep -F "printf 'Exact HEAD: %s\\n' \"\$actual_head\"" "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-# shellcheck disable=SC2016
-grep -F 'physical_shell=$(resolve_executable "$SELECTED_BASH")' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-# shellcheck disable=SC2016
-grep -F 'LOOM_TEST_BASH="$physical_shell"' "$REPOSITORY_ROOT/.github/workflows/check.yml" >/dev/null
-expected_rows=$(jq -r '.runners[] | [.label,.os,.architecture,.release,.shell,.versionRegex] | join("\t")' "$CONTRACT")
-actual_rows=$(workflow_rows)
-[ "$actual_rows" = "$expected_rows" ] || {
-    printf 'workflow runner matrix differs from check-toolchain.json\nExpected:\n%s\nActual:\n%s\n' "$expected_rows" "$actual_rows" >&2
+workflow_path=$(jq -r .workflow.path "$CONTRACT")
+[ "$workflow_path" = ".github/workflows/check.yml" ] || exit 1
+[ "$(sha256 "$REPOSITORY_ROOT/$workflow_path")" = "$(jq -r .workflow.sha256 "$CONTRACT")" ] || {
+    printf 'workflow exact-contract digest drift: %s\n' "$workflow_path" >&2
     exit 1
 }
 [ "$(sha256 "$SCRIPT_DIR/check-tools/package-lock.json")" = "$(jq -r .packageLockSha256 "$CONTRACT")" ] || {

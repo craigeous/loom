@@ -89,7 +89,8 @@ Run the complete gate from any working directory with:
 The check pins shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0, Node 22.17.0,
 Claude Code 2.1.216, Ajv 8.17.1, YAML 2.8.0, markdown-it 14.1.0, and
 github-slugger 2.0.0. Bootstrap prerequisites are `curl` and `tar`; production
-requires Bash 3.2+, Git 2.34+, jq 1.6+, and a supported Loom client.
+requires Bash 3.2+, Git 2.34+, and jq 1.6+. The exact supported client floors are
+Claude Code 2.1.216 and Codex CLI 0.144.6.
 
 The v0.2 host baseline is Ubuntu 22.04/24.04 x86-64 and macOS 14+ on Apple
 silicon or Intel where the selected client is supported. Native Windows,

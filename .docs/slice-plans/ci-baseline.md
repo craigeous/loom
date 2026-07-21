@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -637,3 +637,45 @@ not success.
   both exact README client floors; standalone positive allowlist suppression; all
   three unknown-frontmatter-key cases; the complete validator CLI contract; and final
   exact-head cwd-independent gate evidence for both local Bash lanes.
+
+### Developer revision for valid bootstrap merits Round 2 (2026-07-21)
+
+- Explicit-root discovery now compares the canonical requested root with Git's
+  canonical top level before using `git ls-files`. A positively non-Git root,
+  including an untracked root nested beneath a parent worktree, is walked without
+  following symlinks. A root Git marker, canonicalization failure, or tracked-file
+  discovery failure fails closed; the forced-failure regression proves an untracked
+  malformed JSON canary is never read.
+- README states the exact supported floors, Claude Code `2.1.216` and Codex CLI
+  `0.144.6`, while retaining the static Codex-scaffolding limitation. Metadata
+  validation enforces the exact combined statement, and a direct regression drifts
+  each client floor independently.
+- Retained tests now include a standalone live allowlist success with no broken-link
+  diagnostic; independent unknown-key failures for command, agent, and skill
+  frontmatter; and the CLI's nested-cwd default root, valid/failing `--all`, missing
+  mode, repeated mode, and mixed-mode exit-2 contracts.
+- `scripts/check` no longer greps workflow text. The closed toolchain record carries
+  a reviewed exact-workflow SHA-256 plus the checkout action/ref/fetch-depth/
+  credential and exact-head execution declarations. The gate accepts only that exact
+  byte contract, so inline-comment spoofing, commented-out settings, duplicate YAML
+  keys, relocated assertion strings, row deletion, and every retained workflow
+  mutation fail before repository code executes. No new dependency or lockfile
+  update was needed.
+- Focused verification passed all 126 tests in
+  `scripts/tests/repository-validation.bats`, including the new trust-boundary,
+  README, CLI, allowlist, frontmatter, and workflow mutations.
+- Final full-gate commands were run strictly sequentially from cwd `/tmp` using the
+  absolute check path and base `b28a74754e2ee016a035fa085f0d91de66057f62`:
+  - Bash 3.2 command:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+    — PASS, selected `/bin/bash` `3.2.57(1)-release`, dynamically discovered and
+    passed 243/243 Bats tests, ending `All checks passed`.
+  - Bash 5.3 command:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+    — PASS, resolved `/opt/homebrew/Cellar/bash/5.3.9/bin/bash`
+    `5.3.9(1)-release`, dynamically discovered and passed 243/243 Bats tests,
+    ending `All checks passed`.
+- Both lanes also passed the exact workflow/toolchain digest, locked JavaScript
+  install, metadata and link validation, shfmt, ShellCheck, Bash syntax, Claude
+  `2.1.216` strict plugin validation, and diff-whitespace stages. No remote push or
+  hosted-CI claim is made by this developer handoff.
