@@ -33,4 +33,8 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 
 ## In Review
 
-_(none)_
+- [0018 — Shared Portable Core with Claude Code and Codex Adapters](0018-shared-core-and-client-adapters.md) — partially supersedes Claude-only architecture/surface assumptions in ADRs 0001, 0002, 0006, and 0007
+- [0019 — Supported Runtime, Platforms, Compatibility, and Release Contract](0019-supported-runtime-and-release-contract.md) — chooses Bash, Ubuntu/macOS support, pinned client compatibility, and SemVer
+- [0020 — Remote Publication Is the Landing Authority](0020-remote-publication-is-the-landing-authority.md) — partially supersedes ADR 0014's shared-local-`main`, no-push landing model
+- [0021 — Loom-Owned Local Review Protocol](0021-loom-owned-local-review-protocol.md) — replaces ADR 0010/0011's external review-command dependency while preserving evaluator verdict authority
+- [0022 — Controlled-Input Independent Evaluation and Its Isolation Boundary](0022-controlled-input-independent-evaluation.md) — corrects ADR 0004's overbroad blind-evaluation claim and defines the sanitized boundary
