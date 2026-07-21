@@ -48,6 +48,19 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scrub Git credentials before repository-controlled code
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r key; do
+            git config --local --unset-all "$key"
+          done < <(git config --local --name-only --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$' || true)
+          if git config --local --show-origin --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$'; then
+            echo 'credential-bearing local Git configuration remains' >&2
+            exit 1
+          fi
 
       - name: Assert runner and run the pinned gate
         env:
@@ -59,9 +72,20 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BASE: ${{ github.event.before }}
+          HOME: ${{ runner.temp }}/loom-check-home
+          GIT_CONFIG_NOSYSTEM: "1"
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_ASKPASS: /bin/false
+          SSH_ASKPASS: /bin/false
         shell: bash
         run: |
           set -euo pipefail
+          unset GH_TOKEN GITHUB_TOKEN GIT_PASSWORD GIT_USERNAME
+          mkdir -m 700 -p "$HOME"
+          if git config --show-origin --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$'; then
+            echo 'credential-bearing Git configuration is visible to the gate' >&2
+            exit 1
+          fi
           test "$(uname -s)" = "$EXPECTED_HOST"
           test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
           case "$EXPECTED_HOST" in

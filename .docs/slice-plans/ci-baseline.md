@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -518,11 +518,10 @@ not success.
   Claude Code 2.1.216. Static Codex metadata, compatibility, root bindings, and
   release fixtures passed schema, digest, reference, path, and drift checks;
   this is not Codex install or behavior evidence.
-- `.github/workflows/check.yml` declares all four required runner cells and the
-  gate verifies its full checkout-action pin against `check-toolchain.json`.
-  The workflow was not remotely dispatched because this handoff does not push or
-  publish; its jobs remain required CI evidence when the branch is published by
-  the orchestrator.
+- `.github/workflows/check.yml` declares all four required runner cells; the local
+  gate now compares every row and field exactly with `check-toolchain.json`, and
+  isolated mutations prove deletion or drift fails. Exact-head remote execution
+  remains required external evidence and is not claimed by this local handoff.
 - M0 remains incomplete until `client-floor-adapter-smoke` supplies the deferred
   clean install, invocation, cold-role, hook, helper, upgrade, and uninstall
   evidence for both exact client floors.
@@ -536,3 +535,18 @@ not success.
   gate; no v0.2 artifact is published before M0-M7 are green.
 - Later slices add spec-08 checks with the artifacts they introduce; this baseline
   does not pretend absent review/evaluation/doctor/landing protocols are validated.
+
+### Developer revision after code-evaluation Round 1 (2026-07-21)
+
+- The revision closes all confirmed Round-1 findings with isolated regressions for
+  authenticated private tool extraction/cache publication, cache symlinks, exact
+  workflow/toolchain closure, selected-Bash floor and launcher cleanup, rendered
+  heading fragments, exhaustive release metadata boundaries/drift, safe contained
+  reads, exact root-binding pairs, and CI credential scrubbing.
+- The complete local gate passed under `/bin/bash` 3.2.57 and Homebrew Bash 5.3.9,
+  with 192 dynamically discovered Bats tests in each lane plus metadata, links,
+  formatting, lint, syntax, pinned Claude strict validation, and diff checks.
+- Required external handoff: the root orchestrator must push the final exact commit
+  and retain successful logs for `ubuntu-22.04`, `ubuntu-24.04`, `macos-14` arm64,
+  and `macos-15-intel` x86-64. This developer did not push and does not claim those
+  four exact-head CI cells passed.

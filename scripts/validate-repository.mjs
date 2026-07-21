@@ -15,10 +15,10 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 let root;
 let mode;
-for (let i = 0; i < args.length; i += 1) {
-  if (args[i] === "--root" && i + 1 < args.length) root = path.resolve(args[++i]);
-  else if (["--metadata", "--links", "--all"].includes(args[i]) && !mode) mode = args[i].slice(2);
-  else usage(`unknown or repeated argument: ${args[i]}`);
+for (let index = 0; index < args.length; index += 1) {
+  if (args[index] === "--root" && index + 1 < args.length) root = path.resolve(args[++index]);
+  else if (["--metadata", "--links", "--all"].includes(args[index]) && !mode) mode = args[index].slice(2);
+  else usage(`unknown or repeated argument: ${args[index]}`);
 }
 if (!mode) usage("exactly one of --metadata, --links, or --all is required");
 if (!root) {
@@ -31,9 +31,8 @@ if (!root) {
 root = fs.realpathSync(root);
 
 const diagnostics = [];
+const unsafeReports = new Set();
 const report = (file, message) => diagnostics.push(`${slash(file)}: ${message}`);
-const absolute = (relative) => path.join(root, relative);
-const exists = (relative) => fs.existsSync(absolute(relative));
 
 function usage(message) {
   console.error(`validate-repository: ${message}`);
@@ -42,8 +41,70 @@ function usage(message) {
 }
 function slash(value) { return value.split(path.sep).join("/"); }
 function isInside(parent, child) {
-  const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith(`..${path.sep}`) && rel !== "..");
+  const relative = path.relative(parent, child);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
+}
+function unsafe(relative, message) {
+  const key = `${relative}\0${message}`;
+  if (!unsafeReports.has(key)) {
+    unsafeReports.add(key);
+    report(relative, message);
+  }
+}
+
+// Every repository-derived read passes through this lexical, lstat, and realpath
+// boundary. In particular, no parse diagnostic can disclose an outside-root file.
+function safeNode(relative, { missing = true, regularFile = false } = {}) {
+  if (typeof relative !== "string" || relative.length === 0 || relative.includes("\0") || path.isAbsolute(relative)) {
+    unsafe(String(relative), "unsafe path is not a repository-relative name");
+    return null;
+  }
+  const lexical = path.resolve(root, relative);
+  if (!isInside(root, lexical)) {
+    unsafe(relative, "unsafe path escapes repository root");
+    return null;
+  }
+  const rootRelative = path.relative(root, lexical);
+  let cursor = root;
+  for (const component of rootRelative.split(path.sep).filter(Boolean)) {
+    cursor = path.join(cursor, component);
+    let stat;
+    try { stat = fs.lstatSync(cursor); }
+    catch (error) {
+      if (error.code === "ENOENT") {
+        if (missing) report(relative, "required file is missing");
+        return null;
+      }
+      unsafe(relative, `cannot inspect path safely (${error.code || error.message})`);
+      return null;
+    }
+    if (stat.isSymbolicLink()) {
+      unsafe(relative, `unsafe path contains symlink: ${slash(path.relative(root, cursor))}`);
+      return null;
+    }
+  }
+  let physical;
+  try { physical = fs.realpathSync(lexical); }
+  catch (error) {
+    if (missing) report(relative, `cannot resolve path safely (${error.code || error.message})`);
+    return null;
+  }
+  if (!isInside(root, physical)) {
+    unsafe(relative, "unsafe physical path escapes repository root");
+    return null;
+  }
+  const stat = fs.lstatSync(physical);
+  if (regularFile && !stat.isFile()) {
+    unsafe(relative, "unsafe input is not a regular file");
+    return null;
+  }
+  return { lexical, physical, stat };
+}
+function readText(relative) {
+  const node = safeNode(relative, { regularFile: true });
+  if (!node) return null;
+  try { return fs.readFileSync(node.physical, "utf8"); }
+  catch (error) { report(relative, `cannot read file safely (${error.code || error.message})`); return null; }
 }
 function discover() {
   try {
@@ -51,15 +112,15 @@ function discover() {
     return output.toString("utf8").split("\0").filter(Boolean).sort();
   } catch {
     const found = [];
-    const walk = (dir) => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const walk = (directory) => {
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
         if (entry.name === ".git" || entry.name === ".check-cache" || entry.name === "node_modules") continue;
-        const full = path.join(dir, entry.name);
-        const rel = slash(path.relative(root, full));
+        const full = path.join(directory, entry.name);
+        const relative = slash(path.relative(root, full));
         const stat = fs.lstatSync(full);
-        if (stat.isSymbolicLink()) { found.push(rel); continue; }
+        if (stat.isSymbolicLink()) { found.push(relative); continue; }
         if (stat.isDirectory()) walk(full);
-        else if (stat.isFile()) found.push(rel);
+        else if (stat.isFile()) found.push(relative);
       }
     };
     walk(root);
@@ -68,12 +129,13 @@ function discover() {
 }
 
 const files = discover();
-const fileSet = new Set(files);
 const json = new Map();
 function readJson(relative) {
   if (json.has(relative)) return json.get(relative);
+  const text = readText(relative);
+  if (text === null) { json.set(relative, null); return null; }
   try {
-    const value = JSON.parse(fs.readFileSync(absolute(relative), "utf8"));
+    const value = JSON.parse(text);
     json.set(relative, value);
     return value;
   } catch (error) {
@@ -82,19 +144,22 @@ function readJson(relative) {
     return null;
   }
 }
-function deepEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+function deepEqual(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
 
 async function validateMetadata() {
-  for (const relative of files.filter((f) => f.endsWith(".json"))) readJson(relative);
+  let structurallyValid = true;
+  for (const relative of files.filter((file) => file.endsWith(".json"))) {
+    if (readJson(relative) === null) structurallyValid = false;
+  }
 
   const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
   addFormats(ajv);
-  const schemaFiles = files.filter((f) => f.endsWith(".schema.json"));
+  const schemaFiles = files.filter((file) => file.endsWith(".schema.json"));
   for (const relative of schemaFiles) {
     const schema = readJson(relative);
-    if (!schema) continue;
+    if (!schema) { structurallyValid = false; continue; }
     try { ajv.addSchema(schema); }
-    catch (error) { report(relative, `invalid JSON Schema: ${error.message}`); }
+    catch (error) { report(relative, `invalid JSON Schema: ${error.message}`); structurallyValid = false; }
   }
 
   const schemaBindings = [
@@ -106,7 +171,12 @@ async function validateMetadata() {
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
   ];
-  for (const [target, schemaPath] of schemaBindings) validateJson(target, schemaPath, ajv);
+  const schemaResults = new Map();
+  for (const [target, schemaPath] of schemaBindings) {
+    const valid = validateJson(target, schemaPath, ajv);
+    schemaResults.set(target, valid);
+    if (!valid) structurallyValid = false;
+  }
 
   const fixtureBindings = [
     ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json", schemaBindings[0]],
@@ -118,8 +188,11 @@ async function validateMetadata() {
     ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json", schemaBindings[6]]
   ];
   for (const [fixture, [live, schemaPath]] of fixtureBindings) {
-    validateJson(fixture, schemaPath, ajv);
-    const left = readJson(fixture); const right = readJson(live);
+    const fixtureValid = validateJson(fixture, schemaPath, ajv);
+    if (!fixtureValid) { structurallyValid = false; continue; }
+    if (!schemaResults.get(live)) continue;
+    const left = readJson(fixture);
+    const right = readJson(live);
     if (left && right && !deepEqual(left, right)) report(fixture, `release fixture differs from ${live}`);
   }
 
@@ -142,26 +215,41 @@ async function validateMetadata() {
       else names[kind].set(componentName, relative);
     }
   }
-  semanticMetadata();
+
+  // Schema-invalid release objects are never passed into semantic validation.
+  if (structurallyValid) semanticMetadata();
 }
 
 function validateJson(target, schemaPath, ajv) {
-  if (!exists(target)) { report(target, "required file is missing"); return; }
-  if (!exists(schemaPath)) { report(target, `schema reference is missing: ${schemaPath}`); return; }
-  const value = readJson(target); const schema = readJson(schemaPath);
-  if (!value || !schema) return;
-  validateValue(target, value, schemaPath, ajv);
+  const targetNode = safeNode(target, { regularFile: true });
+  if (!targetNode) return false;
+  const schemaNode = safeNode(schemaPath, { regularFile: true });
+  if (!schemaNode) {
+    report(target, `schema reference is missing or unsafe: ${schemaPath}`);
+    return false;
+  }
+  const value = readJson(target);
+  const schema = readJson(schemaPath);
+  if (!value || !schema) return false;
+  return validateValue(target, value, schemaPath, ajv);
 }
 function validateValue(target, value, schemaPath, ajv) {
   let validator;
-  try { validator = ajv.getSchema(readJson(schemaPath)?.$id) || ajv.compile(readJson(schemaPath)); }
-  catch (error) { report(schemaPath, `invalid JSON Schema: ${error.message}`); return; }
-  if (!validator(value)) {
-    for (const error of validator.errors || []) report(target, `schema ${error.instancePath || "/"} ${error.message}`);
+  try {
+    const schema = readJson(schemaPath);
+    if (!schema) return false;
+    validator = ajv.getSchema(schema.$id) || ajv.compile(schema);
+  } catch (error) {
+    report(schemaPath, `invalid JSON Schema: ${error.message}`);
+    return false;
   }
+  if (validator(value)) return true;
+  for (const error of validator.errors || []) report(target, `schema ${error.instancePath || "/"} ${error.message}`);
+  return false;
 }
 function parseFrontmatter(relative) {
-  const text = fs.readFileSync(absolute(relative), "utf8");
+  const text = readText(relative);
+  if (text === null) return null;
   if (!text.startsWith("---\n")) { report(relative, "missing YAML frontmatter"); return null; }
   const end = text.indexOf("\n---\n", 4);
   if (end < 0) { report(relative, "unterminated YAML frontmatter"); return null; }
@@ -171,22 +259,35 @@ function parseFrontmatter(relative) {
     const value = document.toJSON();
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("frontmatter must be a mapping");
     return value;
-  } catch (error) { report(relative, `invalid YAML frontmatter: ${error.message}`); return null; }
+  } catch (error) {
+    report(relative, `invalid YAML frontmatter: ${error.message}`);
+    return null;
+  }
 }
 function semanticMetadata() {
-  const cm = readJson("plugins/loom/.claude-plugin/plugin.json");
-  const xm = readJson("plugins/loom/.codex-plugin/plugin.json");
-  const cc = readJson(".claude-plugin/marketplace.json");
-  const xc = readJson(".agents/plugins/marketplace.json");
-  const matrix = readJson("plugins/loom/adapters/compatibility/v0.2.0.json");
-  const roots = [readJson("plugins/loom/adapters/roots/claude-plugin-root-v1.json"), readJson("plugins/loom/adapters/roots/codex-skill-source-v1.json")];
-  for (const [relative, value] of [["plugins/loom/.claude-plugin/plugin.json", cm], ["plugins/loom/.codex-plugin/plugin.json", xm]]) {
-    if (value && (value.name !== "loom" || value.version !== "0.2.0" || value.license !== "MIT" || value.repository !== "https://github.com/craigeous/loom")) report(relative, "product name, exact SemVer, license, or repository identity drift");
+  const claudeManifest = readJson("plugins/loom/.claude-plugin/plugin.json");
+  const codexManifest = readJson("plugins/loom/.codex-plugin/plugin.json");
+  const claudeCatalog = readJson(".claude-plugin/marketplace.json");
+  const codexCatalog = readJson(".agents/plugins/marketplace.json");
+  const matrixPath = "plugins/loom/adapters/compatibility/v0.2.0.json";
+  const matrix = readJson(matrixPath);
+  const rootPaths = [
+    "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
+  ];
+  const roots = rootPaths.map(readJson);
+  for (const [relative, value] of [["plugins/loom/.claude-plugin/plugin.json", claudeManifest], ["plugins/loom/.codex-plugin/plugin.json", codexManifest]]) {
+    if (value && (value.name !== "loom" || value.version !== "0.2.0" || value.license !== "MIT" || value.repository !== "https://github.com/craigeous/loom")) {
+      report(relative, "product name, exact SemVer, license, or repository identity drift");
+    }
   }
-  if (cm && xm && (cm.name !== xm.name || cm.version !== xm.version || cm.description !== xm.description || cm.license !== xm.license || cm.repository !== xm.repository)) report("plugins/loom/.codex-plugin/plugin.json", "manifest identity differs from Claude manifest");
-  for (const [relative, catalog, requireVersion] of [[".claude-plugin/marketplace.json", cc, true], [".agents/plugins/marketplace.json", xc, false]]) {
-    if (!catalog) continue;
-    const entries = catalog.plugins || [];
+  if (claudeManifest && codexManifest && !deepEqual(
+    [claudeManifest.name, claudeManifest.version, claudeManifest.description, claudeManifest.license, claudeManifest.repository],
+    [codexManifest.name, codexManifest.version, codexManifest.description, codexManifest.license, codexManifest.repository]
+  )) report("plugins/loom/.codex-plugin/plugin.json", "manifest identity differs from Claude manifest");
+
+  for (const [relative, catalog, requireVersion] of [[".claude-plugin/marketplace.json", claudeCatalog, true], [".agents/plugins/marketplace.json", codexCatalog, false]]) {
+    const entries = catalog.plugins;
     if (new Set(entries.map((entry) => entry.name)).size !== entries.length) report(relative, "duplicate catalog component name");
     const entry = entries.find((candidate) => candidate.name === "loom");
     if (!entry) report(relative, "catalog is missing loom client manifest");
@@ -196,51 +297,60 @@ function semanticMetadata() {
       validateCatalogSource(relative, entry.source);
     }
   }
-  if (matrix) {
-    if (!deepEqual(matrix.clientFloors, { claude: "2.1.216", codex: "0.144.6" })) report("plugins/loom/adapters/compatibility/v0.2.0.json", "client floor drift");
-    const expectedProfiles = [
-      { profile: "Economy", consumers: ["researcher"], claude: { selector: "haiku" }, codex: { model: "gpt-5.6-terra", effort: "low" } },
-      { profile: "Standard", consumers: ["developer", "orchestrator"], claude: { selector: "sonnet" }, codex: { model: "gpt-5.6", effort: "medium" } },
-      { profile: "Deep review", consumers: ["planner", "plan evaluator", "code evaluator"], claude: { selector: "opus" }, codex: { model: "gpt-5.6", effort: "high" } }
-    ];
-    if (!deepEqual(matrix.profiles, expectedProfiles)) report("plugins/loom/adapters/compatibility/v0.2.0.json", "profile mapping drift");
-    for (const binding of matrix.rootBindings || []) {
-      if (!fileSet.has(binding.path) && !exists(binding.path)) report("plugins/loom/adapters/compatibility/v0.2.0.json", `root binding reference is missing: ${binding.path}`);
-      else if (readJson(binding.path)?.schema !== binding.id) report(binding.path, `binding-reference drift from ${binding.id}`);
-    }
+
+  if (!deepEqual(matrix.clientFloors, { claude: "2.1.216", codex: "0.144.6" })) report(matrixPath, "client floor drift");
+  const expectedProfiles = [
+    { profile: "Economy", consumers: ["researcher"], claude: { selector: "haiku" }, codex: { model: "gpt-5.6-terra", effort: "low" } },
+    { profile: "Standard", consumers: ["developer", "orchestrator"], claude: { selector: "sonnet" }, codex: { model: "gpt-5.6", effort: "medium" } },
+    { profile: "Deep review", consumers: ["planner", "plan evaluator", "code evaluator"], claude: { selector: "opus" }, codex: { model: "gpt-5.6", effort: "high" } }
+  ];
+  if (!deepEqual(matrix.profiles, expectedProfiles)) report(matrixPath, "profile mapping drift");
+  const expectedBindings = [
+    { id: "claude-plugin-root/v1", path: rootPaths[0] },
+    { id: "codex-skill-source/v1", path: rootPaths[1] }
+  ];
+  const normalizedBindings = [...matrix.rootBindings].sort((left, right) => left.id.localeCompare(right.id));
+  const normalizedExpected = [...expectedBindings].sort((left, right) => left.id.localeCompare(right.id));
+  if (!deepEqual(normalizedBindings, normalizedExpected)) report(matrixPath, "root binding ID/path pair drift");
+  for (const binding of expectedBindings) {
+    const node = safeNode(binding.path, { missing: false, regularFile: true });
+    if (!node) report(matrixPath, `root binding reference is missing or unsafe: ${binding.path}`);
+    else if (readJson(binding.path)?.schema !== binding.id) report(binding.path, `binding-reference drift from ${binding.id}`);
   }
   for (const [index, binding] of roots.entries()) {
-    if (binding && (binding.expectedName !== "loom" || binding.expectedVersion !== "0.2.0")) report(index ? "plugins/loom/adapters/roots/codex-skill-source-v1.json" : "plugins/loom/adapters/roots/claude-plugin-root-v1.json", "root binding manifest identity drift");
+    if (binding.expectedName !== "loom" || binding.expectedVersion !== "0.2.0") report(rootPaths[index], "root binding manifest identity drift");
   }
 }
 function validateCatalogSource(catalogPath, source) {
   if (typeof source !== "string") return;
-  const lexical = path.resolve(root, source);
-  if (!isInside(root, lexical)) { report(catalogPath, `catalog source escapes repository: ${source}`); return; }
-  try {
-    if (fs.lstatSync(lexical).isSymbolicLink()) { report(catalogPath, `catalog source is a symlink: ${source}`); return; }
-    const physical = fs.realpathSync(lexical);
-    const expected = fs.realpathSync(absolute("plugins/loom"));
-    if (!isInside(root, physical)) report(catalogPath, `catalog source symlink escapes repository: ${source}`);
-    else if (physical !== expected) report(catalogPath, `catalog source resolves to different physical plugin root: ${source}`);
-  } catch (error) { report(catalogPath, `catalog source cannot resolve: ${source} (${error.code || error.message})`); }
+  const relative = slash(path.normalize(source));
+  const node = safeNode(relative, { missing: false });
+  if (!node) { report(catalogPath, `catalog source is missing, escaped, or unsafe: ${source}`); return; }
+  const expected = safeNode("plugins/loom", { missing: false });
+  if (!expected || node.physical !== expected.physical) report(catalogPath, `catalog source resolves to different physical plugin root: ${source}`);
 }
 
 async function validateLinks() {
-  const md = new MarkdownIt({ html: false, linkify: false });
+  const markdownParser = new MarkdownIt({ html: false, linkify: false });
+  // Preserve the authored href so malformed percent escapes cannot be hidden by
+  // markdown-it's URL normalization before our strict decoder sees them.
+  markdownParser.normalizeLink = (value) => value;
+  markdownParser.normalizeLinkText = (value) => value;
   const markdown = files.filter((relative) => relative.endsWith(".md") && !relative.startsWith(".docs/evaluations/") && !relative.startsWith(".docs/slice-plans/archive/"));
   const allowlistPath = "scripts/validation/relative-link-allowlist.txt";
   const allowlist = parseAllowlist(allowlistPath);
   const used = new Set();
   for (const source of markdown) {
-    const tokens = md.parse(fs.readFileSync(absolute(source), "utf8"), {});
+    const text = readText(source);
+    if (text === null) continue;
+    const tokens = markdownParser.parse(text, {});
     for (const token of tokens) {
       if (token.type !== "inline" || !token.children) continue;
       for (const child of token.children) {
         if (child.type !== "link_open") continue;
         const target = child.attrGet("href");
         if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) continue;
-        const error = checkLink(source, target, md);
+        const error = checkLink(source, target, markdownParser);
         if (!error) continue;
         const key = `${source}\t${target}`;
         if (allowlist.has(key)) used.add(key);
@@ -252,8 +362,9 @@ async function validateLinks() {
 }
 function parseAllowlist(relative) {
   const records = new Map();
-  if (!exists(relative)) { report(relative, "allowlist file is missing"); return records; }
-  const lines = fs.readFileSync(absolute(relative), "utf8").split(/\r?\n/);
+  const text = readText(relative);
+  if (text === null) return records;
+  const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line || line.startsWith("#")) continue;
@@ -265,29 +376,49 @@ function parseAllowlist(relative) {
   }
   return records;
 }
-function checkLink(source, target, md) {
+function checkLink(source, target, markdownParser) {
   const hash = target.indexOf("#");
   const rawPath = hash < 0 ? target : target.slice(0, hash);
   const rawFragment = hash < 0 ? "" : target.slice(hash + 1);
-  let decodedPath; let fragment;
-  try { decodedPath = decodeURIComponent(rawPath); fragment = decodeURIComponent(rawFragment); }
-  catch { return "malformed percent encoding in link"; }
-  const resolved = decodedPath ? path.resolve(path.dirname(absolute(source)), decodedPath) : absolute(source);
-  if (!isInside(root, resolved)) return "relative link escapes repository";
-  let stat;
-  try { stat = fs.statSync(resolved); } catch { return "missing relative-link target"; }
-  let targetFile = resolved;
-  if (stat.isDirectory()) return fragment ? "fragment target is a directory" : null;
-  if (!fs.existsSync(targetFile) || !fs.statSync(targetFile).isFile()) return "missing relative-link target";
+  let decodedPath;
+  let fragment;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+    fragment = decodeURIComponent(rawFragment);
+  } catch {
+    return "malformed percent encoding in link";
+  }
+  const sourceDirectory = path.posix.dirname(source);
+  const repositoryRelative = decodedPath ? slash(path.posix.normalize(path.posix.join(sourceDirectory, decodedPath))) : source;
+  const node = safeNode(repositoryRelative, { missing: false });
+  if (!node) return "missing or unsafe relative-link target";
+  if (node.stat.isDirectory()) return fragment ? "fragment target is a directory" : null;
+  if (!node.stat.isFile()) return "missing or unsafe relative-link target";
   if (!fragment) return null;
-  if (path.extname(targetFile).toLowerCase() !== ".md") return "fragment target is not Markdown";
-  const slugs = headingSlugs(fs.readFileSync(targetFile, "utf8"), md);
+  if (path.extname(node.physical).toLowerCase() !== ".md") return "fragment target is not Markdown";
+  const text = readText(repositoryRelative);
+  if (text === null) return "missing or unsafe relative-link target";
+  const slugs = headingSlugs(text, markdownParser);
   if (!slugs.has(fragment)) return "missing Markdown fragment";
   return null;
 }
-function headingSlugs(text, md) {
-  const result = new Set(); const slugger = new GithubSlugger(); const tokens = md.parse(text, {});
-  for (let index = 0; index < tokens.length - 1; index += 1) if (tokens[index].type === "heading_open" && tokens[index + 1].type === "inline") result.add(slugger.slug(tokens[index + 1].content));
+function renderedInlineText(inline) {
+  if (!inline.children) return inline.content;
+  return inline.children.map((child) => {
+    if (["text", "code_inline", "image"].includes(child.type)) return child.content;
+    if (["softbreak", "hardbreak"].includes(child.type)) return " ";
+    return "";
+  }).join("");
+}
+function headingSlugs(text, markdownParser) {
+  const result = new Set();
+  const slugger = new GithubSlugger();
+  const tokens = markdownParser.parse(text, {});
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    if (tokens[index].type === "heading_open" && tokens[index + 1].type === "inline") {
+      result.add(slugger.slug(renderedInlineText(tokens[index + 1])));
+    }
+  }
   return result;
 }
 

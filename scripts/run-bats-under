@@ -22,7 +22,7 @@ esac
     printf 'run-bats-under: shell is not executable: %s\n' "$selected_bash" >&2
     exit 2
 }
-[ -f "$bats_entry" ] || {
+[ ! -L "$bats_entry" ] && [ -f "$bats_entry" ] || {
     printf 'run-bats-under: Bats entrypoint is missing: %s\n' "$bats_entry" >&2
     exit 2
 }
@@ -31,6 +31,20 @@ shell_dir=$(CDPATH='' cd -- "$(dirname -- "$selected_bash")" && pwd -P)
 physical_bash="$shell_dir/$(basename -- "$selected_bash")"
 # shellcheck disable=SC2016
 actual_version=$("$physical_bash" -c 'printf %s "$BASH_VERSION"')
+version_number=${actual_version%%(*}
+version_major=${version_number%%.*}
+version_rest=${version_number#*.}
+version_minor=${version_rest%%.*}
+case "$version_major:$version_minor" in
+*[!0-9:]* | *::* | :* | *:)
+    printf 'run-bats-under: cannot parse selected Bash version: %s\n' "$actual_version" >&2
+    exit 2
+    ;;
+esac
+if [ "$version_major" -lt 3 ] || { [ "$version_major" -eq 3 ] && [ "$version_minor" -lt 2 ]; }; then
+    printf 'run-bats-under: selected Bash %s is below required 3.2\n' "$actual_version" >&2
+    exit 2
+fi
 if ! [[ "$actual_version" =~ $expected_regex ]]; then
     printf 'run-bats-under: selected Bash %s version %s does not match %s\n' "$physical_bash" "$actual_version" "$expected_regex" >&2
     exit 2
@@ -50,7 +64,18 @@ done
 }
 
 runtime_dir=$(mktemp -d "${TMPDIR:-/tmp}/loom-bash.XXXXXX")
-trap 'rm -rf "$runtime_dir"' EXIT HUP INT TERM
+launcher_cleanup() {
+    cleanup_status="$1"
+    trap - EXIT HUP INT TERM
+    if [ -n "$runtime_dir" ] && [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ]; then
+        rm -rf -- "$runtime_dir"
+    fi
+    exit "$cleanup_status"
+}
+trap 'launcher_cleanup $?' EXIT
+trap 'launcher_cleanup 129' HUP
+trap 'launcher_cleanup 130' INT
+trap 'launcher_cleanup 143' TERM
 mkdir -p "$runtime_dir/bin"
 ln -s "$physical_bash" "$runtime_dir/bin/bash"
 
@@ -60,4 +85,12 @@ export LOOM_EXPECTED_BASH_VERSION="$expected_regex"
 export LOOM_TEST_BASH_PHYSICAL="$physical_bash"
 
 printf 'Selected Bash: %s (%s)\n' "$physical_bash" "$actual_version"
-exec "$physical_bash" "$bats_entry" "$runtime_canary" "${tests[@]}"
+set +e
+if [ "${#tests[@]}" -gt 0 ]; then
+    "$physical_bash" "$bats_entry" "$runtime_canary" "${tests[@]}"
+else
+    "$physical_bash" "$bats_entry" "$runtime_canary"
+fi
+bats_status=$?
+set -e
+launcher_cleanup "$bats_status"
