@@ -27,3 +27,4 @@ repository/physical plugin survives with separate catalogs; and ADR 0007's names
 surface remains the Claude adapter only. Current package shape and the installed client
 versions were checked mechanically; the current tree is Claude-only in exactly the ways
 the ADR identifies, and the research's current-client facts remain reproducible locally.
+

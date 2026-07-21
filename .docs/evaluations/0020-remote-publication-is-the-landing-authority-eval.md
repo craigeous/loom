@@ -28,3 +28,4 @@ role-work remain. ADRs 0015/0016 continue to govern lease freshness and ref CAS,
 0008's isolation principle remains while its local-main landing prose is explicitly
 subject to later amendment. The resulting model is implementable without conflicting
 with the improvement plan's remote-first helper sequence.
+
