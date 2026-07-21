@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: In Progress
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),

@@ -136,3 +136,71 @@ Round: 1
 ### Assessment
 
 [object Object]
+
+---
+
+## Code evaluation — bootstrap Round 2
+
+Verdict: FAIL
+Round: 2
+Required next round: 3
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-700a117-r2`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `700a1176940fb3f2713113d02816e66b745bc064`
+- Manifest SHA-256: `98a5b90538c316940a328edac440205de40217365bf2ea4660df615c2b4f20dc`
+- Aggregate findings SHA-256: `8cbd1c76a21c902dc119685659dac769387f06ab141cd6a34b2ffa6207044194`
+- Evaluator verdict SHA-256: `ae6d6933c77cb1652338bbeb8d4c5f3eaf677a1953ea8f5d35bffa0a4ddc32b6`
+
+### Gate rerun
+
+- `bash-3.2`: PASS, exit 0, 192/192 Bats; stdout SHA-256 `02e580e669b03aa705c6cee669c208509ddee5a1e37e73ecd3b9884427357382`, stderr SHA-256 `d52ea3298bdfa8ecdbd5eac5823c2e461ab663ebd3a6c112341524cc6c9db918`.
+- `bash-5.3`: PASS, exit 0, 192/192 Bats; stdout SHA-256 `1355688259cd6a56b913d9dd8cdc4cd538b11639343420a592e78f0fe254a096`, stderr SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+### Advisory-finding adjudication
+
+- [BLOCKER] `COR-R2-1` — confirmed: All four retained logs execute GitHub's synthetic pull/1/merge commit a8ee9ed, not bound head 700a117; the plan requires exact-head execution and treats absent exact-head cells as failure.
+- [BLOCKER] `COR-R2-2` — confirmed: Fixture/live equality and other semantic comparisons use JSON.stringify, so schema-valid objects with reordered keys are rejected despite semantic equality. This is incorrect behavior against an explicit plan requirement, so the severity rubric makes it a blocker.
+- [BLOCKER] `COR-R2-3` — confirmed: The exact diff changes three unrelated pre-existing evaluation records that are absent from the closed implementation allowlist and explicitly out of scope; cosmetic EOF edits remain scope violations under the rubric.
+- [MINOR] `COR-R2-4` — confirmed: The durable Round-1 code-evaluation Assessment is literally '[object Object]', an incomplete serialization artifact. The substantive verdict remains readable, so this is non-blocking record hygiene.
+- [BLOCKER] `TST-R2-1` — confirmed: The real-tree test assigns the repository root to teardown-owned TEST_ROOT and clears it only after the success assertion; any validator regression transfers to teardown and recursively removes the checkout.
+- [BLOCKER] `TST-R2-2` — confirmed: Multiple tests create, truncate, and delete predictable files in the shared parent of their mktemp root. This can overwrite or remove unrelated data and is unsafe to land, which is blocker severity under the rubric.
+- [BLOCKER] `TST-R2-3` — confirmed: Both manifest schemas require and support homepage, but semantic identity compares only name, version, description, license, and repository. A fixture-matched, schema-valid Codex homepage drift passes contrary to spec 10's shared metadata contract.
+- [MAJOR] `TST-R2-4` — confirmed: The implementation currently rejects empty fields, but no isolated three-column empty-reason case proves the explicit nonempty-reason contract or that the broken link remains unallowlisted if that check regresses.
+- [MAJOR] `TST-R2-5` — confirmed: The gate currently closes the contract, but the mutation suite omits independent changes or omissions for exact tool versions, runtime floors, checkout pin, package-lock digest, and unexpected top-level fields, leaving stated closure insufficiently regression-tested.
+- [BLOCKER] `SEC-R2-001` — confirmed: A cache hit is hashed at a shared predictable pathname and later copied or extracted from that same mutable file. No authenticated private snapshot or immediate private recheck closes the race, and existing cache directories receive no ownership or mode validation.
+- [BLOCKER] `SEC-R2-002` — confirmed: Independently from COR-R2-1, the workflow lacks a pull-request head ref and a pre-code exact-SHA assertion, so green status can depend on target-branch content absent from the reviewed head and cannot attest the manifest revision.
+
+### Evaluator-originated findings
+
+- [BLOCKER] `EVAL-R2-1` at `scripts/tests/run-bats-under.bats:1` — The implementation adds two developer test files outside the approved plan's closed path allowlist. changed-paths.txt and the exact diff add scripts/tests/run-bats-under.bats and scripts/tests/toolchain-contract.bats. The approved plan permits only scripts/tests/repository-validation.bats, scripts/tests/shell-runtime.bats, and scripts/tests/fixtures/** under scripts/tests; neither added file is listed. The plan states developers may add or edit only the enumerated paths. The severity authority defines an out-of-scope change as BLOCKER. These useful regressions must be moved into allowed paths or authorized by a reviewed plan change before implementation.
+
+### Required changes
+
+- For pull_request, checkout github.event.pull_request.head.sha; for push, bind github.sha. Before any repository-controlled code, assert git rev-parse HEAD equals the expected full SHA, then rerun and retain all four required exact-head cells.
+- Replace JSON.stringify equality with order-insensitive structural JSON equality that preserves array order, and add reordered-object regressions.
+- Enforce all supported shared manifest identity fields, including homepage, with isolated schema-valid drift tests.
+- Remove the unrelated edits to the three pre-existing evaluation files.
+- Resolve the out-of-allowlist additions scripts/tests/run-bats-under.bats and scripts/tests/toolchain-contract.bats by moving their coverage into authorized test paths or obtaining an approved plan revision before implementation.
+- Make teardown delete only explicitly owned mktemp roots; never assign the real repository to the cleanup-owned variable. Add a forced-failure regression proving the repository survives.
+- Use unique teardown-owned outside-root directories for containment sentinels so parallel tests cannot overwrite, delete, or leak shared predictable files.
+- Add isolated negative tests for an empty allowlist reason and for every closed toolchain class: tools, runtime floors, checkout action pin, package-lock digest, and unexpected top-level fields.
+- On every cache hit, copy into a newly created private run file, verify that private snapshot, and consume only it; publish fresh downloads separately. Reject or safely repair cache directories with unexpected ownership or permissions and add a cache-rewrite race regression.
+- Replace the '[object Object]' durable assessment with meaningful structured or textual assessment output and reject such serialization placeholders when recording.
+
+### Assessment
+
+The two required local gates are green with 192 tests each and the evaluator-copy source inventory remains hash-identical, but green local execution is insufficient for PASS.
+
+Confirmed advisory findings: 11; rejected: 0; evaluator-originated: 1.
+
+- The required remote evidence does not execute the bound exact head.
+- The cache trust model has a digest-before-use race that can lead to unauthenticated code execution.
+- The test suite contains destructive cleanup and shared-sentinel hazards.
+- Semantic metadata validation violates required equality and shared-homepage contracts.
+- The exact diff contains both unrelated evaluation edits and two developer test paths outside the approved allowlist.
+
+Round rule: One prior durable code-evaluation FAIL counts as failure 1; this valid FAIL is Round 2 and requires Round 3.
