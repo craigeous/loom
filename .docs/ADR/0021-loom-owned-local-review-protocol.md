@@ -1,6 +1,6 @@
 # 0021 — Loom-Owned Local Review Protocol
 
-Status: Plan Review
+Status: Draft
 Date: 2026-07-21
 
 ## Context
