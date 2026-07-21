@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -550,3 +550,13 @@ not success.
   and retain successful logs for `ubuntu-22.04`, `ubuntu-24.04`, `macos-14` arm64,
   and `macos-15-intel` x86-64. This developer did not push and does not claim those
   four exact-head CI cells passed.
+
+### Hosted CI attempt 29855001240
+
+- Exact prior head `6c5c77b` ran all four required cells. Every cell passed the
+  192-test Bats suite, metadata and link validation, shfmt, ShellCheck, Bash syntax,
+  and pinned Claude strict validation, then failed the final range-wide
+  `git diff --check` on three pre-existing evaluation-file EOF blank lines.
+- This failed attempt is not CI success. The three reported EOF-only defects are
+  corrected in this revision; all four required cells must rerun on the new exact
+  head before remote CI evidence can be claimed.
