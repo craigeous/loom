@@ -1,6 +1,6 @@
 # 0018 — Shared Portable Core with Claude Code and Codex Adapters
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-07-21
 
 ## Context
