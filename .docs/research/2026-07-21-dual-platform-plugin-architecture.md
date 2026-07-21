@@ -1,6 +1,6 @@
 # Research: Dual-platform plugin architecture
 
-Status: Draft
+Status: Research Review
 Date: 2026-07-21
 Topic: Portability boundaries for executing the repository improvement program while supporting both Claude Code and Codex from one Loom codebase.
 
@@ -21,11 +21,12 @@ Topic: Portability boundaries for executing the repository improvement program w
   orchestrator, command-surface, playbook, and packaging specs currently define
   Claude-specific contracts that M0, M3, M4, M6, and M7 would otherwise implement
   against. [1][13]
-- The most immediate behavioral incompatibility is `PreCompact`: the current hook
-  reads Claude's `compaction_trigger` and blocks with exit 2, whereas Codex sends
-  `trigger` and documents `continue: false` JSON as the way to stop compaction.
-  The hook currently treats an absent trigger as `auto`, so a Codex manual
-  compaction would not exercise Loom's manual-block path. [2][4][8]
+- The most immediate behavioral incompatibility is Loom's current `PreCompact`
+  implementation versus both clients: Claude and Codex now send `trigger`, but
+  the hook still reads `compaction_trigger`, so it treats every current manual
+  event as `auto` and bypasses Loom's manual no-progress block. Blocking output
+  also needs a client adapter: Claude documents exit 2 or `decision: "block"`,
+  while Codex documents `continue: false` for `PreCompact`. [2][4][8]
 
 ## Findings
 
@@ -63,10 +64,10 @@ create `/name` shortcuts, while new shared workflows are expected to use
 `skills/<name>/SKILL.md`. Claude skills follow the Agent Skills standard and can
 load supporting files progressively. [10]
 
-Codex deprecates custom prompts in favor of skills. Installed skills are invoked
-implicitly by description or explicitly with a `$` mention or skill picker; the
-Codex plugin documentation does not promise Claude-style `/loom:<command>` names.
-[3][15]
+Codex documents skills as its authoring format for reusable workflows. Installed
+skills are invoked implicitly by description or explicitly with a `$` mention or
+skill picker; the Codex plugin and skill documentation does not promise
+Claude-style `/loom:<command>` names. [3][15]
 
 Loom's eight flat command files should consequently be regarded as Claude adapters,
 not the shared workflow source. A portable layout would place the real workflows
@@ -77,15 +78,22 @@ invocation rather than claim slash-command parity. [2][3][10][15]
 
 ### 3. Roles, subagents, and orchestration
 
-Claude plugin agents are Markdown files under `agents/` with YAML frontmatter;
-they are namespaced by the plugin, can be selected explicitly, and cannot spawn
-other subagents. The current Loom role files match that model. [2][7][9]
+Claude plugin agents are Markdown files under `agents/` with YAML frontmatter and
+are namespaced by the plugin. Since Claude Code 2.1.172, a subagent can spawn
+nested subagents; nesting has a fixed maximum depth of five, and the `Agent` tool
+is inherited when a definition does not restrict it. A role can disable nesting
+by omitting `Agent` from an explicit `tools` allowlist. Every current Loom role
+uses such an allowlist without `Agent`, so Loom's plugin roles cannot currently
+spawn subagents even though the installed Claude Code 2.1.216 supports it.
+[2][7][9][12]
 
 Codex can delegate when a prompt, `AGENTS.md`, or a skill requests subagents.
 Its reusable custom agents are standalone TOML files under user
 `~/.codex/agents/` or project `.codex/agents/`, and the documentation warns that
 the format may evolve. Codex plugin manifests do not currently list custom-agent
-files as a packaged component. [3][5]
+files as a packaged component. Codex supports configurable nesting, but
+`agents.max_depth` defaults to 1: the root can spawn direct children and those
+children cannot spawn descendants unless the setting is raised. [3][5]
 
 The shared role source should therefore be the role behavior/rubric and bounded
 handoff contract, with client adapters for launch and model configuration. Claude
@@ -95,10 +103,16 @@ generic subagents with the shared role prompt, or Loom can install/generate
 project-scoped `.codex/agents/*.toml` and invoke those profiles. The second option
 mutates the managed repository and inherits an evolving format. [2][5][7]
 
-Both clients default to one level of delegation: Claude subagents cannot spawn
-subagents, and Codex's `agents.max_depth` defaults to 1. Loom's current hub-and-spoke
-rule—only the main orchestrator launches cold roles—therefore remains a portable
-core invariant. [5][9][13]
+The clients do not share a one-level platform default: current Claude permits
+nesting through depth five, while Codex defaults to one level and can be
+configured deeper. Loom's current hub-and-spoke rule—only the main orchestrator
+launches cold roles—remains a valid portable core invariant, but it must be
+enforced as Loom policy rather than inferred from the platforms. A preserving
+adapter would keep `Agent` out of each Claude role allowlist and keep Codex at
+`agents.max_depth = 1`, with tests that child roles cannot delegate. If Loom later
+adopts nested delegation, the adapters must instead grant Claude roles `Agent`
+and raise Codex's depth explicitly; the hierarchy and cost implications would
+then be a new architecture decision. [2][5][9][13]
 
 Model tiers are not portable identifiers. Claude role files select
 `haiku`/`sonnet`/`opus`, while Codex custom agents select a model plus
@@ -124,9 +138,13 @@ the specs should name the canonical source and conflict rule. [1][6][13]
 ### 5. Hook portability and enforcement semantics
 
 Both clients support plugin `PreToolUse` and `PreCompact`, consume JSON on stdin,
-and provide `session_id`, `cwd`, and tool/event fields. Codex exposes plugin-root
-and data variables and also supplies `CLAUDE_PLUGIN_ROOT` and
-`CLAUDE_PLUGIN_DATA` to plugin hook processes for compatibility. [4][8]
+and provide common fields including `session_id`, `transcript_path`, `cwd`, and
+`hook_event_name`. For `PreCompact`, both use `trigger` with `manual` or `auto`;
+Claude additionally supplies `custom_instructions`, while Codex supplies a
+Codex-specific `turn_id` (and its common input includes a Codex-specific `model`).
+Codex exposes plugin-root and data variables and also supplies
+`CLAUDE_PLUGIN_ROOT` and `CLAUDE_PLUGIN_DATA` to plugin hook processes for
+compatibility. [4][8]
 
 The identity guard's current `PreToolUse` contract is close to portable: both
 clients identify shell calls as `Bash`, pass the command in
@@ -135,12 +153,17 @@ call. The M3 parser and post-command verification work is still required because
 both platforms describe hooks as guardrails around supported tool paths, not a
 complete security boundary. [2][4][8]
 
-`PreCompact` is not wire-compatible today. Claude supplies
-`compaction_trigger`; Codex supplies `trigger`. Codex documents JSON
-`{"continue":false,"stopReason":"..."}` to stop before compaction, while the
-existing Loom hook emits stderr and exits 2. A shared implementation needs to
-normalize both inputs and emit client-correct output, with contract tests that
-feed each client's exact event fixture. [2][4][8]
+The two clients' current `PreCompact` trigger field is wire-compatible, but Loom's
+hook is not: it extracts the obsolete `compaction_trigger`, and its missing-field
+fallback converts every current event to `auto`. Consequently, a no-progress
+manual compaction from either client is logged and allowed instead of taking the
+intended manual block path. Output remains client-specific. Claude documents exit
+2 with stderr or JSON `{"decision":"block"}` to block compaction; Codex's
+`PreCompact` section documents JSON
+`{"continue":false,"stopReason":"..."}`. The existing hook only uses Claude's
+exit-2 path. A shared policy implementation therefore needs the common `trigger`
+parser plus client-correct output adapters, with contract tests that feed each
+client's exact event fixture and assert its documented block result. [2][4][8]
 
 Codex also requires explicit trust review for new or changed non-managed/plugin
 hooks and skips them until trusted. Installation and doctor documentation must not
@@ -195,24 +218,29 @@ dual support adds a client dimension to those existing requirements. [1]
   Claude-specific, so deferring this decision to M7 would make earlier slices
   conform to superseded contracts. [1][13]
 - **M0:** expand `ci-baseline` to validate/install both package shapes, document
-  both minimum client versions and supported surfaces, and create dual hook wire
-  fixtures. Codex lacks the same validator command and its plugin is unavailable
-  in the IDE, so a single “plugin validates” check is insufficient. [1][3][4][12][14]
+  both minimum client versions and supported surfaces, and create `PreCompact`
+  fixtures with the shared `trigger` field, each client's supplemental fields,
+  and each client's documented blocking output. Codex lacks the same validator
+  command and its plugin is unavailable in the IDE, so a single “plugin validates”
+  check is insufficient. [1][3][4][8][12][14]
 - **M1:** keep identifier, lock, and schema-CAS work client-neutral; amend helper
   invocation tests so they do not rely solely on Claude's `bin/` PATH behavior.
   [1][3][7]
 - **M2:** keep remote publication and coordinator state client-neutral, but define
   client adapters for orchestrator launch, status wording, and recovery prompts;
   no landing invariant itself depends on Claude or Codex. [1][13]
-- **M3:** design hook normalization before implementing the two hook slices, and
-  test Claude and Codex input/output and trust behavior separately. [1][2][4][8]
+- **M3:** correct the shared `trigger` parser before implementing the two hook
+  slices, add client-specific `PreCompact` block-output adapters, and test Claude
+  and Codex input/output and Codex trust behavior separately. [1][2][4][8]
 - **M4:** define reviewer roles and findings as shared protocol assets before
-  binding their launch to Claude plugin agents or Codex subagents; local review
-  must remain network-silent and client-independent even when orchestration differs.
-  [1][5][7][9]
+  binding their launch to Claude plugin agents or Codex subagents; mechanically
+  enforce the chosen hub-and-spoke policy through Claude role tool allowlists and
+  Codex depth configuration. Local review must remain network-silent and
+  client-independent even when orchestration differs. [1][2][5][7][9][13]
 - **M5:** the sanitized workspace and deterministic recorder are already
-  client-neutral, but the evaluator launcher and permission/read-only setup need a
-  per-client adapter test. [1][5][9]
+  client-neutral, but the evaluator launcher, permission/read-only setup, and
+  inability of evaluator children to delegate need a per-client adapter test.
+  [1][2][5][9][13]
 - **M6:** `loom doctor` must report the selected client, client version, manifest
   and marketplace load, skill/role availability, hook trust/enabled state,
   instruction-file parity, and helper resolution rather than requiring both
@@ -220,9 +248,9 @@ dual support adds a client dimension to those existing requirements. [1]
 - **M7:** release conformance must cover both manifests/catalogs, clean install,
   upgrade, uninstall, changelog/version agreement, surface limitations, and
   platform-specific invocation examples. [1][3][7][11][14]
-- **M8:** benchmark client and process profile as separate variables; otherwise
-  platform orchestration/model differences can be mistaken for workflow overhead.
-  [1][5][9]
+- **M8:** benchmark client, process profile, and configured delegation depth as
+  separate variables; otherwise platform orchestration/model differences can be
+  mistaken for workflow overhead. [1][5][9]
 
 ## Risks
 
@@ -240,7 +268,8 @@ dual support adds a client dimension to those existing requirements. [1]
   plugins are not available in the IDE even though skills are. [14][15]
 - **Release skew:** Claude and Codex update independently; shared hook behavior and
   manifest fields require separate minimum versions and compatibility fixtures.
-  [4][7][8][12]
+  Claude's nested-subagent behavior is itself version-gated, so hierarchy tests
+  must also run against each declared minimum. [4][7][8][9][12]
 
 ## Sources
 
@@ -270,7 +299,8 @@ manifest/path variables, `agents/`, `hooks/`, and `bin/` PATH behavior.
 blocking semantics, and `PreToolUse` decision contract.
 
 [9] https://code.claude.com/docs/en/sub-agents — Claude agent format, namespace,
-cold context, model/tool controls, and no-nested-subagent boundary.
+cold context, model/tool controls, nested-subagent support since 2.1.172, fixed
+depth-five limit, and tool-based nesting restriction.
 
 [10] https://code.claude.com/docs/en/slash-commands — Claude skills, Agent Skills
 standard, invocation, and legacy command compatibility.
@@ -306,8 +336,8 @@ explicit/implicit invocation, progressive disclosure, and plugin packaging.
 - Does the supported Codex version add plugin `bin/` to shell `PATH` despite the
   absence of that promise in current documentation? Until tested, Loom should not
   rely on it.
-- Can one hook executable emit platform-specific `PreCompact` output by detecting
-  `trigger` versus `compaction_trigger`, or will separate hook config adapters be
-  clearer and safer?
+- Should one shared hook policy use thin per-client output wrappers, or can a
+  documented and tested platform discriminator select Claude's block output versus
+  Codex's without coupling the core policy to incidental wire fields?
 - What exact minimum Claude Code and Codex versions first support every selected
   manifest, hook, marketplace, and subagent feature?
