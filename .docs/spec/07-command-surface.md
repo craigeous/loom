@@ -1,6 +1,6 @@
 # 07 — Client Invocation Surface
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

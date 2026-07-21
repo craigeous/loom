@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

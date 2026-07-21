@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Plan Review
+Status: Draft
 
 ## Authority
 
