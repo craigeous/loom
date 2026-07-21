@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -9,7 +9,7 @@ ADRs [0001](../ADR/0001-plugin-architecture-and-orchestrator.md),
 [0012](../ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md) through
 [0018](../ADR/0018-shared-core-and-client-adapters.md), and
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md) through
-[0022](../ADR/0022-controlled-input-independent-evaluation.md).
+[0023](../ADR/0023-repository-self-hosting-bootstrap-transition.md).
 
 ## Identity and adapter boundary
 
@@ -75,6 +75,169 @@ or an authority-changing ambiguity.
 
 One-off workflows use the same shared contracts but perform one pass and stop; they
 must not bypass export, review, recorder, or landing rules applicable to that pass.
+
+## Repository self-hosting bootstrap orchestration (non-release exception)
+
+The production orchestration sections below remain Loom's v1 contract. ADR 0023 adds
+one temporary, non-release bridge for this repository only. Released Loom and every
+Loom-managed project always use the production local-review, controlled-input
+evaluation, recorder, and landing paths; they cannot select, advertise, or consume
+`loom-repository-bootstrap/v1`.
+
+### Eligibility and exact evidence
+
+Before any bootstrap action, including checkpoint resume, the root freshly reads and
+validates the protected remote transition branch described below and the configured
+target. The state must list the exact separately planned slice and its needed component
+as available. The closed set is M0 `ci-baseline` and
+`client-floor-adapter-smoke`; M1 `coord-identifier-boundaries`,
+`coord-lock-ownership`, and `coord-schema-cas`; M2
+`remote-first-integration-candidate` and `coordination-state-separation`; M3
+`identity-guard-contract` and `precompact-per-session`; M4 `local-review-helper`,
+`local-review-agents`, `local-review-orchestration`, and
+`local-review-defect-battery`; and M5 `sanitized-evaluation-workspace` and
+`evaluation-output-recorder`. Only ADR 0023's degraded cold ratification evaluation
+and a plan evaluation solely authorizing one listed slice receive analogous plan
+eligibility. No other artifact, slice, milestone, repository, or workflow is eligible.
+
+Before launching a worker or evaluator, the root SHALL:
+
+1. Resolve full existing `base_sha` and `head_sha` commit objects, prove ancestry,
+   record `head_sha^{tree}`, and reject a dirty handoff.
+2. Export committed `head_sha` source to a fresh temporary root outside the checkout;
+   record the exact full-index binary/mode/rename diff and ordered changed paths.
+3. Hash the source inventory, diff, approved plan, authority, rubric, and every gate
+   evidence file. Record the exact gate command, available tool versions, creation
+   time, client/launch mechanism, and bootstrap evidence mode.
+4. Run the developer gate against source verified as `head_sha`; preserve command,
+   environment summary, timing, exit, stdout/stderr hashes, and output location.
+5. Exclude producer transcripts/reasoning, credentials, unrelated evaluations, status
+   history, and original Git identities/history. Necessary synthetic Git metadata is
+   identity-free and explicitly marked synthetic.
+
+The root re-verifies inventory immediately before each cold launch and after each gate.
+A changed head, nonzero or incomplete gate, source mismatch, or unrecorded output
+invalidates the run; evidence never carries across a base/head pair.
+
+### Auxiliary review, evaluation, and recording
+
+The root launches exactly three separate cold, non-delegating auxiliary workers for
+correctness, tests, and security. They receive the same hash-bound package without
+producer context and use separate scratch/output paths with no source, checkout,
+authority, gate-evidence, or peer-output write access. Each echoes the base/head and
+manifest hash and returns parseable, diff-intersecting findings with stable run-local
+ID, confidence, proposed severity, location, claim, evidence, and suggested
+verification.
+
+The root mechanically validates completeness, bindings, inventories, and locations,
+then records an identity-neutral companion with only
+`bootstrap-ran-with-findings`, `bootstrap-ran-clean`, or `bootstrap-invalid`. Clean
+requires three valid workers and zero findings. Any missing, failed, timed-out,
+truncated, malformed, duplicate, hash-mismatched, or source-mutating output makes the
+aggregate invalid; partial findings remain diagnostics only.
+
+After a complete review, the root launches a fresh cold code evaluator distinct from
+the developer, workers, and root. It receives only the exact package, validated
+bootstrap findings, rubric, and bounded instruction, cannot delegate, independently
+checks plan/spec conformance and adjudicates every finding, and obtains the same gate
+rerun against a fresh writable copy whose starting inventory matches `head_sha`.
+Developer gate evidence is comparison material, not a substitute. An unavailable or
+incomplete rerun invalidates the evaluation.
+
+The evaluator writes one bound verdict to its scratch output and never commits or
+changes status. The root validates run ID, exact SHAs, manifest hash, round,
+adjudications, gate evidence, and output uniqueness, copies it without changing its
+merits, and commits the companion and verdict under the configured uniform identity.
+Only the independent evaluator supplies PASS/FAIL. Until the recorder component
+retires, this root-copy operation is explicitly not deterministic recorder
+conformance.
+
+Every artifact prominently records:
+
+```text
+Evidence mode: loom-repository-bootstrap/v1
+Conformance: degraded bootstrap; not loom-local-review/v1
+Isolation: not established under ADR 0022
+```
+
+The orchestrator never labels bootstrap output isolated, sanitized-evaluation/v1,
+controlled-input-conformant, or release/adapter conformance, and never feeds it into a
+production-v1 consumer as production evidence.
+
+### Protected transition state, publication, and recovery
+
+Eligibility is latched only by `refs/heads/loom/bootstrap-transition`, an ordinary
+branch on the configured remote, separate from the target and protected against
+deletion and non-fast-forward updates. Protection must be freshly verified before a
+create-only root push. The canonical JSON root binds the accepted ADR commit/blob,
+`loom-repository-bootstrap-state/v1` schema and unique program ID, improvement-plan
+blob, configured remote/full target/`remote-direct` mode, transition ref, exact
+allowlist, component retirement slices, empty result/evidence maps, sequence zero,
+phase `active`, and `full_sunset: not-reached`. A missing or unexpected root blocks
+bootstrap.
+
+Each ordinary-push successor has the prior verified tip as its sole parent, increments
+the sequence, repeats immutable fields, and carries cumulative state. History
+validation permits only slice removal, immutable result addition, component movement
+`available -> closing -> retired`, and full-sunset movement
+`not-reached -> closing -> retired`. Every push is freshly fetched and checked by exact
+object ID. Each result binds the verified target result and slice head, initial/final
+bases, gate/review/evaluation hashes, receipt hash, and intent-state SHA; retirement
+records its slice and result SHA. Writers that lose a fast-forward race inspect the
+winner and recover its matching intent or restart from fresh state; they never retry
+stale state or candidate commits.
+
+Every eligible publication, including later production-helper publications while the
+program remains active, uses this envelope: prepare and check the final candidate;
+append and freshly verify a `publication-intent` phase bound to slice, session/claim,
+final base, candidate input/result, evidence hashes, and intended removals/retirements;
+publish and freshly verify the configured target; write the ADR-0020 receipt; append
+and freshly verify settlement returning to `active` or terminal `retired`; then release
+the claim and clean up. A current intent blocks every other new or resumed bootstrap
+action. An abort successor is permitted only after proving no target publication
+occurred; it retains the intent/abort record and cannot undo results or retirements.
+Recovery freshly reads both refs and either publishes only the exact recorded
+candidate, reconstructs the receipt and settles a verified result, completes cleanup
+for an existing settlement, or stops for owner recovery when containment is uncertain.
+
+For only M0, M1, and `remote-first-integration-candidate`, while
+`bootstrap-landing` remains available, the root may replace the not-yet-built landing
+helper with ADR 0023's repository-only `remote-direct` procedure. It fetches the exact
+remote base into a temporary ref; builds a disposable candidate containing only the
+slice and deterministic prospective finalization; runs the integrated gate, auxiliary
+review, and independent evaluation against exact candidate SHAs; adds only declared
+evidence/finalization; reruns the exact publish-candidate gate; and re-fetches before
+publication. Target movement discards and rebuilds the candidate with affected checks
+rerun. Publication uses an explicit non-force `<sha>:<full-target-ref>` refspec and is
+successful only after a fresh read proves the target and checked tree exactly match.
+It never falls back to PR, merge queue, a protected target, force, or another mode.
+
+Settlement of `remote-first-integration-candidate` retires bootstrap landing;
+`local-review-orchestration` retires auxiliary bootstrap review;
+`sanitized-evaluation-workspace` retires bootstrap export and gate rerun; and
+`evaluation-output-recorder` retires root-copy recording. Retirements govern every
+new and resumed run regardless of its base. A stale run must rebuild/rebase from a
+fresh target containing every retired component's result SHA and rerun the integrated
+gate and all affected review/evaluation. A rewind or unavailable qualifying base
+blocks; an older checkpoint never reopens a retired path.
+
+Settlement of `evaluation-output-recorder` derives the full-sunset SHA from a fresh
+target proven to contain the results for `local-review-orchestration`,
+`sanitized-evaluation-workspace`, and `evaluation-output-recorder`. Its terminal state
+retires all components and empties the allowlist. Bootstrap is then forbidden for all
+runs. Production failure does not revive it; only a new accepted ADR and new
+program/ref could authorize another transition.
+
+At every preparation, review, gate, evaluation, recording, state, or publication
+failure, the root fails closed: it never records clean/PASS or advances without valid
+evidence; retains the exact commits and safe diagnostics; keeps `Implemented`, or
+`Ready to Publish` after a valid PASS, unless a merits revision returns to
+`In Progress`; checkpoints the exact resume action; preserves the claim during
+incomplete intent/publication/settlement; and stops spawning. Infrastructure blocks
+consume no merits round and are never retried blindly. A stage may resume only with
+hash-identical inputs; otherwise the root starts a new run. A docs-only skip, missing
+command, partial finder set, manual finding summary, owner assertion, or prior slice's
+evidence never substitutes for a required bootstrap stage.
 
 ## Local review orchestration
 

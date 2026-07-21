@@ -1,13 +1,15 @@
 # 05 — Controlled-Input Independent Evaluation
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
 ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md) and
 [0004](../ADR/0004-blind-evaluation-role-separation.md), as corrected and extended
 by [0021](../ADR/0021-loom-owned-local-review-protocol.md) and
-[0022](../ADR/0022-controlled-input-independent-evaluation.md).
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), with the temporary
+repository-only transition in
+[0023](../ADR/0023-repository-self-hosting-bootstrap-transition.md).
 
 ## The claim
 
@@ -78,6 +80,104 @@ Code evaluation receives only:
 The evaluator independently adjudicates every advisory local-review finding. It may
 confirm, reject with reason, or adjust proposed severity under the canonical rubric.
 Finders never determine PASS/FAIL.
+
+## Degraded repository bootstrap evaluation (non-release exception)
+
+The production controlled-input claim and construction requirements in this spec are
+unchanged. ADR 0023 permits a temporary `loom-repository-bootstrap/v1` substitute only
+inside this Loom repository while it builds the exporter, runner, and recorder. It is
+never available to released Loom, a Loom-managed project, another repository, or as
+release/client-adapter conformance.
+
+Eligibility is closed to M0 `ci-baseline` and `client-floor-adapter-smoke`; M1
+`coord-identifier-boundaries`, `coord-lock-ownership`, and `coord-schema-cas`; M2
+`remote-first-integration-candidate` and `coordination-state-separation`; M3
+`identity-guard-contract` and `precompact-per-session`; M4 `local-review-helper`,
+`local-review-agents`, `local-review-orchestration`, and
+`local-review-defect-battery`; and M5 `sanitized-evaluation-workspace` and
+`evaluation-output-recorder`. The only planning uses are ADR 0023's degraded cold
+ratification and a slice-plan solely authorizing one listed slice. A renamed, combined,
+unlisted, M6-or-later, research, maintenance, or other planning artifact is ineligible.
+The ADR 0023 ratification verdict additionally records
+`bootstrap-ratification: degraded` and requires the existing explicit owner gate; it
+does not retroactively authorize its own evaluation.
+
+The bootstrap package binds full ancestor `base_sha` and committed `head_sha`,
+`head_sha^{tree}`, exact full-index binary/mode/rename diff, ordered source inventory,
+approved plan and authority, rubric, and SHA-256 for every input. It records the exact
+developer gate command, environment/tool versions, timing, exit, stdout/stderr hashes,
+and output after running against source verified to match `head_sha`. The package is
+materialized outside the managed checkout from the commit, never the worktree, and
+excludes producer transcripts/reasoning, credentials, unrelated evaluation and status
+history, and original Git identity/history. A changed head requires a new package and
+new evidence.
+
+Before evaluation, three separate cold, non-delegating auxiliary workers for
+correctness, tests, and security inspect that same immutable package using distinct
+writable output/scratch locations. Each echoes exact revisions and manifest hash and
+returns structured diff-intersecting advisory findings. The root validates all three;
+missing, failed, timed-out, truncated, malformed, duplicate, hash-mismatched, or
+source-mutating output makes the review `bootstrap-invalid`, never clean. Valid
+aggregate states are only `bootstrap-ran-with-findings` and
+`bootstrap-ran-clean`.
+
+The code evaluator is a new cold invocation distinct from the developer, all three
+workers, and the root orchestrator. It receives only the exact package, validated
+bootstrap findings, rubric, and bounded instruction; receives no producer conversation
+or reasoning; cannot delegate; independently checks plan/spec conformance and
+adjudicates every finding; and obtains a rerun of the same gate against a fresh writable
+copy whose starting inventory matches `head_sha`. The rerun records its
+command/environment digest, tool versions, timing, exit, stdout/stderr hashes, and
+ending inventory. Prior developer evidence cannot substitute; an unavailable or
+incomplete rerun invalidates the evaluation.
+
+The evaluator writes one verdict in scratch, echoing run ID, exact base/head, manifest
+hash, PASS/FAIL, round, adjudications, severity findings, and gate-rerun reference. It
+never writes the repository, commits, or changes lifecycle state. The root validates
+the bindings and copies the verdict without merits changes under the uniform neutral
+identity. Only this independent evaluator may supply PASS or FAIL. Missing, malformed,
+duplicate, truncated, cross-run, hash-mismatched, or unrecordable output cannot advance
+the lifecycle.
+
+Every bootstrap findings file and verdict prominently records:
+
+```text
+Evidence mode: loom-repository-bootstrap/v1
+Conformance: degraded bootstrap; not loom-local-review/v1
+Isolation: not established under ADR 0022
+```
+
+It never claims `protocol: loom-local-review/v1`, `isolated`,
+`sanitized-evaluation/v1`, `controlled-input-conformant`, unqualified production
+review states, or deterministic recorder/adapter conformance. Prompt restrictions and
+temporary-directory permissions are controls, not proof of the production isolation
+boundary. Bootstrap artifacts remain degraded historical evidence and are never
+upgraded or relabeled as v1.
+
+The protected append-only transition history at
+`refs/heads/loom/bootstrap-transition` is the only authority for use and retirement.
+Each run and resume freshly validates its exact remote history and target containment.
+Settlement of `local-review-orchestration` permanently requires production local
+review; settlement of `sanitized-evaluation-workspace` permanently requires the
+production export and gate-runner path; settlement of `evaluation-output-recorder`
+permanently requires deterministic recording. Any stale run must rebuild/rebase onto a
+fresh target containing those result SHAs and rerun affected checks. Missing,
+unprotected, divergent, rewound, malformed, or unverifiable state/target fails closed.
+
+When a hash-bound publication intent is current, no new or resumed bootstrap review,
+evaluation, or recording may start; only exact intent recovery may proceed. The full
+sunset is terminal once fresh target ancestry proves the results for
+`local-review-orchestration`, `sanitized-evaluation-workspace`, and
+`evaluation-output-recorder`, the transition state retires every component, and the
+allowlist becomes empty. Stale state, local edits, missing receipts, owner assertion,
+or production failure cannot revive the exception; that requires a new accepted ADR
+and program/ref.
+
+Any failed package, worker, gate, evaluator, recording, transition-state, or recovery
+step is invalid/infrastructure-blocked, not clean or PASS. Safe diagnostics and exact
+input bindings are retained, no unauthorized status advance occurs, incomplete
+publication/settlement keeps its claim, and retry is permitted only for hash-identical
+inputs. Otherwise a wholly new evaluation run is required.
 
 ## Unconditional gate rerun
 
