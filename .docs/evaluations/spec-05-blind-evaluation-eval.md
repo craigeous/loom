@@ -1,38 +1,39 @@
 # Evaluation: 05 — Controlled-Input Independent Evaluation
 
-Verdict: FAIL
+Verdict: PASS
 Round: 1
+Reviewed artifact commit: `c14034fc9d5b2066858f1660dbfa48ad064b15fa`
+Reviewed artifact blob: `01bfc9838f15e941cb469d1b7b231f2b88a32d33`
 Reviewed against: accepted ADR 0023; retained production authority in accepted ADRs
 0020–0022; sibling specs 03 and 04; exact amendment diff `80499f1^..80499f1`;
-plan-evaluation rubric and severity rules.
+resolving revision diff `213b909..c14034f`; plan-evaluation rubric and severity
+rules.
 
 ## Findings
 
-- [BLOCKER] The exception names ADR 0023 ratification and one-listed-slice plan
-  evaluation as its only planning uses (lines 98–103), but every bootstrap package,
-  worker, evaluator, and recording rule that follows is code-specific (lines 105–140):
-  it requires `base_sha`/`head_sha`, an approved plan, developer gate, three
-  diff-intersecting code workers, a code evaluator, and gate-rerun verdict fields.
-  The spec never supplies ADR 0023 sections 2 and 4's analogous planning package—exact
-  artifact commit, authority/rubric blobs and required `evidence_sha`—or its distinct
-  cold plan-evaluator scratch verdict and root-copy validation. Falling through to the
-  production plan path would require the exporter and deterministic recorder this
-  transition exists to build, so the authorized planning exception is unusable.
-
-## Required changes (for FAIL)
-
-1. Separate bootstrap plan evaluation from the code path. Define the exact planning
-   allowlist/package, distinct cold plan evaluator, scratch-only verdict, root
-   validation/copy without merits changes, required degraded labels (including
-   `bootstrap-ratification: degraded` for ADR 0023), and invalid-output handling.
-   Explicitly scope the developer gate, three auxiliary workers, code adjudication,
-   and gate-rerun fields to eligible code-bearing slices.
+No blocking or major findings.
 
 ## Notes
 
-The code path's trust claim and labels are accurate: bootstrap evidence is expressly
-degraded, non-v1, and non-isolated; exact committed inputs, all three cold workers, the
-independent evaluator and fresh gate rerun are mandatory; malformed or unavailable
-evidence fails closed; protected remote state makes retirement and full sunset
-one-way; and the exception cannot become managed-project, adapter, or release
-conformance.
+The `213b909..c14034f` revision resolves the Round-1 blocker. Lines 105–172 now
+define a planning-artifact path separate from the code-bearing path. The manifest
+binds the normalized artifact path, type/status, full reviewed commit and blob,
+artifact bytes, typed authority/rubric/severity inputs, optional current-tree evidence,
+and the prior verdict plus exact artifact revision diff on re-review. Only those
+read-only inputs reach one fresh cold, non-delegating plan evaluator distinct from the
+author/producer and root.
+
+The evaluator can write only one verdict in confined output plus private scratch and
+cannot write `.docs/`, commit, or transition status. The root verifies confinement,
+eligibility, state, schema, uniqueness, completeness, and all hashes before copying the
+verdict without merits changes and applying only spec 03's legal transition. Required
+degraded provenance is explicit, including ADR 0023's ratification label. Invalid or
+unrecordable runs are infrastructure-blocked, never merits PASS/FAIL, consume no round,
+and cannot advance status; the protected transition state and production-component
+retirements make fallback and full-sunset revival impossible.
+
+Lines 174 onward retain the code-bearing requirements: exact base/head package,
+developer gate evidence, three cold correctness/test/security finders, independent
+code evaluator adjudication, and fresh gate rerun. The spec therefore preserves the
+code guarantees while excluding every code-only participant from planning evaluation,
+consistent with ADR 0023 and Approved specs 03 and 04.
