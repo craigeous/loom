@@ -1,6 +1,6 @@
 # 0019 — Supported Runtime, Platforms, Compatibility, and Release Contract
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-07-21
 
 ## Context
