@@ -1,6 +1,6 @@
 # 0023 — Repository Self-Hosting Bootstrap Transition
 
-Status: Draft
+Status: Plan Review
 Date: 2026-07-21
 
 ## Context
@@ -34,10 +34,11 @@ Stopping all code work would instead make the approved ordering impossible to ex
 In scope is one temporary self-hosting transition for this Loom repository's named
 improvement-program slices, including the minimum planning evaluations needed to
 authorize them. It defines exact-revision evidence, cold auxiliary review, independent
-evaluation, recording, failure handling, progressive retirement, and a hard sunset.
-It does not change behavior shipped to or promised for a Loom-managed project, waive
-publication authority, establish a reusable workflow profile, or authorize unrelated
-repository work.
+evaluation, recording, a closed bootstrap publication path until the landing helper
+can land itself, failure handling, remote-latched progressive retirement, and a hard
+sunset. It does not change behavior shipped to or promised for a Loom-managed project,
+waive configured-remote publication authority, establish a reusable workflow profile,
+or authorize unrelated repository work.
 
 ## Decision
 
@@ -168,9 +169,9 @@ reviewer, model-persona, or tool authorship attribution.
 Only that independent code-evaluator verdict may supply PASS or FAIL. The root,
 auxiliary workers, developer, and owner cannot turn invalid bootstrap evidence into an
 evaluator PASS. A valid FAIL returns the slice to `In Progress`; a valid PASS may
-advance it to `Ready to Publish`. This ADR does not weaken ADR 0020 or specs 03/04:
-publication, remote verification, and receipt requirements still apply before
-`Landed`.
+advance it to `Ready to Publish`. ADR 0020/specs 03–04 publication authority, fresh
+remote verification, and receipt requirements still apply before `Landed`; section 7
+temporarily replaces only their unavailable helper implementation boundary.
 
 Cold plan evaluations use the same separation: a plan evaluator distinct from the
 planner writes its own verdict to scratch, and the root records it without merits
@@ -202,61 +203,215 @@ otherwise abbreviated to imply those unproved guarantees. User-facing material m
 continue to distinguish this degraded repository bootstrap from Loom's production
 claim.
 
-### 6. Retire the bridge monotonically and mechanically
+### 6. Latch eligibility and retirement on an append-only remote state ref
 
 The original improvement-plan milestone order remains unchanged. Safety and remote
-publication work are not moved behind self-hosting machinery. Instead the exception
-shrinks as each production component is remotely landed:
+publication work are not moved behind self-hosting machinery. Bootstrap eligibility is
+not inferred from a chosen run base, local status, local receipts, or the current target
+branch. It is granted only by a valid state history on the configured remote at
+`refs/heads/loom/bootstrap-transition` (the **transition ref**).
 
-- For a run whose `base_sha` contains the verified remote result of
-  `local-review-orchestration`, production `loom-local-review/v1` is mandatory; the
-  bootstrap review in section 3 is no longer available.
-- For a run whose `base_sha` contains the verified remote result of
-  `sanitized-evaluation-workspace`, its production exporter and gate runner are
-  mandatory; prompt-scoped bootstrap preparation/rerun is no longer available.
-- For a run whose `base_sha` contains the verified remote result of
-  `evaluation-output-recorder`, its production recorder is mandatory; root-copy
-  bootstrap recording is no longer available.
+The transition ref is an ordinary branch, separate from the configured target branch.
+Before this exception is used after ADR acceptance, the repository owner SHALL
+configure the remote to reject deletion and non-fast-forward updates of that ref. If
+that protection cannot be established and freshly verified, bootstrap is unavailable.
+The initializer then creates, with a create-only ordinary push, one root commit whose
+sole payload is canonical UTF-8 JSON with:
 
-At the start of each run the orchestrator freshly reads the configured remote target.
-Absence there of a transition slice's published `Archived` plan and PASS evidence means
-that component has not landed. Their presence triggers ADR 0020 receipt recovery and
-fresh verification of its exact result SHA. The boundary contains the run base only
-when `git merge-base --is-ancestor <result_sha> <base_sha>` succeeds. An ambiguous,
-unverifiable, or contradictory tracked state, receipt, or remote result fails closed;
-deleting local recovery state cannot make the older bootstrap path available.
+- `schema: "loom-repository-bootstrap-state/v1"`, a unique program ID, this accepted
+  ADR's commit and blob IDs, and improvement-plan blob
+  `316ae4bc964fb422134151478b6369e1f9b4cfa5`;
+- the configured remote name, full target ref, required `remote-direct` mode, and
+  transition ref;
+- sequence `0`, no predecessor, phase `active`, and the exact initial allowed slice set
+  from section 1;
+- immutable component entries for `bootstrap-landing`, `local-review`,
+  `evaluation-workspace`, and `evaluation-recorder`, initially `available` and bound
+  respectively to `remote-first-integration-candidate`,
+  `local-review-orchestration`, `sanitized-evaluation-workspace`, and
+  `evaluation-output-recorder`; and
+- empty result/evidence maps and `full_sunset: {"state":"not-reached"}`.
 
-The **full sunset SHA** is the first verified configured-remote target commit that
-contains the verified results of all three slices: `local-review-orchestration`,
-`sanitized-evaluation-workspace`, and `evaluation-output-recorder`. Bootstrap mode is
-forbidden for every run whose base is that SHA or a descendant. This predicate is
-mechanical, has no date extension or owner-discretion flag, and lets each transition
-component use bootstrap only for its own pre-landing evaluation. At and after the full
-sunset, ADRs 0021/0022 and specs 03–05 apply without exception. An unavailable or
-defective production component is then an infrastructure block, not grounds to revive
-bootstrap mode. Revival requires a new accepted ADR; editing a plan, status file,
-receipt, or local configuration cannot do it.
+Missing state does not mean “not yet retired”: it blocks the exception. A create race
+is resolved by freshly reading and validating the winning root; an unexpected root is
+invalid, not replaceable. The initialization commit and every successor are pushed
+without force and freshly fetched back by exact object ID before they have authority.
+No command in this ADR deletes, force-updates, or recreates the transition ref.
 
-### 7. Fail closed and recover without changing the reviewed target
+Each successor has exactly one parent equal to the previously verified transition tip,
+increments the sequence by one, repeats the immutable program/configuration fields,
+and contains the complete cumulative state. Validation walks the entire history to the
+root and permits only these monotonic changes:
 
-At any bootstrap preparation, auxiliary review, gate, evaluation, recording, or
-sunset-check failure, the orchestrator SHALL:
+- remove, never add, a slice from `allowed_slices`;
+- add one immutable slice result containing its verified configured-target result SHA,
+  slice head, initial/final target bases, gate/review/evaluation evidence hashes,
+  receipt hash, and publication-intent state SHA;
+- move a component only `available -> closing -> retired`, recording its retirement
+  slice and result SHA; and
+- move full sunset only `not-reached -> closing -> retired`, with its derived SHA.
 
-1. mark the run invalid, never clean/PASS, and make no advancing lifecycle transition;
-2. leave the slice at `Implemented` (or return it to `In Progress` only for a merits
-   revision), retain the exact committed base/head and all safe diagnostic evidence,
-   and checkpoint the failed step and resume action;
-3. stop spawning and classify infrastructure failures under ADR 0017 without consuming
-   a merits round or retrying blindly; and
+A publication-intent successor records the exact slice, session/claim, final remote
+base, candidate-input and publish-result SHAs, evidence hashes, and intended removals
+or retirements, and changes phase to `publication-intent`. While that phase is current,
+all new and resumed bootstrap review, evaluation, recording, and landing runs are
+blocked. Only recovery of that exact hash-bound publication may proceed. Its settlement
+successor records the verified result and removals/retirements and returns to `active`,
+or to terminal `retired` at full sunset. If no target publication occurred, an abort
+successor may return to `active`, but it retains the intent and abort record and cannot
+undo an earlier result or retirement. This prepare-intent, publish-target, settle-state
+ordering deliberately does not assume atomic publication of two remote refs.
+
+That envelope applies to every section-1 slice, including publications performed by
+the production landing helper after its own retirement boundary: prepare and check the
+final candidate; append and freshly verify its transition intent; publish and freshly
+verify the configured target; write the ADR-0020 receipt; append and freshly verify
+settlement; then release the claim and clean up. A helper may implement those steps,
+but may not reorder or collapse the two remote updates. Concurrent state writers start
+from the same verified tip; only one ordinary fast-forward push can win. A loser
+freshly reads the winner and either recovers the matching intent or restarts from the
+new state and target. It never retries its old state commit or target candidate.
+
+At the start of every new run and before resuming any checkpoint, the orchestrator
+performs a network read of the transition ref into a new temporary ref, verifies the
+advertised and fetched object IDs agree, validates the complete state history, and
+freshly reads the configured target. It also compares the observed state tip with every
+tip bound into the current run, claim, candidate manifest, or recoverable receipt. A
+missing, unreadable, unprotected, malformed, wrong-program, divergent, deleted,
+rewound, or non-fast-forward transition ref; unavailable remote; or target that no
+longer contains every recorded result SHA blocks all bootstrap use and recovery. It
+never selects an older valid-looking state. Remote enforcement supplies the durable
+append-only latch, so deletion of all local checkpoints or receipts loses recovery
+convenience but cannot restore a removed permission.
+
+Settlement of these verified configured-target results retires the corresponding
+component for **every** later new or resumed run, independent of its selected base:
+
+- `remote-first-integration-candidate` retires `bootstrap-landing`;
+- `local-review-orchestration` retires the section 3 bootstrap review;
+- `sanitized-evaluation-workspace` retires bootstrap export and gate rerun; and
+- `evaluation-output-recorder` retires root-copy recording.
+
+Once state retires a component, every run base must contain that component's recorded
+result SHA. A stale run is invalidated and rebuilt/rebased from a fresh configured
+remote target that contains all required result SHAs; its integrated gate and every
+review/evaluation check affected by the new base are rerun. If the target was rewound,
+is unavailable, or cannot supply such a base, the run blocks. Choosing a pre-result
+base, resuming an old checkpoint, deleting a receipt, or deleting local transition
+state can therefore never reopen bootstrap.
+
+The **full sunset SHA** is derived during settlement of
+`evaluation-output-recorder`: after fresh verification of that published result, read
+the configured target once more and require
+`git merge-base --is-ancestor <result_sha> <target_sha>` for the recorded results of
+`local-review-orchestration`, `sanitized-evaluation-workspace`, and
+`evaluation-output-recorder`. The first target SHA verified by that settlement to
+contain all three is recorded as `full_sunset.sha`; the final successor sets every
+component and `full_sunset.state` to `retired`, empties `allowed_slices`, and is
+terminal. Bootstrap is then forbidden for all runs, including stale-base and resumed
+runs. Production failure is an infrastructure block, not revival grounds. Revival
+requires a new accepted ADR and a new program/ref; no target rewind, state-file edit,
+local configuration change, owner flag, or receipt deletion can mutate this terminal
+history.
+
+### 7. Bootstrap remote-direct landing only until the landing helper lands
+
+ADR 0020's remote authority remains the success boundary, but its not-yet-implemented
+landing-helper requirement is temporarily replaced for exactly these slices:
+`ci-baseline`, `client-floor-adapter-smoke`, `coord-identifier-boundaries`,
+`coord-lock-ownership`, `coord-schema-cas`, and
+`remote-first-integration-candidate`. The procedure is repository-only,
+`remote-direct` only, and available only while the freshly validated transition state
+lists the slice and `bootstrap-landing` is `available`. It is not `loom-land/v1`, a
+supported managed-project path, provider-adapter conformance, or release conformance.
+It does not support PR, merge-queue, protected-target fallback, another repository, or
+any later slice.
+
+The root orchestrator, while retaining the slice claim, SHALL perform this closed
+procedure:
+
+1. Freshly validate the transition state and fetch the configured full target ref by
+   name into a new temporary ref. Record its exact commit as `initial_base`; never read
+   local `main` for authority or candidate content.
+2. Resolve the reviewed slice head and its exact evidence, create a disposable branch
+   and worktree at `initial_base`, integrate only that slice, and deterministically add
+   the prospective `Landed`/`Archived` finalization required by specs 03/04. Record an
+   inventory proving that no unrelated local-main or other-slice commit entered the
+   candidate.
+3. Run the integrated gate against the resulting candidate input. Run sections 3 and
+   4 again against its exact base/input SHAs and bind their outputs to that integrated
+   tree. Add only those generated evidence and final status/index files to form the
+   publish candidate, prove that this last delta is confined to the declared
+   finalization paths, and run the integrated gate once more against the exact publish
+   candidate. Any other delta restarts integrated review/evaluation.
+4. Immediately re-fetch the configured target. If it differs from `initial_base`,
+   discard the candidate, rebuild from the new exact base, and repeat step 3. A conflict,
+   ambiguous affected-check determination, or evidence mismatch fails closed.
+5. Append and freshly verify a `publication-intent` transition-state commit bound to
+   the final base, candidate-input SHA, publish-candidate SHA, claim, and all integrated
+   evidence hashes. This makes other bootstrap work stop before the target update.
+6. Push the publish-candidate SHA with an explicit `<sha>:<full-target-ref>` refspec
+   through the configured remote, without `+`, `--force`, `--force-with-lease`, mirror
+   mode, deletion, or a changed destination. A non-fast-forward, protection,
+   credential, or network failure is not retried blindly and never selects another
+   mode.
+7. Perform a new remote read, fetch the advertised object, and verify the configured
+   target equals the exact publish-candidate SHA and its tree equals the checked tree.
+   Push exit alone is insufficient. Write a bound untracked receipt in common-Git-dir
+   recovery state containing the program/state-intent SHA, slice/session/claim, remote
+   and full target ref, mode `remote-direct`, slice head, initial/final bases,
+   candidate-input and result SHAs, gate/review/evaluation hashes, timestamps, and
+   publication/verification outcomes.
+8. Append and freshly verify the settlement transition commit, removing the slice from
+   `allowed_slices` and recording the result and receipt hash. For
+   `remote-first-integration-candidate`, also retire `bootstrap-landing`. Only then
+   release the owner-verified claim and perform idempotent local cleanup. Updating local
+   `main` is optional cache maintenance and has no authority.
+
+The transition ref and target ref are intentionally updated in separate ordered
+operations. Crash recovery begins with fresh reads of both. Before the intent exists,
+the disposable candidate may be discarded and rebuilt. With an intent and the target
+still at its recorded base, recovery may publish only the exact recorded candidate; if
+that object was lost before publication, append an abort only after proving the target
+does not contain it, then rebuild under a new intent. If the target equals or contains
+the recorded result, validate its tree/evidence, reconstruct a missing receipt, and
+settle without republishing. If the receipt exists but settlement does not, validate
+the receipt and settle. If settlement exists but local receipt/cleanup was deleted,
+reconstruct the receipt from the cumulative remote state plus fresh target containment,
+then clean up. Any target that neither remains at the recorded base nor contains the
+result, any rewritten transition history, or any uncertain containment stops for owner
+recovery without releasing the claim or reopening bootstrap.
+
+After the verified settlement of `remote-first-integration-candidate`, every later
+publication uses the production landing helper required by ADR 0020/specs 03–04. An
+unavailable or defective helper is infrastructure-blocked and cannot fall back to this
+procedure.
+
+### 8. Fail closed and recover without changing the reviewed target
+
+At any bootstrap preparation, auxiliary review, gate, evaluation, recording,
+publication, or transition-state failure, the orchestrator SHALL:
+
+1. mark the run invalid, never clean/PASS, and make no unauthorized advancing
+   lifecycle transition;
+2. leave the slice at `Implemented`, or at `Ready to Publish` after a valid PASS (return
+   it to `In Progress` only for a merits revision), retain the exact committed
+   base/head and all safe diagnostic evidence, and checkpoint the failed step and
+   resume action;
+3. preserve the claim whenever publication or transition settlement is incomplete,
+   stop spawning, and classify infrastructure failures under ADR 0017 without
+   consuming a merits round or retrying blindly; and
 4. after repair, rerun the failed stage only when its inputs remain hash-identical,
-   otherwise start a completely new run for the new committed head.
+   otherwise start a completely new run for the new committed head. A current
+   publication intent may be recovered only by section 7's exact procedure.
 
 If bootstrap cannot be launched at all, the owner may restore the existing client,
-filesystem, gate dependency, or orchestrator capability and resume from the checkpoint,
-or abandon the slice. No docs-only skip, command-unavailable state, partial finder set,
-manual finding summary, owner assertion, or earlier slice's evidence substitutes for
-the required run. If the sunset predicate has fired, recovery uses production v1 or
-pauses for a new authority decision; it never falls back to this bridge.
+filesystem, gate dependency, remote/state-ref protection, or orchestrator capability
+and resume from the checkpoint, or abandon the slice. No docs-only skip,
+command-unavailable state, partial finder set, manual finding summary, owner assertion,
+or earlier slice's evidence substitutes for the required run. Once remote state has
+retired a component, recovery uses its production implementation or pauses for a new
+authority decision; it never falls back to this bridge.
 
 ## Consequences
 
@@ -272,14 +427,20 @@ pauses for a new authority decision; it never falls back to this bridge.
   conformance for ADR 0023 ratification and the closed repository/program slice list.
   Cold separation, no self-approval, exact evidence, honest trust claims, and invalid
   output handling remain.
+- **Temporarily and narrowly supersedes ADR 0020 section 2 and specs 03/04** only where
+  they require the not-yet-landed deterministic landing helper. Section 7 preserves
+  the configured remote as authority, exact candidate construction, integrated
+  evidence, non-force publication, fresh verification, bound untracked receipt, and
+  recovery, and disappears when `remote-first-integration-candidate` is settled.
 - Approved specs 03–05 are read through exactly those temporary exceptions for eligible
-  runs before each mechanical retirement boundary. No other lifecycle, orchestration,
-  evaluation, or publication rule is superseded. ADR 0017's infrastructure handling,
-  ADR 0003's neutral handoffs, and ADR 0020's remote authority remain fully in force.
+  runs before each remote-latched retirement boundary. No other lifecycle,
+  orchestration, evaluation, or publication rule is superseded. ADR 0017's
+  infrastructure handling, ADR 0003's neutral handoffs, and ADR 0020's remote
+  publication authority remain fully in force.
 - Production components must accept and test only production evidence. Bootstrap
   artifacts remain auditable historical records but are never upgraded, relabeled, or
   counted as v1 conformance after the sunset.
-- The price of preserving program order is explicit degraded provenance and some
-  manual orchestration. The benefit is a hard one-way transition: each landed
-  self-hosting component removes its corresponding exception, and the final landing
-  eliminates the bridge entirely.
+- The price of preserving program order is explicit degraded provenance, a protected
+  append-only transition ref, and some manual orchestration. The benefit is a hard
+  one-way transition: each settled remote result removes its corresponding exception,
+  stale bases must move forward, and the final state eliminates the bridge entirely.
