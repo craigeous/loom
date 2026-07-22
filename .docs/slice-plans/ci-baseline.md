@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -758,3 +758,27 @@ not success.
   coverage for the required unsupported-host rejection. Round 4 must add isolated
   unknown-OS and unsupported-architecture cases that assert the exact diagnostic and
   prove provisioning/download code is not reached.
+
+### Developer revision for valid bootstrap merits Round 4 (2026-07-22)
+
+- Two isolated negative cases now control `uname` through a test-owned shim while
+  preserving native OS answers for the gate's preceding cache-safety probes. One
+  case supplies the unknown OS `Plan9`; the other supplies the supported native OS
+  with unsupported architecture `riscv64`. Both require status 1 and exactly one
+  complete `Unsupported check host: <os> <architecture>` diagnostic.
+- Selective test-owned `jq` and `curl` shims create a marker if the gate enters the
+  download-record lookup or attempts a download. Both cases prove that marker is
+  absent and that no pinned-download message is emitted, so rejection precedes
+  provisioning. No production seam or `scripts/check` behavior changed.
+- Focused verification passed all 136 tests in
+  `scripts/tests/repository-validation.bats`. Both complete gates then passed all 253
+  dynamically discovered tests plus metadata, links, shfmt, ShellCheck, Bash syntax,
+  pinned Claude strict validation, and diff-whitespace stages. Final exact-tree
+  commands were run strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-4 bootstrap review/evaluation.

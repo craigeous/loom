@@ -1195,6 +1195,49 @@ make_runtime_floor_shim() {
     chmod +x "$TEST_ROOT/runtime-floor-bin/$tool"
 }
 
+make_unsupported_host_shims() {
+    rejected_os="$1"
+    rejected_arch="$2"
+    shim_root="$TEST_ROOT/unsupported-host-bin"
+    uname_count="$TEST_ROOT/uname-s-count"
+    provision_marker="$TEST_ROOT/provisioning-reached"
+    mkdir -p "$shim_root"
+
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$1" in' \
+        '-s)' \
+        "  count_file='$uname_count'" \
+        '  count=0' \
+        '  [ ! -f "$count_file" ] || count=$(cat "$count_file")' \
+        '  count=$((count + 1))' \
+        '  printf "%s\\n" "$count" >"$count_file"' \
+        '  if [ "$count" -le 2 ]; then exec '"$(command -v uname)"' -s; fi' \
+        "  printf '%s\\n' '$rejected_os'" \
+        '  ;;' \
+        "-m) printf '%s\\n' '$rejected_arch' ;;" \
+        '*) exec '"$(command -v uname)"' "$@" ;;' \
+        'esac' >"$shim_root/uname"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'case "$*" in *".downloads[]"*) : >'"'$provision_marker'"' ;; esac' \
+        'exec '"$(command -v jq)"' "$@"' >"$shim_root/jq"
+    printf '%s\n' \
+        '#!/bin/sh' \
+        ': >'"'$provision_marker'" \
+        'exit 88' >"$shim_root/curl"
+    chmod +x "$shim_root/uname" "$shim_root/jq" "$shim_root/curl"
+}
+
+assert_unsupported_host_rejected_before_provisioning() {
+    expected_diagnostic="$1"
+    run env PATH="$shim_root:$PATH" /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 1 ]
+    [ "$(printf '%s\n' "$output" | grep -Fxc "$expected_diagnostic")" -eq 1 ]
+    [ ! -e "$provision_marker" ]
+    [[ "$output" != *"Downloading pinned"* ]]
+}
+
 @test "Git immediately below 2.34 is rejected with an actionable diagnostic" {
     make_contract_root
     make_runtime_floor_shim git 2.33 "$(command -v git)"
@@ -1225,6 +1268,19 @@ make_runtime_floor_shim() {
     run env PATH="$TEST_ROOT/runtime-floor-bin:$PATH" LOOM_CHECK_BASH_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Selected Bash floor check passed"* ]]
+}
+
+@test "unknown host OS is rejected before provisioning" {
+    make_contract_root
+    make_unsupported_host_shims Plan9 x86_64
+    assert_unsupported_host_rejected_before_provisioning "Unsupported check host: Plan9 x86_64"
+}
+
+@test "supported host OS with unsupported architecture is rejected before provisioning" {
+    make_contract_root
+    supported_os=$(uname -s)
+    make_unsupported_host_shims "$supported_os" riscv64
+    assert_unsupported_host_rejected_before_provisioning "Unsupported check host: $supported_os riscv64"
 }
 
 @test "first-stage failure preserves status and emits one exact diagnostic before later stages" {
