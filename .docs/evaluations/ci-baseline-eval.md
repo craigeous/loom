@@ -366,3 +366,69 @@ The transition latch, exact revision bindings, hosted matrix, and authoritative
 sequential gate reruns are valid and green. They are necessary but insufficient:
 two confirmed trust-boundary BLOCKERs and six confirmed MAJOR gaps require merits
 Round 2, so the slice returns to `In Progress`.
+
+---
+
+## Code evaluation — valid bootstrap merits Round 2
+
+Verdict: FAIL
+Round: 2
+Required next round: 3
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-c85cdd6-valid-r2`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c85cdd6e944473817daae4cdc53dc736ac85d2d5`
+- Head tree: `42b815a416b2bfc807941df1e3f3c5a23fcc3b26`
+- Manifest SHA-256: `556f6ddc89dd0f09a23d5d6d782168567ec9022d925bd0149867fe2d265ed04c`
+- Aggregate findings SHA-256: `ea9462777cb0de0565470c32eb08fe1c9c30a8415e92beed849b9adf5faae34a`
+- Evaluator verdict SHA-256: `a3d18bc202c1cc4311c52b7eb237789116bac682baa1b9e3a86b49835468b74e`
+- Exact-head CI run: `29871936814`; all four required jobs succeeded with
+  `1..243`, `All checks passed`, and exact head
+  `c85cdd6e944473817daae4cdc53dc736ac85d2d5`.
+
+### Evaluator gate rerun
+
+The evaluator used two fresh synthetic one-commit copies whose starting tree was the
+exact head tree and ran the lanes strictly sequentially:
+
+- Bash 3.2: PASS, exit 0, 243/243 tests, unchanged tree and source inventory; stdout
+  SHA-256 `5a5170c36376d7651d22dda8fb35a437a87c8c39e309fad186613c22f789ce61`,
+  stderr SHA-256 `2d8d1cc547e8e6ad58464a6f32ffd7c26217df34219b4db53f26e828b1dd32fa`.
+- Bash 5.3: PASS, exit 0, 243/243 tests, unchanged tree and source inventory; stdout
+  SHA-256 `7ef90289df1d9bfbcd38e85b16fb4ffce0eacb7c74bedde7d5673ef2e51fd896`,
+  stderr SHA-256 `4f1e36c6526a193763f26140a88878687a4a68745a60405dba1059b1d4371326`.
+
+### Advisory-finding adjudication
+
+- [BLOCKER] `R2-001` — confirmed: the new Codex catalog, manifest, and release
+  fixtures use unqualified “blind evaluation” claims. ADR 0022 makes the exact
+  controlled-input independent-evaluation wording a user-facing SHALL.
+- [MAJOR] `R2-002` — confirmed: no test exercises below-floor or exact-boundary Git
+  and jq versions even though their rejection is part of the approved gate contract.
+- [MAJOR] `R2-003` — confirmed: no test exercises the required failed-stage
+  diagnostic, original status preservation, stage attribution, or later-stage stop.
+
+No evaluator-originated finding was added. The resumed security stage was clean; its
+pre-output quota interruption was recorded as an infrastructure failure and resumed
+only after every input reverified hash-identical, so it did not consume a merits round.
+
+### Required changes
+
+- Replace prohibited evaluation wording consistently in both client manifests,
+  catalogs, README, and release fixtures; update pinned digests and add an isolated
+  rejection regression for the unqualified claims.
+- Add Git and jq shims proving immediately-below-floor rejection and exact-boundary
+  acceptance with actionable diagnostics.
+- Add deterministic failures at two gate stages proving the exact first-failure
+  diagnostic, preserved exit status, correct stage advancement, and non-execution of
+  later stages.
+
+### Assessment
+
+All developer, hosted, and evaluator gates are exact-head, source-preserving, and
+green. They remain insufficient for PASS because one confirmed authority BLOCKER and
+two confirmed test-sufficiency MAJOR findings remain. The slice returns to
+`In Progress` for valid bootstrap merits Round 3.

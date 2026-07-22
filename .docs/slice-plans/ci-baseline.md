@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: In Progress
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -679,3 +679,29 @@ not success.
   install, metadata and link validation, shfmt, ShellCheck, Bash syntax, Claude
   `2.1.216` strict plugin validation, and diff-whitespace stages. No remote push or
   hosted-CI claim is made by this developer handoff.
+
+### Valid bootstrap merits Round 2 (2026-07-22)
+
+- Exact implementation head `c85cdd6e944473817daae4cdc53dc736ac85d2d5`
+  and tree `42b815a416b2bfc807941df1e3f3c5a23fcc3b26` passed both complete
+  cwd-independent developer gates with 243 tests. Exact-head GitHub Actions run
+  `29871936814` passed all four required cells with the same count and final success
+  marker.
+- Sealed manifest `556f6ddc89dd0f09a23d5d6d782168567ec9022d925bd0149867fe2d265ed04c`
+  and input inventory
+  `99ae338fd6eda0772b4af0eac02899da7ab45745984a347622b8a63712cdcafb`
+  produced aggregate findings
+  `ea9462777cb0de0565470c32eb08fe1c9c30a8415e92beed849b9adf5faae34a`.
+  Independent evaluator verdict
+  `a3d18bc202c1cc4311c52b7eb237789116bac682baa1b9e3a86b49835468b74e`
+  is `FAIL`, Round 2, requiring Round 3.
+- A quota interruption stopped the security worker before it produced output. Under
+  ADR 0023 section 8, the failure was recorded as infrastructure-only; after limits
+  reset, every sealed input reverified hash-identical and only the failed stage
+  resumed. Its completed output was clean and did not consume a merits round.
+- The evaluator's fresh, strictly sequential Bash 3.2 and Bash 5.3 reruns both passed
+  243/243 tests with unchanged exact trees and source inventories.
+- Round 3 must replace the newly added client-visible unqualified “blind evaluation”
+  wording with ADR 0022's controlled-input independent-evaluation claim and add
+  isolated regressions for that wording, below-floor/exact-boundary Git and jq
+  versions, and first-failure stage attribution at two stages.

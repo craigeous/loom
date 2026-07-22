@@ -496,3 +496,72 @@ inventory remained unchanged and every location below intersects the exact diff.
 - Suggested verification: Positively establish the explicit root is non-Git before
   walking; fail closed for any Git discovery error in a detected worktree, with an
   unread untracked canary regression.
+
+---
+
+# Valid bootstrap review — ci-baseline merits Round 2
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Aggregate state: `bootstrap-ran-with-findings`
+- Run: `ci-baseline-b28a747-c85cdd6-valid-r2`
+- Merits round: `2`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c85cdd6e944473817daae4cdc53dc736ac85d2d5`
+- Head tree: `42b815a416b2bfc807941df1e3f3c5a23fcc3b26`
+- Transition-state tip: `367584c3b3d0423af04194171e35c827d069a744`
+- Manifest SHA-256: `556f6ddc89dd0f09a23d5d6d782168567ec9022d925bd0149867fe2d265ed04c`
+- Sealed input-inventory SHA-256: `99ae338fd6eda0772b4af0eac02899da7ab45745984a347622b8a63712cdcafb`
+- Aggregate findings SHA-256: `ea9462777cb0de0565470c32eb08fe1c9c30a8415e92beed849b9adf5faae34a`
+
+All three required cold worker outputs completed with matching bindings. The security
+stage was interrupted before producing output when its execution quota was exhausted.
+ADR 0023 section 8 classified that as infrastructure failure, not a merits round;
+after limits were restored, every input reverified hash-identical and only the failed
+stage resumed. The resumed security output was clean. The sealed input inventory and
+source remained unchanged, finding IDs were unique, and every finding intersects the
+exact diff.
+
+## R2-001 — proposed BLOCKER
+
+- Location: `.agents/plugins/marketplace.json:9`, with the same claim in
+  `plugins/loom/.codex-plugin/plugin.json:4` and their release fixtures
+- Confidence: `0.99`
+- Claim: Newly added Codex metadata publishes unqualified “blind evaluation” and
+  “blind-reviewed” claims that ADR 0022 expressly forbids in user-facing material.
+- Evidence: ADR 0022 requires the exact claim “independent cold-agent evaluation with
+  controlled inputs” unless a narrower term is immediately qualified by that
+  boundary. The new client-visible catalog, manifest, and fixtures use the stronger
+  prohibited wording without qualification.
+- Suggested verification: Replace the claims consistently across live metadata,
+  release fixtures, and README; refresh pinned digests; and add an isolated validator
+  regression that rejects every prohibited unqualified phrase.
+
+## R2-002 — proposed MAJOR
+
+- Location: `scripts/check:356-369`
+- Confidence: `0.99`
+- Claim: Required Git `2.34` and jq `1.6` runtime-floor rejection has no negative or
+  exact-boundary test coverage.
+- Evidence: The suite covers a below-floor selected Bash, while its runtime-contract
+  mutation exits during contract validation and never exercises installed Git or jq
+  version parsing. All retained local and hosted gates use above-floor versions.
+- Suggested verification: Add isolated delegating Git and jq shims for values just
+  below each floor and exactly at each floor; assert actionable rejection below the
+  floor and acceptance at the boundary.
+
+## R2-003 — proposed MAJOR
+
+- Location: `scripts/check:29-43`
+- Confidence: `0.98`
+- Claim: The required first-failure stage diagnostic and stage advancement are not
+  tested.
+- Evidence: No retained test asserts `FAILED stage <stage> (exit <status>)`, the
+  original exit status, correct stage attribution, or the absence of later-stage
+  execution. Successful full-gate logs never exercise this path.
+- Suggested verification: Inject deterministic failures at two different stages and
+  assert the exact single diagnostic, original status, correct stage, and absence of a
+  later-stage marker.
+
+The security worker returned zero findings.
