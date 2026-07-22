@@ -565,3 +565,43 @@ exact diff.
   later-stage marker.
 
 The security worker returned zero findings.
+
+---
+
+# Valid bootstrap review — ci-baseline merits Round 3
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Aggregate state: `bootstrap-ran-with-findings`
+- Run: `ci-baseline-b28a747-b6d87a2-valid-r3`
+- Merits round: `3`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `b6d87a21a7df54b4be6c29b4fa73bf3ef9d971fe`
+- Head tree: `5b1d788ce2d8ae59cd91e3aec5dc39748996db31`
+- Transition-state tip: `367584c3b3d0423af04194171e35c827d069a744`
+- Manifest SHA-256: `0cbb3cd8b58b2f43f0b98d79d36a5d06cbc022c2ded5943ffe0a45eac42590f0`
+- Sealed input-inventory SHA-256: `ba2af4b2f435451bdc81edec2be6e6278835eadde5360745f03e19e0ec308a5b`
+- Aggregate findings SHA-256: `dd4fef582948c2dacf5e6a5e963970f5088de6dccbcf284f060c0ce562452d11`
+
+All three cold workers completed with exact bindings; correctness and security were
+clean. The source and sealed input inventories remained unchanged and the sole finding
+intersects the exact diff. A Bash 3.2 evidence-wrapper attempt completed the gate but
+failed to capture exit/end metadata because the wrapper used a zsh-reserved variable.
+That incomplete attempt is retained as infrastructure-only evidence. After the exact
+clean tree was reverified, only Bash 3.2 was rerun, successfully, under ADR 0023
+section 8.
+
+## R3-001 — proposed MAJOR
+
+- Location: `scripts/check:413-429`
+- Confidence: `high`
+- Claim: The required unsupported OS/architecture rejection has no negative
+  regression coverage.
+- Evidence: The gate accepts only Darwin arm64/x86_64 and Linux x86_64 and requires
+  every other pair to emit `Unsupported check host`. Neither retained Bats suite
+  controls `uname -s` or `uname -m` to exercise an unknown OS or unsupported
+  architecture. Both local lanes and all four CI cells are supported-host positives.
+- Suggested verification: Add isolated negative cases for an unknown OS and a
+  supported OS with an unsupported architecture; assert nonzero status, the exact
+  actionable diagnostic, and that provisioning/download execution is not reached.

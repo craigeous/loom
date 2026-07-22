@@ -432,3 +432,61 @@ All developer, hosted, and evaluator gates are exact-head, source-preserving, an
 green. They remain insufficient for PASS because one confirmed authority BLOCKER and
 two confirmed test-sufficiency MAJOR findings remain. The slice returns to
 `In Progress` for valid bootstrap merits Round 3.
+
+---
+
+## Code evaluation — valid bootstrap merits Round 3
+
+Verdict: FAIL
+Round: 3
+Required next round: 4
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-b6d87a2-valid-r3`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `b6d87a21a7df54b4be6c29b4fa73bf3ef9d971fe`
+- Head tree: `5b1d788ce2d8ae59cd91e3aec5dc39748996db31`
+- Manifest SHA-256: `0cbb3cd8b58b2f43f0b98d79d36a5d06cbc022c2ded5943ffe0a45eac42590f0`
+- Aggregate findings SHA-256: `dd4fef582948c2dacf5e6a5e963970f5088de6dccbcf284f060c0ce562452d11`
+- Evaluator verdict SHA-256: `b32d040ae5c62dada73d2fc7e5622650b2970a0ae9d588bd3c2d19cde8ecce0f`
+- Exact-head CI run: `29937249418`; all four required cells passed 251 tests and
+  ended `All checks passed` at
+  `b6d87a21a7df54b4be6c29b4fa73bf3ef9d971fe`.
+
+### Evaluator gate rerun
+
+The evaluator used separate fresh synthetic exact-tree copies and ran them strictly
+sequentially:
+
+- Bash 3.2: PASS, exit 0, 251/251 tests, unchanged tree and byte-identical tracked
+  inventory; stdout SHA-256
+  `b1f2751a713458df7a493973161648f64e49addc3ad604dd08e86194f44878cf`,
+  stderr SHA-256 `be4d3a935422dca8d851085248f7d193eb2bef8eb533ecd2a84d55af83bd2351`.
+- Bash 5.3: PASS, exit 0, 251/251 tests, unchanged tree and byte-identical tracked
+  inventory; stdout SHA-256
+  `fc0f61ee684b49f0a860d20a49f954230cb0530bf328d9c0a40366c1ccb8dabc`,
+  stderr SHA-256 `ac6bcca2eecca12893b520a2df20eda1445162e34a28e7b3fca8a8c53b7b6231`.
+
+### Advisory-finding adjudication
+
+- [MAJOR] `R3-001` — confirmed: unsupported-host rejection is an explicit approved
+  gate behavior, but no test controls `uname` to prove an unknown OS or unsupported
+  architecture fails before provisioning with the actionable diagnostic.
+
+No evaluator-originated finding was added.
+
+### Required changes
+
+- Add isolated unknown-OS and supported-OS/unsupported-architecture gate tests using
+  safe test-owned `uname` control.
+- Assert nonzero status, exact `Unsupported check host` text, and a marker proving no
+  provisioning or download path was reached.
+
+### Assessment
+
+The wording contract, runtime-floor boundaries, first-failure attribution, exact-head
+CI, and both evaluator gates are green. One required portability boundary remains
+untested, so the confirmed MAJOR requires valid bootstrap merits Round 4 and returns
+the slice to `In Progress`.

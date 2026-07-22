@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: In Progress
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -737,3 +737,24 @@ not success.
 - No tag, release, publication, push, or hosted-CI success is claimed by this
   developer handoff. The root orchestrator must bind and run fresh exact-head hosted
   evidence before the Round-3 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 3 (2026-07-22)
+
+- Exact head `b6d87a21a7df54b4be6c29b4fa73bf3ef9d971fe` and tree
+  `5b1d788ce2d8ae59cd91e3aec5dc39748996db31` passed both local developer gates
+  and exact-head GitHub Actions run `29937249418` in all four required cells, with
+  251 tests and the final success marker in every lane.
+- Sealed manifest `0cbb3cd8b58b2f43f0b98d79d36a5d06cbc022c2ded5943ffe0a45eac42590f0`
+  and input inventory
+  `ba2af4b2f435451bdc81edec2be6e6278835eadde5360745f03e19e0ec308a5b`
+  produced aggregate findings
+  `dd4fef582948c2dacf5e6a5e963970f5088de6dccbcf284f060c0ce562452d11`.
+  Independent evaluator verdict
+  `b32d040ae5c62dada73d2fc7e5622650b2970a0ae9d588bd3c2d19cde8ecce0f`
+  is `FAIL`, Round 3, requiring Round 4.
+- The evaluator's fresh, strictly sequential Bash 3.2 and Bash 5.3 reruns both passed
+  251/251 with clean unchanged exact trees and byte-identical tracked inventories.
+- Correctness and security were clean. The sole confirmed MAJOR is missing negative
+  coverage for the required unsupported-host rejection. Round 4 must add isolated
+  unknown-OS and unsupported-architecture cases that assert the exact diagnostic and
+  prove provisioning/download code is not reached.
