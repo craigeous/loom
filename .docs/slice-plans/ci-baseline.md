@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -828,3 +828,22 @@ not success.
 - No tag, release, publication, push, or hosted-CI success is claimed by this
   developer handoff. The root orchestrator must bind and run fresh exact-head hosted
   evidence before the Round-5 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 5 (2026-07-22)
+
+- Exact implementation head `c52ff8260c90dc4e0961752e9d6fcc8107075d2e` and tree
+  `82e6953cd412c5171967d41fb063f97d7512ba15` passed both sealed local gates at
+  257 tests and all four exact-head CI cells in run `29948739525`.
+- Manifest `1600467825f4a3358b1f81f690fb0a2d785d447d515c9116e2dca1baf7a88ccf`,
+  sealed input inventory
+  `33aa8ab7e38c3dfecdb81651858fd723aaa4a255591953ae21e36e06e115a8b6`, and
+  clean aggregate
+  `6b4df9699e178ba8ef31029558ed618e8c9394f9d02efeff7a68b49f62e60909`
+  bind three complete cold auxiliary reviews with zero findings.
+- Independent verdict
+  `3a14a5f254f7798e9642ffb5351b6810ac659fb2bb86696db50c175d0d8a6e73`
+  is `PASS`, with zero BLOCKER, MAJOR, or MINOR findings and no next round.
+- The evaluator's fresh Bash 3.2 and Bash 5.3 gates ran strictly sequentially,
+  passed 257/257 tests, and ended with unchanged exact trees, clean status, and
+  matching inventories. The slice advances to `Ready to Publish`; it is not yet
+  `Landed`, and no release or tag is authorized by this result.

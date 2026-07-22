@@ -520,3 +520,51 @@ Required next round: 5
 
 Round 5 must enforce all three shebangs and reject unsafe shared-cache hard links
 without mutating their target. The slice returns to `In Progress`.
+
+---
+
+## Code evaluation — valid bootstrap merits Round 5
+
+Verdict: PASS
+Round: 5
+Required next round: none
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-c52ff82-valid-r5`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c52ff8260c90dc4e0961752e9d6fcc8107075d2e`
+- Head tree: `82e6953cd412c5171967d41fb063f97d7512ba15`
+- Manifest SHA-256: `1600467825f4a3358b1f81f690fb0a2d785d447d515c9116e2dca1baf7a88ccf`
+- Input-inventory SHA-256: `33aa8ab7e38c3dfecdb81651858fd723aaa4a255591953ae21e36e06e115a8b6`
+- Aggregate findings SHA-256: `6b4df9699e178ba8ef31029558ed618e8c9394f9d02efeff7a68b49f62e60909`
+- Evaluator verdict SHA-256: `3a14a5f254f7798e9642ffb5351b6810ac659fb2bb86696db50c175d0d8a6e73`
+- Exact-head CI run `29948739525`: all four required cells passed 257 tests.
+
+### Advisory-finding adjudication
+
+All three complete cold auxiliary reviews returned zero findings. No
+evaluator-originated finding was added. Round 4's exact-shebang and hard-link cache
+findings are resolved.
+
+### Evaluator gate rerun
+
+The evaluator used distinct fresh writable copies matching the exact implementation
+tree and ran the required lanes strictly sequentially:
+
+- Bash 3.2: PASS, exit 0, 257/257 tests, `2026-07-22T22:16:46Z` through
+  `2026-07-22T22:20:53Z`; stdout SHA-256
+  `c46176fd4a3194fc06fc47dda9e71c866df140de83059c928b9c21bf1bb64a3e`.
+- Bash 5.3: PASS, exit 0, 257/257 tests, `2026-07-22T22:21:17Z` through
+  `2026-07-22T22:25:25Z`; stdout SHA-256
+  `1a52637f8f1ba2bfe2547785dac424011d62144e1f9bd29311cee13330cacc8c`.
+- Both lanes ended with exact unchanged tree, clean status, matching source and
+  full-tree inventories, and empty stderr.
+
+### Assessment
+
+All exact bindings, authority and evidence hashes, inventories, worker outputs, and
+the clean aggregate validate. The approved plan and applicable specifications are
+satisfied, both fresh evaluator gates are complete and green, and no BLOCKER, MAJOR,
+or MINOR finding remains. The slice advances to `Ready to Publish`.

@@ -638,3 +638,25 @@ Correctness was clean. All worker bindings and inventories validated.
   before authentication because link count is not checked.
 - Suggested verification: Never repair an untrusted shared inode in place; require
   safe metadata and link count one, with an outside-sentinel regression.
+
+---
+
+# Valid bootstrap review — ci-baseline merits Round 5
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Aggregate state: `bootstrap-ran-clean`
+- Run: `ci-baseline-b28a747-c52ff82-valid-r5`
+- Merits round: `5`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `c52ff8260c90dc4e0961752e9d6fcc8107075d2e`
+- Head tree: `82e6953cd412c5171967d41fb063f97d7512ba15`
+- Transition-state tip: `367584c3b3d0423af04194171e35c827d069a744`
+- Manifest SHA-256: `1600467825f4a3358b1f81f690fb0a2d785d447d515c9116e2dca1baf7a88ccf`
+- Input-inventory SHA-256: `33aa8ab7e38c3dfecdb81651858fd723aaa4a255591953ae21e36e06e115a8b6`
+- Aggregate findings SHA-256: `6b4df9699e178ba8ef31029558ed618e8c9394f9d02efeff7a68b49f62e60909`
+
+Correctness, test-sufficiency, and security workers completed with exact bindings,
+unchanged source inventory, and zero findings. The exact shipped-script shebang
+enforcement and hard-linked outside-sentinel regression close both Round 4 findings.
