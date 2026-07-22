@@ -1,6 +1,6 @@
 # 0024 — macOS-First Dual-Client Dogfood Bootstrap Amendment
 
-Status: Draft
+Status: Plan Review
 Date: 2026-07-22
 
 ## Context
@@ -37,6 +37,9 @@ implementation/evidence chain ending at
 `cd6b5e17e04168d8e8472b4c55600c6a2aa6a5b9`. Calling those authority commits
 unrelated hitchhikers would make the reviewed slice impossible to publish; allowing
 arbitrary ancestors alongside them would make the slice boundary meaningless.
+Those counts and relationships are proposed acceptance conditions here, not facts
+established by prose: section 2 requires the re-ratification package to prove and
+seal them mechanically before this ADR can be accepted.
 
 In scope is one owner-authorized, pre-acceptance ratification of this ADR; one
 append-only amendment to the existing protected transition state; exact publication
@@ -59,13 +62,14 @@ matrix, release candidate, version, tag, distribution publication, or claim abou
 ChatGPT desktop or Codex IDE surfaces. “Dogfood-ready” means only that the exact host
 and client behavior in section 6 passed.
 
-For this checkpoint, Ubuntu and macOS Intel execution are deferred and MAY remain as
-advisory signal where already inexpensive. Their failure or absence does not block the
-two dogfood slices, but it also produces no support claim. Shared helpers, protocols,
-schemas, paths, and role contracts SHALL retain their client-neutral and portable
-boundaries. A dogfood change may branch at an explicit host/client adapter; it SHALL
-not make Darwin paths, Apple tools, Homebrew, or one client's root variable the shared
-core contract.
+For this checkpoint, only Ubuntu and macOS Intel **dogfood execution** is deferred and
+MAY remain as advisory signal where already inexpensive. Their failure or absence does
+not block the two dogfood slices, but would still block any v0.2 release whose evidence
+requires them. This does not suspend, narrow, or remove either host family from ADR
+0019's v0.2 support matrix. Shared helpers, protocols, schemas, paths, and role
+contracts SHALL retain their client-neutral and portable boundaries. A dogfood change
+may branch at an explicit host/client adapter; it SHALL not make Darwin paths, Apple
+tools, Homebrew, or one client's root variable the shared core contract.
 
 ADR 0019's v0.2 release matrix and its M0-through-M7 release gate remain in force.
 This ADR does not authorize v0.2.0 publication. Changing that release contract still
@@ -84,9 +88,35 @@ only exception:
    protected transition-state tip, and the exact remote-target observation. Producer
    conversation, reasoning, credentials, and unrelated status/evaluation history are
    excluded.
+   The package also contains a sealed mechanical publication inventory produced from
+   the repository object database, not copied from this ADR. The collector resolves
+   only these literal object IDs:
+
+   - target boundary `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`, required tree
+     `c387891a74dd673857f15769fba839f4c28bb2b1`;
+   - authority boundary `b28a74754e2ee016a035fa085f0d91de66057f62`, required tree
+     `1acfdaac06c0cdb609af099435cee21cd532f60e`; and
+   - M0 boundary `cd6b5e17e04168d8e8472b4c55600c6a2aa6a5b9`, required tree
+     `36a8c126c452c9d8e73bb2bdc26570b8708e06d0`.
+
+   It proves both adjacent `merge-base --is-ancestor` relationships; records the
+   complete `git rev-list --reverse` output for each open-left/closed-right range;
+   records each commit's tree, parents, subject, and `git diff-tree -r --root --raw -z
+   -M` path/status/mode/object data; derives stable ordered per-commit changed-path
+   unions directly from those records; and separately records each boundary-to-boundary
+   net path/status/mode/object inventory. The manifest must obtain exactly 32 authority
+   commits, 40 per-commit authority paths, and 40 net authority paths, followed by
+   exactly 21 M0 commits, 57 per-commit M0 paths, and 52 net M0 paths. It rejects a
+   missing object, duplicate or extra commit, boundary/tree mismatch, non-contiguous
+   ancestry, unclassified path, parse failure, or count mismatch. The canonical
+   manifest bytes, every raw command-output file, and their SHA-256 hashes are sealed
+   into the input inventory; the ratification manifest binds their aggregate hash and
+   the evaluator receives them read-only. Until that package validates, none of the
+   ancestry, tree, commit-count, or path-count assertions in this proposal is accepted
+   authority.
 3. A fresh cold plan evaluator, distinct from the planner and root, receives only that
    package and the plan-evaluation rubric. It may not delegate or mutate the checkout.
-   Its verdict must bind every supplied hash and explicitly assess the seven numbered
+   Its verdict must bind every supplied hash and explicitly assess the eight numbered
    decisions in this ADR.
 4. The verdict is recorded without changing its merits and carries exactly:
 
@@ -105,15 +135,24 @@ only exception:
    its own work, the planner does not evaluate its own proposal, and owner acceptance
    does not substitute for evaluator `PASS`.
 
+Owner acceptance makes this ADR effective at first for one purpose only: constructing,
+pushing, and freshly verifying the exact transition-state successor in section 3. It
+does not yet authorize either added slice, the `ci-baseline` publication exception,
+the program amendment, or dogfood implementation. Those provisions become effective
+only after the successor has been freshly fetched and validated at the protected
+transition ref. This narrow activation boundary is the non-circular authority for the
+state mutation that records the remainder of the decision.
+
 A FAIL returns the ADR to planning. Missing, malformed, hash-mismatched, self-reviewed,
 or unrecorded evidence leaves it at `Plan Review`. This exception cannot evaluate a
 different ADR, research artifact, spec amendment, or slice plan.
 
 ### 3. Add exactly two transition-state permissions, exactly once
 
-No authority in this ADR may be used until its accepted commit and blob, ratification
-verdict, and explicit owner-acceptance record are bound into the protected transition
-history.
+After evaluator PASS and explicit owner acceptance, only the limited activation
+authority at the end of section 2 is available. Added-slice and all other operational
+authority remain unavailable until the state operation below completes and is freshly
+verified.
 
 The only permitted state mutation is one ordinary fast-forward successor to exact
 transition tip `367584c3b3d0423af04194171e35c827d069a744`. Before constructing it,
@@ -126,14 +165,17 @@ the root SHALL freshly verify that:
 - the complete ADR-0023 history is valid, sequence is `0`, phase is `active`, all
   four bootstrap components are `available`, results/evidence maps are empty, and
   full sunset is `not-reached`; and
-- the configured target is freshly readable.
+- the configured target is freshly advertised and fetched as exact commit
+  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca` with exact tree
+  `c387891a74dd673857f15769fba839f4c28bb2b1`.
 
 The successor increments the sequence to `1`, has the verified tip as its sole parent,
-retains every immutable ADR-0023 program/configuration field, and adds one
-`authority_amendments` entry identified as `adr-0024-macos-dogfood/v1`. That entry
-binds the accepted ADR commit/blob, ratification verdict and package hashes, owner-
-acceptance record hash, and the before/after allowed-slice sets. The only set change is
-the addition of these exact names:
+retains every immutable ADR-0023 program/configuration field, and adds an
+`authority_amendments` array containing exactly one entry identified as
+`adr-0024-macos-dogfood/v1`. That entry binds the accepted ADR commit/blob,
+ratification verdict and package hashes (including the sealed publication-inventory
+aggregate), owner-acceptance record hash, predecessor state SHA, and the before/after
+allowed-slice sets. The only set change is the addition of these exact names:
 
 - `macos-dogfood-program-amendment`
 - `macos-dual-client-dogfood`
@@ -147,13 +189,22 @@ three-finder plus distinct-evaluator procedure. Both retain ADR 0023's labels,
 exact-revision bindings, failure rules, publication intent/settlement ordering, and
 component retirement boundaries.
 
+The extended validator accepts no `authority_amendments` field at sequence `0`; at
+sequence `1` it requires the exact single entry, predecessor, bindings, and set delta
+above; and at every later sequence it requires that entry byte-for-byte unchanged.
+It rejects a missing/extra field, a second entry, a different predecessor, any other
+allowed-slice addition, or any changed binding. All ordinary ADR-0023 cumulative-state,
+intent, result, component-retirement, and sunset validations continue around that
+single extension.
+
 The successor is pushed without force and freshly fetched and validated by exact
-object ID before either slice is planned, evaluated, implemented, or published. A
-race, changed predecessor, unexpected state, missing protection, or failed fresh read
-blocks this amendment; the root does not adapt the mutation to another state. Every
-later state validates this amendment entry as immutable. Thereafter the original
-remove-only rule resumes: no slice may ever be added, renamed, replaced, or re-added,
-and sunset remains monotonic and terminal.
+object ID before either slice is planned, evaluated, implemented, or published. Only
+that successful fresh verification activates sections 1 and 4–8 and the two added
+slice permissions. A race, changed predecessor, unexpected state, missing protection,
+or failed fresh read blocks this amendment; the root does not adapt the mutation to
+another state. Every later state validates this amendment entry as immutable.
+Thereafter the original remove-only rule resumes: no slice may ever be added, renamed,
+replaced, or re-added, and sunset remains monotonic and terminal.
 
 ### 4. Publish the exact prerequisite authority with `ci-baseline`, not arbitrary history
 
@@ -162,29 +213,34 @@ candidate built from a fresh read of the configured remote target under ADR 0023
 publication-intent procedure. Local `main`, the current ADR branch, and an existing
 integration worktree are not candidate inputs.
 
-The candidate manifest SHALL separate and exhaustively inventory these two closed
-segments:
+The candidate manifest SHALL reuse and reverify the sealed section-2 publication
+inventory, then separate these two closed segments:
 
-| Segment | Exact range | Commit count | Purpose |
+| Segment | Exact range | Required sealed count | Purpose |
 |---|---|---:|---|
 | prerequisite authority | `c7bd84d997afb32f6159628eb840a9dd8d2d3dca..b28a74754e2ee016a035fa085f0d91de66057f62` | 32 | improvement plan, dual-platform research/evaluation, ADRs 0018–0023 and evaluations, frozen-spec amendments/evaluations, and approved `ci-baseline` planning |
 | M0 slice | `b28a74754e2ee016a035fa085f0d91de66057f62..cd6b5e17e04168d8e8472b4c55600c6a2aa6a5b9` | 21 | `ci-baseline` implementation, revisions, review findings, and final Round-5 PASS evidence |
 
-The manifest records the three boundary commit/tree IDs, every commit ID in reverse
-topological order for each segment, and for every commit its subject plus changed
-path, status, old/new mode, and object IDs. It also records the ordered union of 40
-paths changed by the authority segment and 52 paths changed by the M0 segment, with a
-category and justification for each. A path or commit is related only when it belongs
-to one of those exact ranges and categories. No other local commit, side branch,
-working-tree edit, status update, or completed slice is a permissible hitchhiker.
+The manifest requires the three sealed boundary commit/tree IDs, every sealed commit
+ID in order for each segment, and every commit's sealed subject, tree/parents, changed
+path, status, old/new mode, and object IDs. It also requires both sealed path views:
+the 40/57-path per-commit unions, which inventory history even where a later commit
+removes a path, and the 40/52-path net boundary diffs, which inventory the candidate
+tree delta. Every path receives a category and justification. Fresh object-database
+regeneration must byte-match the sealed mechanical records before categories are
+applied. A path or commit is related only when it belongs to one of those exact ranges
+and categories. No other local commit, side branch, working-tree edit, status update,
+or completed slice is a permissible hitchhiker.
 
-If the fresh remote target remains the stated `c7bd84d...` base, those exact chains
-are replayed without omission or substitution. If it has advanced by ordinary
-fast-forward, the candidate is rebuilt from the new exact remote SHA and integrates
-the same two closed segments; it must prove the new base does not already contain a
-conflicting or partial version. Ambiguous overlap, changed bytes, conflict resolution
-that would alter a reviewed commit, target rewind, or an inability to classify every
-result path fails closed.
+This exception is valid only when a fresh advertised-and-fetched read proves the
+configured target still equals exact commit
+`c7bd84d997afb32f6159628eb840a9dd8d2d3dca` and exact tree
+`c387891a74dd673857f15769fba839f4c28bb2b1`. The candidate is built at that base and
+replays the two sealed chains without omission, substitution, conflict resolution, or
+commit/tree rewriting. Any target movement, rewind, tree mismatch, partial prior
+integration, overlap, or changed object blocks this exception and requires new
+owner-reviewed authority. There is no advanced-target integration or evidence-reuse
+path under this ADR.
 
 The integrated candidate must then receive a fresh complete gate, all three cold
 auxiliary reviews, and a distinct cold code-evaluator verdict against its exact remote
@@ -252,7 +308,7 @@ before/after filesystem inventories. Static schema validation, manifest presence
 mock-only invocation, one client's success, or installation without functional use is
 not sufficient. The code evaluator remains the sole PASS/FAIL authority.
 
-### 7. Synchronize documentation and define restoration criteria
+### 7. Synchronize documentation and preserve full-matrix release evidence
 
 The `macos-dogfood-program-amendment` plan SHALL enumerate and update, in one reviewed
 candidate, every affected authority or user-facing surface:
@@ -263,10 +319,14 @@ candidate, every affected authority or user-facing surface:
   lifecycle authority, client adapters, invocation, hook/root behavior, dogfood
   evidence, and the unchanged release gate;
 - `.docs/ADR/README.md`, the new slice-plan/evaluation indexes and artifacts, and
-  living roadmap/progress/handoff state at their normal finalization boundary; and
-- `README.md` and `CLAUDE.md` so installation, support, limitations, gate guidance,
-  and agent-facing architecture do not imply Linux/Intel dogfood proof or public
-  Codex support before the behavioral slice passes.
+  living roadmap/progress/handoff state at their normal finalization boundary;
+- the canonical managed-project digest at
+  `.docs/status/project-instructions.md` and its generated Loom-owned blocks in root
+  `CLAUDE.md` and root `AGENTS.md`, preserving owner text and mechanically proving
+  matching canonical digest hashes and semantic parity as required by ADR 0018; and
+- `README.md`, root `CLAUDE.md`, and root `AGENTS.md` so installation, support,
+  limitations, gate guidance, and agent-facing architecture do not imply Linux/Intel
+  dogfood execution or public Codex support before the behavioral slice passes.
 
 The code-bearing slice SHALL update both manifests/catalogs, compatibility and root-
 binding data, hook/workflow/role/helper documentation, tests, and release-owned
@@ -275,14 +335,14 @@ documentation check must reject conflicting platform status, client floors,
 invocation names, version values, or “supported” claims across those files. Historical
 ADRs and evaluations remain immutable and are linked rather than rewritten.
 
-Linux and macOS Intel may return to a public support claim only after a later accepted
-planning decision names the restored matrix and a clean candidate passes, for every
-claimed host/architecture: the full local gate; exact floor and current Bash lanes;
-both pinned-client clean install/reinstall, discovery/invocation, cold-role, hook,
-helper/root, and uninstall matrix; fresh-clone release testing; and synchronized
-spec, compatibility, README, changelog, and release evidence. Current official runner
-labels may replace retired labels only through that reviewed amendment. Advisory jobs
-and old M0 logs do not satisfy restoration.
+ADR 0019's Ubuntu and macOS Intel v0.2 support and release evidence were never
+suspended, so they require no restoration decision. Before any v0.2 release, every
+host/architecture in that unchanged matrix must still pass ADR 0019's full local gate,
+exact floor/current Bash lanes, both pinned-client install and behavior matrix,
+fresh-clone release testing, and synchronized spec, compatibility, README, changelog,
+and release evidence. Current official runner labels may replace retired labels only
+through the normal reviewed amendment. Advisory dogfood jobs and old M0 logs do not
+satisfy that release evidence.
 
 ### 8. Preserve review integrity, release gates, and fail-closed recovery
 
@@ -310,9 +370,9 @@ revives a retired component, or weakens target publication verification.
 
 - The owner gets the shortest honest path to real Claude Code and Codex dogfooding on
   the current Mac without representing that checkpoint as a release.
-- ADR 0019's public v0.2 platform and release contract remains unchanged. Linux and
-  macOS Intel work can be resumed later against explicit restoration evidence instead
-  of being silently abandoned.
+- ADR 0019's public v0.2 platform and release contract remains unchanged. Only
+  Linux/macOS-Intel execution in the private dogfood checkpoint is deferred; their
+  full release evidence remains mandatory.
 - ADR 0023 is superseded only for one pre-acceptance ADR-0024 ratification, one exact
   transition successor that adds two names, and those names' planning/publication
   eligibility. Its append-only protection, progressive retirement, failure handling,
@@ -324,7 +384,7 @@ revives a retired component, or weakens target publication verification.
 - The planning amendment and behavioral implementation remain separate, so the
   support-language change can be reviewed before code and M1 safety work does not get
   hidden in a client-adapter slice.
-- The cost is one additional ratification and state transition plus later restoration
-  work. If the exact state predecessor or publication ancestry no longer holds, this
-  narrowly written exception fails closed and a new owner-reviewed decision is
-  required.
+- The cost is one additional ratification and state transition plus the unchanged
+  full-matrix work before release. If the exact state predecessor, target, or
+  publication ancestry no longer holds, this narrowly written exception fails closed
+  and a new owner-reviewed decision is required.
