@@ -929,11 +929,16 @@ EOF
 make_contract_root() {
     make_owned_root contract
     TEST_ROOT="$NEW_OWNED_ROOT"
-    mkdir -p "$TEST_ROOT/scripts/check-tools" "$TEST_ROOT/.github/workflows"
+    mkdir -p "$TEST_ROOT/scripts/check-tools" "$TEST_ROOT/.github/workflows" \
+        "$TEST_ROOT/plugins/loom/bin" "$TEST_ROOT/plugins/loom/hooks"
     cp "$REPOSITORY_ROOT/scripts/check" "$TEST_ROOT/scripts/check"
     cp "$REPOSITORY_ROOT/scripts/check-toolchain.json" "$TEST_ROOT/scripts/check-toolchain.json"
     cp "$REPOSITORY_ROOT/scripts/check-tools/package-lock.json" "$TEST_ROOT/scripts/check-tools/package-lock.json"
     cp "$REPOSITORY_ROOT/.github/workflows/check.yml" "$TEST_ROOT/.github/workflows/check.yml"
+    cp "$REPOSITORY_ROOT/plugins/loom/bin/loom-coord" "$TEST_ROOT/plugins/loom/bin/loom-coord"
+    cp "$REPOSITORY_ROOT/plugins/loom/hooks/git-identity-guard.sh" "$TEST_ROOT/plugins/loom/hooks/git-identity-guard.sh"
+    cp "$REPOSITORY_ROOT/plugins/loom/hooks/precompact-write-ahead-backstop.sh" \
+        "$TEST_ROOT/plugins/loom/hooks/precompact-write-ahead-backstop.sh"
     while IFS= read -r vendored; do
         mkdir -p "$TEST_ROOT/$(dirname "$vendored")"
         cp "$REPOSITORY_ROOT/$vendored" "$TEST_ROOT/$vendored"
@@ -947,6 +952,19 @@ ensure_contract_root() {
 contract_check() {
     ensure_contract_root
     run env LOOM_CHECK_CONTRACT_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+}
+
+assert_required_bash_shebang_rejected() {
+    relative="$1"
+    make_contract_root
+    {
+        printf '%s\n' '#!/bin/sh'
+        tail -n +2 "$TEST_ROOT/$relative"
+    } >"$TEST_ROOT/shebang.next"
+    mv "$TEST_ROOT/shebang.next" "$TEST_ROOT/$relative"
+    contract_check
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"required Bash shebang drift: $relative must start exactly with #!/usr/bin/env bash"* ]]
 }
 
 rewrite_workflow() {
@@ -965,6 +983,18 @@ mutate_contract() {
 @test "exact workflow and toolchain contract passes" {
     contract_check
     [ "$status" -eq 0 ]
+}
+
+@test "loom-coord exact Bash shebang is mechanically required" {
+    assert_required_bash_shebang_rejected plugins/loom/bin/loom-coord
+}
+
+@test "git identity guard exact Bash shebang is mechanically required" {
+    assert_required_bash_shebang_rejected plugins/loom/hooks/git-identity-guard.sh
+}
+
+@test "precompact backstop exact Bash shebang is mechanically required" {
+    assert_required_bash_shebang_rejected plugins/loom/hooks/precompact-write-ahead-backstop.sh
 }
 
 @test "workflow runner row deletion fails" {
@@ -1438,15 +1468,38 @@ run_signal_case() {
     [ "$(cat "$sentinel")" = unchanged ]
 }
 
-@test "owner-controlled cache modes are repaired before use" {
+@test "owner-controlled cache directories are repaired before use" {
     prepare_cached_downloads
     chmod 755 "$TEST_ROOT/.check-cache" "$TEST_ROOT/.check-cache/downloads"
-    chmod 666 "$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
     provision_check
     [ "$status" -eq 0 ]
     case "$(uname -s)" in
-    Darwin) [ "$(stat -f %Lp "$TEST_ROOT/.check-cache")" = 700 ]; [ "$(stat -f %Lp "$TEST_ROOT/.check-cache/downloads/shfmt-$platform")" = 600 ] ;;
-    *) [ "$(stat -c %a "$TEST_ROOT/.check-cache")" = 700 ]; [ "$(stat -c %a "$TEST_ROOT/.check-cache/downloads/shfmt-$platform")" = 600 ] ;;
+    Darwin) [ "$(stat -f %Lp "$TEST_ROOT/.check-cache")" = 700 ] ;;
+    *) [ "$(stat -c %a "$TEST_ROOT/.check-cache")" = 700 ] ;;
+    esac
+}
+
+@test "hard-linked cached download is rejected without mutating its outside sentinel" {
+    prepare_cached_downloads
+    make_outside_root
+    cache_file="$TEST_ROOT/.check-cache/downloads/shfmt-$platform"
+    sentinel="$OUTSIDE_ROOT/shfmt-sentinel"
+    mv "$cache_file" "$sentinel"
+    chmod 666 "$sentinel"
+    ln "$sentinel" "$cache_file"
+    before_digest=$(shasum -a 256 "$sentinel" | awk '{print $1}')
+    case "$(uname -s)" in
+    Darwin) before_mode=$(stat -f %Lp "$sentinel") ;;
+    *) before_mode=$(stat -c %a "$sentinel") ;;
+    esac
+
+    provision_check
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unsafe cached download link count"* ]]
+    [ "$(shasum -a 256 "$sentinel" | awk '{print $1}')" = "$before_digest" ]
+    case "$(uname -s)" in
+    Darwin) [ "$(stat -f %Lp "$sentinel")" = "$before_mode" ] ;;
+    *) [ "$(stat -c %a "$sentinel")" = "$before_mode" ] ;;
     esac
 }
 

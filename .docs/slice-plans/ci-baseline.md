@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -796,3 +796,35 @@ not success.
 - Round 5 must mechanically enforce all three exact shipped-script Bash shebangs and
   close the unsafe hard-linked cache-entry chmod path with fail-closed metadata checks
   and an outside-sentinel regression.
+
+### Developer revision for valid bootstrap merits Round 5 (2026-07-22)
+
+- The toolchain-contract stage now requires the literal first line
+  `#!/usr/bin/env bash` on `plugins/loom/bin/loom-coord`,
+  `plugins/loom/hooks/git-identity-guard.sh`, and
+  `plugins/loom/hooks/precompact-write-ahead-backstop.sh`. Three isolated mutations
+  replace exactly one shipped shebang with `#!/bin/sh` and prove each path fails with
+  its own deterministic diagnostic.
+- Shared cached downloads are never chmodded or otherwise repaired in place. Before a
+  cache entry is copied, the gate requires the current user as owner, mode `600`, and
+  hard-link count exactly one using the supported Darwin and Linux `stat` interfaces;
+  any mismatch returns explicitly from `fetch`, including under Bash 3.2 command-
+  substitution semantics. Only an acceptable entry is copied to the private run
+  directory, where the private inode is mode-normalized and digest-authenticated
+  before use.
+- The cache regression hard-links the cached shfmt artifact to an outside sentinel
+  with mode `666`. Provisioning rejects the link count and proves the sentinel's
+  SHA-256 and mode are unchanged. The retained symlink, ownership, digest-race, and
+  private-provisioning cases remain green. Focused verification passed all 140 tests
+  in `scripts/tests/repository-validation.bats`.
+- Both complete gates passed all 257 dynamically discovered tests, metadata, links,
+  shfmt, ShellCheck, Bash syntax, pinned Claude strict validation, and diff-whitespace
+  stages. After this documentation update, the final exact-tree commands were rerun
+  strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-5 bootstrap review/evaluation.

@@ -142,19 +142,26 @@ secure_cache_file() {
     Darwin)
         actual_owner=$(stat -f %u "$candidate")
         actual_mode=$(stat -f %Lp "$candidate")
+        actual_links=$(stat -f %l "$candidate")
         ;;
     *)
         actual_owner=$(stat -c %u "$candidate")
         actual_mode=$(stat -c %a "$candidate")
+        actual_links=$(stat -c %h "$candidate")
         ;;
     esac
     [ "$actual_owner" = "$expected_owner" ] || {
         printf 'unsafe cached download owner for %s: expected %s, got %s\n' "$candidate" "$expected_owner" "$actual_owner" >&2
         return 1
     }
-    if [ "$actual_mode" != 600 ]; then
-        chmod 600 "$candidate"
-    fi
+    [ "$actual_links" = 1 ] || {
+        printf 'unsafe cached download link count for %s: expected 1, got %s\n' "$candidate" "$actual_links" >&2
+        return 1
+    }
+    [ "$actual_mode" = 600 ] || {
+        printf 'unsafe cached download mode for %s: expected 600, got %s\n' "$candidate" "$actual_mode" >&2
+        return 1
+    }
 }
 secure_regular_file() {
     candidate="$1"
@@ -205,7 +212,7 @@ fetch() {
         return 1
     fi
     if [ -f "$destination" ]; then
-        secure_cache_file "$destination"
+        secure_cache_file "$destination" || return 1
         snapshot="$RUN_DIR/downloads/${tool}-${platform}.snapshot"
         (umask 077 && cp "$destination" "$snapshot")
         [ ! -L "$snapshot" ] && [ -f "$snapshot" ] || {
@@ -343,6 +350,19 @@ while IFS=$'\t' read -r expected vendored; do
         exit 1
     }
 done < <(jq -r '.vendored[] | [.sha256, .path] | @tsv' "$CONTRACT")
+
+for required_bash_script in \
+    plugins/loom/bin/loom-coord \
+    plugins/loom/hooks/git-identity-guard.sh \
+    plugins/loom/hooks/precompact-write-ahead-backstop.sh; do
+    required_bash_path="$REPOSITORY_ROOT/$required_bash_script"
+    first_line=
+    IFS= read -r first_line <"$required_bash_path" || :
+    [ "${first_line:-}" = '#!/usr/bin/env bash' ] || {
+        printf 'required Bash shebang drift: %s must start exactly with #!/usr/bin/env bash\n' "$required_bash_script" >&2
+        exit 1
+    }
+done
 
 if [ "${LOOM_CHECK_CONTRACT_ONLY:-0}" = 1 ]; then
     printf '\nToolchain contract check passed\n'
