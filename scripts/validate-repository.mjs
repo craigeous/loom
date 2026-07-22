@@ -220,11 +220,57 @@ function deepEqual(left, right) {
   return false;
 }
 
+const INDEPENDENT_EVALUATION_CLAIM = "independent cold-agent evaluation with controlled inputs";
+const CLIENT_VISIBLE_CLAIM_SURFACES = [
+  "README.md",
+  ".claude-plugin/marketplace.json",
+  ".agents/plugins/marketplace.json",
+  "plugins/loom/.claude-plugin/plugin.json",
+  "plugins/loom/.codex-plugin/plugin.json"
+];
+const RELEASE_METADATA_FIXTURE_ROOT = "plugins/loom/adapters/fixtures/v0.2.0/metadata/";
+const PROHIBITED_EVALUATION_CLAIM = /\b(?:self-favoring\s+is\s+impossible|blind(?:-reviewed)?(?:\s+evaluation)?|impartial(?:ity)?(?:\s+by\s+construction)?|anonymous(?:ly)?(?:\s+evaluator)?|impossible)\b/giu;
+const IMMEDIATE_CLAIM_QUALIFICATION = new RegExp(`^[ \\t:;,()\\[\\]—–-]*${INDEPENDENT_EVALUATION_CLAIM.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "iu");
+
+function visitStrings(value, visit) {
+  if (typeof value === "string") visit(value);
+  else if (Array.isArray(value)) value.forEach((entry) => visitStrings(entry, visit));
+  else if (isObject(value)) Object.values(value).forEach((entry) => visitStrings(entry, visit));
+}
+function hasUnqualifiedEvaluationClaim(value) {
+  let unqualified = false;
+  visitStrings(value, (text) => {
+    PROHIBITED_EVALUATION_CLAIM.lastIndex = 0;
+    for (const match of text.matchAll(PROHIBITED_EVALUATION_CLAIM)) {
+      if (!IMMEDIATE_CLAIM_QUALIFICATION.test(text.slice(match.index + match[0].length))) {
+        unqualified = true;
+        break;
+      }
+    }
+  });
+  return unqualified;
+}
+function validateClientVisibleClaims() {
+  let valid = true;
+  const releaseFixtures = files.filter((relative) => relative.startsWith(RELEASE_METADATA_FIXTURE_ROOT) && relative.endsWith(".json"));
+  const surfaces = [...new Set([...CLIENT_VISIBLE_CLAIM_SURFACES, ...releaseFixtures])].sort();
+  for (const relative of surfaces) {
+    const value = relative.endsWith(".json") ? readJson(relative) : readText(relative);
+    if (value === null || value === JSON_READ_FAILURE) continue;
+    if (hasUnqualifiedEvaluationClaim(value)) {
+      report(relative, `prohibited unqualified evaluation claim; use '${INDEPENDENT_EVALUATION_CLAIM}'`);
+      valid = false;
+    }
+  }
+  return valid;
+}
+
 async function validateMetadata() {
   let structurallyValid = true;
   for (const relative of files.filter((file) => file.endsWith(".json"))) {
     if (readJson(relative) === JSON_READ_FAILURE) structurallyValid = false;
   }
+  if (!validateClientVisibleClaims()) structurallyValid = false;
 
   const authorizedCatalogs = new Set([
     ".claude-plugin/marketplace.json",

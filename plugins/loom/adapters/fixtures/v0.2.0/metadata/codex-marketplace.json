@@ -1,4 +1,4 @@
 {
   "name": "loom", "description": "Loom's Codex plugin marketplace", "owner": { "name": "Craig", "email": "craigeous@gmail.com" },
-  "plugins": [{ "name": "loom", "source": "./plugins/loom", "description": "Spec-driven multi-agent development loop with blind evaluation" }]
+  "plugins": [{ "name": "loom", "source": "./plugins/loom", "description": "Spec-driven multi-agent development loop with independent cold-agent evaluation with controlled inputs" }]
 }

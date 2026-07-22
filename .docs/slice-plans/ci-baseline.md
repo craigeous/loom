@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: In Progress
+Status: Implemented
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -705,3 +705,35 @@ not success.
   wording with ADR 0022's controlled-input independent-evaluation claim and add
   isolated regressions for that wording, below-floor/exact-boundary Git and jq
   versions, and first-failure stage attribution at two stages.
+
+### Developer revision for valid bootstrap merits Round 3 (2026-07-22)
+
+- README, both client manifests and catalogs, and their release-owned metadata
+  fixtures now use ADR 0022's exact claim, “independent cold-agent evaluation with
+  controlled inputs.” The metadata validator checks README, all four live client
+  surfaces, and all seven release-owned metadata fixtures for unqualified `blind`,
+  `impartial`, anonymous, or impossible claims. An isolated table-driven regression
+  proves every surface rejects one prohibited form, while a narrow legacy term passes
+  only when immediately qualified by the exact required claim. Fixture digests were
+  refreshed, and README still says the Codex contracts are static scaffolding only.
+- Safe test-owned `git` and `jq` shims delegate every operation except `--version`.
+  Isolated cases prove Git 2.33 and jq 1.5 fail with the actionable required-floor
+  diagnostic, while the exact Git 2.34 and jq 1.6 boundaries pass the runtime gate.
+- The gate now has a failure-only test control that stops at a named stage with a
+  chosen nonzero status. Regressions fail first at `toolchain contract and pinned
+  digests` with status 67 and later at `locked JavaScript dependencies and metadata
+  validation` with status 73. Each proves the original status, exact single
+  `FAILED stage <stage> (exit <status>)` diagnostic, correct stage advancement, and
+  absence of every asserted later-stage marker.
+- Focused verification passed all 134 tests in
+  `scripts/tests/repository-validation.bats`. Both complete gates then passed all 251
+  dynamically discovered tests plus metadata, links, shfmt, ShellCheck, Bash syntax,
+  pinned Claude strict validation, and diff-whitespace stages. Final exact-tree
+  commands were run strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-3 bootstrap review/evaluation.

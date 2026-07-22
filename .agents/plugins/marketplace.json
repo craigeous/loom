@@ -6,7 +6,7 @@
     {
       "name": "loom",
       "source": "./plugins/loom",
-      "description": "Spec-driven multi-agent development loop with blind evaluation"
+      "description": "Spec-driven multi-agent development loop with independent cold-agent evaluation with controlled inputs"
     }
   ]
 }

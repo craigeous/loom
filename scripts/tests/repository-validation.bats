@@ -206,6 +206,48 @@ links() {
     done
 }
 
+@test "every client-visible claim surface rejects prohibited unqualified wording" {
+    while IFS='|' read -r relative claim; do
+        make_metadata_root
+        if [ "$relative" = README.md ]; then
+            printf '\n%s\n' "$claim" >>"$TEST_ROOT/$relative"
+        else
+            jq --arg claim "$claim" 'if has("description") then .description=$claim else .schema=$claim end' \
+                "$TEST_ROOT/$relative" >"$TEST_ROOT/claim.next"
+            mv "$TEST_ROOT/claim.next" "$TEST_ROOT/$relative"
+        fi
+        metadata
+        [ "$status" -ne 0 ]
+        [[ "$output" == *"$relative: prohibited unqualified evaluation claim; use 'independent cold-agent evaluation with controlled inputs'"* ]]
+    done <<'EOF'
+README.md|blind evaluation
+.claude-plugin/marketplace.json|blind-reviewed
+.agents/plugins/marketplace.json|blind
+plugins/loom/.claude-plugin/plugin.json|impartial by construction
+plugins/loom/.codex-plugin/plugin.json|anonymous evaluator
+plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json|self-favoring is impossible
+plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json|impartial
+plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json|anonymous
+plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json|blind evaluation
+plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json|blind-reviewed
+plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json|anonymously
+plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json|impossible
+EOF
+}
+
+@test "a narrow evaluation term passes only with the immediate required qualification" {
+    make_metadata_root
+    printf '\nblind evaluation — independent cold-agent evaluation with controlled inputs\n' >>"$TEST_ROOT/README.md"
+    metadata
+    [ "$status" -eq 0 ]
+
+    make_metadata_root
+    printf '\nblind evaluation\nindependent cold-agent evaluation with controlled inputs\n' >>"$TEST_ROOT/README.md"
+    metadata
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"README.md: prohibited unqualified evaluation claim"* ]]
+}
+
 @test "malformed JSON names the materialized file" {
     make_metadata_root
     apply_overlay malformed-json
@@ -1132,6 +1174,85 @@ mutate_contract() {
     run env LOOM_CHECK_BASH_ONLY=1 LOOM_TEST_BASH="$fake_shell" LOOM_EXPECTED_BASH_VERSION='^3\\.1' /bin/bash "$TEST_ROOT/scripts/check"
     [ "$status" -ne 0 ]
     [[ "$output" == *"selected LOOM_TEST_BASH 3.1.99 is below required 3.2"* ]]
+}
+
+make_runtime_floor_shim() {
+    tool="$1"
+    advertised_version="$2"
+    delegate="$3"
+    mkdir -p "$TEST_ROOT/runtime-floor-bin"
+    case "$tool" in
+    git)
+        printf '#!/bin/sh\nif [ "$1" = --version ]; then printf "git version %%s\\n" "%s"; exit 0; fi\nexec "%s" "$@"\n' \
+            "$advertised_version" "$delegate" >"$TEST_ROOT/runtime-floor-bin/git"
+        ;;
+    jq)
+        printf '#!/bin/sh\nif [ "$1" = --version ]; then printf "jq-%%s\\n" "%s"; exit 0; fi\nexec "%s" "$@"\n' \
+            "$advertised_version" "$delegate" >"$TEST_ROOT/runtime-floor-bin/jq"
+        ;;
+    *) return 1 ;;
+    esac
+    chmod +x "$TEST_ROOT/runtime-floor-bin/$tool"
+}
+
+@test "Git immediately below 2.34 is rejected with an actionable diagnostic" {
+    make_contract_root
+    make_runtime_floor_shim git 2.33 "$(command -v git)"
+    run env PATH="$TEST_ROOT/runtime-floor-bin:$PATH" LOOM_CHECK_BASH_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Git 2.33 is below required 2.34"* ]]
+}
+
+@test "Git exact floor 2.34 is accepted" {
+    make_contract_root
+    make_runtime_floor_shim git 2.34 "$(command -v git)"
+    run env PATH="$TEST_ROOT/runtime-floor-bin:$PATH" LOOM_CHECK_BASH_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Selected Bash floor check passed"* ]]
+}
+
+@test "jq immediately below 1.6 is rejected with an actionable diagnostic" {
+    make_contract_root
+    make_runtime_floor_shim jq 1.5 "$(command -v jq)"
+    run env PATH="$TEST_ROOT/runtime-floor-bin:$PATH" LOOM_CHECK_BASH_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"jq 1.5 is below required 1.6"* ]]
+}
+
+@test "jq exact floor 1.6 is accepted" {
+    make_contract_root
+    make_runtime_floor_shim jq 1.6 "$(command -v jq)"
+    run env PATH="$TEST_ROOT/runtime-floor-bin:$PATH" LOOM_CHECK_BASH_ONLY=1 /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Selected Bash floor check passed"* ]]
+}
+
+@test "first-stage failure preserves status and emits one exact diagnostic before later stages" {
+    make_contract_root
+    run env LOOM_CHECK_TEST_FAIL_STAGE='toolchain contract and pinned digests' LOOM_CHECK_TEST_FAIL_STATUS=67 \
+        /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 67 ]
+    diagnostic='FAILED stage toolchain contract and pinned digests (exit 67)'
+    [ "$(printf '%s\n' "$output" | grep -Fxc "$diagnostic")" -eq 1 ]
+    [ "$(printf '%s\n' "$output" | grep -c '^FAILED stage ')" -eq 1 ]
+    [[ "$output" == *"==> toolchain contract and pinned digests"* ]]
+    [[ "$output" != *"==> locked JavaScript dependencies and metadata validation"* ]]
+    [[ "$output" != *"==> shfmt"* ]]
+}
+
+@test "advanced-stage failure preserves status and stops before every later stage" {
+    make_contract_root
+    prepare_cached_downloads
+    run env LOOM_CHECK_TEST_FAIL_STAGE='locked JavaScript dependencies and metadata validation' LOOM_CHECK_TEST_FAIL_STATUS=73 \
+        /bin/bash "$TEST_ROOT/scripts/check"
+    [ "$status" -eq 73 ]
+    diagnostic='FAILED stage locked JavaScript dependencies and metadata validation (exit 73)'
+    [ "$(printf '%s\n' "$output" | grep -Fxc "$diagnostic")" -eq 1 ]
+    [ "$(printf '%s\n' "$output" | grep -c '^FAILED stage ')" -eq 1 ]
+    [[ "$output" == *"==> toolchain contract and pinned digests"* ]]
+    [[ "$output" == *"==> locked JavaScript dependencies and metadata validation"* ]]
+    [[ "$output" != *"==> shfmt"* ]]
+    [[ "$output" != *"==> ShellCheck"* ]]
 }
 
 @test "gate resolves terminal and relative multihop selected-Bash symlinks" {

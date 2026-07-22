@@ -40,6 +40,14 @@ trap failed ERR
 stage() {
     CURRENT_STAGE="$1"
     printf '\n==> %s\n' "$CURRENT_STAGE"
+    if [ "${LOOM_CHECK_TEST_FAIL_STAGE:-}" = "$CURRENT_STAGE" ]; then
+        test_fail_status=${LOOM_CHECK_TEST_FAIL_STATUS:-97}
+        case "$test_fail_status" in
+        '' | *[!0-9]* | 0) return 2 ;;
+        esac
+        [ "$test_fail_status" -le 255 ] || return 2
+        return "$test_fail_status"
+    fi
 }
 require_command() {
     command -v "$1" >/dev/null 2>&1 || {

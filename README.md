@@ -3,7 +3,8 @@
 **loom** weaves a development loop out of five specialist roles —
 *researcher, planner, plan evaluator, developer, code evaluator* — and drives
 them through a file-based, spec-driven process so that work survives context
-resets and is reviewed with blind, impartial rigor.
+resets and is reviewed through independent cold-agent evaluation with controlled
+inputs.
 
 loom currently provides its behavioral workflow through a Claude Code **plugin**.
 The same distribution now also contains validated static Codex packaging contracts;
@@ -18,16 +19,17 @@ agent** on the model best suited to its job, hands off work through files in
 
 - **Context drift** — long sessions lose the thread. loom keeps durable memory in
   `.docs/` so any cold agent can resume from files alone.
-- **Blind rigor** — evaluators judge work without knowing who produced it, so
-  review stays critical and free of self-approval.
+- **Controlled evaluation** — independent cold-agent evaluation with controlled
+  inputs separates producing and evaluating invocations and prohibits self-approval.
 - **Token-smart automation** — each role runs on the cheapest model that can do
   its job well; only judgment-heavy roles use the strongest model.
 
 ## Status
 
 **M1 complete; M2 (init modes & gate learning) in progress.** The plugin is built,
-installed, validated, and run end-to-end (planner → blind plan-eval →
-developer + gate → blind code-eval → finalize). The `/loom:run` orchestrator, the
+installed, validated, and run end-to-end (planner → independent cold-agent
+evaluation with controlled inputs → developer + gate → independent cold-agent
+evaluation with controlled inputs → finalize). The `/loom:run` orchestrator, the
 five role agents, and the playbook all exist. The authoritative design lives in
 [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); decisions are in
@@ -67,9 +69,9 @@ commands are namespaced as `/loom:<name>`:
 | `/loom:run [scope]` | the orchestrator — detect state, take scope/gates, drive the roles |
 | `/loom:research <topic>` | one-off researcher pass |
 | `/loom:plan` | one-off planner pass |
-| `/loom:eval-plan [artifact]` | one-off blind plan/research review |
+| `/loom:eval-plan [artifact]` | one-off independent cold-agent evaluation with controlled inputs |
 | `/loom:develop [slice]` | one-off developer pass |
-| `/loom:eval-code [slice]` | one-off blind code review |
+| `/loom:eval-code [slice]` | one-off independent cold-agent evaluation with controlled inputs |
 | `/loom:status` | print `.docs/` state |
 | `/loom:init` | initialize/align this repo to loom |
 
