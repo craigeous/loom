@@ -1,0 +1,19 @@
+{
+  "schema": "claude-plugin-root/v1",
+  "client": "claude",
+  "binding": "CLAUDE_PLUGIN_ROOT",
+  "inputMustBeAbsolute": true,
+  "invocationMustBeAbsolute": true,
+  "canonicalizeInput": true,
+  "canonicalRootRequired": true,
+  "manifest": ".claude-plugin/plugin.json",
+  "manifestMustBeCanonical": true,
+  "manifestMustBeRegularFile": true,
+  "expectedName": "loom",
+  "expectedVersion": "0.2.0",
+  "helperDirectory": "bin",
+  "helperDirectoryMustBeDirectChild": true,
+  "allowedHelpers": ["loom-coord"],
+  "helperMustBeRegularFile": true,
+  "helperMustBeExecutable": true
+}

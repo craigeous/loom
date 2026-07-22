@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://github.com/craigeous/loom/scripts/schemas/command-frontmatter-v1.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["description"],
+  "properties": { "description": { "type": "string", "minLength": 1 }, "argument-hint": { "type": ["string", "array", "null"] }, "model": { "enum": ["haiku", "sonnet", "opus"] }, "allowed-tools": { "type": ["string", "array"] }, "disable-model-invocation": { "type": "boolean" } }
+}

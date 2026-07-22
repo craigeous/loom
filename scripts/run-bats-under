@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 4 ]; then
+    printf 'usage: run-bats-under ABSOLUTE_BASH VERSION_REGEX BATS_ENTRY TEST...\n' >&2
+    exit 2
+fi
+
+selected_bash="$1"
+expected_regex="$2"
+bats_entry="$3"
+shift 3
+
+case "$selected_bash" in
+/*) ;;
+*)
+    printf 'run-bats-under: shell path must be absolute: %s\n' "$selected_bash" >&2
+    exit 2
+    ;;
+esac
+[ -L "$selected_bash" ] || [ -x "$selected_bash" ] || {
+    printf 'run-bats-under: shell is not executable: %s\n' "$selected_bash" >&2
+    exit 2
+}
+[ ! -L "$bats_entry" ] && [ -f "$bats_entry" ] || {
+    printf 'run-bats-under: Bats entrypoint is missing: %s\n' "$bats_entry" >&2
+    exit 2
+}
+
+resolve_executable() {
+    resolver_candidate="$1"
+    resolver_hops=0
+    while [ -L "$resolver_candidate" ]; do
+        resolver_hops=$((resolver_hops + 1))
+        if [ "$resolver_hops" -gt 40 ]; then
+            printf 'run-bats-under: shell symlink chain is too deep or cyclic: %s\n' "$1" >&2
+            return 1
+        fi
+        resolver_link=$(readlink "$resolver_candidate") || return 1
+        case "$resolver_link" in
+        /*) resolver_candidate="$resolver_link" ;;
+        *) resolver_candidate="$(dirname -- "$resolver_candidate")/$resolver_link" ;;
+        esac
+        resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+        resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    done
+    resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+    resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    [ -f "$resolver_candidate" ] && [ ! -L "$resolver_candidate" ] && [ -x "$resolver_candidate" ] || return 1
+    printf '%s\n' "$resolver_candidate"
+}
+physical_bash=$(resolve_executable "$selected_bash") || {
+    printf 'run-bats-under: cannot resolve selected shell to a regular executable: %s\n' "$selected_bash" >&2
+    exit 2
+}
+# shellcheck disable=SC2016
+actual_version=$("$physical_bash" -c 'printf %s "$BASH_VERSION"')
+version_number=${actual_version%%(*}
+version_major=${version_number%%.*}
+version_rest=${version_number#*.}
+version_minor=${version_rest%%.*}
+case "$version_major:$version_minor" in
+*[!0-9:]* | *::* | :* | *:)
+    printf 'run-bats-under: cannot parse selected Bash version: %s\n' "$actual_version" >&2
+    exit 2
+    ;;
+esac
+if [ "$version_major" -lt 3 ] || { [ "$version_major" -eq 3 ] && [ "$version_minor" -lt 2 ]; }; then
+    printf 'run-bats-under: selected Bash %s is below required 3.2\n' "$actual_version" >&2
+    exit 2
+fi
+if ! [[ "$actual_version" =~ $expected_regex ]]; then
+    printf 'run-bats-under: selected Bash %s version %s does not match %s\n' "$physical_bash" "$actual_version" "$expected_regex" >&2
+    exit 2
+fi
+
+runtime_canary=""
+tests=()
+for test_file in "$@"; do
+    case "$test_file" in
+    */scripts/tests/shell-runtime.bats | scripts/tests/shell-runtime.bats) runtime_canary="$test_file" ;;
+    *) tests+=("$test_file") ;;
+    esac
+done
+[ -n "$runtime_canary" ] || {
+    printf 'run-bats-under: runtime canary is missing from discovered tests\n' >&2
+    exit 2
+}
+
+runtime_dir=$(mktemp -d "${TMPDIR:-/tmp}/loom-bash.XXXXXX")
+launcher_cleanup() {
+    cleanup_status="$1"
+    trap - EXIT HUP INT TERM
+    if [ -n "$runtime_dir" ] && [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ]; then
+        rm -rf -- "$runtime_dir"
+    fi
+    exit "$cleanup_status"
+}
+trap 'launcher_cleanup $?' EXIT
+trap 'launcher_cleanup 129' HUP
+trap 'launcher_cleanup 130' INT
+trap 'launcher_cleanup 143' TERM
+mkdir -p "$runtime_dir/bin"
+ln -s "$physical_bash" "$runtime_dir/bin/bash"
+
+export PATH="$runtime_dir/bin:$PATH"
+export LOOM_TEST_BASH="$physical_bash"
+export LOOM_EXPECTED_BASH_VERSION="$expected_regex"
+export LOOM_TEST_BASH_PHYSICAL="$physical_bash"
+
+printf 'Selected Bash: %s (%s)\n' "$physical_bash" "$actual_version"
+set +e
+if [ "${#tests[@]}" -gt 0 ]; then
+    "$physical_bash" "$bats_entry" "$runtime_canary" "${tests[@]}"
+else
+    "$physical_bash" "$bats_entry" "$runtime_canary"
+fi
+bats_status=$?
+set -e
+launcher_cleanup "$bats_status"

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/schemas/loom-compatibility-matrix-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "product", "version", "clientFloors", "workflows", "roles", "hookWireFixtureVersion", "rootBindings", "profiles"],
+  "properties": {
+    "schema": { "const": "loom-compatibility-matrix/v1" },
+    "product": { "const": "loom" },
+    "version": { "type": "string", "pattern": "^0\\.2\\.0$" },
+    "clientFloors": { "type": "object", "additionalProperties": false, "required": ["claude", "codex"], "properties": { "claude": { "const": "2.1.216" }, "codex": { "const": "0.144.6" } } },
+    "workflows": { "type": "array", "uniqueItems": true, "items": { "enum": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init"] }, "minItems": 8, "maxItems": 8 },
+    "roles": { "type": "array", "uniqueItems": true, "items": { "enum": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"] }, "minItems": 5, "maxItems": 5 },
+    "hookWireFixtureVersion": { "const": "hook-wire-v1" },
+    "rootBindings": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "type": "object", "additionalProperties": false, "required": ["id", "path"], "properties": { "id": { "enum": ["claude-plugin-root/v1", "codex-skill-source/v1"] }, "path": { "type": "string", "pattern": "^plugins/loom/adapters/roots/[a-z0-9-]+\\.json$" } } } },
+    "profiles": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "object", "additionalProperties": false, "required": ["profile", "consumers", "claude", "codex"], "properties": { "profile": { "enum": ["Economy", "Standard", "Deep review"] }, "consumers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true, "minItems": 1 }, "claude": { "type": "object", "additionalProperties": false, "required": ["selector"], "properties": { "selector": { "enum": ["haiku", "sonnet", "opus"] } } }, "codex": { "type": "object", "additionalProperties": false, "required": ["model", "effort"], "properties": { "model": { "enum": ["gpt-5.6-terra", "gpt-5.6"] }, "effort": { "enum": ["low", "medium", "high"] } } } } } }
+  }
+}

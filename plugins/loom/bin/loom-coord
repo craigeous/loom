@@ -1,5 +1,4 @@
-#!/bin/sh
-# shellcheck disable=SC3043  # local is supported by all real sh implementations
+#!/usr/bin/env bash
 # loom-coord — Multi-session lock/claim coordination helper (ADR 0014)
 # Ships in the plugin's bin/ (on $PATH when loom is enabled); invoke as the bare command `loom-coord`.
 #
@@ -39,9 +38,7 @@
 # Tunable parameters (overridable via env)
 # ---------------------------------------------------------------------------
 # X1 fix: _norm_int strips leading zeros to normalize to base-10.
-# POSIX $(( )) treats 08/09 as invalid octal → must normalize before any
-# arithmetic.  Pure parameter-expansion loop — no subprocess, no 10# (dash
-# does not support arithmetic base-conversion syntax).
+# Bash arithmetic treats 08/09 as invalid octal, so normalize before use.
 _norm_int() {
     local _ni
     _ni="$1"

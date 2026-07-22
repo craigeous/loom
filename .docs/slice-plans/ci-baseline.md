@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Approved
+Status: Ready to Publish
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -491,6 +491,41 @@ not success.
 
 ## Notes
 
+### Implementation gate evidence (2026-07-21)
+
+- Known Claude red reproduced before the fix: `claude plugin validate
+  plugins/loom --strict` exited 1 under Claude Code 2.1.216, reporting the
+  `commands/run.md` YAML parse error and the missing manifest-version warning.
+- Validator red reproduced against base `b28a74754e2ee016a035fa085f0d91de66057f62`
+  with the new targeted suite overlaid: the valid dual-client metadata test
+  exited 1 because `.agents/plugins/marketplace.json` and the release contracts
+  did not exist.
+- Fixture isolation: the filtered malformed-JSON test and subsequent real-tree
+  metadata test both passed; `scripts/validate-repository.mjs --metadata` then
+  passed at the Git root. `git ls-files` shows the four malformed sources only
+  with `.json.in`, `.md.in`, or `.allowlist.in` suffixes.
+- Floor gate: `LOOM_TEST_BASH=/bin/bash
+  LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash scripts/check` exited 0.
+  It dynamically discovered 123 Bats tests; the canary logged Bats and its
+  executable child at `3.2.57(1)-release`. Metadata, link, pinned Claude strict,
+  and working/index diff stages passed.
+- Current/cwd-independent gate: from `/tmp`,
+  `LOOM_TEST_BASH=/opt/homebrew/bin/bash
+  LOOM_EXPECTED_BASH_VERSION='^5\.3\.' /opt/homebrew/bin/bash
+  /Users/craig/git/loom-worktrees/ci-baseline/scripts/check` exited 0. The same
+  123 tests passed and both canary processes logged `5.3.9(1)-release`.
+- Locked strict validation printed `Validation passed` with no warning for
+  Claude Code 2.1.216. Static Codex metadata, compatibility, root bindings, and
+  release fixtures passed schema, digest, reference, path, and drift checks;
+  this is not Codex install or behavior evidence.
+- `.github/workflows/check.yml` declares all four required runner cells; the local
+  gate now compares every row and field exactly with `check-toolchain.json`, and
+  isolated mutations prove deletion or drift fails. Exact-head remote execution
+  remains required external evidence and is not claimed by this local handoff.
+- M0 remains incomplete until `client-floor-adapter-smoke` supplies the deferred
+  clean install, invocation, cold-role, hook, helper, upgrade, and uninstall
+  evidence for both exact client floors.
+
 - Required next M0 slice: `client-floor-adapter-smoke`, after the workflow, role,
   hook-wire, and root-bootstrap adapters exist. It runs both exact floor clients in
   isolated homes through clean marketplace/plugin loading, explicit invocation,
@@ -500,3 +535,315 @@ not success.
   gate; no v0.2 artifact is published before M0-M7 are green.
 - Later slices add spec-08 checks with the artifacts they introduce; this baseline
   does not pretend absent review/evaluation/doctor/landing protocols are validated.
+
+### Developer revision after code-evaluation Round 1 (2026-07-21)
+
+- The revision closes all confirmed Round-1 findings with isolated regressions for
+  authenticated private tool extraction/cache publication, cache symlinks, exact
+  workflow/toolchain closure, selected-Bash floor and launcher cleanup, rendered
+  heading fragments, exhaustive release metadata boundaries/drift, safe contained
+  reads, exact root-binding pairs, and CI credential scrubbing.
+- The complete local gate passed under `/bin/bash` 3.2.57 and Homebrew Bash 5.3.9,
+  with 192 dynamically discovered Bats tests in each lane plus metadata, links,
+  formatting, lint, syntax, pinned Claude strict validation, and diff checks.
+- Required external handoff: the root orchestrator must push the final exact commit
+  and retain successful logs for `ubuntu-22.04`, `ubuntu-24.04`, `macos-14` arm64,
+  and `macos-15-intel` x86-64. This developer did not push and does not claim those
+  four exact-head CI cells passed.
+
+### Hosted CI attempt 29855001240
+
+- Exact prior head `6c5c77b` ran all four required cells. Every cell passed the
+  192-test Bats suite, metadata and link validation, shfmt, ShellCheck, Bash syntax,
+  and pinned Claude strict validation, then failed the final range-wide
+  `git diff --check` on three pre-existing evaluation-file EOF blank lines.
+- This failed attempt is not CI success. The three reported EOF-only defects are
+  restored byte-for-byte to slice base `b28a747` and therefore removed from the
+  implementation diff. The root orchestrator must retarget the draft PR to that
+  remote authority base, and all four required cells must rerun on the new exact
+  head before remote CI evidence can be claimed.
+
+### Developer revision after code-evaluation Round 2 (2026-07-21)
+
+- Pull-request and push jobs now checkout, assert, and log the exact event head
+  before repository-controlled code. Credential scrubbing remains in front of the
+  gate, and isolated workflow mutations cover the ref, expected SHA, assertion,
+  log, action pin, and every runner field.
+- Every cache hit is copied to a private run-owned snapshot and authenticated there
+  before use; fresh-download publication uses a separate inode. Cache ownership,
+  modes, symlinks, concurrent rewriting, and cleanup have isolated regressions.
+- Metadata equality is object-order-insensitive while retaining array order;
+  homepage identity, empty allowlist reasons, cleanup ownership, unique parallel
+  sentinels, and every closed toolchain class have direct regression coverage.
+- The launcher and toolchain regressions now live only in the two approved test
+  files. Both complete local gates passed all 211 dynamically discovered tests on
+  Bash 3.2.57 and Bash 5.3.9, with every other ordered stage green.
+- Required external handoff: retarget the draft PR to remote base `b28a747`, push
+  the final exact head, and retain successful exact-head logs for all four required
+  runner cells. This local revision makes no remote CI success claim.
+
+### Developer revision after diagnostic Round 3 (2026-07-21)
+
+- The installed-root documents, shared closed schema, release fixtures, digest
+  contract, semantic equality check, and isolated mutations now cover absolute
+  inputs/invocations, canonical physical inputs/roots/manifests, the exact Codex
+  `skills/<skill>/SKILL.md` suffix and `../..` ascent, manifest/skill identity,
+  direct `bin/` containment, the sole `loom-coord` helper, and its regular-file and
+  executable requirements. These remain static declarations, not bootstrap code.
+- Metadata discovery rejects catalog-shaped tracked JSON outside the two exact live
+  paths and two named release fixtures. A distinct JSON-read failure sentinel keeps
+  valid `null`, `false`, `0`, and `""` inputs in schema validation, produces
+  deterministic file-specific target/schema diagnostics, and prevents semantic
+  validation after structural failure.
+- The launcher, gate, and workflow assertion completely resolve final and multihop
+  relative Bash symlinks with a bounded loop check. Regressions cover terminal and
+  multihop links, retargeting/removing the original links after resolution, and
+  loop rejection. Bats version probing uses the resolved selected Bash with a
+  private selected-shell PATH; a poisoned ambient `bash` is never executed.
+- Gate cleanup is attached to `EXIT`; HUP, INT, and TERM have separate handlers
+  that deterministically return 129, 130, and 143. Focused process-controlled
+  checks verified each status, private-run cleanup, and absence of the success
+  marker.
+- Both complete local gates passed all 226 dynamically discovered tests: system
+  Bash 3.2.57 and resolved Homebrew Bash 5.3.9. Metadata, link validation, shfmt,
+  ShellCheck, Bash syntax, pinned Claude strict validation, and diff whitespace
+  stages also passed in both lanes.
+- Required external handoff: push the final exact commit only after orchestration
+  approval and retain successful exact-head logs for `ubuntu-22.04`,
+  `ubuntu-24.04`, `macos-14` arm64, and `macos-15-intel` x86-64. This developer did
+  not push and makes no remote CI success claim.
+
+### Valid bootstrap merits Round 1 (2026-07-21)
+
+- The protected transition ref was initialized and freshly verified at
+  `367584c3b3d0423af04194171e35c827d069a744` before this run. The three earlier
+  review/evaluation rounds predated that latch and remain invalid diagnostics; they
+  do not authorize publication or consume merits rounds.
+- Exact implementation head `c92464aefb6189f40227abd0904d20d2efb7debe`
+  and tree `c4573aae54abb81ba524f52c3e93a7e57301ca56` passed both complete local gates
+  with 226 tests. GitHub Actions run `29865566135` passed all four required exact-head
+  cells with the same count and final success marker.
+- Sealed manifest `bfe36caa897196f3995dac8524e987d4c0efa526a3606ba44e550370f093cb65`
+  produced aggregate findings
+  `e0d404fdcd357e5bfd62c058b8c4026226722d49d4ad4676a59329193717e61d`.
+  Independent evaluator verdict
+  `8a5afa8f17899fcee81bfb373b5ebfbd7f1612d0a7f9471a836a979024ccb281`
+  is `FAIL`, Round 1, requiring Round 2.
+- The evaluator's authoritative strictly sequential reruns both passed 226/226 on
+  clean unchanged exact trees. Earlier concurrent attempts are retained only as
+  infrastructure diagnostics because deterministic global test paths collided.
+- Round 2 must close the two confirmed BLOCKERs and six MAJOR gaps: semantic,
+  comment-safe workflow validation; fail-closed explicit-root Git/non-Git discovery;
+  both exact README client floors; standalone positive allowlist suppression; all
+  three unknown-frontmatter-key cases; the complete validator CLI contract; and final
+  exact-head cwd-independent gate evidence for both local Bash lanes.
+
+### Developer revision for valid bootstrap merits Round 2 (2026-07-21)
+
+- Explicit-root discovery now compares the canonical requested root with Git's
+  canonical top level before using `git ls-files`. A positively non-Git root,
+  including an untracked root nested beneath a parent worktree, is walked without
+  following symlinks. A root Git marker, canonicalization failure, or tracked-file
+  discovery failure fails closed; the forced-failure regression proves an untracked
+  malformed JSON canary is never read.
+- README states the exact supported floors, Claude Code `2.1.216` and Codex CLI
+  `0.144.6`, while retaining the static Codex-scaffolding limitation. Metadata
+  validation enforces the exact combined statement, and a direct regression drifts
+  each client floor independently.
+- Retained tests now include a standalone live allowlist success with no broken-link
+  diagnostic; independent unknown-key failures for command, agent, and skill
+  frontmatter; and the CLI's nested-cwd default root, valid/failing `--all`, missing
+  mode, repeated mode, and mixed-mode exit-2 contracts.
+- `scripts/check` no longer greps workflow text. The closed toolchain record carries
+  a reviewed exact-workflow SHA-256 plus the checkout action/ref/fetch-depth/
+  credential and exact-head execution declarations. The gate accepts only that exact
+  byte contract, so inline-comment spoofing, commented-out settings, duplicate YAML
+  keys, relocated assertion strings, row deletion, and every retained workflow
+  mutation fail before repository code executes. No new dependency or lockfile
+  update was needed.
+- Focused verification passed all 126 tests in
+  `scripts/tests/repository-validation.bats`, including the new trust-boundary,
+  README, CLI, allowlist, frontmatter, and workflow mutations.
+- Final full-gate commands were run strictly sequentially from cwd `/tmp` using the
+  absolute check path and base `b28a74754e2ee016a035fa085f0d91de66057f62`:
+  - Bash 3.2 command:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+    — PASS, selected `/bin/bash` `3.2.57(1)-release`, dynamically discovered and
+    passed 243/243 Bats tests, ending `All checks passed`.
+  - Bash 5.3 command:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+    — PASS, resolved `/opt/homebrew/Cellar/bash/5.3.9/bin/bash`
+    `5.3.9(1)-release`, dynamically discovered and passed 243/243 Bats tests,
+    ending `All checks passed`.
+- Both lanes also passed the exact workflow/toolchain digest, locked JavaScript
+  install, metadata and link validation, shfmt, ShellCheck, Bash syntax, Claude
+  `2.1.216` strict plugin validation, and diff-whitespace stages. No remote push or
+  hosted-CI claim is made by this developer handoff.
+
+### Valid bootstrap merits Round 2 (2026-07-22)
+
+- Exact implementation head `c85cdd6e944473817daae4cdc53dc736ac85d2d5`
+  and tree `42b815a416b2bfc807941df1e3f3c5a23fcc3b26` passed both complete
+  cwd-independent developer gates with 243 tests. Exact-head GitHub Actions run
+  `29871936814` passed all four required cells with the same count and final success
+  marker.
+- Sealed manifest `556f6ddc89dd0f09a23d5d6d782168567ec9022d925bd0149867fe2d265ed04c`
+  and input inventory
+  `99ae338fd6eda0772b4af0eac02899da7ab45745984a347622b8a63712cdcafb`
+  produced aggregate findings
+  `ea9462777cb0de0565470c32eb08fe1c9c30a8415e92beed849b9adf5faae34a`.
+  Independent evaluator verdict
+  `a3d18bc202c1cc4311c52b7eb237789116bac682baa1b9e3a86b49835468b74e`
+  is `FAIL`, Round 2, requiring Round 3.
+- A quota interruption stopped the security worker before it produced output. Under
+  ADR 0023 section 8, the failure was recorded as infrastructure-only; after limits
+  reset, every sealed input reverified hash-identical and only the failed stage
+  resumed. Its completed output was clean and did not consume a merits round.
+- The evaluator's fresh, strictly sequential Bash 3.2 and Bash 5.3 reruns both passed
+  243/243 tests with unchanged exact trees and source inventories.
+- Round 3 must replace the newly added client-visible unqualified “blind evaluation”
+  wording with ADR 0022's controlled-input independent-evaluation claim and add
+  isolated regressions for that wording, below-floor/exact-boundary Git and jq
+  versions, and first-failure stage attribution at two stages.
+
+### Developer revision for valid bootstrap merits Round 3 (2026-07-22)
+
+- README, both client manifests and catalogs, and their release-owned metadata
+  fixtures now use ADR 0022's exact claim, “independent cold-agent evaluation with
+  controlled inputs.” The metadata validator checks README, all four live client
+  surfaces, and all seven release-owned metadata fixtures for unqualified `blind`,
+  `impartial`, anonymous, or impossible claims. An isolated table-driven regression
+  proves every surface rejects one prohibited form, while a narrow legacy term passes
+  only when immediately qualified by the exact required claim. Fixture digests were
+  refreshed, and README still says the Codex contracts are static scaffolding only.
+- Safe test-owned `git` and `jq` shims delegate every operation except `--version`.
+  Isolated cases prove Git 2.33 and jq 1.5 fail with the actionable required-floor
+  diagnostic, while the exact Git 2.34 and jq 1.6 boundaries pass the runtime gate.
+- The gate now has a failure-only test control that stops at a named stage with a
+  chosen nonzero status. Regressions fail first at `toolchain contract and pinned
+  digests` with status 67 and later at `locked JavaScript dependencies and metadata
+  validation` with status 73. Each proves the original status, exact single
+  `FAILED stage <stage> (exit <status>)` diagnostic, correct stage advancement, and
+  absence of every asserted later-stage marker.
+- Focused verification passed all 134 tests in
+  `scripts/tests/repository-validation.bats`. Both complete gates then passed all 251
+  dynamically discovered tests plus metadata, links, shfmt, ShellCheck, Bash syntax,
+  pinned Claude strict validation, and diff-whitespace stages. Final exact-tree
+  commands were run strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-3 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 3 (2026-07-22)
+
+- Exact head `b6d87a21a7df54b4be6c29b4fa73bf3ef9d971fe` and tree
+  `5b1d788ce2d8ae59cd91e3aec5dc39748996db31` passed both local developer gates
+  and exact-head GitHub Actions run `29937249418` in all four required cells, with
+  251 tests and the final success marker in every lane.
+- Sealed manifest `0cbb3cd8b58b2f43f0b98d79d36a5d06cbc022c2ded5943ffe0a45eac42590f0`
+  and input inventory
+  `ba2af4b2f435451bdc81edec2be6e6278835eadde5360745f03e19e0ec308a5b`
+  produced aggregate findings
+  `dd4fef582948c2dacf5e6a5e963970f5088de6dccbcf284f060c0ce562452d11`.
+  Independent evaluator verdict
+  `b32d040ae5c62dada73d2fc7e5622650b2970a0ae9d588bd3c2d19cde8ecce0f`
+  is `FAIL`, Round 3, requiring Round 4.
+- The evaluator's fresh, strictly sequential Bash 3.2 and Bash 5.3 reruns both passed
+  251/251 with clean unchanged exact trees and byte-identical tracked inventories.
+- Correctness and security were clean. The sole confirmed MAJOR is missing negative
+  coverage for the required unsupported-host rejection. Round 4 must add isolated
+  unknown-OS and unsupported-architecture cases that assert the exact diagnostic and
+  prove provisioning/download code is not reached.
+
+### Developer revision for valid bootstrap merits Round 4 (2026-07-22)
+
+- Two isolated negative cases now control `uname` through a test-owned shim while
+  preserving native OS answers for the gate's preceding cache-safety probes. One
+  case supplies the unknown OS `Plan9`; the other supplies the supported native OS
+  with unsupported architecture `riscv64`. Both require status 1 and exactly one
+  complete `Unsupported check host: <os> <architecture>` diagnostic.
+- Selective test-owned `jq` and `curl` shims create a marker if the gate enters the
+  download-record lookup or attempts a download. Both cases prove that marker is
+  absent and that no pinned-download message is emitted, so rejection precedes
+  provisioning. No production seam or `scripts/check` behavior changed.
+- Focused verification passed all 136 tests in
+  `scripts/tests/repository-validation.bats`. Both complete gates then passed all 253
+  dynamically discovered tests plus metadata, links, shfmt, ShellCheck, Bash syntax,
+  pinned Claude strict validation, and diff-whitespace stages. Final exact-tree
+  commands were run strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-4 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 4 (2026-07-22)
+
+- Exact head `df3714f1fa60d3ea41df9c07e821b2204b304979` and tree
+  `2697ba389b9b59952279f11f17316d4816e9c88a` passed both developer gates and
+  all four exact-head CI cells at 253 tests.
+- Manifest `de34b8a93064b5ef2b3bc1c1acc0dbd8ae736c9dcb917377a61bac186aa0bfad`,
+  aggregate `f9847c8104dc74af4c54083c58d74d2d1828db79cd7a7fbe95423c531b48ed66`,
+  and independent verdict
+  `9dfcb9aedcb48961aeeb682a54dab9d036471ac5f832572d8c0af80da993cd9f`
+  bind a Round-4 `FAIL` requiring Round 5.
+- Round 5 must mechanically enforce all three exact shipped-script Bash shebangs and
+  close the unsafe hard-linked cache-entry chmod path with fail-closed metadata checks
+  and an outside-sentinel regression.
+
+### Developer revision for valid bootstrap merits Round 5 (2026-07-22)
+
+- The toolchain-contract stage now requires the literal first line
+  `#!/usr/bin/env bash` on `plugins/loom/bin/loom-coord`,
+  `plugins/loom/hooks/git-identity-guard.sh`, and
+  `plugins/loom/hooks/precompact-write-ahead-backstop.sh`. Three isolated mutations
+  replace exactly one shipped shebang with `#!/bin/sh` and prove each path fails with
+  its own deterministic diagnostic.
+- Shared cached downloads are never chmodded or otherwise repaired in place. Before a
+  cache entry is copied, the gate requires the current user as owner, mode `600`, and
+  hard-link count exactly one using the supported Darwin and Linux `stat` interfaces;
+  any mismatch returns explicitly from `fetch`, including under Bash 3.2 command-
+  substitution semantics. Only an acceptable entry is copied to the private run
+  directory, where the private inode is mode-normalized and digest-authenticated
+  before use.
+- The cache regression hard-links the cached shfmt artifact to an outside sentinel
+  with mode `666`. Provisioning rejects the link count and proves the sentinel's
+  SHA-256 and mode are unchanged. The retained symlink, ownership, digest-race, and
+  private-provisioning cases remain green. Focused verification passed all 140 tests
+  in `scripts/tests/repository-validation.bats`.
+- Both complete gates passed all 257 dynamically discovered tests, metadata, links,
+  shfmt, ShellCheck, Bash syntax, pinned Claude strict validation, and diff-whitespace
+  stages. After this documentation update, the final exact-tree commands were rerun
+  strictly sequentially from cwd `/tmp`:
+  - Bash 3.2:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.57' /bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+  - Bash 5.3:
+    `env LOOM_DIFF_BASE=b28a74754e2ee016a035fa085f0d91de66057f62 LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3' /opt/homebrew/bin/bash /Users/craig/git/loom-worktrees/ci-baseline/scripts/check`
+- No tag, release, publication, push, or hosted-CI success is claimed by this
+  developer handoff. The root orchestrator must bind and run fresh exact-head hosted
+  evidence before the Round-5 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 5 (2026-07-22)
+
+- Exact implementation head `c52ff8260c90dc4e0961752e9d6fcc8107075d2e` and tree
+  `82e6953cd412c5171967d41fb063f97d7512ba15` passed both sealed local gates at
+  257 tests and all four exact-head CI cells in run `29948739525`.
+- Manifest `1600467825f4a3358b1f81f690fb0a2d785d447d515c9116e2dca1baf7a88ccf`,
+  sealed input inventory
+  `33aa8ab7e38c3dfecdb81651858fd723aaa4a255591953ae21e36e06e115a8b6`, and
+  clean aggregate
+  `6b4df9699e178ba8ef31029558ed618e8c9394f9d02efeff7a68b49f62e60909`
+  bind three complete cold auxiliary reviews with zero findings.
+- Independent verdict
+  `3a14a5f254f7798e9642ffb5351b6810ac659fb2bb86696db50c175d0d8a6e73`
+  is `PASS`, with zero BLOCKER, MAJOR, or MINOR findings and no next round.
+- The evaluator's fresh Bash 3.2 and Bash 5.3 gates ran strictly sequentially,
+  passed 257/257 tests, and ended with unchanged exact trees, clean status, and
+  matching inventories. The slice advances to `Ready to Publish`; it is not yet
+  `Landed`, and no release or tag is authorized by this result.

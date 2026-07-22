@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/scripts/schemas/codex-marketplace-0.144.6.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["name", "description", "owner", "plugins"],
+  "properties": {
+    "name": { "const": "loom" }, "description": { "type": "string", "minLength": 1 },
+    "owner": { "type": "object", "additionalProperties": false, "required": ["name", "email"], "properties": { "name": { "type": "string", "minLength": 1 }, "email": { "type": "string", "minLength": 3 } } },
+    "plugins": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["name", "source", "description"], "properties": { "name": { "const": "loom" }, "source": { "const": "./plugins/loom" }, "description": { "type": "string", "minLength": 1 } } } }
+  }
+}
