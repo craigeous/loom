@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Implemented
+Status: In Progress
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -782,3 +782,17 @@ not success.
 - No tag, release, publication, push, or hosted-CI success is claimed by this
   developer handoff. The root orchestrator must bind and run fresh exact-head hosted
   evidence before the Round-4 bootstrap review/evaluation.
+
+### Valid bootstrap merits Round 4 (2026-07-22)
+
+- Exact head `df3714f1fa60d3ea41df9c07e821b2204b304979` and tree
+  `2697ba389b9b59952279f11f17316d4816e9c88a` passed both developer gates and
+  all four exact-head CI cells at 253 tests.
+- Manifest `de34b8a93064b5ef2b3bc1c1acc0dbd8ae736c9dcb917377a61bac186aa0bfad`,
+  aggregate `f9847c8104dc74af4c54083c58d74d2d1828db79cd7a7fbe95423c531b48ed66`,
+  and independent verdict
+  `9dfcb9aedcb48961aeeb682a54dab9d036471ac5f832572d8c0af80da993cd9f`
+  bind a Round-4 `FAIL` requiring Round 5.
+- Round 5 must mechanically enforce all three exact shipped-script Bash shebangs and
+  close the unsafe hard-linked cache-entry chmod path with fail-closed metadata checks
+  and an outside-sentinel regression.

@@ -490,3 +490,33 @@ The wording contract, runtime-floor boundaries, first-failure attribution, exact
 CI, and both evaluator gates are green. One required portability boundary remains
 untested, so the confirmed MAJOR requires valid bootstrap merits Round 4 and returns
 the slice to `In Progress`.
+
+---
+
+## Code evaluation — valid bootstrap merits Round 4
+
+Verdict: FAIL
+Round: 4
+Required next round: 5
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-df3714f-valid-r4`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `df3714f1fa60d3ea41df9c07e821b2204b304979`
+- Head tree: `2697ba389b9b59952279f11f17316d4816e9c88a`
+- Manifest SHA-256: `de34b8a93064b5ef2b3bc1c1acc0dbd8ae736c9dcb917377a61bac186aa0bfad`
+- Aggregate findings SHA-256: `f9847c8104dc74af4c54083c58d74d2d1828db79cd7a7fbe95423c531b48ed66`
+- Evaluator verdict SHA-256: `9dfcb9aedcb48961aeeb682a54dab9d036471ac5f832572d8c0af80da993cd9f`
+- Exact-head CI run `29942792380`: all four cells passed 253 tests.
+
+- [MAJOR] `R4-001` — confirmed: required exact shipped Bash shebangs are not
+  mechanically asserted.
+- [BLOCKER] `R4-002` — confirmed and elevated: in-place chmod through a hard-linked
+  cache entry can mutate an outside file and is unsafe to land.
+- Fresh evaluator Bash 3.2 and Bash 5.3 reruns each passed 253/253 strictly
+  sequentially with clean unchanged trees and valid inventories.
+
+Round 5 must enforce all three shebangs and reject unsafe shared-cache hard links
+without mutating their target. The slice returns to `In Progress`.

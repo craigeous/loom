@@ -605,3 +605,36 @@ section 8.
 - Suggested verification: Add isolated negative cases for an unknown OS and a
   supported OS with an unsupported architecture; assert nonzero status, the exact
   actionable diagnostic, and that provisioning/download execution is not reached.
+
+---
+
+# Valid bootstrap review — ci-baseline merits Round 4
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not loom-local-review/v1
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-b28a747-df3714f-valid-r4`
+- Base: `b28a74754e2ee016a035fa085f0d91de66057f62`
+- Head: `df3714f1fa60d3ea41df9c07e821b2204b304979`
+- Head tree: `2697ba389b9b59952279f11f17316d4816e9c88a`
+- Manifest SHA-256: `de34b8a93064b5ef2b3bc1c1acc0dbd8ae736c9dcb917377a61bac186aa0bfad`
+- Input-inventory SHA-256: `833a27cca334479e0d1eacb1bb0acf40b8461a805fbb9a1bf32473e9057383da`
+- Aggregate findings SHA-256: `f9847c8104dc74af4c54083c58d74d2d1828db79cd7a7fbe95423c531b48ed66`
+
+Correctness was clean. All worker bindings and inventories validated.
+
+## R4-001 — proposed MAJOR
+
+- Location: `scripts/check:474-501`
+- Claim: The gate does not enforce the exact `#!/usr/bin/env bash` first line on the
+  three shipped executables; all current checks force Bash independently.
+- Suggested verification: Assert each exact first line and independently mutate each
+  shebang to `/bin/sh`.
+
+## R4-002 — proposed MAJOR
+
+- Location: `scripts/check:138-157`
+- Claim: Cache mode repair can follow a hard link and chmod an unrelated same-UID file
+  before authentication because link count is not checked.
+- Suggested verification: Never repair an untrusted shared inode in place; require
+  safe metadata and link count one, with an outside-sentinel regression.
