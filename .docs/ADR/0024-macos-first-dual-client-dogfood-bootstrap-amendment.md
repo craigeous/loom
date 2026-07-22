@@ -1,6 +1,6 @@
 # 0024 — macOS-First Dual-Client Dogfood Bootstrap Amendment
 
-Status: Plan Review
+Status: Draft
 Date: 2026-07-22
 
 ## Context

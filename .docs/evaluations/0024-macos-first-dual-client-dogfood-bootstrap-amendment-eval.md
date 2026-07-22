@@ -50,3 +50,44 @@ The two-slice separation, minimum dual-client behavioral proof, and review-integ
 rules are sufficient. Three confirmed BLOCKERs and three MAJOR findings prevent
 ratification. The ADR returns to `Draft`; owner acceptance is unavailable until a
 cold re-evaluation passes.
+
+---
+
+Verdict: FAIL
+Round: 1
+Evidence mode: `loom-repository-bootstrap/v1`
+Bootstrap-ratification: degraded ADR 0024 one-time ratification
+Isolation: not established under ADR 0022
+Release conformance: not established
+Run: `adr-0024-a8a0d63-ratification-r1`
+Reviewed artifact commit: `a8a0d63557f517d7c39bf476f55d84ff6a48c37f`
+Reviewed artifact blob: `cc661a984e7c9a552393faed3cac3b54cb027b56`
+Manifest SHA-256: `4bd1268ecadcbababf33c5d2915f8180db2182bd22a0639464b36e1866378603`
+Input-inventory SHA-256: `6f97a6a021f384600e76a64a047fa3970ce8554adf123c96091aaa7a37bc1921`
+Publication-evidence inventory SHA-256: `d74d4d008e36f5c3b6934ae3e46ab3d22d1afcc4a841f5826baa7ffbab909b32`
+Evaluator verdict SHA-256: `2a5b70b95a1600c24d6c17f2c0376639c446849c1ca6c8958761cf2f6dd5d7d8`
+
+## Round 1 findings
+
+- [BLOCKER] The sealed M0 classification covers the 52-path net diff but omits five
+  history-only paths from the required 57-path per-commit union: the evaluations for
+  ADRs 0018–0020 and `scripts/tests/run-bats-under.bats` plus
+  `scripts/tests/toolchain-contract.bats`.
+- [BLOCKER] Both sealed boundary range raw files contain seven-character abbreviated
+  object IDs even though the inventory summary and ADR require full 40-character
+  object IDs.
+
+## Round 1 required changes
+
+1. Classify all 57 M0 historical-union paths and mechanically reject any
+   union/classification difference before sealing a replacement package.
+2. Regenerate both net boundary raw inventories with full object IDs, validate the
+   object-field widths, and reseal the evidence and ratification inventories.
+
+## Round 1 assessment
+
+The revised ADR closes five of the six Round 0 findings and passes six of its eight
+decision assessments. The remaining Round 0 mechanical-evidence finding stays open
+only because of the two defects above. Two BLOCKERs require `FAIL`; the ADR returns
+to `Draft`, and owner acceptance remains unavailable until a cold re-evaluation
+passes.
