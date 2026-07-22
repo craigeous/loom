@@ -38,4 +38,4 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 
 ## In Review
 
-None.
+- [0024 — macOS-First Dual-Client Dogfood Bootstrap Amendment](0024-macos-first-dual-client-dogfood-bootstrap-amendment.md) — proposes a one-time protected-transition amendment and two named slices for an Apple-silicon macOS dogfood checkpoint without changing the v0.2 release gate
