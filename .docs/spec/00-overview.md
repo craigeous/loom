@@ -1,6 +1,6 @@
 # 00 — Overview & Goals
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

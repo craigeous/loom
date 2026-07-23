@@ -1,6 +1,6 @@
 # 08 — Shared Playbook, Instructions, Hooks, and Helpers
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

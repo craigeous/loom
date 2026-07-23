@@ -1,6 +1,6 @@
 # macOS-first dual-client dogfood program amendment
 
-Status: Plan Review
+Status: Approved
 Target specs: [00-overview.md](../spec/00-overview.md),
 [02-roles.md](../spec/02-roles.md),
 [03-artifact-lifecycle.md](../spec/03-artifact-lifecycle.md),

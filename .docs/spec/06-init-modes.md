@@ -1,6 +1,6 @@
 # 06 — Init Modes
 
-Status: Plan Review
+Status: Approved
 
 ## Authority
 

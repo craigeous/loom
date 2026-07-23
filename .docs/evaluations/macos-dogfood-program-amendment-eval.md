@@ -1,6 +1,6 @@
 # Evaluation: macOS-first dual-client dogfood program amendment
 
-Verdict: FAIL
+Verdict: PASS
 Round: 0
 Reviewed against: accepted ADR 0024, ADRs 0018/0019/0023, target specs 00/02/03/04/06/07/08/10, the spec index, improvement plan, and plan-evaluation rubric
 
@@ -9,34 +9,30 @@ Conformance: degraded bootstrap; not `loom-local-review/v1`
 Isolation: not established under ADR 0022
 Release conformance: not established
 
-## Findings
+## Prior finding dispositions
 
-- [BLOCKER] `R0-F001` — The plan deferred planner-owned frozen-spec amendments until
-  after slice-plan approval, which would route illegal spec edits to a developer.
-- [BLOCKER] `R0-F002` — The path boundary used open-ended evaluator/finalization
-  classes instead of the literal exhaustive allowlist ADR 0024 requires.
-- [BLOCKER] `R0-F003` — The eight-spec step did not map exact normative changes to
-  each file/section, including the added bootstrap eligibility exceptions.
-- [BLOCKER] `R0-F004` — Digest verification incorrectly described hashing a body and
-  semantic comparison; spec 08 requires whole-file normalized bytes and byte-exact
-  deterministic rendered blocks.
-- [BLOCKER] `R0-F005` — Publication checks omitted full protected transition history,
-  bound tip, component availability, no-conflicting-intent, and settled-result
-  containment.
-- [MAJOR] `R0-F006` — Several invariants had unspecified searches rather than bounded
-  commands, exact values/counts, parsers, and exit expectations.
+- `R0-F001` — RESOLVED: the complete planner-owned set is authored before one Plan
+  Review and no developer edits frozen specs.
+- `R0-F002` — RESOLVED: four immutable prerequisites and 22 writable paths are
+  literal, exhaustive, and phase-aware.
+- `R0-F003` — RESOLVED: the spec index and all eight target specs have a precise
+  per-file/per-section amendment matrix and matching committed text.
+- `R0-F004` — RESOLVED: the entire normalized canonical file is hashed and both
+  deterministic client blocks are byte-compared while outside bytes are preserved.
+- `R0-F005` — RESOLVED: the package and pre-intent gates cover protected ancestry,
+  bound tip, active phase, intent, components, authority, results, and target base.
+- `R0-F006` — RESOLVED: exact path, heading, ordering, matrix, table, language,
+  digest, gate, and transition assertions replace open-ended searches.
 
-## Required changes
+## Current findings
 
-1. Keep the complete planning set Draft while the planner authors all amendments,
-   then submit that exact set once for cold plan evaluation.
-2. Enumerate every writable and immutable prerequisite path literally.
-3. Add a per-file/per-section amendment matrix.
-4. Use spec 08's exact whole-file digest and deterministic byte-comparison contract.
-5. Add every ADR-0023/0024 pre-run and pre-publication state check.
-6. Replace vague searches with executable bounded assertions and expected results.
+None.
 
 ## Notes
 
 The sealed package and accepted-authority bindings validated. Evaluator raw verdict
-SHA-256: `98583cbf24027b0708c38086f21a0073aca17813e85572a25f873417b91909dc`.
+SHA-256: `a723530e2a1ebbb7e7f7fee5366ab5df74d549f9cd57c8a30dd9caa0ed75f79c`.
+Manifest SHA-256: `a3472df32b51952d1e7e9b6f0f849704cf43ca7a753aa533a543be4253adce2c`.
+Input inventory SHA-256: `ad3b3901a796c486a57168302f877729584437757d75b7f1184104425f044653`.
+Reviewed commit/tree: `ee37a20a7ce8725ff4a46b236b5d1937d348e8ee` /
+`c816e6e490ac9c5942043cd1788dac6069da78e2`.
