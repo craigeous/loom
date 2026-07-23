@@ -1,6 +1,6 @@
 # Repository Improvement Plan
 
-Status: Draft
+Status: Plan Review
 
 Date: 2026-07-21
 
@@ -34,7 +34,7 @@ combine coordinator concurrency changes with review-pipeline work.
 
 ---
 
-## M0 — Establish a trustworthy baseline
+## M0 — Establish a trustworthy baseline (Landed)
 
 Purpose: make every subsequent change reproducibly testable.
 
@@ -72,6 +72,40 @@ Explicitly document whether Windows or Git Bash is supported.
 - A fresh clone can run one documented command and reproduce the full gate.
 - CI runs on both supported operating systems.
 - Tool versions and installation steps are pinned or reproducible.
+
+---
+
+## Checkpoint D0 — Apple-silicon dual-client dogfood
+
+Purpose: make the exact committed Loom candidate privately usable on the owner's
+Darwin `arm64` development host through both Claude Code 2.1.216 and Codex CLI
+0.144.6 before M1 begins. This checkpoint is not a release, support-matrix reduction,
+tag, or marketplace publication.
+
+### Slice: `macos-dogfood-program-amendment`
+
+Publish accepted ADR 0024 and synchronize the frozen specs, this program, canonical
+project instructions, generated root adapters, README, indexes, and living status.
+No product/manifest behavior changes are permitted.
+
+### Slice: `macos-dual-client-dogfood`
+
+Prove isolated clean install and reinstall, all eight native workflow mappings, all
+five role mappings with a real cold no-delegation role launch per client, hook
+fixtures/trust behavior, absolute installed-root helper execution, inside/outside-
+project behavior, and clean uninstall on Darwin `arm64`.
+
+#### Acceptance criteria
+
+- Both slices independently pass their accepted plan and evaluator boundary.
+- Only Apple-silicon macOS execution gates this private checkpoint.
+- Linux and macOS Intel remain portable shared-core/release obligations and are not
+  made dogfood blockers here.
+- Codex behavior remains pending until the code-bearing slice passes.
+
+The v0.2 release rule is unchanged: M0 through M7 must be green on Ubuntu 22.04 and
+24.04 x86-64 plus macOS 14+ on both `arm64` and Intel, with the complete Claude Code
+2.1.216 and Codex CLI 0.144.6 release evidence required by ADR 0019/spec 10.
 
 ---
 

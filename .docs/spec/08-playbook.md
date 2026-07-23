@@ -1,6 +1,6 @@
 # 08 — Shared Playbook, Instructions, Hooks, and Helpers
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -231,3 +231,20 @@ remote landing configuration, and optional OS egress-sandbox status.
 Playbook changes are planned, independently evaluated, and released atomically with
 both adapters. Workflow-profile selection and target-branch history shape are not
 defined here; they remain evidence-dependent future decisions.
+### Private dogfood hook and helper evidence
+
+Both client fixtures carry the same normalized event input, including required
+`trigger`, for `PreToolUse` and `PreCompact`. Claude and Codex output adapters may use
+client-native blocking envelopes, but evidence must prove the same shared allow/block
+decision. Codex hook trust and activation are recorded honestly; unavailable or
+untrusted activation is not relabeled as success.
+
+Helper execution resolves an absolute physical installed root, proves root/manifest
+containment, and invokes the helper from that root. Codex uses the exact skill-source
+ascent contract. Shared correctness never depends on bare `PATH`, `CODEX_HOME`,
+`CLAUDE_PLUGIN_ROOT`, or another client-only root variable; such inputs are adapter-
+scoped fixtures only.
+
+This amendment does not change the canonical digest algorithm: hash the complete
+normalized canonical file with one trailing LF, deterministically render both client
+blocks, and require each actual block to byte-match its expected rendering.

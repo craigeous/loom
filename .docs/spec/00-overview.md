@@ -1,6 +1,6 @@
 # 00 — Overview & Goals
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -96,3 +96,15 @@ cannot delegate, cannot edit product code, and cannot decide PASS/FAIL.
   root-resolution, or instruction-file binding.
 - **Gate:** configured format → lint → test sequence.
 - **Landing:** verified publication through the configured remote mode.
+## Private macOS dual-client checkpoint
+
+Accepted ADR 0024 inserts one pre-M1 private checkpoint on the owner's Darwin
+`arm64` host. It may establish dogfood readiness only after exact-candidate Claude
+Code 2.1.216 and Codex CLI 0.144.6 installation and behavior evidence passes. It is
+not public support, release conformance, a release candidate, tag, or distribution
+publication.
+
+The client-neutral shared core remains portable. Darwin paths, Apple tools, Homebrew,
+one client's root variable, or implicit `PATH` behavior may appear only in explicit
+host/client adapters. ADR 0019's Ubuntu and macOS Intel obligations and M0–M7 release
+gate remain unchanged.

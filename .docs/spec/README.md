@@ -36,6 +36,9 @@ The current amendment derives principally from accepted ADRs
 [0021](../ADR/0021-loom-owned-local-review-protocol.md), and
 [0022](../ADR/0022-controlled-input-independent-evaluation.md). Where their
 decisions conflict with earlier approved text, the later accepted ADR controls.
+Accepted ADR [0024](../ADR/0024-macos-first-dual-client-dogfood-bootstrap-amendment.md)
+also authorizes one private Apple-silicon dual-client dogfood checkpoint before M1.
+That checkpoint does not change ADR 0019's full v0.2 release matrix or M0–M7 gate.
 
 ## Non-negotiable design
 
@@ -64,6 +67,8 @@ decisions conflict with earlier approved text, the later accepted ADR controls.
   SemVer.
 - Workflow profiles and target-branch history shape remain outside frozen design
   until the improvement program's benchmark supplies evidence.
+- “Dogfood-ready” is a private Darwin `arm64` behavior result, not public support,
+  release conformance, a tag, or permission to skip Ubuntu/macOS-Intel release proof.
 
 ## Decision records
 

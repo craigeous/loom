@@ -1,6 +1,6 @@
 # 07 — Client Invocation Surface
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -57,3 +57,31 @@ commands; the orchestrator launches them only within `loom-local-review/v1`.
 - Codex IDE plugin installation is not a v0.2 supported surface. Repository skills
   may be documented as an unguaranteed fallback and must not be labeled full plugin
   support.
+
+## Private dogfood workflow and role mapping
+
+The ADR 0024 code slice must prove these exact client-native workflow pairs:
+
+| Shared workflow | Claude Code | Codex CLI |
+|---|---|---|
+| `run` | `/loom:run` | `$loom-run` |
+| `research` | `/loom:research` | `$loom-research` |
+| `plan` | `/loom:plan` | `$loom-plan` |
+| `eval-plan` | `/loom:eval-plan` | `$loom-eval-plan` |
+| `develop` | `/loom:develop` | `$loom-develop` |
+| `eval-code` | `/loom:eval-code` | `$loom-eval-code` |
+| `status` | `/loom:status` | `$loom-status` |
+| `init` | `/loom:init` | `$loom-init` |
+
+The role adapter table is exactly:
+
+| Shared role | Claude Code | Codex CLI |
+|---|---|---|
+| `researcher` | `loom:researcher` | `loom-researcher` |
+| `planner` | `loom:planner` | `loom-planner` |
+| `plan-evaluator` | `loom:plan-evaluator` | `loom-plan-evaluator` |
+| `developer` | `loom:developer` | `loom-developer` |
+| `code-evaluator` | `loom:code-evaluator` | `loom-code-evaluator` |
+
+These are intended mappings. Codex behavior is pending until the exact-candidate
+dogfood evaluation passes; ChatGPT desktop and Codex IDE are outside this checkpoint.

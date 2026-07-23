@@ -1,6 +1,6 @@
 # 04 — Orchestrator
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -434,3 +434,19 @@ claim/candidate state, and resume command. Infrastructure failure is detected on
 failure, not predicted: it consumes no merits round and stops blind retries. A crash
 after remote publication is recovered by fresh remote verification and idempotent
 receipt/cleanup; if the exact published result cannot be proven, the owner decides.
+### ADR 0024 dogfood bootstrap dispatch
+
+At new-run, resume, package, and pre-intent boundaries, the root freshly reads the
+protected transition ref and configured target. It validates the full append-only
+history, bound tip, active phase, unchanged authority amendment, slice membership,
+absence of another current intent, required component states, and containment of every
+settled result in target. `bootstrap-landing`, `evaluation-workspace`, and
+`evaluation-recorder` must be `available` for these two slices; any additional
+component required by the selected route must also be available.
+
+The docs-only program amendment routes its complete Draft planning set to a distinct
+cold plan evaluator. The code-bearing dogfood slice routes exact-base/head inputs to
+correctness, tests, and security workers and then a distinct cold code evaluator.
+Changed target/state invalidates the package and requires rebuild/re-evaluation.
+Publication uses the ADR-0023 prepare-intent → target update → verify/receipt → settle
+order without force or mode fallback.

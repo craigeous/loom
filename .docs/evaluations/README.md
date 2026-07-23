@@ -17,4 +17,16 @@ reasoning — only the artifact and the authority it's judged against. Format an
 PASS/FAIL + severity rules are in
 [../spec/05-blind-evaluation.md](../spec/05-blind-evaluation.md).
 
-> None yet.
+## Current program evaluations
+
+- [macOS dogfood program amendment](macos-dogfood-program-amendment-eval.md) —
+  planner-owned frozen-spec/program set; degraded bootstrap provenance until its
+  protected publication settles.
+- [ADR 0024 ratification](0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md)
+  and [owner acceptance](0024-macos-first-dual-client-dogfood-bootstrap-amendment-acceptance.md)
+  — immutable authority for the private Apple-silicon checkpoint.
+- [ci-baseline](ci-baseline-eval.md) and
+  [review findings](ci-baseline-review-findings.md) — landed M0 evidence.
+
+All other files in this directory remain durable historical verdicts and are not
+rewritten when a later decision supersedes their subject.

@@ -1,6 +1,6 @@
 # 10 — Packaging, Compatibility & Release
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -234,6 +234,21 @@ at the proposed tag, all of these must pass:
 
 No v0.2 artifact is published until improvement milestones M0–M7 are green on the
 declared matrix. Release assets derive from that tag and are never edited afterward.
+
+## Private Apple-silicon dogfood evidence
+
+Before M1, ADR 0024 permits one private Darwin `arm64` checkpoint using exact floors
+Claude Code 2.1.216 and Codex CLI 0.144.6. In isolated client/project homes, each
+client must pass clean marketplace/plugin install, second reinstall, discovery,
+explicit workflow invocation, real cold role launch, hook/trust fixtures, absolute-
+root helper execution, inside/outside-project behavior, and clean uninstall. Evidence
+records commands, versions, roots, exits, structured-output/fixture hashes, and
+before/after inventories.
+
+This checkpoint is not release evidence. v0.2 still requires M0 through M7 and the
+full Ubuntu 22.04/24.04 x86-64 plus macOS 14+ `arm64` and Intel matrix, including
+both pinned-client install/behavior lanes, fresh-clone checks, synchronized metadata,
+and exact tested tag.
 
 Workflow-profile policy and target-branch history shape are deliberately not release
 contracts here. They require benchmark evidence and a later accepted decision.

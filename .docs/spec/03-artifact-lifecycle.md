@@ -1,6 +1,6 @@
 # 03 — Artifact Lifecycle & Status State Machine
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -344,3 +344,17 @@ the counter.
 
 Every escalation writes the per-session checkpoint before pausing and states the
 specific block, location/artifact status, preserved evidence, and exact resume action.
+### ADR 0024 dogfood slice eligibility
+
+After verified M0 settlement, the protected bootstrap state may admit exactly
+`macos-dogfood-program-amendment` and `macos-dual-client-dogfood` while those names
+remain in `allowed_slices` and required components remain available. The first is a
+planner-owned documentation/spec set judged by a cold plan evaluator; no developer
+edits frozen specs and code finders are `skipped: docs-only`. The second is
+code-bearing and requires all three cold finders plus a distinct code evaluator.
+
+Each slice independently follows Approved/Implemented-or-planning PASS, integrated
+candidate, final exact gate, `publication-intent`, non-force remote-direct update,
+fresh target verification, untracked receipt, settlement/removal, and only then claim
+release. A local status token never establishes `Landed`. These are degraded bootstrap
+records, not `loom-local-review/v1`, ADR-0022 isolation, or release conformance.

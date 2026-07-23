@@ -1,6 +1,6 @@
 # 02 — Roles
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -214,3 +214,14 @@ request `Needs Clarification`. The orchestrator records the prior status, dispat
 the authoritative clarifying role cold, commits the answer, restores the prior status,
 and resumes. Evaluators do not use clarification to gain producer conversations; they
 receive only recorded artifacts allowed by the evaluation manifest.
+## Private dual-client dogfood role proof
+
+For ADR 0024's checkpoint, the shared role contract has exactly these five client
+adapter mappings: `researcher`, `planner`, `plan-evaluator`, `developer`, and
+`code-evaluator`. The code-bearing dogfood slice mechanically validates all five and
+performs at least one real cold launch through each client.
+
+Each launch records the selected shared capability profile, client-native launch
+configuration, bounded return, and evidence that the child cannot delegate. Only the
+root orchestrator delegates. One client's success, manifest presence, or mock-only
+launch is insufficient and does not establish public Codex support.

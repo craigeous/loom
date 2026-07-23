@@ -1,6 +1,6 @@
 # 06 — Init Modes
 
-Status: Approved
+Status: Plan Review
 
 ## Authority
 
@@ -127,3 +127,15 @@ Initialization records a remote name and full target ref (normally `origin` and
 modes require an installed conforming adapter. Missing credentials/protection do not
 authorize mode fallback. Offline work may progress through `Ready to Publish`, but
 cannot be called `Landed`.
+## Isolated dogfood homes and project roots
+
+ADR 0024 dogfood tests create disposable, inventory-tracked Claude and Codex client
+homes plus a disposable project root. Clean install and second reinstall may write
+only inside those owned roots and explicitly documented client caches. Invocation
+from inside and outside the project must resolve the same intended project root,
+without writing elsewhere.
+
+Uninstall removes Loom marketplace/plugin discovery and Loom-owned residue from the
+isolated roots. Before/after filesystem inventories and relevant structured-output
+hashes are evidence. Existing owner configuration/cache is never an input, and the
+checkpoint does not alter normal Greenfield/Unaligned/Initialized semantics.

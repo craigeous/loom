@@ -6,9 +6,9 @@ them through a file-based, spec-driven process so that work survives context
 resets and is reviewed through independent cold-agent evaluation with controlled
 inputs.
 
-loom currently provides its behavioral workflow through a Claude Code **plugin**.
-The same distribution now also contains validated static Codex packaging contracts;
-Codex install and behavior support remains gated on the follow-up adapter smoke.
+loom currently provides its proven behavioral workflow through a Claude Code
+**plugin**. The same distribution contains validated static Codex packaging contracts;
+Codex CLI install and behavior remain pending the private Apple-silicon dogfood slice.
 Inside a repository, loom detects
 how aligned that repo is with loom's conventions and either bootstraps,
 migrates, or resumes work. A thin orchestrator spawns each role as a **cold
@@ -26,11 +26,11 @@ agent** on the model best suited to its job, hands off work through files in
 
 ## Status
 
-**M1 complete; M2 (init modes & gate learning) in progress.** The plugin is built,
-installed, validated, and run end-to-end (planner → independent cold-agent
-evaluation with controlled inputs → developer + gate → independent cold-agent
-evaluation with controlled inputs → finalize). The `/loom:run` orchestrator, the
-five role agents, and the playbook all exist. The authoritative design lives in
+**M0 baseline landed; private macOS dual-client dogfood is next.** The reproducible
+257-test gate and static Claude Code/Codex packaging contracts are on remote `main`.
+Claude Code behavior exists; Codex CLI behavior is not yet claimed. Accepted ADR 0024
+inserts a private Darwin `arm64` checkpoint before M1 without changing the v0.2
+Ubuntu/macOS-Intel release obligations. The authoritative design lives in
 [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); decisions are in
 [`.docs/ADR/`](.docs/ADR/README.md).
@@ -55,11 +55,19 @@ loom/                          # this repo = the loom project + its marketplace
 
 ## Install
 
+Claude Code's currently proven local plugin path is:
+
 ```sh
 /plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local)
 /plugin install loom@loom
 claude plugin validate plugins/loom --strict # optional: check Claude metadata
 ```
+
+Codex CLI installation, `$loom-*` discovery, hooks, roles, helpers, and uninstall are
+deliberately not documented as supported behavior until `macos-dual-client-dogfood`
+passes. The intended mapping is specified in
+[`07-command-surface.md`](.docs/spec/07-command-surface.md), not established by the
+static manifest alone.
 
 Then, inside any repo, run the orchestrated loop or a single role pass. Plugin
 commands are namespaced as `/loom:<name>`:
