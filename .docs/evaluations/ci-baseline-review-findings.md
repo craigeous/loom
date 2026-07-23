@@ -660,3 +660,29 @@ Correctness was clean. All worker bindings and inventories validated.
 Correctness, test-sufficiency, and security workers completed with exact bindings,
 unchanged source inventory, and zero findings. The exact shipped-script shebang
 enforcement and hard-linked outside-sentinel regression close both Round 4 findings.
+
+---
+
+# Integrated publication review — ci-baseline round 0
+
+- Evidence mode: `loom-repository-bootstrap/v1`
+- Conformance: degraded bootstrap; not `loom-local-review/v1`
+- Isolation: not established under ADR 0022
+- Run: `ci-baseline-publication-c7bd84d-06f9f45-r0`
+- Base: `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`
+- Head: `06f9f45ef4ba6f5ee838c627ffdca25544863273`
+- Head tree: `2e4a6a134a0324d50f91275be94ea0a485931e27`
+- Manifest SHA-256: `63e397580ab94dd681daf52a9d23bd0f5d82ecb966edcdb4dde9dfa36bb99cb9`
+- Input-inventory SHA-256: `270b9607e6c04a1ac3a087b026b11903a73985d101b56633022bbaae4f12a364`
+- Aggregate SHA-256: `c4c44eb32ca6a18465517e6672a9bc058a74cf78c6591a96deabbea02204ae29`
+
+Test sufficiency was clean. Correctness proposed `COR-001`: the post-merits
+allowlist edit was outside ADR 0024's permitted finalization path classes. Security
+proposed `SEC-PUB-001`: a concurrent same-user path replacement could race the
+validator's static containment check and read.
+
+The distinct evaluator confirmed `COR-001` as a BLOCKER and rejected
+`SEC-PUB-001` as outside M0's approved trust model. Both fresh exact-candidate gates
+passed 257/257 strictly sequentially, but green gates cannot override publication
+authority. Round 1 must remove the gate-policy delta and retain link validity using
+only authorized declared-plan/archive-index/evaluation/living-status paths.

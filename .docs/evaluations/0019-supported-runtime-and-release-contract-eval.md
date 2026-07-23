@@ -26,4 +26,3 @@ Codex manifest exists yet. The locally inspected clients are exactly Claude Code
 and Codex CLI 0.144.6, matching the conservative floors stated by the ADR; system Bash
 3.2 is present on the supported macOS host. The later spec/code/CI changes are honestly
 identified rather than performed in this decision pass.
-

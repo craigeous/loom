@@ -568,3 +568,29 @@ All exact bindings, authority and evidence hashes, inventories, worker outputs, 
 the clean aggregate validate. The approved plan and applicable specifications are
 satisfied, both fresh evaluator gates are complete and green, and no BLOCKER, MAJOR,
 or MINOR finding remains. The slice advances to `Ready to Publish`.
+
+---
+
+## Integrated publication evaluation — round 0
+
+Verdict: FAIL
+Round: 0
+Required next round: 1
+
+- Run: `ci-baseline-publication-c7bd84d-06f9f45-r0`
+- Base: `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`
+- Head: `06f9f45ef4ba6f5ee838c627ffdca25544863273`
+- Head tree: `2e4a6a134a0324d50f91275be94ea0a485931e27`
+- Manifest SHA-256: `63e397580ab94dd681daf52a9d23bd0f5d82ecb966edcdb4dde9dfa36bb99cb9`
+- Aggregate SHA-256: `c4c44eb32ca6a18465517e6672a9bc058a74cf78c6591a96deabbea02204ae29`
+- Evaluator verdict SHA-256: `4718559742e3571ad754456e8629a606f13d70abc397195605a2a38ca8cc19fa`
+- Hosted CI run `29970043574`: all four required cells passed 257 tests.
+- Fresh evaluator Bash 3.2 and Bash 5.3 clones each passed 257/257 with exact
+  unchanged head/tree and clean status, strictly sequentially.
+
+`COR-001` is confirmed BLOCKER: finalization changed
+`scripts/validation/relative-link-allowlist.txt`, outside ADR 0024 section 4's
+authorized post-merits path classes. `SEC-PUB-001` is rejected: M0 requires static
+repository-path containment but does not establish a same-user concurrent-writer
+security boundary. Rebuild the atomic archive with no gate-policy change and keep
+the immutable ADR link resolvable through an authorized non-active plan pointer.

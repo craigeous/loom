@@ -21,6 +21,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Archived plans
 
+- [archive/ci-baseline.md](archive/ci-baseline.md) — `Archived` —
+  M0 reproducible repository gate and static Claude Code/Codex compatibility baseline;
+  prospectively landed through the ADR-0024 exact-authority publication candidate.
+  Behavioral client installation and invocation proof remains separate and release-
+  blocking.
+
 - [archive/claude-md-slim-down-plan.md](archive/claude-md-slim-down-plan.md) — `Archived` —
   apply + enforce the Approved spec-08 § "Shape and Concision Discipline": rewrote loom's
   root `CLAUDE.md` 197 → 85 lines (collapsed 132-line Repo-layout to ~25-line one-clause

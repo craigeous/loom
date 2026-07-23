@@ -16,6 +16,17 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **Repository improvement M0 publication is the active checkpoint.** ADR 0024 passed
+  cold ratification and was explicitly accepted. Protected transition sequence 1
+  (`e2248d870857fce128568a90ee8025c58d59514d`) activates exactly
+  `macos-dogfood-program-amendment` and `macos-dual-client-dogfood`. The atomic
+  `ci-baseline` candidate is built from exact configured remote base
+  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`; its archived plan and prospective
+  landing text remain non-authoritative until remote verification, receipt, and
+  transition settlement. After settlement, plan/evaluate the program amendment, then
+  the Apple-silicon Claude Code + Codex behavioral dogfood slice. Do not claim v0.2
+  release conformance; Linux and macOS Intel remain mandatory for release.
+
 - **Post-M4: CLAUDE.md Shape and Concision Discipline — COMPLETE.** Research note
   `2026-07-03-claude-md-digest-discipline.md` (Approved) → spec 08 § "Shape and Concision
   Discipline" + spec 03 finalize-step pointer (frozen) → `claude-md-slim-down` slice landed
