@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-*(none)*
+- [macos-dogfood-program-amendment.md](macos-dogfood-program-amendment.md) — `Plan Review` —
+  synchronize the frozen specs, improvement program, canonical instructions, and
+  user-facing docs for the private Apple-silicon Claude Code + Codex dogfood checkpoint
+  while preserving the full v0.2 release matrix.
 
 ## Archived plans
 
