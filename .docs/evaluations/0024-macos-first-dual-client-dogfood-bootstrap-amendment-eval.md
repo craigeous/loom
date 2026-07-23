@@ -126,3 +126,9 @@ BLOCKERs are closed.
 This `PASS` is necessary but not sufficient for acceptance. Per ADR 0024, the owner
 must read the final proposed ADR and this verdict and explicitly accept the proposal
 before its narrowly staged authority activates.
+
+## Owner acceptance
+
+The repository owner explicitly accepted the exact Round 2 proposal on
+`2026-07-23T00:18:10Z`. The durable acceptance record is
+[0024-macos-first-dual-client-dogfood-bootstrap-amendment-acceptance.md](0024-macos-first-dual-client-dogfood-bootstrap-amendment-acceptance.md).
