@@ -3,7 +3,6 @@
 loom is a Claude Code plugin that automates a spec-driven development loop with
 five blind-reviewed roles. This file is the entry point for any agent working in
 this repo.
-
 <!-- loom:project-instructions begin schema=loom-project-instructions/v1 sha256=025e848ae610480a69d54967c9cafb87effe278464130d9cf421ca7100b2b2bf -->
 ## Loom project instructions
 
