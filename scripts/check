@@ -1,0 +1,555 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+REPOSITORY_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)
+CONTRACT="$SCRIPT_DIR/check-toolchain.json"
+CACHE="$REPOSITORY_ROOT/.check-cache"
+DOWNLOADS="$CACHE/downloads"
+CURRENT_STAGE="bootstrap"
+RUN_DIR=""
+
+cleanup_run_dir() {
+    if [ -n "$RUN_DIR" ] && [ -d "$RUN_DIR" ] && [ ! -L "$RUN_DIR" ]; then
+        rm -rf -- "$RUN_DIR"
+    fi
+}
+cleanup() {
+    status=$?
+    trap - EXIT ERR HUP INT TERM
+    cleanup_run_dir
+    exit "$status"
+}
+interrupted() {
+    status="$1"
+    trap - EXIT ERR HUP INT TERM
+    cleanup_run_dir
+    exit "$status"
+}
+failed() {
+    status=$?
+    printf 'FAILED stage %s (exit %s)\n' "$CURRENT_STAGE" "$status" >&2
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'interrupted 129' HUP
+trap 'interrupted 130' INT
+trap 'interrupted 143' TERM
+trap failed ERR
+
+stage() {
+    CURRENT_STAGE="$1"
+    printf '\n==> %s\n' "$CURRENT_STAGE"
+    if [ "${LOOM_CHECK_TEST_FAIL_STAGE:-}" = "$CURRENT_STAGE" ]; then
+        test_fail_status=${LOOM_CHECK_TEST_FAIL_STATUS:-97}
+        case "$test_fail_status" in
+        '' | *[!0-9]* | 0) return 2 ;;
+        esac
+        [ "$test_fail_status" -le 255 ] || return 2
+        return "$test_fail_status"
+    fi
+}
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || {
+        printf 'scripts/check requires %s to bootstrap pinned check tools\n' "$1" >&2
+        return 1
+    }
+}
+version_at_least() {
+    actual="$1" required="$2"
+    actual_major=${actual%%.*}
+    actual_rest=${actual#*.}
+    actual_minor=${actual_rest%%.*}
+    required_major=${required%%.*}
+    required_rest=${required#*.}
+    required_minor=${required_rest%%.*}
+    case "$actual_major:$actual_minor:$required_major:$required_minor" in
+    *[!0-9:]* | *::* | :* | *:) return 1 ;;
+    esac
+    [ "$actual_major" -gt "$required_major" ] || {
+        [ "$actual_major" -eq "$required_major" ] && [ "$actual_minor" -ge "$required_minor" ]
+    }
+}
+resolve_executable() {
+    resolver_candidate="$1"
+    resolver_hops=0
+    while [ -L "$resolver_candidate" ]; do
+        resolver_hops=$((resolver_hops + 1))
+        if [ "$resolver_hops" -gt 40 ]; then
+            printf 'selected Bash symlink chain is too deep or cyclic: %s\n' "$1" >&2
+            return 1
+        fi
+        resolver_link=$(readlink "$resolver_candidate") || return 1
+        case "$resolver_link" in
+        /*) resolver_candidate="$resolver_link" ;;
+        *) resolver_candidate="$(dirname -- "$resolver_candidate")/$resolver_link" ;;
+        esac
+        resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+        resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    done
+    resolver_dir=$(CDPATH='' cd -- "$(dirname -- "$resolver_candidate")" && pwd -P) || return 1
+    resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+    [ -f "$resolver_candidate" ] && [ ! -L "$resolver_candidate" ] && [ -x "$resolver_candidate" ] || return 1
+    printf '%s\n' "$resolver_candidate"
+}
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+secure_directory() {
+    directory="$1"
+    if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
+        printf 'unsafe cache path (symlink or non-directory): %s\n' "$directory" >&2
+        return 1
+    fi
+    if [ ! -d "$directory" ]; then
+        mkdir -m 700 "$directory"
+    fi
+    expected_owner=$(id -u)
+    case "$(uname -s)" in
+    Darwin)
+        actual_owner=$(stat -f %u "$directory")
+        actual_mode=$(stat -f %Lp "$directory")
+        ;;
+    *)
+        actual_owner=$(stat -c %u "$directory")
+        actual_mode=$(stat -c %a "$directory")
+        ;;
+    esac
+    [ "$actual_owner" = "$expected_owner" ] || {
+        printf 'unsafe cache directory owner for %s: expected %s, got %s\n' "$directory" "$expected_owner" "$actual_owner" >&2
+        return 1
+    }
+    if [ "$actual_mode" != 700 ]; then
+        chmod 700 "$directory"
+    fi
+    physical=$(CDPATH='' cd -- "$directory" && pwd -P)
+    case "$physical" in
+    "$REPOSITORY_ROOT"/.check-cache | "$REPOSITORY_ROOT"/.check-cache/*) ;;
+    *)
+        printf 'cache path escapes repository physically: %s\n' "$directory" >&2
+        return 1
+        ;;
+    esac
+}
+secure_cache_file() {
+    candidate="$1"
+    expected_owner=$(id -u)
+    case "$(uname -s)" in
+    Darwin)
+        actual_owner=$(stat -f %u "$candidate")
+        actual_mode=$(stat -f %Lp "$candidate")
+        actual_links=$(stat -f %l "$candidate")
+        ;;
+    *)
+        actual_owner=$(stat -c %u "$candidate")
+        actual_mode=$(stat -c %a "$candidate")
+        actual_links=$(stat -c %h "$candidate")
+        ;;
+    esac
+    [ "$actual_owner" = "$expected_owner" ] || {
+        printf 'unsafe cached download owner for %s: expected %s, got %s\n' "$candidate" "$expected_owner" "$actual_owner" >&2
+        return 1
+    }
+    [ "$actual_links" = 1 ] || {
+        printf 'unsafe cached download link count for %s: expected 1, got %s\n' "$candidate" "$actual_links" >&2
+        return 1
+    }
+    [ "$actual_mode" = 600 ] || {
+        printf 'unsafe cached download mode for %s: expected 600, got %s\n' "$candidate" "$actual_mode" >&2
+        return 1
+    }
+}
+secure_regular_file() {
+    candidate="$1"
+    relative=${candidate#"$RUN_DIR"/}
+    case "$relative" in
+    "$candidate" | ../* | */../* | /*)
+        printf 'tool path escapes private extraction root: %s\n' "$candidate" >&2
+        return 1
+        ;;
+    esac
+    cursor="$RUN_DIR"
+    remaining=$relative
+    while :; do
+        component=${remaining%%/*}
+        cursor="$cursor/$component"
+        [ ! -L "$cursor" ] || {
+            printf 'tool path contains symlink: %s\n' "$candidate" >&2
+            return 1
+        }
+        [ "$remaining" = "$component" ] && break
+        remaining=${remaining#*/}
+    done
+    [ -f "$candidate" ] || {
+        printf 'tool path is not a regular file: %s\n' "$candidate" >&2
+        return 1
+    }
+    physical_dir=$(CDPATH='' cd -- "$(dirname -- "$candidate")" && pwd -P)
+    case "$physical_dir/$(basename -- "$candidate")" in
+    "$RUN_DIR"/*) ;;
+    *)
+        printf 'tool path escapes private extraction root physically: %s\n' "$candidate" >&2
+        return 1
+        ;;
+    esac
+}
+download_field() {
+    tool="$1" platform="$2" field="$3"
+    jq -er --arg tool "$tool" --arg platform "$platform" --arg field "$field" \
+        '.downloads[] | select(.tool == $tool and (.platform == $platform or .platform == "all")) | .[$field]' "$CONTRACT"
+}
+fetch() {
+    tool="$1" platform="$2"
+    url=$(download_field "$tool" "$platform" url)
+    expected=$(download_field "$tool" "$platform" sha256)
+    destination="$DOWNLOADS/${tool}-${platform}"
+    if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+        printf 'unsafe cached download target: %s\n' "$destination" >&2
+        return 1
+    fi
+    if [ -f "$destination" ]; then
+        secure_cache_file "$destination" || return 1
+        snapshot="$RUN_DIR/downloads/${tool}-${platform}.snapshot"
+        (umask 077 && cp "$destination" "$snapshot")
+        [ ! -L "$snapshot" ] && [ -f "$snapshot" ] || {
+            printf 'cannot create private cache snapshot: %s\n' "$snapshot" >&2
+            return 1
+        }
+        chmod 600 "$snapshot"
+        actual=$(sha256 "$snapshot")
+        [ "$actual" = "$expected" ] || {
+            printf 'private snapshot digest mismatch for %s: expected %s, got %s\n' "$destination" "$expected" "$actual" >&2
+            return 1
+        }
+        printf '%s' "$snapshot"
+        return
+    fi
+    temporary="$RUN_DIR/downloads/${tool}-${platform}.download"
+    printf 'Downloading pinned %s for %s\n' "$tool" "$platform" >&2
+    (umask 077 && curl -fL --retry 3 --proto '=https' -o "$temporary" "$url")
+    actual=$(sha256 "$temporary")
+    [ "$actual" = "$expected" ] || {
+        printf '%s digest mismatch: expected %s, got %s\n' "$temporary" "$expected" "$actual" >&2
+        return 1
+    }
+    # Publish a separate inode: the authenticated private download remains stable
+    # even if another process rewrites the shared cache after publication.
+    publication="$RUN_DIR/downloads/${tool}-${platform}.publish"
+    (umask 077 && cp "$temporary" "$publication")
+    chmod 600 "$publication"
+    if ! ln "$publication" "$destination" 2>/dev/null; then
+        [ -f "$destination" ] && [ ! -L "$destination" ] && [ "$(sha256 "$destination")" = "$expected" ] || {
+            printf 'cannot publish authenticated download safely: %s\n' "$destination" >&2
+            return 1
+        }
+    fi
+    printf '%s' "$temporary"
+}
+validate_archive_names() {
+    archive="$1"
+    tar -tf "$archive" | awk '
+      /^\// { bad=1 }
+      { n=split($0, part, "/"); for (i=1; i<=n; i++) if (part[i] == "..") bad=1 }
+      END { exit bad ? 1 : 0 }
+    ' || {
+        printf 'archive contains an escaping member: %s\n' "$archive" >&2
+        return 1
+    }
+}
+extract_archive() {
+    archive="$1" format="$2"
+    validate_archive_names "$archive"
+    case "$format" in
+    tar.xz) tar -xJf "$archive" -C "$TOOLS" ;;
+    tar.gz) tar -xzf "$archive" -C "$TOOLS" ;;
+    *)
+        printf 'unsupported archive format: %s\n' "$format" >&2
+        return 1
+        ;;
+    esac
+}
+stage "toolchain contract and pinned digests"
+for command_name in bash curl git id jq stat tar awk; do require_command "$command_name"; done
+jq -e '
+  . == {
+    contract:"loom-check-toolchain/v1", productVersion:"0.2.0",
+    tools:{shfmt:"3.13.1",shellcheck:"0.11.0",bats:"1.13.0",claude:"2.1.216",node:"22.17.0",ajv:"8.17.1","ajv-formats":"3.0.1",yaml:"2.8.0","markdown-it":"14.1.0","github-slugger":"2.0.0"},
+    runtimeFloors:{bash:"3.2",git:"2.34",jq:"1.6"},
+    actions:{checkout:"11bd71901bbe5b1630ceea73d27597364c9af683"},
+    packageLockSha256:.packageLockSha256, workflow:.workflow, runners:.runners, downloads:.downloads, vendored:.vendored
+  } and
+  .workflow == {
+    path:".github/workflows/check.yml",
+    sha256:"e2a7e4a93afc811065c536d62e704d1e987341210ee245bef1ceb4d82b4b5c76",
+    checkout:{uses:"actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",ref:"${{ github.event.pull_request.head.sha || github.sha }}",fetchDepth:0,persistCredentials:false},
+    exactHead:{environment:"${{ github.event.pull_request.head.sha || github.sha }}",read:"actual_head=$(git rev-parse HEAD)",assertion:"test \"$actual_head\" = \"$EXPECTED_HEAD\"",log:"printf \u0027Exact HEAD: %s\\n\u0027 \"$actual_head\"",resolvedShell:"physical_shell=$(resolve_executable \"$SELECTED_BASH\")",gate:"LOOM_TEST_BASH=\"$physical_shell\" LOOM_EXPECTED_BASH_VERSION=\"$EXPECTED_BASH_REGEX\" \"$physical_shell\" scripts/check"}
+  } and
+  .runners == [
+    {label:"ubuntu-22.04",os:"Linux",architecture:"x86_64",release:"22.04",shell:"/usr/bin/bash",versionRegex:"^5\\."},
+    {label:"ubuntu-24.04",os:"Linux",architecture:"x86_64",release:"24.04",shell:"/usr/bin/bash",versionRegex:"^5\\."},
+    {label:"macos-14",os:"Darwin",architecture:"arm64",release:"14",shell:"/bin/bash",versionRegex:"^3\\.2\\.57"},
+    {label:"macos-15-intel",os:"Darwin",architecture:"x86_64",release:"15",shell:"/bin/bash",versionRegex:"^3\\.2\\.57"}
+  ] and
+  .downloads == [
+    {tool:"shfmt",platform:"darwin-arm64",archive:"binary",url:"https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_arm64",sha256:"9680526be4a66ea1ffe988ed08af58e1400fe1e4f4aef5bd88b20bb9b3da33f8"},
+    {tool:"shfmt",platform:"darwin-x86_64",archive:"binary",url:"https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_amd64",sha256:"6feedafc72915794163114f512348e2437d080d0047ef8b8fa2ec63b575f12af"},
+    {tool:"shfmt",platform:"linux-x86_64",archive:"binary",url:"https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64",sha256:"fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1"},
+    {tool:"shellcheck",platform:"darwin-arm64",archive:"tar.xz",url:"https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz",sha256:"56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"},
+    {tool:"shellcheck",platform:"darwin-x86_64",archive:"tar.xz",url:"https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.xz",sha256:"3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6"},
+    {tool:"shellcheck",platform:"linux-x86_64",archive:"tar.xz",url:"https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz",sha256:"8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"},
+    {tool:"node",platform:"darwin-arm64",archive:"tar.gz",url:"https://nodejs.org/dist/v22.17.0/node-v22.17.0-darwin-arm64.tar.gz",sha256:"615dda58b5fb41fad2be43940b6398ca56554cbe05800953afadc724729cb09e"},
+    {tool:"node",platform:"darwin-x86_64",archive:"tar.gz",url:"https://nodejs.org/dist/v22.17.0/node-v22.17.0-darwin-x64.tar.gz",sha256:"c39c8ec3cdadedfcc75de0cb3305df95ae2aecebc5db8d68a9b67bd74616d2ad"},
+    {tool:"node",platform:"linux-x86_64",archive:"tar.gz",url:"https://nodejs.org/dist/v22.17.0/node-v22.17.0-linux-x64.tar.gz",sha256:"0fa01328a0f3d10800623f7107fbcd654a60ec178fab1ef5b9779e94e0419e1a"},
+    {tool:"bats",platform:"all",archive:"tar.gz",url:"https://github.com/bats-core/bats-core/archive/refs/tags/v1.13.0.tar.gz",sha256:"a85e12b8828271a152b338ca8109aa23493b57950987c8e6dff97ba492772ff3"}
+  ] and
+  ([.vendored[].path] | sort) == ([
+    "scripts/schemas/claude-plugin-2.1.216.schema.json","scripts/schemas/claude-marketplace-2.1.216.schema.json",
+    "scripts/schemas/codex-plugin-0.144.6.schema.json","scripts/schemas/codex-marketplace-0.144.6.schema.json",
+    "scripts/schemas/command-frontmatter-v1.schema.json","scripts/schemas/agent-frontmatter-v1.schema.json","scripts/schemas/skill-frontmatter-v1.schema.json",
+    "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json","plugins/loom/schemas/loom-installed-root-binding-v1.schema.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json","plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json","plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json","plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json"
+  ] | sort) and
+  ([.vendored[] | has("path") and has("purpose") and has("version") and has("kind") and has("provenance") and has("retrieved") and has("sha256") and
+    (.purpose | type == "string" and length > 0) and (.version | type == "string" and length > 0) and
+    (.kind == "upstream" or .kind == "derived-local") and (.provenance | type == "string" and length > 0) and
+    (.retrieved | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and (.sha256 | test("^[0-9a-f]{64}$"))] | all)
+' "$CONTRACT" >/dev/null
+workflow_path=$(jq -r .workflow.path "$CONTRACT")
+[ "$workflow_path" = ".github/workflows/check.yml" ] || exit 1
+[ "$(sha256 "$REPOSITORY_ROOT/$workflow_path")" = "$(jq -r .workflow.sha256 "$CONTRACT")" ] || {
+    printf 'workflow exact-contract digest drift: %s\n' "$workflow_path" >&2
+    exit 1
+}
+[ "$(sha256 "$SCRIPT_DIR/check-tools/package-lock.json")" = "$(jq -r .packageLockSha256 "$CONTRACT")" ] || {
+    printf 'package-lock digest drift\n' >&2
+    exit 1
+}
+while IFS=$'\t' read -r expected vendored; do
+    candidate="$REPOSITORY_ROOT/$vendored"
+    [ ! -L "$candidate" ] && [ -f "$candidate" ] || {
+        printf 'missing or symlinked pinned file: %s\n' "$vendored" >&2
+        exit 1
+    }
+    physical_parent=$(CDPATH='' cd -- "$(dirname -- "$candidate")" && pwd -P)
+    case "$physical_parent/$(basename -- "$candidate")" in
+    "$REPOSITORY_ROOT"/*) ;;
+    *)
+        printf 'pinned file escapes repository physically: %s\n' "$vendored" >&2
+        exit 1
+        ;;
+    esac
+    [ "$(sha256 "$candidate")" = "$expected" ] || {
+        printf 'pinned file digest drift: %s\n' "$vendored" >&2
+        exit 1
+    }
+done < <(jq -r '.vendored[] | [.sha256, .path] | @tsv' "$CONTRACT")
+
+for required_bash_script in \
+    plugins/loom/bin/loom-coord \
+    plugins/loom/hooks/git-identity-guard.sh \
+    plugins/loom/hooks/precompact-write-ahead-backstop.sh; do
+    required_bash_path="$REPOSITORY_ROOT/$required_bash_script"
+    first_line=
+    IFS= read -r first_line <"$required_bash_path" || :
+    [ "${first_line:-}" = '#!/usr/bin/env bash' ] || {
+        printf 'required Bash shebang drift: %s must start exactly with #!/usr/bin/env bash\n' "$required_bash_script" >&2
+        exit 1
+    }
+done
+
+if [ "${LOOM_CHECK_CONTRACT_ONLY:-0}" = 1 ]; then
+    printf '\nToolchain contract check passed\n'
+    exit 0
+fi
+
+secure_directory "$CACHE"
+secure_directory "$DOWNLOADS"
+RUN_DIR=$(mktemp -d "$CACHE/run.XXXXXX")
+chmod 700 "$RUN_DIR"
+mkdir -m 700 "$RUN_DIR/downloads" "$RUN_DIR/tools"
+TOOLS="$RUN_DIR/tools"
+if [ -n "${LOOM_CHECK_TEST_PAUSE:-}" ]; then
+    printf '%s\n' "$RUN_DIR" >"$LOOM_CHECK_TEST_PAUSE.run-dir"
+    : >"$LOOM_CHECK_TEST_PAUSE.ready"
+    while [ ! -e "$LOOM_CHECK_TEST_PAUSE.release" ]; do sleep 1; done
+fi
+
+bash_version=${BASH_VERSION%%(*}
+git_version=$(git --version | awk '{print $3}')
+jq_version=$(jq --version | sed 's/^jq-//')
+version_at_least "$bash_version" "$(jq -r .runtimeFloors.bash "$CONTRACT")" || {
+    printf 'Bash %s is below required 3.2\n' "$bash_version" >&2
+    exit 1
+}
+version_at_least "$git_version" "$(jq -r .runtimeFloors.git "$CONTRACT")" || {
+    printf 'Git %s is below required 2.34\n' "$git_version" >&2
+    exit 1
+}
+version_at_least "$jq_version" "$(jq -r .runtimeFloors.jq "$CONTRACT")" || {
+    printf 'jq %s is below required 1.6\n' "$jq_version" >&2
+    exit 1
+}
+
+running_bash=$(resolve_executable "$BASH") || {
+    printf 'running Bash cannot be resolved to a regular executable: %s\n' "$BASH" >&2
+    exit 1
+}
+selected_bash=${LOOM_TEST_BASH:-$running_bash}
+case "$selected_bash" in
+/*) ;;
+*)
+    printf 'LOOM_TEST_BASH must be absolute\n' >&2
+    exit 1
+    ;;
+esac
+[ -x "$selected_bash" ] || {
+    printf 'LOOM_TEST_BASH is not executable: %s\n' "$selected_bash" >&2
+    exit 1
+}
+selected_bash=$(resolve_executable "$selected_bash") || {
+    printf 'LOOM_TEST_BASH cannot be resolved to a regular executable: %s\n' "${LOOM_TEST_BASH:-$running_bash}" >&2
+    exit 1
+}
+# shellcheck disable=SC2016
+selected_version=$("$selected_bash" -c 'printf %s "${BASH_VERSION%%(*}"')
+version_at_least "$selected_version" "$(jq -r .runtimeFloors.bash "$CONTRACT")" || {
+    printf 'selected LOOM_TEST_BASH %s is below required 3.2\n' "$selected_version" >&2
+    exit 1
+}
+expected_bash=${LOOM_EXPECTED_BASH_VERSION:-^${selected_version%%.*}\.}
+
+if [ "${LOOM_CHECK_BASH_ONLY:-0}" = 1 ]; then
+    printf '\nSelected Bash floor check passed\n'
+    exit 0
+fi
+
+case "$(uname -s):$(uname -m)" in
+Darwin:arm64)
+    PLATFORM=darwin-arm64
+    NODE_DIR=node-v22.17.0-darwin-arm64
+    ;;
+Darwin:x86_64)
+    PLATFORM=darwin-x86_64
+    NODE_DIR=node-v22.17.0-darwin-x64
+    ;;
+Linux:x86_64)
+    PLATFORM=linux-x86_64
+    NODE_DIR=node-v22.17.0-linux-x64
+    ;;
+*)
+    printf 'Unsupported check host: %s %s\n' "$(uname -s)" "$(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+shfmt_archive=$(fetch shfmt "$PLATFORM")
+shellcheck_archive=$(fetch shellcheck "$PLATFORM")
+node_archive=$(fetch node "$PLATFORM")
+bats_archive=$(fetch bats "$PLATFORM")
+mkdir -m 700 "$TOOLS/bin"
+cp "$shfmt_archive" "$TOOLS/bin/shfmt"
+chmod 700 "$TOOLS/bin/shfmt"
+extract_archive "$shellcheck_archive" tar.xz
+extract_archive "$node_archive" tar.gz
+extract_archive "$bats_archive" tar.gz
+SHFMT="$TOOLS/bin/shfmt"
+SHELLCHECK="$TOOLS/shellcheck-v0.11.0/shellcheck"
+NODE="$TOOLS/$NODE_DIR/bin/node"
+NPM_CLI="$TOOLS/$NODE_DIR/lib/node_modules/npm/bin/npm-cli.js"
+BATS="$TOOLS/bats-core-1.13.0/bin/bats"
+for consumed_tool in "$SHFMT" "$SHELLCHECK" "$NODE" "$NPM_CLI" "$BATS"; do secure_regular_file "$consumed_tool"; done
+[ "$("$SHFMT" --version | sed 's/^v//')" = "3.13.1" ]
+[ "$("$SHELLCHECK" --version | awk '/version:/ {print $2}')" = "0.11.0" ]
+[ "$("$NODE" --version)" = "v22.17.0" ]
+[ "$("$NODE" "$NPM_CLI" --version)" = "10.9.2" ]
+BATS_PROBE_DIR="$RUN_DIR/bats-probe/bin"
+mkdir -m 700 "$RUN_DIR/bats-probe"
+mkdir -m 700 "$BATS_PROBE_DIR"
+ln -s "$selected_bash" "$BATS_PROBE_DIR/bash"
+[ "$(PATH="$BATS_PROBE_DIR:$PATH" "$selected_bash" "$BATS" --version 2>/dev/null || true)" = "Bats 1.13.0" ]
+
+if [ "${LOOM_CHECK_PROVISION_ONLY:-0}" = 1 ]; then
+    printf '\nFresh authenticated tool provisioning passed\n'
+    exit 0
+fi
+
+stage "locked JavaScript dependencies and metadata validation"
+if [ -L "$SCRIPT_DIR/check-tools/node_modules" ]; then
+    printf 'refusing symlinked JavaScript dependency directory\n' >&2
+    exit 1
+fi
+PATH="$TOOLS/$NODE_DIR/bin:$PATH" "$NODE" "$NPM_CLI" ci --prefix "$SCRIPT_DIR/check-tools" --ignore-scripts --no-audit --no-fund
+if [ ! -e "$SCRIPT_DIR/node_modules" ]; then ln -s check-tools/node_modules "$SCRIPT_DIR/node_modules"; fi
+[ -L "$SCRIPT_DIR/node_modules" ] && [ "$(readlink "$SCRIPT_DIR/node_modules")" = "check-tools/node_modules" ]
+export LOOM_NODE="$NODE"
+"$NODE" "$SCRIPT_DIR/validate-repository.mjs" --root "$REPOSITORY_ROOT" --metadata
+
+script_files=()
+while IFS= read -r -d '' tracked; do script_files+=("$REPOSITORY_ROOT/$tracked"); done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.sh')
+while IFS= read -r -d '' record; do
+    metadata=${record%%$'\t'*}
+    tracked=${record#*$'\t'}
+    mode=${metadata%% *}
+    base=${tracked##*/}
+    case "$mode:$base" in
+    100755:*.*) ;;
+    100755:*)
+        if [ -f "$REPOSITORY_ROOT/$tracked" ] && head -1 "$REPOSITORY_ROOT/$tracked" | grep -q 'bash$'; then script_files+=("$REPOSITORY_ROOT/$tracked"); fi
+        ;;
+    esac
+done < <(git -C "$REPOSITORY_ROOT" ls-files --stage -z)
+for required_script in "$SCRIPT_DIR/check" "$SCRIPT_DIR/run-bats-under" "$REPOSITORY_ROOT/plugins/loom/bin/loom-coord"; do
+    found=false
+    for candidate in "${script_files[@]}"; do [ "$candidate" = "$required_script" ] && found=true; done
+    $found || script_files+=("$required_script")
+done
+
+stage "shfmt"
+"$SHFMT" -i 4 -d -ln bash "${script_files[@]}"
+
+stage "ShellCheck"
+"$SHELLCHECK" -s bash "${script_files[@]}"
+
+stage "Bash syntax"
+"$selected_bash" -n "${script_files[@]}"
+
+stage "Bats tests"
+test_files=()
+while IFS= read -r -d '' tracked; do test_files+=("$REPOSITORY_ROOT/$tracked"); done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.bats')
+for required_test in "$SCRIPT_DIR/tests/shell-runtime.bats" "$SCRIPT_DIR/tests/repository-validation.bats"; do
+    found=false
+    for candidate in "${test_files[@]}"; do [ "$candidate" = "$required_test" ] && found=true; done
+    $found || test_files+=("$required_test")
+done
+test_count=$("$selected_bash" "$BATS" --count "${test_files[@]}")
+printf 'Discovered %s Bats tests\n' "$test_count"
+"$selected_bash" "$SCRIPT_DIR/run-bats-under" "$selected_bash" "$expected_bash" "$BATS" "${test_files[@]}"
+
+stage "relative links"
+"$NODE" "$SCRIPT_DIR/validate-repository.mjs" --root "$REPOSITORY_ROOT" --links
+
+stage "Claude strict plugin validation"
+CLAUDE_WRAPPER="$SCRIPT_DIR/check-tools/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs"
+[ ! -L "$CLAUDE_WRAPPER" ] && [ -f "$CLAUDE_WRAPPER" ] || {
+    printf 'locked Claude wrapper is missing or symlinked\n' >&2
+    exit 1
+}
+[ "$("$NODE" "$CLAUDE_WRAPPER" --version | awk '{print $1}')" = "2.1.216" ]
+"$NODE" "$CLAUDE_WRAPPER" plugin validate "$REPOSITORY_ROOT/plugins/loom" --strict
+
+stage "diff whitespace"
+git -C "$REPOSITORY_ROOT" diff --check
+git -C "$REPOSITORY_ROOT" diff --cached --check
+if [ -n "${LOOM_DIFF_BASE:-}" ]; then
+    git -C "$REPOSITORY_ROOT" cat-file -e "$LOOM_DIFF_BASE^{commit}"
+    git -C "$REPOSITORY_ROOT" diff --check "$LOOM_DIFF_BASE...HEAD"
+fi
+if [ -n "${LOOM_CHECK_TEST_SUCCESS_MARKER:-}" ]; then : >"$LOOM_CHECK_TEST_SUCCESS_MARKER"; fi
+printf '\nAll checks passed\n'

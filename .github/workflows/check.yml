@@ -1,0 +1,129 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            host: Linux
+            architecture: x86_64
+            release: "22.04"
+            shell: /usr/bin/bash
+            bash_regex: '^5\.'
+          - runner: ubuntu-24.04
+            host: Linux
+            architecture: x86_64
+            release: "24.04"
+            shell: /usr/bin/bash
+            bash_regex: '^5\.'
+          - runner: macos-14
+            host: Darwin
+            architecture: arm64
+            release: "14"
+            shell: /bin/bash
+            bash_regex: '^3\.2\.57'
+          - runner: macos-15-intel
+            host: Darwin
+            architecture: x86_64
+            release: "15"
+            shell: /bin/bash
+            bash_regex: '^3\.2\.57'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scrub Git credentials before repository-controlled code
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r key; do
+            git config --local --unset-all "$key"
+          done < <(git config --local --name-only --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$' || true)
+          if git config --local --show-origin --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$'; then
+            echo 'credential-bearing local Git configuration remains' >&2
+            exit 1
+          fi
+
+      - name: Assert runner and run the pinned gate
+        env:
+          EXPECTED_HOST: ${{ matrix.host }}
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+          EXPECTED_RELEASE: ${{ matrix.release }}
+          SELECTED_BASH: ${{ matrix.shell }}
+          EXPECTED_BASH_REGEX: ${{ matrix.bash_regex }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HOME: ${{ runner.temp }}/loom-check-home
+          GIT_CONFIG_NOSYSTEM: "1"
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_ASKPASS: /bin/false
+          SSH_ASKPASS: /bin/false
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset GH_TOKEN GITHUB_TOKEN GIT_PASSWORD GIT_USERNAME
+          mkdir -m 700 -p "$HOME"
+          if git config --show-origin --get-regexp '^(http\..*\.extraheader|credential\..*|credential\.helper)$'; then
+            echo 'credential-bearing Git configuration is visible to the gate' >&2
+            exit 1
+          fi
+          actual_head=$(git rev-parse HEAD)
+          test "$actual_head" = "$EXPECTED_HEAD"
+          printf 'Exact HEAD: %s\n' "$actual_head"
+          test "$(uname -s)" = "$EXPECTED_HOST"
+          test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          case "$EXPECTED_HOST" in
+            Linux) . /etc/os-release; test "$VERSION_ID" = "$EXPECTED_RELEASE" ;;
+            Darwin) test "$(sw_vers -productVersion | cut -d. -f1)" = "$EXPECTED_RELEASE" ;;
+          esac
+          test -x "$SELECTED_BASH"
+          resolve_executable() {
+            resolver_candidate="$1"
+            resolver_hops=0
+            while test -L "$resolver_candidate"; do
+              resolver_hops=$((resolver_hops + 1))
+              test "$resolver_hops" -le 40
+              resolver_link=$(readlink "$resolver_candidate")
+              case "$resolver_link" in
+                /*) resolver_candidate="$resolver_link" ;;
+                *) resolver_candidate="$(dirname -- "$resolver_candidate")/$resolver_link" ;;
+              esac
+              resolver_dir=$(CDPATH= cd -- "$(dirname -- "$resolver_candidate")" && pwd -P)
+              resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+            done
+            resolver_dir=$(CDPATH= cd -- "$(dirname -- "$resolver_candidate")" && pwd -P)
+            resolver_candidate="$resolver_dir/$(basename -- "$resolver_candidate")"
+            test -f "$resolver_candidate" && test ! -L "$resolver_candidate" && test -x "$resolver_candidate"
+            printf '%s\n' "$resolver_candidate"
+          }
+          physical_shell=$(resolve_executable "$SELECTED_BASH")
+          test "$physical_shell" = "$SELECTED_BASH"
+          actual_version=$($physical_shell -c 'printf %s "$BASH_VERSION"')
+          [[ "$actual_version" =~ $EXPECTED_BASH_REGEX ]]
+          printf 'Host: %s %s %s; shell: %s (%s)\n' "$EXPECTED_HOST" "$EXPECTED_ARCHITECTURE" "$EXPECTED_RELEASE" "$physical_shell" "$actual_version"
+          if test "$EVENT_NAME" = pull_request; then LOOM_DIFF_BASE="$PR_BASE"; else LOOM_DIFF_BASE="$PUSH_BASE"; fi
+          if test -z "$LOOM_DIFF_BASE" || test "$LOOM_DIFF_BASE" = 0000000000000000000000000000000000000000; then LOOM_DIFF_BASE=$(git rev-parse HEAD^); fi
+          git cat-file -e "$LOOM_DIFF_BASE^{commit}"
+          export LOOM_DIFF_BASE
+          LOOM_TEST_BASH="$physical_shell" LOOM_EXPECTED_BASH_VERSION="$EXPECTED_BASH_REGEX" "$physical_shell" scripts/check

@@ -1,0 +1,11 @@
+{
+  "name": "loom",
+  "version": "0.2.0",
+  "description": "Spec-driven dev loop with five roles and independent cold-agent evaluation with controlled inputs",
+  "author": { "name": "Craig", "email": "craigeous@gmail.com" },
+  "homepage": "https://github.com/craigeous/loom",
+  "repository": "https://github.com/craigeous/loom",
+  "license": "MIT",
+  "keywords": ["spec-driven", "agents", "orchestration", "code-review", "workflow"],
+  "skills": "./skills/"
+}

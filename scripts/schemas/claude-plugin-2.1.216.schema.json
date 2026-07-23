@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/scripts/schemas/claude-plugin-2.1.216.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["name", "version", "description", "author", "homepage", "repository", "license", "keywords"],
+  "properties": {
+    "name": { "const": "loom" }, "version": { "type": "string", "pattern": "^0\\.2\\.0$" }, "description": { "type": "string", "minLength": 1 },
+    "author": { "type": "object", "additionalProperties": false, "required": ["name", "email"], "properties": { "name": { "type": "string", "minLength": 1 }, "email": { "type": "string", "minLength": 3 } } },
+    "homepage": { "type": "string", "format": "uri" }, "repository": { "type": "string", "format": "uri" }, "license": { "const": "MIT" },
+    "keywords": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+  }
+}

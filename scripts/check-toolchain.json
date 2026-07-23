@@ -1,0 +1,65 @@
+{
+  "contract": "loom-check-toolchain/v1",
+  "productVersion": "0.2.0",
+  "tools": {
+    "shfmt": "3.13.1", "shellcheck": "0.11.0", "bats": "1.13.0", "claude": "2.1.216", "node": "22.17.0",
+    "ajv": "8.17.1", "ajv-formats": "3.0.1", "yaml": "2.8.0", "markdown-it": "14.1.0", "github-slugger": "2.0.0"
+  },
+  "runtimeFloors": { "bash": "3.2", "git": "2.34", "jq": "1.6" },
+  "actions": { "checkout": "11bd71901bbe5b1630ceea73d27597364c9af683" },
+  "packageLockSha256": "a3e23f973383d493c006f9ef8676296ba36f75850f0695a4f6d88489d321b327",
+  "workflow": {
+    "path": ".github/workflows/check.yml",
+    "sha256": "e2a7e4a93afc811065c536d62e704d1e987341210ee245bef1ceb4d82b4b5c76",
+    "checkout": {
+      "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+      "ref": "${{ github.event.pull_request.head.sha || github.sha }}",
+      "fetchDepth": 0,
+      "persistCredentials": false
+    },
+    "exactHead": {
+      "environment": "${{ github.event.pull_request.head.sha || github.sha }}",
+      "read": "actual_head=$(git rev-parse HEAD)",
+      "assertion": "test \"$actual_head\" = \"$EXPECTED_HEAD\"",
+      "log": "printf 'Exact HEAD: %s\\n' \"$actual_head\"",
+      "resolvedShell": "physical_shell=$(resolve_executable \"$SELECTED_BASH\")",
+      "gate": "LOOM_TEST_BASH=\"$physical_shell\" LOOM_EXPECTED_BASH_VERSION=\"$EXPECTED_BASH_REGEX\" \"$physical_shell\" scripts/check"
+    }
+  },
+  "runners": [
+    { "label": "ubuntu-22.04", "os": "Linux", "architecture": "x86_64", "release": "22.04", "shell": "/usr/bin/bash", "versionRegex": "^5\\." },
+    { "label": "ubuntu-24.04", "os": "Linux", "architecture": "x86_64", "release": "24.04", "shell": "/usr/bin/bash", "versionRegex": "^5\\." },
+    { "label": "macos-14", "os": "Darwin", "architecture": "arm64", "release": "14", "shell": "/bin/bash", "versionRegex": "^3\\.2\\.57" },
+    { "label": "macos-15-intel", "os": "Darwin", "architecture": "x86_64", "release": "15", "shell": "/bin/bash", "versionRegex": "^3\\.2\\.57" }
+  ],
+  "downloads": [
+    { "tool": "shfmt", "platform": "darwin-arm64", "archive": "binary", "url": "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_arm64", "sha256": "9680526be4a66ea1ffe988ed08af58e1400fe1e4f4aef5bd88b20bb9b3da33f8" },
+    { "tool": "shfmt", "platform": "darwin-x86_64", "archive": "binary", "url": "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_amd64", "sha256": "6feedafc72915794163114f512348e2437d080d0047ef8b8fa2ec63b575f12af" },
+    { "tool": "shfmt", "platform": "linux-x86_64", "archive": "binary", "url": "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64", "sha256": "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1" },
+    { "tool": "shellcheck", "platform": "darwin-arm64", "archive": "tar.xz", "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz", "sha256": "56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79" },
+    { "tool": "shellcheck", "platform": "darwin-x86_64", "archive": "tar.xz", "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.xz", "sha256": "3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6" },
+    { "tool": "shellcheck", "platform": "linux-x86_64", "archive": "tar.xz", "url": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz", "sha256": "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198" },
+    { "tool": "node", "platform": "darwin-arm64", "archive": "tar.gz", "url": "https://nodejs.org/dist/v22.17.0/node-v22.17.0-darwin-arm64.tar.gz", "sha256": "615dda58b5fb41fad2be43940b6398ca56554cbe05800953afadc724729cb09e" },
+    { "tool": "node", "platform": "darwin-x86_64", "archive": "tar.gz", "url": "https://nodejs.org/dist/v22.17.0/node-v22.17.0-darwin-x64.tar.gz", "sha256": "c39c8ec3cdadedfcc75de0cb3305df95ae2aecebc5db8d68a9b67bd74616d2ad" },
+    { "tool": "node", "platform": "linux-x86_64", "archive": "tar.gz", "url": "https://nodejs.org/dist/v22.17.0/node-v22.17.0-linux-x64.tar.gz", "sha256": "0fa01328a0f3d10800623f7107fbcd654a60ec178fab1ef5b9779e94e0419e1a" },
+    { "tool": "bats", "platform": "all", "archive": "tar.gz", "url": "https://github.com/bats-core/bats-core/archive/refs/tags/v1.13.0.tar.gz", "sha256": "a85e12b8828271a152b338ca8109aa23493b57950987c8e6dff97ba492772ff3" }
+  ],
+  "vendored": [
+    { "path": "scripts/schemas/claude-plugin-2.1.216.schema.json", "purpose": "Claude manifest validation", "version": "Claude Code 2.1.216", "kind": "derived-local", "provenance": "claude plugin validate --strict observed contract", "retrieved": "2026-07-21", "sha256": "e5b7772241f8271b625a91de75b91b51f2e5672b9d81883511c95975adb3a9ce" },
+    { "path": "scripts/schemas/claude-marketplace-2.1.216.schema.json", "purpose": "Claude catalog validation", "version": "Claude Code 2.1.216", "kind": "derived-local", "provenance": "https://docs.anthropic.com/en/docs/claude-code/plugins", "retrieved": "2026-07-21", "sha256": "e0ff1023d895126d2f4b57be36f199d7060a0eaf6db5cc5e06d4e90e5339d3aa" },
+    { "path": "scripts/schemas/codex-plugin-0.144.6.schema.json", "purpose": "Codex manifest validation", "version": "Codex CLI 0.144.6", "kind": "derived-local", "provenance": "Codex 0.144.6 installed manifest observations", "retrieved": "2026-07-21", "sha256": "c8c4f0eb8f2048ec58c0b2f1ef01a6025ee697cf066be1ed453e950764131c8a" },
+    { "path": "scripts/schemas/codex-marketplace-0.144.6.schema.json", "purpose": "Codex catalog validation", "version": "Codex CLI 0.144.6", "kind": "derived-local", "provenance": "https://developers.openai.com/codex/plugins", "retrieved": "2026-07-21", "sha256": "2a40fd91a47f79ba5caece4e954f09e3dcf8f09908d98f6dea7c9e79928b6e71" },
+    { "path": "scripts/schemas/command-frontmatter-v1.schema.json", "purpose": "Claude command frontmatter", "version": "v1", "kind": "derived-local", "provenance": "Claude Code 2.1.216 strict validator", "retrieved": "2026-07-21", "sha256": "f978e0e0c58bb66cba54276c86408a44708b65d1598c475d1db9ab480a12b5a7" },
+    { "path": "scripts/schemas/agent-frontmatter-v1.schema.json", "purpose": "Claude agent frontmatter", "version": "v1", "kind": "derived-local", "provenance": "Claude Code 2.1.216 strict validator", "retrieved": "2026-07-21", "sha256": "7c1b5cd46018f084bf4722c947b81378497060f62c483c9d87fed05c40a09cce" },
+    { "path": "scripts/schemas/skill-frontmatter-v1.schema.json", "purpose": "Agent Skills frontmatter", "version": "v1", "kind": "upstream", "provenance": "https://agentskills.io/specification", "retrieved": "2026-07-21", "sha256": "a6d882bd4c79b3e016a3b55b73cc2dafd3dde4a48e829c51a1f7d4b592d98ba7" },
+    { "path": "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json", "purpose": "Loom compatibility matrix", "version": "loom-compatibility-matrix/v1", "kind": "derived-local", "provenance": ".docs/spec/10-packaging.md", "retrieved": "2026-07-21", "sha256": "bd4340322e0b833a7d8cb3c7331c098147d96caca9597a247dff9c87084b7e72" },
+    { "path": "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json", "purpose": "Loom installed-root bindings", "version": "loom-installed-root-binding/v1", "kind": "derived-local", "provenance": ".docs/spec/10-packaging.md", "retrieved": "2026-07-21", "sha256": "544a86dcb844298fb8693d3f8fd73a66eda1a84793d8a8691dfe03fd342e5e56" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json", "purpose": "Claude manifest release fixture", "version": "0.2.0", "kind": "derived-local", "provenance": "plugins/loom/.claude-plugin/plugin.json", "retrieved": "2026-07-21", "sha256": "10a9f392a0e2ce6b2c52bc5a44f7b069741052432bee377ff87e0946fef27011" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json", "purpose": "Claude catalog release fixture", "version": "0.2.0", "kind": "derived-local", "provenance": ".claude-plugin/marketplace.json", "retrieved": "2026-07-21", "sha256": "a693ef5fb4953ca2f737d66bec3ad234ee8e5c1aafc9de0a0e828654bc43f529" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json", "purpose": "Codex manifest release fixture", "version": "0.2.0", "kind": "derived-local", "provenance": "plugins/loom/.codex-plugin/plugin.json", "retrieved": "2026-07-21", "sha256": "4d8ee34640701b24d4b293a90ffa7eb45542e63163309e1ca838ef38497c2c38" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json", "purpose": "Codex catalog release fixture", "version": "0.2.0", "kind": "derived-local", "provenance": ".agents/plugins/marketplace.json", "retrieved": "2026-07-21", "sha256": "30750caa382532b84fe9ec8098a6da7c719a7ed0300bc2df9e2f836c51b5d370" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json", "purpose": "Compatibility release fixture", "version": "0.2.0", "kind": "derived-local", "provenance": "plugins/loom/adapters/compatibility/v0.2.0.json", "retrieved": "2026-07-21", "sha256": "644b2c36b876a7db6f9e110c91645afd36958bada884d03a1a19544cc1887838" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json", "purpose": "Claude root-binding release fixture", "version": "v1", "kind": "derived-local", "provenance": "plugins/loom/adapters/roots/claude-plugin-root-v1.json", "retrieved": "2026-07-21", "sha256": "8cad0437451d4b9e86aadde76270f477860dd38c1a9015e599dcd0a32e9feae8" },
+    { "path": "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json", "purpose": "Codex root-binding release fixture", "version": "v1", "kind": "derived-local", "provenance": "plugins/loom/adapters/roots/codex-skill-source-v1.json", "retrieved": "2026-07-21", "sha256": "91d641842d1b01c89fd26f9eea4578b1314ea1fb09614255d2c238dafb4cda04" }
+  ]
+}

@@ -26,7 +26,8 @@ after approval and change only via planning. Design decisions are in
 
 ## Map (where authoritative things live)
 
-- **`plugins/loom/`** — commands, agents, skills, hooks; namespaced `loom:<name>`; marketplace catalog `.claude-plugin/marketplace.json`.
+- **`plugins/loom/`** — commands, agents, skills, hooks, and separate Claude/Codex manifests; catalogs are `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`.
+- **`plugins/loom/adapters/`** — the v0.2.0 compatibility matrix, installed-root bindings, and release-owned static metadata fixtures.
 - **`.docs/`** — loom's own design memory (dogfooding); not a plugin component.
 - **`plugins/loom/hooks/`** — `git-identity-guard.sh` (ADR 0003) + `precompact-write-ahead-backstop.sh` (ADR 0013 §Decision 5); auto-discovered via `hooks.json`; shell-gated.
 - **`plugins/loom/bin/loom-coord`** — multi-session coordination CLI (git-CAS lock/claim + lease renewer; on `$PATH`; ADR 0014/0015/0016).
@@ -62,11 +63,9 @@ slice is considered `Implemented`. Verified gates ship in
 **Rust gate** (`gates/rust.md`):
 `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`
 
-**Shell gate** (`gates/shell.md`) — the first *learned* gate, covers all POSIX-sh in
-`plugins/loom/hooks/` and `plugins/loom/bin/` (path-generic). Example invocation on a file:
-- format: `shfmt -i 4 -d <file.sh>`
-- lint: `shellcheck <file.sh>`
-- test: `bats <file.bats>`
+**Shell gate** (`gates/shell.md`) — Bash 3.2+ with pinned format, lint, syntax,
+runtime, metadata, link, and client-validation stages. Run the whole repository gate
+with `scripts/check`; it dynamically discovers tracked scripts and Bats tests.
 
 For other stacks, the unknown-stack path is specified in
 `plugins/loom/skills/loom-playbook/references/gate-learning.md` (inspect toolchain

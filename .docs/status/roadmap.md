@@ -5,6 +5,20 @@ Status: Living
 Milestone order for building loom. "What's next and why"; detailed status in
 `progress.md`, restart context in `handoff.md`.
 
+## Repository improvement program (2026)
+
+- [x] M0 `ci-baseline` — prospective atomic publication of the reproducible local
+  gate, four-cell hosted CI, and static Claude Code/Codex compatibility contracts.
+- [ ] `macos-dogfood-program-amendment` — synchronize the accepted macOS-first
+  authority into the improvement plan, frozen specs, indexes, and instruction digest.
+- [ ] `macos-dual-client-dogfood` — prove real clean install/reinstall, discovery,
+  workflows, roles, hooks/trust, helper-root behavior, and uninstall on Apple silicon.
+
+The first checkbox becomes authoritative only when the configured remote target and
+protected transition settlement verify the exact publication candidate. M0 remains
+release-incomplete until its required behavioral adapter evidence is green; ADR 0019's
+Ubuntu and both macOS architecture release matrix is unchanged.
+
 ## M0 — Design (complete)
 
 - [x] Foundational design conversation with the owner.

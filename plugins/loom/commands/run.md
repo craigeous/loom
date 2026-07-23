@@ -1,6 +1,6 @@
 ---
 description: Run the loom dev loop — detect state, take scope/gates, drive the roles
-argument-hint: [scope]   e.g. /loom:run slice  ·  /loom:run plan
+argument-hint: "[scope]   e.g. /loom:run slice  ·  /loom:run plan"
 model: sonnet
 ---
 

@@ -30,7 +30,12 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0016 — Git-Native Ref Compare-and-Swap as the Lock/Claim Substrate](0016-git-native-ref-cas-lock-mechanism.md) — supersedes ADR 0014's lock/claim **mechanism** only (mkdir-CAS + rename-capture + TSV registry → git `update-ref` CAS on `refs/loom/lock` + `refs/loom/claims/*`); keeps ADR 0014 coordination model + ADR 0015 lease-freshness liveness; builds on ADR 0014/0015/0001/0003. Eliminates review defects U1/U4 and fixes U3 by heartbeating the lock ref; carries U2/U5/U6 + secondary forward as re-implementation obligations.
 
 - [0017 — Infrastructure-Blocked Escalation, Degraded-Review Honesty, and Incremental-Commit Discipline](0017-infrastructure-blocked-escalation.md) — builds on ADR 0013 (write-ahead checkpoint + pause+summary escalation machinery), 0010/0011 (review faithfulness invariant), and 0012 (bounded return); adds a third escalation *type* for account-level infrastructure blocks (spend/usage/quota, 429, 5xx, classifier-unavailable, limit-crashed sub-agents) — detect-on-failure + graceful-pause, **not** round-counted — plus degraded-review honesty (a limit-killed review is INVALID, never `ran-clean`) and developer incremental-commit discipline. Supersedes none.
+- [0018 — Shared Portable Core with Claude Code and Codex Adapters](0018-shared-core-and-client-adapters.md) — partially supersedes Claude-only architecture/surface assumptions in ADRs 0001, 0002, 0006, and 0007
+- [0019 — Supported Runtime, Platforms, Compatibility, and Release Contract](0019-supported-runtime-and-release-contract.md) — chooses Bash, Ubuntu/macOS support, pinned client compatibility, and SemVer
+- [0020 — Remote Publication Is the Landing Authority](0020-remote-publication-is-the-landing-authority.md) — partially supersedes ADR 0014's shared-local-`main`, no-push landing model
+- [0021 — Loom-Owned Local Review Protocol](0021-loom-owned-local-review-protocol.md) — replaces ADR 0010/0011's external review-command dependency while preserving evaluator verdict authority
+- [0022 — Controlled-Input Independent Evaluation and Its Isolation Boundary](0022-controlled-input-independent-evaluation.md) — corrects ADR 0004's overbroad blind-evaluation claim and defines the sanitized boundary
 
 ## In Review
 
-_(none)_
+None.

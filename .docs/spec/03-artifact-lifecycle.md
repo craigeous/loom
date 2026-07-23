@@ -2,282 +2,345 @@
 
 Status: Approved
 
-Status is loom's dispatcher. Each gated artifact carries a `Status:` line; the
-orchestrator reads it (and git state) to decide which role to spawn next. **Every
-role pass ends in a commit** (ADR 0003), so status transitions are paired with
-commits the next role can diff against.
+## Authority
 
-## Statuses
+ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md),
+[0005](../ADR/0005-specs-frozen-after-approval.md),
+[0013](../ADR/0013-starvation-loop-guards-cold-restart.md),
+[0017](../ADR/0017-infrastructure-blocked-escalation.md),
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
+[0021](../ADR/0021-loom-owned-local-review-protocol.md), and
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), with the temporary
+repository-only transition authorized by
+[0023](../ADR/0023-repository-self-hosting-bootstrap-transition.md).
 
-| Status               | Meaning                                      | Next actor            |
-|----------------------|----------------------------------------------|-----------------------|
-| `Draft`              | Author is writing / revising                 | author (researcher/planner) |
-| `Research Review`    | Research note ready for source check         | plan evaluator        |
-| `Plan Review`        | Planning artifact ready for blind review     | plan evaluator        |
-| `Approved`           | Artifact accepted                            | developer (if a slice)|
-| `In Progress`        | Developer implementing                       | developer             |
-| `Implemented`        | Gate green; awaiting code review             | code evaluator        |
-| `Landed`             | Code approved; finalize pass underway        | developer (finalize)  |
-| `Archived`           | Plan moved to `archive/`; history            | —                     |
-| `Needs Clarification`| Blocked on a question in `## Notes`          | clarifying role       |
-| `Abandoned`          | Dropped; kept for history                    | —                     |
+Status is a dispatcher, not proof by itself. The orchestrator combines artifact
+status with commits, validated review/evaluation evidence, coordination state, and
+remote publication receipts.
 
-## Research lifecycle
+## Legal statuses
 
+| Status | Meaning | Next actor |
+|---|---|---|
+| `Draft` | authoring/revision | researcher or planner |
+| `Research Review` | research ready for source evaluation | plan evaluator |
+| `Plan Review` | ADR/spec/plan ready for evaluation | plan evaluator |
+| `Accepted` | ADR accepted and immutable | none; later ADR may supersede it |
+| `Approved` | planning artifact accepted | developer for a slice |
+| `Living` | operational artifact maintained in place outside gated review | deterministic finalizer |
+| `In Progress` | slice implementation/revision active | developer |
+| `Implemented` | developer gate green; exact committed head awaits review/evaluation | orchestrator |
+| `Ready to Publish` | code evaluation passed; claim and evidence retained pending publication | orchestrator via landing helper |
+| `Landed` | configured remote result independently verified and receipt recorded | orchestrator via deterministic cleanup |
+| `Archived` | completed/abandoned plan stored under `archive/` | none |
+| `Needs Clarification` | prior transition paused on a recorded question | authoritative clarifier |
+| `Abandoned` | deliberately stopped and retained for history | none |
+
+Only these exact tokens are valid. `Accepted` is reserved for ADRs; approved research,
+specs, and plans use `Approved`. Review finder states and evaluation validity are
+protocol fields, not artifact statuses.
+
+## Research and planning
+
+```text
+Research: Draft -> Research Review -> Approved
+                         | FAIL
+                         v
+                       Draft
+
+ADR:       Draft -> Plan Review -> Accepted
+                              | FAIL
+                              v
+                            Draft
+
+Spec/plan: Draft -> Plan Review -> Approved
+                               | FAIL
+                               v
+                             Draft
 ```
-Draft ──▶ Research Review ──approve──▶ Approved (usable by planner)
-   ▲             │
-   └───reject────┘   (eval: sources missing or don't support claims)
+
+An accepted ADR is immutable. An approved spec is frozen and can re-enter the
+planning cycle only through a planner-authored amendment. Research or evaluation
+whose required captured evidence is unavailable is invalid/infrastructure-blocked,
+not a merits FAIL and not round-counted.
+
+## Code-bearing slice
+
+```text
+Approved -> In Progress -> Implemented
+                              |
+                              v
+                 valid local-review/v1 run
+                              |
+                              v
+                 isolated code evaluation
+                       | FAIL      | PASS
+                       v           v
+                 In Progress  Ready to Publish
+                                      |
+                    build/rebuild one checked candidate containing
+                    prospective Landed text and the plan already at
+                    archive/<name> with prospective Archived status
+                                      |
+                    atomic configured-mode remote publication
+                                      |
+                    fresh verification against remote authority
+                                      |
+                    record local untracked receipt
+                                      |
+                                      v
+                    Landed slice + published Archived plan authoritative
+                                      |
+                         release claim; idempotent local cleanup
 ```
 
-Research approval is a light gate: citations present, sources exist and support
-the summary.
+For a pure-documentation slice the review companion records `skipped: docs-only` and
+the code evaluator still runs when the slice requires code-evaluation authority. For
+an applicable code slice, only a valid complete `loom-local-review/v1` run may enter
+code evaluation. There is no command-unavailable terminal skip.
 
-## ADR / Spec lifecycle (no implementation)
+The diagram and rule above are the production v1 contract. The following exception
+exists only to let this repository build that contract and is never available to a
+Loom-managed project or released Loom workflow.
 
-```
-Draft ──▶ Plan Review ──approve──▶ Approved
-   ▲           │
-   └──reject───┘   (eval notes written; planner revises)
-```
+## Repository self-hosting bootstrap transition (non-release exception)
 
-- An **accepted ADR** is immutable. To change it, write a new ADR that supersedes
-  it.
-- An **approved spec is frozen** (ADR 0005). It changes only by re-entering this
-  cycle in a new planning phase — never as a side effect of a slice landing, and
-  never by a developer.
+ADR 0023 temporarily permits `loom-repository-bootstrap/v1` for this Loom repository
+and only for the following separately planned improvement-program slices:
 
-## Slice-plan lifecycle (the full loop)
+| Milestone | Eligible slice IDs |
+|---|---|
+| M0 | `ci-baseline`; `client-floor-adapter-smoke` |
+| M1 | `coord-identifier-boundaries`; `coord-lock-ownership`; `coord-schema-cas` |
+| M2 | `remote-first-integration-candidate`; `coordination-state-separation` |
+| M3 | `identity-guard-contract`; `precompact-per-session` |
+| M4 | `local-review-helper`; `local-review-agents`; `local-review-orchestration`; `local-review-defect-battery` |
+| M5 | `sanitized-evaluation-workspace`; `evaluation-output-recorder` |
 
-```
-Draft ──▶ Plan Review ──approve──▶ Approved ──▶ In Progress ──▶ Implemented
-  ▲            │                                    ▲                │
-  └──reject────┘                                    │                │ PASS
-   (planner revises)                                │                ▼
-                                                    │          Landed ──▶ Archived
-                                                    │                │
-                                       FAIL (eval notes)─────────────┘
-```
+The mode may also support the degraded cold ratification evaluation for ADR 0023 and
+a slice-plan whose sole purpose is to authorize one listed slice. It does not apply to
+research, another ADR/spec amendment, a renamed or combined slice, M6 or later work,
+unlisted maintenance, another repository, or a managed project. The list is closed;
+only another accepted ADR may change it. Bootstrap evidence is historical transition
+evidence and can never become release, adapter, local-review/v1, or controlled-input
+conformance evidence.
 
-`Implemented` is the awaiting-review status: the code evaluator holds the slice
-under **code review** (a phase, not a status) and writes a verdict. On **PASS** it
-sets `Landed`; on **FAIL** it sets `In Progress` with eval notes and the developer
-fixes. The full string is therefore `… Implemented → (code review) → Landed →
-Archived`, where *code review* names the evaluator's pass over an `Implemented`
-artifact rather than a distinct `Status:`.
+For an eligible code-bearing slice, and only while the corresponding transition-state
+components remain available, the production review/evaluation arrows above may
+temporarily be satisfied by all of the following, without changing the legal status
+tokens or PASS/FAIL authority:
 
-On **code-eval PASS** (the slice is `Landed`), the developer runs a **finalize
-pass** (cold):
-1. Update `status/progress.md` and `status/handoff.md` (and `roadmap.md` if a
-   milestone closed).
-2. Update the relevant `CLAUDE.md` **only when the landed slice changed something
-   in the curated-digest scope** — i.e. it introduced or altered a durable
-   convention, a repo-layout fact, a gate definition, or a "read-first" pointer.
-   The change reflected into `CLAUDE.md` is the stable, agent-facing form of what
-   landed; **per-slice history stays in `progress.md`** and the other living docs,
-   never in `CLAUDE.md`. If the slice changed nothing in that scope, **no
-   `CLAUDE.md` edit is made.** This applies to loom's own root `CLAUDE.md` and, in
-   a managed project, to that project's `CLAUDE.md`. The curated-digest boundary is
-   defined authoritatively in [08](08-playbook.md) (*Evolving the playbook*), whose
-   *Shape and Concision Discipline* governs how the edit is written (point-don't-restate
-   pointers, the size bound, the two-zone shape); the finalize pass applies it here.
-3. `git mv` the plan into `slice-plans/archive/`, set status `Archived`, commit.
+1. A clean committed `head_sha`, ancestor `base_sha`, `head_sha^{tree}`, exact
+   full-index binary/mode/rename diff, ordered path inventory, hash-bound authority,
+   and a recorded successful developer gate run against verified `head_sha` source.
+2. Three separate cold, non-delegating auxiliary workers for correctness, tests, and
+   security against the same immutable package, each with independent writable output.
+   Missing, failed, malformed, hash-mismatched, duplicate, truncated, or source-mutating
+   output invalidates the aggregate and never means clean.
+3. A fresh cold code evaluator, distinct from the developer, workers, and root
+   orchestrator, which adjudicates every advisory finding and reruns the declared gate
+   against a fresh copy matching the committed source. Only its valid bound verdict
+   supplies PASS or FAIL.
+4. Companion and verdict artifacts that prominently identify
+   `loom-repository-bootstrap/v1`, `degraded bootstrap; not loom-local-review/v1`, and
+   `isolation not established under ADR 0022`. Unqualified production review states,
+   `isolated`, `controlled-input-conformant`, and equivalent v1 claims are forbidden.
 
-**No spec edit happens at landing.** The slice-plan and the living docs record
-what was built; the spec only ever changes through a planning cycle. If
-implementation showed the spec to be wrong, the developer stops and the orchestrator
-opens a planning task instead of patching the spec.
+A valid bootstrap FAIL returns the slice to `In Progress`; a valid PASS may advance it
+to `Ready to Publish`. Invalid or incomplete evidence cannot advance status. The
+orchestrator retains exact inputs and safe diagnostics, checkpoints the failed step,
+keeps the claim whenever publication or settlement is incomplete, and handles
+infrastructure failure without a merits round or blind retry. It reruns a failed stage
+only when all inputs remain hash-identical; otherwise it starts a new run.
 
-The `CLAUDE.md` update in step 2 does **not** weaken this rule or ADR 0005.
-`CLAUDE.md` is a **derived, non-spec digest** — a curated reflection of conventions
-already decided in the specs and playbook — not an authoritative artifact. Updating
-it at finalize is therefore in the same category as updating the living docs, not in
-the category of spec authorship. The frozen artifacts (`.docs/spec/` and
-`.docs/ADR/`) remain untouched at landing; the developer still **never** edits them.
-On any conflict, the specs win and `CLAUDE.md` is corrected to match — it can never
-become a competing source of truth.
+Bootstrap eligibility and retirement come only from a freshly fetched, fully
+validated history at the protected ordinary remote branch
+`refs/heads/loom/bootstrap-transition`, never from local status, a selected base, or a
+receipt. The branch rejects deletion and non-fast-forward updates. Its create-only
+root and each single-parent, sequence-incrementing successor carry complete cumulative
+state. Allowed slices can only be removed, results can only be added, components can
+only move `available -> closing -> retired`, and full sunset can only move
+`not-reached -> closing -> retired`.
 
-> **Why this differs from the prototype:** ballboy folded slice outcomes back into
-> its specs at landing. loom instead **freezes specs** (ADR 0005) and treats the
-> spec as *intended design*, not *current state*. Divergence is surfaced as
-> explicit planning work rather than silent spec drift.
+Every eligible publication first appends and freshly verifies a hash-bound
+`publication-intent`, which blocks all other new or resumed bootstrap work; it then
+publishes and freshly verifies the configured target, records the receipt, and appends
+and freshly verifies settlement before claim release and cleanup. If the target did
+not change, an append-only abort may retain the intent and resume `active`; otherwise
+recovery must reconcile that exact intent and the freshly read target. Missing,
+unprotected, divergent, rewound, malformed, or unverifiable transition state, or a
+target that no longer contains every settled result, blocks the exception.
+
+Only M0, M1, and `remote-first-integration-candidate` may use ADR 0023's repository-only
+`remote-direct` landing procedure. It never supports a protected-target fallback, PR,
+merge queue, force update, another repository, or managed-project publication. After
+settlement of `remote-first-integration-candidate`, every publication uses the
+production landing helper and its failure is infrastructure-blocked.
+
+Settlement retires bootstrap capabilities monotonically for every new or resumed run:
+
+| Settled slice | Bootstrap capability permanently retired |
+|---|---|
+| `remote-first-integration-candidate` | bootstrap landing |
+| `local-review-orchestration` | auxiliary bootstrap review |
+| `sanitized-evaluation-workspace` | bootstrap export and gate rerun |
+| `evaluation-output-recorder` | root-copy recording |
+
+A run based before any retirement result is stale and must be rebuilt/rebased from a
+fresh configured-target base containing every required result SHA; affected integrated
+gates, review, and evaluation run again. During settlement of
+`evaluation-output-recorder`, fresh target ancestry must prove that the target contains
+the recorded results for `local-review-orchestration`,
+`sanitized-evaluation-workspace`, and `evaluation-output-recorder`. The first such
+target SHA becomes the full-sunset SHA; the terminal successor retires every component
+and empties the allowlist. No stale checkpoint, target rewind, missing receipt, local
+edit, owner flag, or production failure revives bootstrap. Revival requires a new
+accepted ADR and a new program/ref.
+
+### `Implemented`
+
+`Implemented` binds one full committed `head_sha`, its review base, and green
+developer gate evidence. The orchestrator prepares review from those exact commits.
+Dirty state, symbolic refs, PR metadata, remote branches, or a current checkout do not
+define the review target.
+
+### `Ready to Publish`
+
+A PASS recorded for the reviewed slice changes the active plan to
+`Ready to Publish`. The slice claim remains held. This is a durable recovery state:
+network failure, remote movement, provider delay, unavailable configured mode, branch
+protection, or unverifiable publication preserves candidate evidence and the claim.
+None of these conditions permits a `Landed` assertion or silent mode fallback.
+
+### Candidate finalization and integrated evidence
+
+The root orchestrator owns dispatch and recovery for landing and invokes the
+deterministic landing helper; neither publication nor cleanup belongs to a lifecycle
+role. The helper fetches the configured remote target, creates a disposable integration
+worktree at its exact SHA, integrates only the slice, and prepares in the candidate:
+
+- the slice change and final plan/evaluation evidence;
+- archived plan and slice-index transition;
+- progress, handoff, and roadmap changes;
+- canonical project-instructions and both generated instruction adapters when the
+  curated digest changed; and
+- tracked finalization metadata required by spec 04. The pre-publication candidate
+  manifest is local untracked recovery state, not another candidate artifact.
+
+It runs the integrated gate against the exact candidate. Any review/evaluation whose
+judgment could be affected by integration is rerun against the candidate. Immediately
+before publication it re-fetches the target. Movement invalidates the candidate base:
+rebuild from the new SHA and rerun all affected checks; never force-push or trust local
+`main`.
+
+The candidate may contain prospective `Landed`/`Archived` text so the final status and
+code arrive in one target update. That text has no operational authority while local.
+Until remote verification, the recoverable source state remains `Ready to Publish`.
+The plan move into `slice-plans/archive/`, its `Archived` token, and related index
+changes are all candidate contents. Fresh verification makes that already-published
+archive state authoritative; no second tracked finalization commit is permitted.
+
+The ordering is strict: build and check the atomic candidate with final tracked
+`Landed`/`Archived` state; publish it atomically through the configured mode; verify
+the candidate/result by a fresh read of the configured remote authority; write or
+reconstruct the untracked common-Git-dir receipt; then release the claim and perform
+idempotent local cleanup. No producing or evaluating role performs those steps, and
+no receipt or cleanup change is added to the candidate.
+
+### `Landed` and cleanup
+
+`Landed` means the explicitly configured mode completed, a fresh remote read proves
+the target contains the exact result SHA, and a publication receipt bound to slice,
+candidate, evidence, mode, and target has been recorded only in the local untracked
+coordinator/recovery state defined by spec [01](01-concepts.md). A local merge, green
+test, provider response, push exit, or local status line is insufficient.
+
+The receipt is written after verification and requires no target update. Only verified
+publication plus that receipt releases the claim and begins idempotent local cleanup;
+the published archived plan already exists before cleanup starts. Cleanup never edits
+tracked lifecycle state. If the remote update succeeded before a crash, recovery
+verifies containment, reconstructs
+the receipt, and completes cleanup without republishing. If containment cannot be
+proved, recovery pauses for the owner. Updating a clean local target branch afterward
+is optional cache maintenance and cannot change landing truth.
+
+## Review-run validity
+
+Every required finder is one of `pending`, `ran-with-findings`, `ran-clean`, `failed`,
+or `invalid`. The aggregate is `ran-with-findings` if at least one valid finder has
+findings and otherwise `ran-clean` only when every required finder completed validly
+and cleanly. Any pending, failed, invalid, missing, duplicate, truncated, malformed,
+hash-mismatched, modified-source, or unknown-version result makes the whole run
+`invalid`. Partial findings may be retained for diagnostics but cannot be assembled as
+completed evidence or presented to the evaluator.
+
+Infrastructure failures are checkpointed and paused under ADR 0017. Retry is allowed
+only when classified safely retryable and does not turn missing work into clean.
+
+## Evaluation-run validity
+
+An evaluation is valid only when the exporter manifest, allowlisted input hashes,
+permissions, required evidence, and output schema/run hashes validate. Code evaluation
+also requires a completed gate rerun in a verified disposable writable copy. Missing,
+duplicate, truncated, mismatched, cross-run, mutated-input, or unrecordable output is
+not a verdict and cannot transition status.
+
+The deterministic recorder installs a valid verdict under `.docs/evaluations/`, makes
+the allowed status transition, and the orchestrator commits the handoff. The evaluator
+itself never mutates the checkout.
+
+## Dispatch rules
+
+| Observed validated state | Dispatch |
+|---|---|
+| `Research Review` or `Plan Review` | export and launch plan evaluator |
+| Approved slice-plan | developer |
+| `Implemented`, docs-only | export and launch code evaluator with explicit skip companion |
+| `Implemented`, code-bearing, no valid review | prepare/launch/validate/assemble local review |
+| `Implemented`, valid review | export and launch code evaluator |
+| `Ready to Publish` | orchestrator invokes helper to build/check, publish, verify, receipt, then clean up |
+| remotely verified result with incomplete receipt/cleanup | orchestrator invokes helper to recover receipt, then clean up |
+| `Needs Clarification` | recorded authoritative clarifier |
+| rejected `Draft`/`In Progress` within scope | producing role |
+
+Dispatch never derives landing, claims, or current authority from local `main`.
 
 ## Clarification sub-flow
 
-```
-<prior status> ──role asks in ## Notes, sets──▶ Needs Clarification
-                                                   │
-                  orchestrator spawns clarifying role (cold)
-                                                   │
-                  answer written in ## Notes, commit
-                                                   ▼
-                  orchestrator restores the prior status, resumes the loop
-```
+The orchestrator persists the status that preceded `Needs Clarification`. A cold
+authorized role answers under `## Notes`; the recorder/orchestrator commits the
+answer, restores the prior status, and resumes. A clarification is not an evaluator
+backchannel and does not supply producer conversation to an evaluator.
 
-The orchestrator records the status the artifact held when it became `Needs
-Clarification` and restores that status once the clarifying role (usually the
-planner) has answered in `## Notes` ([02](02-roles.md) — Clarification between
-roles). The loop then resumes from the restored status via the dispatch rules
-below.
+## Approval gates
 
-## Dispatch rules (status → role)
+Evaluator approval advances by default. At kickoff the owner may claim `all` gates or
+named gates. The orchestrator pauses before crossing a claimed gate and surfaces the
+artifact path and verdict. Owner override is explicit authority and is recorded; it is
+never inferred from silence.
 
-| When it sees…                          | It spawns…       |
-|----------------------------------------|------------------|
-| `Research Review`                      | plan evaluator   |
-| `Plan Review`                          | plan evaluator   |
-| `Approved` slice-plan                  | developer        |
-| `Implemented`                          | code evaluator   |
-| `Landed`                               | developer (finalize) |
-| `Needs Clarification`                  | clarifying role  |
-| `Draft` (after a reject, within scope) | author           |
+## Round limit
 
-Approval authority: by default **evaluator approval advances the loop**. The owner
-declares claimed gates at kickoff — `all` or a named list ([04](04-orchestrator.md));
-at a claimed gate, the orchestrator pauses for owner sign-off before proceeding.
+A round is one merits FAIL followed by revision. The first review begins at round 0;
+each merits FAIL increments the artifact's single lifetime counter, and a resolving
+PASS retains that round number. Plan and code review share the same counter for a
+slice. PASS, invalid runs, infrastructure blocks, publication retries, and
+clarifications do not increment it.
 
-## Round limits
+At the fifth FAIL the loop pauses. The owner receives the artifact/status, ordered
+per-round phase and findings, recurring-versus-new classification, and concrete
+choices: materially redirect (which may reset to 0), abandon, explicitly override, or
+adjust authority/rubric. “Keep trying” without materially new direction does not reset
+the counter.
 
-A **round** is one **reject→revise cycle**: a FAIL verdict followed by the
-author's revision. The round counter exists to bound thrashing — after a fixed
-number of FAILs on one artifact, the orchestrator escalates rather than looping
-indefinitely.
+## Other escalations
 
-### Counting rule
+- **Starvation:** a cold restart re-derives the same action without a new advancing
+  commit/checkpoint. Stop and summarize rather than repeat.
+- **Infrastructure blocked:** spend/usage/quota, 429, transient 5xx,
+  classifier-unavailable, missing required captured evidence/dependencies, unsupported
+  required adapter capability, or partial workflow infrastructure failure. Do not
+  treat it as PASS/FAIL/clean, do not consume a round, and do not retry blindly.
 
-- **A FAIL opens (increments) a round.** When an evaluator returns FAIL, the
-  round counter for that artifact goes up by one, and the author revises.
-- **A PASS does not increment the counter.** A PASS that follows a FAIL is the
-  **resolving review** of the round that FAIL opened; it closes that round
-  rather than starting a new one. A PASS never carries a higher round number
-  just for being the next eval pass.
-- The **first** evaluation of a fresh artifact (no prior FAIL) is round 0 / not
-  yet counted; only a FAIL moves the count to round 1. Round 0 is the
-  initial clean-review state and **carries no FAIL findings**, so the counted
-  rounds — and the escalation summary's per-round findings history — run 1..N. Concretely: a slice that
-  is reviewed, FAILs once, is revised, and then PASSes is **1 round** — not
-  three eval passes counted separately. (This corrects an earlier de-facto
-  practice that numbered every eval pass sequentially, e.g. R1 FAIL → R2 PASS →
-  R3 PASS; under this rule that same history is one round, resolved.)
-- Each eval pass is still recorded in the eval file with its verdict; the
-  `Round:` value written on a PASS that resolves a FAIL is the **same** number as
-  the FAIL it resolves (the round is closed, not advanced).
-
-So an independent orchestrator or evaluator counts identically every time:
-`Round:` equals the number of FAILs the artifact has accumulated, and a
-resolving PASS shares the FAIL's round number.
-
-### Counter scope
-
-- There is **one counter per artifact**, recorded as `Round:` in that artifact's
-  **single eval file** (`.docs/evaluations/<artifact-name>-eval.md`).
-- The counter **spans the artifact's entire life across both review phases** — a
-  slice-plan that goes through plan review and then code review uses **one** eval
-  file and **one** counter. Plan-review FAILs and code-review FAILs accumulate
-  toward the **same** limit. It is **not** a fresh counter per phase: e.g. two
-  plan-review FAILs plus three code-review FAILs is round 5 and triggers
-  escalation, even though neither phase alone reached 5.
-
-### Threshold
-
-After **5** rounds (i.e. the 5th FAIL) for a given artifact, the orchestrator
-**stops and escalates** to the owner instead of dispatching another revision.
-
-### Reset rule
-
-The counter **does not reset on its own** — not when the artifact PASSes a phase,
-not when it crosses from plan review into code review, not on time. It only ever
-moves forward as FAILs accumulate, for the life of that artifact.
-
-The **one** way it resets is **owner-driven at an escalation**: when the
-orchestrator escalates and the owner intervenes with **materially new direction**
-(e.g. a redefined goal, a changed rubric, a new scope boundary for the artifact),
-the orchestrator **may reset the counter to 0** as part of applying that
-redirection — because the artifact is now being judged against a changed target,
-the prior FAILs no longer represent failures against the current bar. An owner
-who merely says "keep trying" without new direction does **not** reset the
-counter; the next FAIL would re-trigger escalation. The orchestrator records the
-reset and its cause in the eval file.
-
-### Escalation contract (pause + summary)
-
-This is the canonical definition of the round-limit escalation; spec
-[04](04-orchestrator.md) ("Human checkpoints") points here. When the threshold is
-reached the orchestrator **pauses the loop** and presents the owner a summary
-that is sufficient to decide without re-reading the whole history. The summary
-**must** contain:
-
-1. **The stuck artifact and its current status** — which artifact, its path, and
-   the `Status:` it now holds (e.g. a slice-plan back at `Draft` after a
-   plan-review FAIL, or at `In Progress` after a code-review FAIL).
-2. **Per-round findings history** — for each of the counted rounds (1..N; round
-   0 carries no findings), the FAIL's verdict and the substantive findings that
-   drove it (and the phase — plan vs. code — each FAIL occurred in), in order.
-3. **A recurring-vs-new classification** — the orchestrator states whether the
-   findings are **recurring** (the same defect surviving one or more revisions =
-   **thrashing**) or **new each round** (each FAIL raises a different issue =
-   genuine churn / a moving target). This tells the owner whether the artifact is
-   stuck on one unsolved problem or accumulating distinct problems.
-4. **Concrete owner options** — at minimum:
-   - **Give new direction** — redefine the goal/scope/rubric (may reset the
-     counter, per the reset rule above) and resume.
-   - **Abandon the artifact** — set `Abandoned`; stop work on it.
-   - **Override and accept** — owner overrides the evaluator and accepts the
-     artifact as-is, advancing the loop (an owner authority, distinct from
-     evaluator approval).
-   - **Adjust authority or rubric** — change which gates are owner-claimed, or
-     correct the rubric the evaluator is applying, then resume.
-
-The orchestrator ensures `status/handoff.md` reflects the paused state and the
-pending owner decision (consistent with the Human-checkpoints rule in
-[04](04-orchestrator.md)).
-
-## Infrastructure-blocked escalation (a sibling — not round-counted)
-
-The round-limit escalation above is one of **three** escalation types loom
-recognizes, all sharing the same **pause + summary** shape but firing on different
-triggers. The other two are ADR 0013's **starvation-loop escalation** (a cold
-restart that re-derives the same action with no new commit since — a no-progress
-wedge) and the **infrastructure-blocked escalation** defined here
-([ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)). Because this trigger
-reflects **account state, not the artifact's quality**, it lives beside the
-round-limit contract but is explicitly **not** round-counted.
-
-An **infrastructure block** is a role return, or a tool/workflow result, that
-matches an **infrastructure-failure signature** — any of:
-
-- an account **spend / usage / quota limit** reached;
-- a **rate-limit / HTTP 429**;
-- a **5xx** / transient upstream error;
-- a **safety-classifier-unavailable** error (a review or guard command whose
-  classifier could not run); or
-- a **partial workflow failure** — a multi-agent workflow (e.g. `/code-review`)
-  whose sub-agents crashed on one of the above limits, even if the workflow returns
-  a plausible-looking summary.
-
-Such a result is **not a valid outcome**: it is not a blind-eval FAIL, not a
-`ran-clean` review, and not a genuine finding set — the role or tool was killed by a
-limit outside loom's control rather than failing on the merits. On matching the
-signature the orchestrator MUST:
-
-1. **Not consume a round.** An infrastructure block **never** increments the
-   `Round:` counter toward the 5-FAIL threshold and never counts as a FAIL against
-   the artifact — it is not the artifact's fault. It also does not fabricate or
-   attribute any findings from the failed result.
-2. **Halt rather than retry-loop.** A blind retry re-hits the same limit and wastes
-   budget; the block clears by **owner action** (e.g. raising the limit, waiting out
-   a 429), not by re-attempting.
-3. **Write-ahead checkpoint** the current state to `status/handoff.md`
-   ([ADR 0013](../ADR/0013-starvation-loop-guards-cold-restart.md) rule 1) so a
-   resume once unblocked is lossless and picks up the exact pending action.
-4. **Pause + summarize to the owner**, naming (a) the **specific block** hit (which
-   limit / signature), (b) **where** it fired (which role or command, which artifact
-   + `Status:`), and (c) **how to resume** (e.g. raise the monthly limit, wait out a
-   429, then resume `/loom:run`).
-
-This escalation is **detect-on-failure only**: loom is a plugin with **no interface
-to account limit state** and **cannot poll or predict** a limit — it reacts to a
-block that has *already* fired, so it always takes at least one hit before it can
-pause. It is an orchestration rule, not a hook. See spec [04](04-orchestrator.md)
-(*Human checkpoints* and *Automated review before a slice lands* — the degraded-review
-case) for the orchestrator-side handling.
+Every escalation writes the per-session checkpoint before pausing and states the
+specific block, location/artifact status, preserved evidence, and exact resume action.

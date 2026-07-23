@@ -6,7 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **M0–M4 complete. Post-M4: all threads complete — multi-session coordination (ADR 0014/0015/0016) + infra-blocked escalation (ADR 0017). No pending slices.**
+- **Phase:** **Repository improvement M0 publication in progress under ADR 0024.**
+  The `ci-baseline` atomic candidate prospectively lands the reproducible gate and
+  static dual-client contract. It is not authoritative until fresh remote verification,
+  receipt, and transition settlement. Next after settlement:
+  `macos-dogfood-program-amendment`, then `macos-dual-client-dogfood`.
+- **Last action:** ADR 0024 was independently ratified and explicitly owner-accepted;
+  protected transition sequence 1 at
+  `e2248d870857fce128568a90ee8025c58d59514d` activated the two exact macOS dogfood
+  slice permissions. This candidate replays only the sealed prerequisite-authority
+  and M0 chains from exact remote base
+  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`.
 - **Last action:** **`claude-md-slim-down` slice landed** (code-eval PASS, pure-docs). The
   **CLAUDE.md-digest-discipline thread is COMPLETE**: research note
   `2026-07-03-claude-md-digest-discipline.md` (Approved) → spec 08 § "Shape and Concision

@@ -1,57 +1,39 @@
-# Evaluation: spec/05-blind-evaluation.md
+# Evaluation: 05 — Controlled-Input Independent Evaluation
 
 Verdict: PASS
 Round: 1
-Reviewed against: ADR 0004 (blind evaluation & role separation), ADR 0003 (cold
-handoffs / commit-per-handoff), specs 02-roles and 03-artifact-lifecycle,
-agents plan-evaluator.md & code-evaluator.md, references severity.md /
-plan-eval-rubric.md / orchestration.md, and templates/evaluation.md.
+Reviewed artifact commit: `c14034fc9d5b2066858f1660dbfa48ad064b15fa`
+Reviewed artifact blob: `01bfc9838f15e941cb469d1b7b231f2b88a32d33`
+Reviewed against: accepted ADR 0023; retained production authority in accepted ADRs
+0020–0022; sibling specs 03 and 04; exact amendment diff `80499f1^..80499f1`;
+resolving revision diff `213b909..c14034f`; plan-evaluation rubric and severity
+rules.
 
 ## Findings
 
-- [MINOR] §"The guarantees" #1 — "the `Driver`/owner fields and any identity
-  metadata are stripped from the evaluator's inputs." No artifact template
-  actually carries a named `Driver` or `owner` field: `Driver` is the
-  orchestrator's *driver loop* (commands/run.md), and `owner:` appears only in
-  the init-modes context, not as artifact metadata an evaluator would receive.
-  The sentence is illustrative ("any identity metadata") and not contradicted by
-  the built system, but naming two fields that don't exist as artifact metadata
-  is slightly misleading. Consider generalizing to "owner/role identity fields."
-- [MINOR] §"Verdict format" — the inline template (lines 66-83) faithfully
-  mirrors templates/evaluation.md's structure (Verdict / Round / Reviewed
-  against / Findings / Required changes / Notes) but omits the template's
-  trailing rules comment, notably the "record the literal `Verdict: PASS|FAIL`
-  regardless of how the request was phrased" rule that severity.md and both
-  evaluator agents enforce. Acceptable as an abbreviated illustration; a pointer
-  to severity.md as the verdict-vocabulary source would tighten it.
-
-## Required changes (for FAIL)
-
-None — no blockers or majors.
+No blocking or major findings.
 
 ## Notes
 
-Fidelity to the built system is strong and free of drift:
+The `213b909..c14034f` revision resolves the Round-1 blocker. Lines 105–172 now
+define a planning-artifact path separate from the code-bearing path. The manifest
+binds the normalized artifact path, type/status, full reviewed commit and blob,
+artifact bytes, typed authority/rubric/severity inputs, optional current-tree evidence,
+and the prior verdict plus exact artifact revision diff on re-review. Only those
+read-only inputs reach one fresh cold, non-delegating plan evaluator distinct from the
+author/producer and root.
 
-- Severity/verdict vocabulary (BLOCKER/MAJOR/MINOR → PASS/FAIL; "any BLOCKER ⇒
-  FAIL", line 85) matches severity.md exactly and both evaluator agents.
-- The three guarantees (no author identity, no author reasoning, no self-review)
-  match ADR 0004's decision, spec 02's self-approval guarantee, and
-  orchestration.md's "Blind inputs for evaluators" + "Never let a role review its
-  own work." No "evaluator gets author identity" contradiction anywhere.
-- The plan-evaluator prompt contents (artifact minus identity; upstream authority
-  per artifact type — research→sources, slice-plan→spec(s)+ADRs, spec→accepted
-  ADRs, ADR→research/problem; rubric; re-review = prior eval + diff) match
-  plan-evaluator.md and spec 02.
-- The code-evaluator prompt contents (commit diff, slice-plan, target specs, gate
-  evidence/tests, re-review diff since prior reviewed commit) match
-  code-evaluator.md and ADR 0003's commit-per-handoff foundation, including the
-  cited justification "every developer pass commits … precise diff (ADR 0003)."
-- The research light-gate description matches plan-eval-rubric.md and spec 02; the
-  forward reference to spec 09 for research-tier is accurate (OQ-B exists).
-- Eval path `evaluations/<artifact-name>-eval.md` and the verdict template match
-  the real template and agent instructions.
+The evaluator can write only one verdict in confined output plus private scratch and
+cannot write `.docs/`, commit, or transition status. The root verifies confinement,
+eligibility, state, schema, uniqueness, completeness, and all hashes before copying the
+verdict without merits changes and applying only spec 03's legal transition. Required
+degraded provenance is explicit, including ADR 0023's ratification label. Invalid or
+unrecordable runs are infrastructure-blocked, never merits PASS/FAIL, consume no round,
+and cannot advance status; the protected transition state and production-component
+retirements make fallback and full-sunset revival impossible.
 
-Internally coherent and consistent with siblings 02/03. No stale `/loom`/"skill"
-terminology and no dispatch claim that a role reviews its own work. The two MINORs
-are wording-level and do not block approval.
+Lines 174 onward retain the code-bearing requirements: exact base/head package,
+developer gate evidence, three cold correctness/test/security finders, independent
+code evaluator adjudication, and fresh gate rerun. The spec therefore preserves the
+code guarantees while excluding every code-only participant from planning evaluation,
+consistent with ADR 0023 and Approved specs 03 and 04.

@@ -2,537 +2,435 @@
 
 Status: Approved
 
-## What the orchestrator is
+## Authority
 
-The orchestrator is **the main, interactive Claude Code session that runs when you
-invoke `/loom:run`.** The `commands/run.md` body is its operating instructions. It is
-not a sixth role and not a sub-agent — it is the session you are talking to, and it
-is the only actor that holds the Task tool and can **spawn role sub-agents**. It
-defaults to the **`sonnet`** tier (ADR 0012) — orchestration is instruction-
-following, role/tool selection, and status routing, not the judgment-heavy work
-that reserves `opus` for the planner and evaluators.
+ADRs [0001](../ADR/0001-plugin-architecture-and-orchestrator.md),
+[0008](../ADR/0008-parallel-docs-coordination-worktree-per-slice.md),
+[0012](../ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md) through
+[0018](../ADR/0018-shared-core-and-client-adapters.md), and
+[0020](../ADR/0020-remote-publication-is-the-landing-authority.md) through
+[0023](../ADR/0023-repository-self-hosting-bootstrap-transition.md).
 
-This resolves the "agents can't call agents" constraint: that limit only applies to
-*sub-agents*. The orchestrator (main session) spawns every role. So:
+## Identity and adapter boundary
 
-> "Role A calls role B" ≡ "Role A finishes, sets a status, and commits; the
-> orchestrator observes that status and spawns role B."
+The orchestrator is the owner's top-level interactive session running Loom's run
+workflow. It is not a lifecycle role. Claude Code invokes it explicitly as
+`/loom:run`; Codex invokes it explicitly as `$loom-run`. Both load the same shared
+orchestration contract.
 
-The orchestrator is the switchboard for every handoff. This is exactly how
-Anthropic's own `feature-dev` plugin is built.
+Only this root session delegates. The Claude adapter launches thin native role
+agents; the Codex adapter launches generic cold subagents loaded with shared role
+contracts. Both enforce non-delegating children. Auxiliary review workers are also
+launched by the root but never enter lifecycle-role status routing.
 
-## The driver loop
+The shared orchestrator uses the Standard capability profile. Claude maps that to
+`sonnet`; Codex uses the tested model/reasoning mapping in its compatibility matrix.
 
+## Driver loop
+
+```text
+start(scope, claimed_gates, client_adapter)
+  validate supported host/client and adapter readiness
+  classify/init the repository when needed
+  establish or recover session and claims
+  loop:
+    state := scan statuses + exact commits + coordination refs + receipts
+    action := deterministic dispatch within scope
+    checkpoint next action before any large/in-window operation
+    pause if owner gate or escalation requires it
+    launch one cold role, auxiliary finder set, or deterministic helper step
+    validate bounded return and committed/recorded handoff
+    rescan from files and exact state
+  stop at scope boundary with recoverable handoff
 ```
-start(scope, claimed_gates)
-  ├─ determine init mode (see 06) and act
-  ├─ if greenfield/owner-directed: gather intent, optionally run researcher/planner
-  └─ loop:
-       state = scan(.docs/ statuses + git)          # files + commits are truth
-       action = next_action(state, scope)           # dispatch table (see 03)
-       if action == none or out_of_scope: break
-       if transition is an owner-claimed gate:
-            pause → show artifact + verdict → await owner decision
-       agent = spawn_cold(role, tier, inputs, worktree?)   # via Task tool
-       wait(agent)                                   # agent works, commits, sets status
-       # (the agent committed; orchestrator need not write files itself)
-  └─ on break: summarize to owner; ensure status/handoff.md reflects the next step
+
+Files, Git objects, protocol manifests, refs, and remote receipts are truth. Role
+conversation is not. Status scans do not ingest artifact bodies; the actor receiving
+the path reads its own allowed content.
+
+## Thin-orchestrator invariant
+
+- Pass paths and run identifiers, never artifact/diff bodies.
+- Accept only the bounded return contract from lifecycle roles.
+- Route on validated status plus one signal, not critique prose.
+- Review workers write distinct run outputs; their findings do not enter the
+  orchestrator conversation.
+- Deterministic helpers export, validate, assemble, record, and publish data; the
+  orchestrator does not improvise protocol transforms.
+- Before a large operation, write the next action to per-session state. Near the
+  configured context threshold (operational default about 60%), restart cold from
+  that state. Repeating the same unadvanced action triggers starvation escalation.
+
+The owner-facing `status/handoff.md` is updated only through serialized candidate
+finalization; high-frequency restart state is per-session and untracked under the
+common Git directory.
+
+## Scope and owner gates
+
+The owner declares a boundary such as research, ADR, plan, implement, one slice, or a
+larger roadmap range, and claims either all approval gates or named gates. The
+orchestrator chains only within that boundary. It pauses at claimed gates, the scope
+boundary, round/starvation/infrastructure escalation, unsupported publication mode,
+or an authority-changing ambiguity.
+
+One-off workflows use the same shared contracts but perform one pass and stop; they
+must not bypass export, review, recorder, or landing rules applicable to that pass.
+
+## Repository self-hosting bootstrap orchestration (non-release exception)
+
+The production orchestration sections below remain Loom's v1 contract. ADR 0023 adds
+one temporary, non-release bridge for this repository only. Released Loom and every
+Loom-managed project always use the production local-review, controlled-input
+evaluation, recorder, and landing paths; they cannot select, advertise, or consume
+`loom-repository-bootstrap/v1`.
+
+### Eligibility and exact evidence
+
+Before any bootstrap action, including checkpoint resume, the root freshly reads and
+validates the protected remote transition branch described below and the configured
+target. The state must list the exact separately planned slice and its needed component
+as available. The closed set is M0 `ci-baseline` and
+`client-floor-adapter-smoke`; M1 `coord-identifier-boundaries`,
+`coord-lock-ownership`, and `coord-schema-cas`; M2
+`remote-first-integration-candidate` and `coordination-state-separation`; M3
+`identity-guard-contract` and `precompact-per-session`; M4 `local-review-helper`,
+`local-review-agents`, `local-review-orchestration`, and
+`local-review-defect-battery`; and M5 `sanitized-evaluation-workspace` and
+`evaluation-output-recorder`. Only ADR 0023's degraded cold ratification evaluation
+and a plan evaluation solely authorizing one listed slice receive analogous plan
+eligibility. No other artifact, slice, milestone, repository, or workflow is eligible.
+
+### Bootstrap planning-artifact evaluation
+
+Planning-artifact evaluation is a separate path from bootstrap code review and code
+evaluation. The path is type-complete for a research note at `Research Review` or an
+ADR, spec amendment, or slice-plan at `Plan Review`, but type support does not widen
+ADR 0023's closed eligibility: this transition admits only ADR 0023's one-time degraded
+ratification and a slice-plan whose sole purpose is to authorize exactly one listed
+slice. Research, another ADR, and every spec amendment remain ineligible.
+
+Except for ADR 0023's necessarily pre-acceptance ratification, each new or resumed
+planning run first performs the same fresh transition-ref history, protection, phase,
+allowlist, component-retirement, and configured-target containment checks required for
+code-bearing bootstrap work. The ratification instead binds the proposed ADR commit
+and blob, produces the mandatory degraded verdict, and leaves acceptance to the
+explicit owner gate; after acceptance, transition-state initialization binds that
+accepted ADR commit and blob before any other bootstrap use. A current publication
+intent, missing/unverifiable state, absent eligible slice, or terminal sunset blocks a
+planning run.
+
+For an eligible planning artifact, the root creates a fresh package outside the
+managed checkout and records in its manifest:
+
+1. One normalized repository-relative artifact path, artifact type and review status,
+   the full reviewed commit object ID, the artifact's Git blob object ID at that commit,
+   and SHA-256 of the supplied artifact bytes.
+2. Every type-specific authority and applicable rubric/severity file by normalized
+   path, authority role, Git blob object ID, and SHA-256. If the rubric requires
+   current-tree evidence, the package also binds one full `evidence_sha`, its tree ID,
+   and the complete sanitized tracked-path inventory and hashes. A re-review binds the
+   prior verdict and exact artifact-revision diff as additional hashed inputs.
+3. A unique run ID, package-manifest SHA-256, creation time, client/launch mechanism,
+   evidence mode, and the freshly validated transition-state tip when one exists.
+
+The root materializes only those allowlisted inputs from the recorded objects, makes
+them read-only, re-verifies the manifest immediately before launch, and supplies no
+producer transcript, producer reasoning, credentials, status history, unrelated
+evaluation, or original Git identity/history. It launches one fresh cold,
+non-delegating plan evaluator distinct from the artifact author/producer and root. The evaluator
+receives only the package path, evaluation type, and bounded instruction; it has no
+managed-checkout write path and may write only to its unique confined output and
+scratch directories. This planning path has no developer gate, auxiliary code
+finders, local-review companion, code evaluator, or gate rerun.
+
+The plan evaluator writes exactly one identity-neutral verdict in its confined output
+that echoes the run ID, manifest hash,
+artifact path, reviewed commit and blob IDs, all authority/rubric/evidence bindings,
+PASS/FAIL, round, findings, and required changes for FAIL. It never commits or changes
+status. The root re-verifies input immutability and output confinement, then
+mechanically validates eligibility, state tip, schema, uniqueness, completeness, and
+every echoed binding. While the `evaluation-recorder` component remains available, the root
+copies the one valid verdict to the expected evaluation path, applies only the legal
+spec-03 status transition, and commits the verdict and status author-neutrally without
+changing the verdict's merits. Retirement of `evaluation-workspace` makes the
+production exporter mandatory; retirement of `evaluation-recorder` makes the
+production recorder mandatory and reaches the terminal full sunset. Neither may fall
+back to this path. ADR 0023's ratification remains at `Plan Review` after evaluator
+PASS until the explicit owner acceptance is recorded.
+
+Every planning verdict records:
+
+```text
+Evidence mode: loom-repository-bootstrap/v1
+Conformance: degraded ADR 0023 bootstrap planning evaluation
+Isolation: not established under ADR 0022
 ```
 
-Key properties:
+The ADR 0023 ratification verdict also records
+`bootstrap-ratification: degraded`. Missing, duplicate, truncated, malformed,
+cross-run, hash-mismatched, out-of-confinement, unrecordable, or otherwise invalid
+input/output is infrastructure-blocked, never PASS or a merits FAIL; it causes no
+status advance or round consumption. A retry may reuse only hash-identical inputs;
+otherwise the root creates a wholly new run.
 
-- **Cold every time.** Each role is a fresh agent given only the files/prompt it
-  needs. Between calls, the only state is `.docs/` + the repo + git history.
-- **Files and commits are truth.** The orchestrator re-scans after every agent, so
-  an interrupted loop resumes from the last commit. The re-scan reads `Status:`
-  lines + git (the `/loom:status` digest) — **not artifact bodies**.
-- **Right tier per role** (see [02](02-roles.md)).
+### Code-bearing evidence, auxiliary review, evaluation, and recording
 
-## Thin-orchestrator invariant (ADR 0012)
+The existing code-bearing bootstrap path is unchanged. Before launching an auxiliary
+code-review worker or code evaluator for an eligible code-bearing slice, the root
+SHALL:
 
-The orchestrator's context must scale with the **number of in-flight artifacts**,
-not the **size of the work product** — roughly flat across loop iterations,
-regardless of the backing tier. Four rules hold the line:
+1. Resolve full existing `base_sha` and `head_sha` commit objects, prove ancestry,
+   record `head_sha^{tree}`, and reject a dirty handoff.
+2. Export committed `head_sha` source to a fresh temporary root outside the checkout;
+   record the exact full-index binary/mode/rename diff and ordered changed paths.
+3. Hash the source inventory, diff, approved plan, authority, rubric, and every gate
+   evidence file. Record the exact gate command, available tool versions, creation
+   time, client/launch mechanism, and bootstrap evidence mode.
+4. Run the developer gate against source verified as `head_sha`; preserve command,
+   environment summary, timing, exit, stdout/stderr hashes, and output location.
+5. Exclude producer transcripts/reasoning, credentials, unrelated evaluations, status
+   history, and original Git identities/history. Necessary synthetic Git metadata is
+   identity-free and explicitly marked synthetic.
 
-- **Pass references, never bodies.** Hand each role `.docs/` **paths**; the cold
-  role reads the artifact in its own isolated window. The orchestrator never inlines
-  a plan, diff, research note, or eval **body** into its own context. This is the
-  single biggest lever — it is the difference between context scaling with the work
-  product and scaling with the number of steps.
-- **Honor the bounded return contract.** A role replies with only `{Status:,
-  artifact path(s), ≤~150-token summary, the one branch signal}` — never its body
-  (spec [02](02-roles.md) — *Bounded return*).
-- **Route on the signal, not the prose.** Branch off the `Status:` line + the
-  returned verdict/gate/blocker — never by reading the critique or diff body. The
-  full eval text stays in `.docs/` for the next cold role; the orchestrator routes
-  from the pointer and the verdict. (The owner-claimed-gate pause below is the one
-  place an artifact is surfaced, and only to the owner.)
-- **Compaction is a cold self-restart, not a lossy summary.** Because `.docs/` + git
-  are truth, the orchestrator checkpoints to `status/handoff.md` and **re-bootstraps
-  from the status digest**, continuing with a fresh window — a perfect reset, since
-  the durable state was never in the window. Sonnet 4.6 is **context-aware** (it
-  receives a running `Token usage … remaining` signal after each tool call), so the
-  orchestrator self-triggers the restart at a budget threshold — operational default
-  **~60%**, set in the playbook — rather than waiting for a numeric auto-compact
-  threshold to fire. Raising the orchestrator's budget (or running it on `opus`) is
-  an owner lever, not the primary answer. The restart is only safe if progress was
-  recorded **before** the window cleared, so the orchestrator uses **write-ahead
-  checkpointing** ([ADR 0013](../ADR/0013-starvation-loop-guards-cold-restart.md):
-  commit the next intended action to `handoff.md` *before* a large
-  or in-window operation; restart *before* a big op when near budget) and a
-  **forward-progress guard** (a restart that re-derives the same action with no new
-  commit since is a starvation loop → escalate, never re-attempt). The 60% self-
-  restart is **lossless** and stays *below* the harness's lossy auto-compact, which
-  is only a backstop. See the playbook (`orchestration.md` → *Restart safely*) for
-  the operative rules.
+The root re-verifies inventory immediately before each cold launch and after each gate.
+A changed head, nonzero or incomplete gate, source mismatch, or unrecorded output
+invalidates the run; evidence never carries across a base/head pair.
 
-## Automated review before a slice lands
+The root launches exactly three separate cold, non-delegating auxiliary workers for
+correctness, tests, and security. They receive the same hash-bound package without
+producer context and use separate scratch/output paths with no source, checkout,
+authority, gate-evidence, or peer-output write access. Each echoes the base/head and
+manifest hash and returns parseable, diff-intersecting findings with stable run-local
+ID, confidence, proposed severity, location, claim, evidence, and suggested
+verification.
 
-When a slice reaches **`Implemented`**, before (or while) dispatching the
-code-evaluator and **before the slice can land**, the orchestrator runs Claude
-Code's built-in **`/code-review`** and **`/security-review`** on the slice's commit
-**diff** ([ADR 0010](../ADR/0010-orchestrator-run-automated-review-in-code-eval.md),
-[ADR 0011](../ADR/0011-correct-automated-review-command-to-code-review.md)).
-The orchestrator runs them — never the code-evaluator — because only the
-orchestrator may spawn and a sub-agent cannot safely run a command that may spawn
-([ADR 0001](../ADR/0001-plugin-architecture-and-orchestrator.md)).
+The root mechanically validates completeness, bindings, inventories, and locations,
+then records an identity-neutral companion with only
+`bootstrap-ran-with-findings`, `bootstrap-ran-clean`, or `bootstrap-invalid`. Clean
+requires three valid workers and zero findings. Any missing, failed, timed-out,
+truncated, malformed, duplicate, hash-mismatched, or source-mutating output makes the
+aggregate invalid; partial findings remain diagnostics only.
 
-- **Local diff mode only.** Never PR / `--comment` / `--fix` mode — no GitHub
-  round-trip, no PR metadata, no working-tree mutation — so the input stays
-  identity-neutral and network-silent and the blind contract holds
-  ([ADR 0004](../ADR/0004-blind-evaluation-role-separation.md)).
-- **Target the slice's commit range.** At `Implemented` the slice is already
-  committed, so the working tree is empty; the orchestrator targets the slice's
-  **commit range / branch** when running `/code-review` (e.g. `git diff
-  <base>...<slice-HEAD>` or passing the slice branch/range as the command's
-  target), never the empty working tree
-  ([ADR 0011](../ADR/0011-correct-automated-review-command-to-code-review.md) §2).
-- **Findings artifact (write-and-forget).** This is the one step that *must* run in
-  the orchestrator's own window (sub-agents can't spawn — ADR 0001), so it is the
-  one place review output enters that window. The orchestrator captures the output
-  into a committed, author-neutral, identity-scrubbed, per-slice file
-  `.docs/evaluations/<slice-name>-review-findings.md` (companion to the slice's
-  `-eval.md`), hands it to the blind code-evaluator as an additional input, and then
-  **drops it** — it does not reason over, re-summarize, or branch on the findings
-  text; the blind code-evaluator adjudicates them from the file (ADR 0012).
-- **Applicability.** Run only when the slice's diff touches at least one code
-  (non-docs) file; a pure-docs slice **skips with a note**.
-- **Explicit status.** The artifact records a distinguishable status —
-  ran-with-findings / ran-clean / skipped: docs-only / skipped: command
-  unavailable. A skip is never confusable with a clean review; if a command is
-  unavailable the orchestrator skips and records it, never silently claiming clean.
-- **Degraded runs are invalid, never clean**
-  ([ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)). A `/code-review`
-  or `/security-review` run whose **finder or verify sub-agents failed on an
-  infrastructure limit** (spend/usage/quota, 429, 5xx, safety-classifier-unavailable)
-  is **INVALID** — a "no findings" result from finders that never executed is a
-  **false-clean**, not a clean review. Such a run is **never recorded `ran-clean`**
-  and **never fed to the blind code-evaluator** as review input; extending the
-  review faithfulness invariant (ADR 0010/0011), it is an instance of the
-  infrastructure-blocked escalation ([03](03-artifact-lifecycle.md)) and triggers the
-  same pause + summary. The orchestrator **re-runs the command once unblocked**. If a
-  limit-killed run genuinely cannot be re-run, it is recorded as a **non-run** under
-  the existing token **`skipped: command-unavailable`** — the command effectively
-  could not complete in this environment — and **never** as `ran-clean`. This
-  **reuses** the four-token contract in
-  [`review-findings.md`](../../plugins/loom/skills/loom-playbook/references/review-findings.md)
-  rather than adding a token: a limit-crashed run maps to
-  `skipped: command-unavailable`.
-- **False-clean detection — how.** Before trusting any `/code-review` /
-  `/security-review` "no findings" (or "no findings survived verification") result as
-  `ran-clean`, the orchestrator MUST inspect the workflow result for a **sub-agent /
-  finder failure indicator**: a non-empty failures list, error signatures matching
-  the infrastructure set (spend/usage/quota, 429, 5xx, classifier-unavailable), or a
-  **finder count of 0 with failures present**. If any such indicator is present, the
-  "clean" result is treated as a **degraded run** (above) — **INVALID**, not
-  `ran-clean`. Only a "no findings" result from a run whose finders **actually
-  executed and completed** is recorded `ran-clean`.
-- **Not the gate.** This is a new, separate review dimension — **not** part of the
-  `format → lint → test` gate, which is unchanged.
+After a complete review, the root launches a fresh cold code evaluator distinct from
+the developer, workers, and root. It receives only the exact package, validated
+bootstrap findings, rubric, and bounded instruction, cannot delegate, independently
+checks plan/spec conformance and adjudicates every finding, and obtains the same gate
+rerun against a fresh writable copy whose starting inventory matches `head_sha`.
+Developer gate evidence is comparison material, not a substitute. An unavailable or
+incomplete rerun invalidates the evaluation.
 
-## Scope (declared by the owner at kickoff)
+The evaluator writes one bound verdict to its scratch output and never commits or
+changes status. The root validates run ID, exact SHAs, manifest hash, round,
+adjudications, gate evidence, and output uniqueness, copies it without changing its
+merits, and commits the companion and verdict under the configured uniform identity.
+Only the independent evaluator supplies PASS/FAIL. Until the recorder component
+retires, this root-copy operation is explicitly not deterministic recorder
+conformance.
 
-Scope bounds the driver loop — how far this session goes. Examples:
+Every artifact prominently records:
 
-- `research` — only the researcher (+ its review) on a topic.
-- `adr` — through an accepted ADR.
-- `plan` — through approved spec + slice-plan(s), no implementation.
-- `implement` — take an approved slice-plan through landed code.
-- `slice` — a full single-slice pass: plan → evaluate → implement → evaluate →
-  land.
-- `full` — keep running slices toward the roadmap target until a checkpoint.
-- **ranges / combinations** — e.g. "plan and implement one slice but stop before
-  landing." When scope spans roles, the orchestrator chains them automatically;
-  this is what "agents calling agents" means in practice.
+```text
+Evidence mode: loom-repository-bootstrap/v1
+Conformance: degraded bootstrap; not loom-local-review/v1
+Isolation: not established under ADR 0022
+```
 
-## Approval gates (declared by the owner at kickoff)
+The orchestrator never labels bootstrap output isolated, sanitized-evaluation/v1,
+controlled-input-conformant, or release/adapter conformance, and never feeds it into a
+production-v1 consumer as production evidence.
 
-By default **evaluator approval is sufficient** to advance. At kickoff the owner
-claims gates: either **`all`** (pause before every advance) or a **named list**
-(e.g. "every ADR" and "before any code lands"). At a claimed gate the orchestrator
-pauses, shows the artifact + the evaluator's verdict, and waits for the owner.
+### Protected transition state, publication, and recovery
 
-## Parallelism (designed-for; built after the sequential loop)
+Eligibility is latched only by `refs/heads/loom/bootstrap-transition`, an ordinary
+branch on the configured remote, separate from the target and protected against
+deletion and non-fast-forward updates. Protection must be freshly verified before a
+create-only root push. The canonical JSON root binds the accepted ADR commit/blob,
+`loom-repository-bootstrap-state/v1` schema and unique program ID, improvement-plan
+blob, configured remote/full target/`remote-direct` mode, transition ref, exact
+allowlist, component retirement slices, empty result/evidence maps, sequence zero,
+phase `active`, and `full_sunset: not-reached`. A missing or unexpected root blocks
+bootstrap.
 
-The orchestrator can launch **multiple role sub-agents at once**, each in the
-**background** and each in its own **git worktree** — without any agent-to-agent
-calls. This gives parallel slices safely:
+Each ordinary-push successor has the prior verified tip as its sole parent, increments
+the sequence, repeats immutable fields, and carries cumulative state. History
+validation permits only slice removal, immutable result addition, component movement
+`available -> closing -> retired`, and full-sunset movement
+`not-reached -> closing -> retired`. Every push is freshly fetched and checked by exact
+object ID. Each result binds the verified target result and slice head, initial/final
+bases, gate/review/evaluation hashes, receipt hash, and intent-state SHA; retirement
+records its slice and result SHA. Writers that lose a fast-forward race inspect the
+winner and recover its matching intent or restart from fresh state; they never retry
+stale state or candidate commits.
 
-- Each in-flight slice gets its **own branch + worktree** → no file clobbering.
-- The orchestrator runs e.g. `developer` on slice A and `developer` on slice B
-  concurrently, each isolated; as each reaches `Implemented`, it fires a
-  `code-evaluator` for each.
-- The orchestrator remains the single hub, keeping the status machine and blind
-  routing coherent.
-- **`.docs/` coordination across branches** follows the hybrid model decided in
-  [ADR 0008](../ADR/0008-parallel-docs-coordination-worktree-per-slice.md) (the
-  authority for detail):
-  - The three living docs (`roadmap.md`, `progress.md`, `handoff.md`) **and the
-    slice-plans index `slice-plans/README.md`** are **orchestrator-owned,
-    main-only, and serialized** — a slice branch never edits them.
-  - Each slice branch carries only its **uniquely-named** plan file
-    (`<slice>-plan.md`), eval file (`<slice>-eval.md`), and its code. These path
-    sets are disjoint across slices by construction, so `.docs/` merge conflicts
-    cannot arise.
-  - Landing is a **serial merge + finalize on main**: the orchestrator merges one
-    slice (bringing only its disjoint files), runs the finalize pass on main to
-    update the living docs and move the slice's index entry Active → Archived,
-    then merges the next.
-  - **Concurrency safety:** `index.lock` collisions retried with exponential
-    backoff; crashed worktrees reclaimed via `git worktree remove -f` / `git
-    worktree prune`; one checkout per branch (each in-flight slice = one unique
-    branch in one worktree).
-  - **Slicer-independence rule:** only slices that touch **disjoint source files**
-    run in parallel; overlapping or mutually dependent slices are **sequenced**.
+Every eligible publication, including later production-helper publications while the
+program remains active, uses this envelope: prepare and check the final candidate;
+append and freshly verify a `publication-intent` phase bound to slice, session/claim,
+final base, candidate input/result, evidence hashes, and intended removals/retirements;
+publish and freshly verify the configured target; write the ADR-0020 receipt; append
+and freshly verify settlement returning to `active` or terminal `retired`; then release
+the claim and clean up. A current intent blocks every other new or resumed bootstrap
+action. An abort successor is permitted only after proving no target publication
+occurred; it retains the intent/abort record and cannot undo results or retirements.
+Recovery freshly reads both refs and either publishes only the exact recorded
+candidate, reconstructs the receipt and settles a verified result, completes cleanup
+for an existing settlement, or stops for owner recovery when containment is uncertain.
 
-**`claude -p` fallback:** a sub-agent with `Bash(claude:*)` can shell out to a
-headless `claude -p` to spawn a peer agent. Kept in reserve for deep nesting;
-the worktree approach is primary because it is more observable and controllable.
+For only M0, M1, and `remote-first-integration-candidate`, while
+`bootstrap-landing` remains available, the root may replace the not-yet-built landing
+helper with ADR 0023's repository-only `remote-direct` procedure. It fetches the exact
+remote base into a temporary ref; builds a disposable candidate containing only the
+slice and deterministic prospective finalization; runs the integrated gate, auxiliary
+review, and independent evaluation against exact candidate SHAs; adds only declared
+evidence/finalization; reruns the exact publish-candidate gate; and re-fetches before
+publication. Target movement discards and rebuilds the candidate with affected checks
+rerun. Publication uses an explicit non-force `<sha>:<full-target-ref>` refspec and is
+successful only after a fresh read proves the target and checked tree exactly match.
+It never falls back to PR, merge queue, a protected target, force, or another mode.
 
-### Multi-session coordination (ADR 0014, ADR 0015, ADR 0016)
+Settlement of `remote-first-integration-candidate` retires bootstrap landing;
+`local-review-orchestration` retires auxiliary bootstrap review;
+`sanitized-evaluation-workspace` retires bootstrap export and gate rerun; and
+`evaluation-output-recorder` retires root-copy recording. Retirements govern every
+new and resumed run regardless of its base. A stale run must rebuild/rebase from a
+fresh target containing every retired component's result SHA and rerun the integrated
+gate and all affected review/evaluation. A rewind or unavailable qualifying base
+blocks; an older checkpoint never reopens a retired path.
 
-Everything above assumes a **single** orchestrator session — which is exactly what
-makes ADR 0008's "main-only, serialized" true *by construction*. The owner may
-instead run **multiple independent top-level `/loom:run` sessions** against the same
-repository at once, each its own thin orchestrator (ADR 0012) that cold-restarts
-independently (ADR 0013). With N sessions nothing serializes one session's `main`
-writes against another's.
-[ADR 0014](../ADR/0014-multi-session-worktree-coordination.md) (the authority for
-detail) **extends — does not replace** — the ADR 0008 model above so that
-"serialized on main" holds *across* sessions. Every single-orchestrator guarantee
-above remains intact; the following adds the cross-session layer.
-[ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md) supersedes ADR 0014
-**on the liveness signal only** — a session's liveness is now **lease freshness** (a
-renewal heartbeat within the TTL), **not** worktree-list membership and **not** the
-process pid; every other ADR 0014 decision below stands unchanged.
-[ADR 0016](../ADR/0016-git-native-ref-cas-lock-mechanism.md) supersedes ADR 0014
-**on the lock/claim *substrate* only** — the concrete atomic primitive under the model.
-The lock and the slice claims are now **git refs** in the repository's **common (shared)
-ref store**, and every acquire / stale-steal / release / claim / renew / reclaim is a
-**`git update-ref` compare-and-swap (CAS)**, replacing the hand-rolled `mkdir` lock-dir +
-rename-capture CAS and the inline/registry lease marker. git owns the atomicity, so the
-CAS is **ABA-safe by construction** (the old-value is the exact prior object SHA) and a
-losing CAS is a **clean, retryable failure**. The coordination model below (session-owned
-worktrees, the three locked shared-`main` writes, per-session `.git/` state, cold-restart)
-and ADR 0015's lease-freshness liveness stand unchanged and now **ride this substrate**;
-only the primitive and its storage change.
+Settlement of `evaluation-output-recorder` derives the full-sunset SHA from a fresh
+target proven to contain the results for `local-review-orchestration`,
+`sanitized-evaluation-workspace`, and `evaluation-output-recorder`. Its terminal state
+retires all components and empties the allowlist. Bootstrap is then forbidden for all
+runs. Production failure does not revive it; only a new accepted ADR and new
+program/ref could authorize another transition.
 
-- **Session-owned slice worktrees.** A `/loom:run` session **never does slice work in
-  the shared `main` checkout.** When it picks up a slice it creates **its own**
-  worktree off **fresh current local `main`**
-  (`git worktree add -b <slice-branch> <session-owned-path> main`) and runs all that
-  slice's roles there. This is ADR 0008's `git worktree add` isolation extended one
-  level — from *one orchestrator's sub-agents* to *each session's* slice work — so
-  disjoint, uniquely-named slice file sets stay conflict-free **by construction** and
-  **lock-free**: two sessions building two independent slices cannot collide on any
-  slice file. The base is the shared **local** `main`, not `origin/main`: loom commits
-  directly to local `main` and does not push, so a landed slice appears on local
-  `main` first and `origin/main` lags.
+At every preparation, review, gate, evaluation, recording, state, or publication
+failure, the root fails closed: it never records clean/PASS or advances without valid
+evidence; retains the exact commits and safe diagnostics; keeps `Implemented`, or
+`Ready to Publish` after a valid PASS, unless a merits revision returns to
+`In Progress`; checkpoints the exact resume action; preserves the claim during
+incomplete intent/publication/settlement; and stops spawning. Infrastructure blocks
+consume no merits round and are never retried blindly. A stage may resume only with
+hash-identical inputs; otherwise the root starts a new run. A docs-only skip, missing
+command, partial finder set, manual finding summary, owner assertion, or prior slice's
+evidence never substitutes for a required bootstrap stage.
 
-- **Authoritative read = a fresh view of local `main` under the lock.** "What has
-  landed and what is claimed" is read from the shared **local `main`**, never the
-  session's own slice-worktree snapshot (which froze at worktree-create time and goes
-  stale the moment any peer lands or claims). Because there is no push, `origin/main`
-  may lag local `main`, so consulting it via `git fetch` is an **unlocked optimization
-  / pre-filter only** — never authoritative. The correctness-critical re-read reads
-  **local `main` under the lock** (below).
+## Local review orchestration
 
-- **A cross-session lock on `main`'s critical section (a git ref — ADR 0016).** The
-  critical section is `{claim-a-slice, merge+finalize-land}` — the only operations that
-  touch the shared `main` checkout and its single-instance coordination files (the three
-  living docs + `slice-plans/README.md`). It is guarded by a **per-repository cross-session
-  mutex that is a single git ref — `refs/loom/lock`** — in the repository's **common
-  (shared) ref store** (below), not a tracked, mergeable file. The ref's value is a small
-  content-addressed **blob** (`git hash-object -w`, which carries **no** author/committer
-  metadata) encoding the holder record `{session-id, lease-timestamp, session-pid,
-  start-time}`; the `session-pid`/`start-time` are **advisory diagnostics / the session's
-  own renewer bookkeeping only, never a cross-session liveness gate** —
-  [ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md) — and none of it is ever
-  commit/author metadata (ADR 0003 untouched). Each state transition is a **`git update-ref`
-  compare-and-swap against the exact object SHA the caller last read**:
-  - **Acquire** is a **create-only CAS** from the null OID (`git update-ref refs/loom/lock
-    <holder-blob> 0{40}`): it succeeds only if the ref is **absent**, so a peer already
-    holding the lock makes it fail.
-  - **Stale-steal** is a **value-CAS** from the exact read SHA, taken **only when the
-    holder's lease is stale** by the lock-TTL gate (below).
-  - **Release** is a **delete-CAS** (`git update-ref -d refs/loom/lock <my-holder-blob>`):
-    it deletes only if the ref still equals the caller's own holder blob, so a session that
-    already lost the lock cannot delete a peer's.
-  Because the old-value in every CAS is the **exact prior object SHA** — checked atomically
-  by git under its own per-ref lock — the mutex is **ABA-safe by construction**: any peer
-  that changed the ref between the caller's read and its `update-ref` makes the old-SHA
-  check fail, so **the caller cleanly loses and retries** and there is never a window in
-  which two contenders both believe they captured the same lock. This delegates
-  cross-worktree atomicity to git's ref-transaction semantics instead of reconstructing
-  compare-and-swap from `mkdir` + `rename(2)` + a re-read, and retires the hand-rolled
-  rename-capture machinery. Contention — a lost value-CAS, or a lost race for the ref's
-  own transient `.lock` (a clean non-zero exit) — reuses ADR 0008's exponential backoff
-  (the same mechanism, now under a git-native primitive). The lock brackets a **short,
-  bounded** main-side op and is **never held across a role spawn** or while a role works in
-  a worktree. This makes ADR 0008's "serialized on main" true *across* sessions — closing
-  concurrent-living-doc-write and concurrent-merge races — while leaving the
-  conflict-free-by-construction disjoint slice files lock-free.
+For each code-bearing `Implemented` slice, the orchestrator runs the repository-owned
+`loom-local-review/v1` protocol through `loom-review` against full `base_sha` and
+`head_sha`:
 
-- **Lock liveness / TTL — distinct from the slice lease.** The `refs/loom/lock` ref does
-  not free itself, so a session that dies mid-critical-section would otherwise deadlock
-  every contender. The lock therefore carries its **own short `lock-TTL`** covering only
-  the lock ref — separate from and much shorter than the slice-lease TTL below (a held lock
-  is a milliseconds-to-seconds op; a lease spans a whole slice). The TTL alone never
-  authorizes a force-clear on a *populated* ref: **holder-lease freshness gates it.** A
-  contender backing off past the `lock-TTL` reads the current holder blob's SHA `H_obs`
-  **and** decodes its `lease-timestamp`, and force-steals **only when that lease is
-  stale — older than the `lock-TTL`** ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)
-  lease-freshness applied to the lock: because the locked section is a
-  milliseconds-to-seconds op — provided the holder is not keeping the lock's lease fresh
-  through a long `land` (see the renewer below) — a lease older than the `lock-TTL` means
-  the holder crashed mid-section). The steal is a **value-CAS from that exact `H_obs`**, so
-  if any peer changed the ref in the interim the CAS fails and the contender cleanly loses
-  and retries — two contenders that both saw the lock stale cannot both capture it.
-  Worktree-list membership and the process pid do **not** enter this decision. A holder
-  still inside its bounded section (or renewing the lock's lease through a long `land`)
-  keeps its lease within the `lock-TTL` and is **never** stolen — the contender keeps
-  backing off and lets it finish.
+1. Resolve the installed helper through the active adapter and invoke its absolute
+   path; `prepare` rejects dirty/ambiguous targets and exports a `.git`-free immutable
+   source snapshot plus hashed manifest.
+2. Launch cold non-delegating correctness, tests, and security workers against that
+   same run. Each has read-only common inputs, its own writable output, no credentials,
+   and no network-specific client tools.
+3. `validate` recalculates all hashes, source inventory, prompt/protocol versions,
+   exact SHAs/diff, finder completeness, and diff-intersecting locations.
+4. Only a valid complete run may be `assemble`d into the identity-neutral
+   `.docs/evaluations/<slice>-review-findings.md` companion.
+5. Preserve the validated evidence through evaluation and publication; `clean` is
+   allowed only when required recovery evidence is safely retained.
 
-- **Liveness rule — lease freshness (a renewal heartbeat)**
-  ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)). A holder/claimant is
-  treated as **alive iff its lease timestamp is fresh — renewed within the TTL**; a
-  lease **older than the TTL is stale → reclaimable**. This is the **sole and
-  sufficient** cross-session liveness signal, and it gates **both** force-clear paths
-  (the stale lock and the stale slice lease). **Worktree-list membership and the process
-  pid are NOT liveness signals:** a crashed session leaves its `wt-<sid>` worktree on
-  disk (and `git worktree prune` will not remove a present directory), so membership
-  would read a crashed session "alive forever"; and the ephemeral per-invocation helper
-  pid is already gone by the time any peer would probe it, so pid reaps the living. A
-  peer therefore decides another session's liveness by **lease freshness alone** — it
-  **never** probes a peer's pid and **never** consults `git worktree list` for liveness.
-  The `session-id` still names the worktree and keys the lease/claim owner (below), but a
-  session's `session-id`-in-`git worktree list` **no longer proves it alive** — its
-  **fresh lease** does. Any pid retained in a lease stamp is **advisory diagnostics
-  only**, never a liveness gate.
+Preparation, workers, validation, and assembly are network-silent and require no
+remote, PR, or external review command. A missing/failed/invalid finder invalidates
+the aggregate, never means clean, and blocks evaluation/landing until corrected or
+infrastructure is restored. Pure-docs changes record `skipped: docs-only` without a
+protocol run. Superseded mechanisms remain documented only in the ADR history.
 
-- **Renew obligation — a detached, out-of-band background renewer.** A live session
-  keeps its lease fresh by **renewing on a cadence well below the TTL** (~TTL/3 as an
-  operational default; the exact fraction is a slice-plan parameter). The renew
-  obligation **must not** be carried by the driver loop: the thin orchestrator (ADR 0012)
-  is **single-threaded** and spends most of its wall-clock **suspended inside long
-  (20–40+ min) sub-agent Task calls**, during which its main thread runs nothing and
-  could emit **zero** heartbeats — a loop-driven lease would go stale mid-slice **while
-  the session is very much alive** (its blocked sub-agent *is* the progress), and a peer
-  would reclaim an in-progress slice. Instead, on **first acquire** of any lock or claim,
-  the session launches **exactly one** detached background renewer that refreshes every
-  held lease on the ~TTL/3 cadence (locked write #2 below),
-  **independently of the blocked main thread**, so leases stay fresh straight through a
-  multi-hour sub-agent call. Each renew is a **value-CAS** of the held ref (a slice claim
-  ref and/or `refs/loom/lock`) from its **exact read SHA** to a blob with a refreshed
-  `lease-timestamp` (ADR 0016). The renewer refreshes **the lock ref's own lease-timestamp
-  while the lock is held**, not only the slice claims: because the lock holder record
-  carries a `lease-timestamp`, a session running a long `land`/merge keeps its **lock**
-  lease fresh, so a peer's stale-steal gate (above) sees the lock as **live** and does
-  **not** steal it mid-critical-section (this closes the review's un-renewed-lock defect —
-  the lock is now heartbeat like any other lease; peers still decide liveness by lease
-  freshness alone). Because the renewer mutates the lock ref's SHA, the main thread's
-  release / `land` must delete-CAS or value-CAS against the **current** ref value — never a
-  remembered stale SHA — so a renew that landed between the main thread's last read and its
-  release does not spuriously fail the release. The renewer is gated on the **stable session
-  process's
-  reuse-robust identity** — the pair **`{session-pid, session-pid-start-time}`** — and
-  keeps beating **only while** that pid is alive **and** its current start-time still
-  matches the recorded one (`alive(session-pid) && starttime == recorded`). This identity
-  gate is **local / intra-session only** — the renewer's own honesty check on whether to
-  keep beating its **own** leases — and is **never** used as a cross-session liveness
-  signal (doing so would reintroduce the stale-pid failure the liveness rule above
-  forecloses). When the session process dies, is killed, or has its pid recycled to an
-  unrelated process (start-time mismatch), the gate fails on the next beat and the
-  renewer **self-terminates**: the lease goes stale within one TTL and the work becomes
-  **reclaimable by design** — a session that stops making progress (including one that
-  hits an [ADR 0013](../ADR/0013-starvation-loop-guards-cold-restart.md)
-  escalate-and-stop wedge and then exits) is **indistinguishable from a crashed one** and
-  is correctly reclaimed, while a **live-but-busy** session (even one blocked in a long
-  sub-agent call) keeps its lease fresh and is **never** reclaimed. The renewer is started
-  **once** (check-then-launch, never duplicated), and stopped on clean session-end (after
-  which the session's leases go stale promptly, so a peer may reclaim without waiting a
-  full TTL).
+## Evaluation orchestration
 
-- **Slice claim / lease — a per-slice ref, check-then-act under the lock (ADR 0016).**
-  Two sessions must not pick the same next action. Each slice's **lease** is a **per-slice
-  git ref — `refs/loom/claims/<slice>`** — in the common ref store, whose value is a blob
-  encoding `{session-id, lease-timestamp}` (this resolves ADR 0015's open
-  inline-vs-sidecar lease-storage parameter to a ref; the `slice-plans/README.md`
-  Active/Archived index remains the ADR 0008 orchestrator-owned listing of which slices are
-  in-flight). Because each claim is an **independent** ref, two sessions claiming
-  **different** slices never contend, and two racing the **same** slice resolve by CAS —
-  exactly one wins. The dispatch scan derives the next action from the `Status:` lines plus
-  the claim-ref/Active state on a fresh view of local `main`. To take slice X, a session
-  acquires the lock and, **while holding it, re-reads the claim-ref/Active state from
-  current local `main`**; if X carries a **live** claim ref by a peer, or landed (moved to
-  Archived) in the interim, it **aborts and re-selects**. Only when the re-read still shows
-  X free does it write its claim — a **CAS on `refs/loom/claims/X`** (create-only from the
-  null OID if absent; a staleness-gated value-CAS steal from the exact read SHA if the prior
-  claim is stale; an idempotent re-affirm of its **own** fresh claim) — record X in the
-  `main` Active index, release the lock, and only then create the worktree and dispatch
-  roles. Because read-validate-write is one locked section **and** the claim itself is an
-  atomic CAS, two sessions cannot both observe X free and both claim it. A session **skips**
-  any slice carrying a **live** (non-expired) claim ref by another session, so two sessions
-  scanning the same `Status:` lines diverge on which slice they take.
+For every plan/research or code evaluation:
 
-- **Stale-claim reclaim — slice-lease TTL.** A claim ref whose `lease-timestamp` is older
-  than the slice-lease TTL is **stale**, and — because **lease freshness is the liveness
-  signal** ([ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md)) — a stale lease
-  **means** its holder is dead: no membership or pid check overrides it. Under the lock
-  the reclaiming session **re-reads** `refs/loom/claims/<slice>` from the common ref store,
-  and if it is **still stale**, force-steals it with a **value-CAS from the exact read SHA**
-  (gated on that staleness), runs `git worktree prune` + `git worktree remove -f` for the
-  orphan worktree, updates the expired Active entry, and claims the slice. (Driving
-  orphan-worktree cleanup off lease **staleness** — rather than off an always-populated
-  worktree-membership read — is what makes a crashed session's worktree reclaimable at
-  all.) A holder whose out-of-band renewer is still beating keeps its lease **fresh** and
-  is **never** reclaimed — this is exactly how a legitimately long-running or
-  sub-agent-blocked slice is protected, since its renewer (above) CAS-renews the claim ref
-  on the ~TTL/3 cadence throughout; landing subsumes the claim release (a **delete-CAS** of
-  the caller's own claim ref — no separate unclaim step).
+1. A deterministic exporter creates a fresh directory outside the managed repository,
+   copies only the type-specific allowlist, strips forbidden metadata, rejects unsafe
+   links/special files, applies read-only permissions, and writes a manifest hashing
+   every input and origin.
+2. Current-tree evidence, when required, is a complete sanitized tracked snapshot at
+   one `evidence_sha`. Research source evidence is captured before launch with locator,
+   retrieval/freshness/provenance, and content hash.
+3. The active adapter launches a cold evaluator with only export path, evaluation
+   type, and bounded task instruction. Delegation and network-specific tools are
+   denied; evaluator writes are confined to output/scratch.
+4. A code evaluator must invoke the deterministic gate runner. The runner verifies
+   judgment-source hashes, creates and verifies a private writable execution copy,
+   runs the pinned gate/environment with prepared offline dependencies, records full
+   result evidence, re-verifies immutable source, and discards the copy even on fail.
+5. A deterministic recorder rejects missing, duplicate, malformed, truncated,
+   cross-run, or hash-mismatched output. It copies one valid verdict to the expected
+   `.docs/evaluations/` path and applies the legal status transition; the orchestrator
+   commits it author-neutrally.
 
-- **Per-session write-ahead anchor — off `main`.** Each thin session must write its
-  next intended action **ahead of every large/in-window op** (ADR 0013 rule 1) so a
-  ~60% cold restart (ADR 0012) resumes from an advancing anchor. Under a single
-  orchestrator the shared `handoff.md` doubled as both the human-facing status doc and
-  that machine anchor; with N sessions the two roles **split**. The **machine
-  cold-restart anchor** moves to **per-session state keyed by `session-id`, persisted
-  under `.git/`** (e.g. `.git/loom-session-<session-id>/`, untracked, alongside loom's
-  other under-`.git/` coordination state) holding `{session-id, write-ahead checkpoint (next intended action),
-  held-claims set}`. Because it is under `.git/` it is **not** a tracked `main` file:
-  writing it is **not** a `main` write, needs **no** lock, and is per-session — a
-  restarting session reads only **its own** anchor, never a peer's. This **preserves**
-  ADR 0013 rule 1's write-ahead invariant and **extends only its medium**; rule 3's
-  forward-progress guard now reads this per-session checkpoint plus the session's own
-  most-recent commit, so one session's progress is never confused for another's. The
-  **human-facing `handoff.md`** (and `roadmap.md`/`progress.md`) **stay shared,
-  single-instance, on `main`**, written only at **land**, under the lock, at milestone
-  granularity — never on the per-op write-ahead cadence.
+Prior developer gate evidence never substitutes for the unconditional evaluator gate
+rerun. Inability to rerun is invalid/infrastructure-blocked, not “unsupported.” The
+orchestrator never grants an evaluator write access to the repository or asks it to
+commit.
 
-- **`session-id` is stable across restart and never pid-derived.** It is allocated
-  once at session start and persisted in the per-session `.git/` state, so it survives
-  a context clear. On **cold-restart bootstrap** a session re-reads that state,
-  re-adopts its `session-id` and held-claims set, and — under the lock — **renews each
-  held lease** (refresh `lease-timestamp`); it also refreshes the recorded
-  `{session-pid, session-pid-start-time}` to the **restarted** process's identity and
-  **relaunches the background renewer only if the recorded one did not survive the
-  restart** (dead, or its pid recycled per the start-time check), so a restart never
-  leaves two renewers racing. Because a peer decides liveness by **lease freshness**
-  (not membership or pid) and the owner's renewer keeps that lease fresh across the
-  owner's own restart, a peer never sees the lease as dead across the restart, and the
-  owner **recovers** (re-adopts and renews) rather than orphaning its claims.
+## Parallel and multi-session work
 
-- **Exactly three locked shared-`main` writes.** With the restart anchor moved
-  off `main`, a session mutates the shared `main`-side coordination state (the tracked
-  living docs + the `slice-plans/README.md` index on `main`, and the `refs/loom/*` refs in
-  the common ref store — ADR 0016) at exactly **three** moments, **all inside the lock**:
-  1. **Claim** — CAS the lease ref `refs/loom/claims/<slice>` and record the slice in
-     `slice-plans/README.md`'s Active region.
-  2. **Lease-renew** — CAS-renew a held lease's `lease-timestamp`: the claim ref and, while
-     the lock is held, `refs/loom/lock` itself (ADR 0016), performed by the out-of-band
-     background renewer on the ~TTL/3 cadence and by the session on cold-restart bootstrap,
-     so a long-running or restarted slice — or a long `land` holding the lock — is not
-     reclaimed/stolen.
-  3. **Land + finalize** — `git merge <slice-branch>`, the living-doc finalize updates
-     (`progress.md`/`handoff.md`, and `roadmap.md` if a milestone closed), moving
-     the slice Active → Archived in `slice-plans/README.md`, and the **delete-CAS** of the
-     caller's own claim ref (which **is** the claim release — no separate unclaim step).
+Each claimed slice uses a session-owned branch/worktree. Independent slices may run
+concurrently only when their source and uniquely named artifact path sets are disjoint;
+overlapping or dependent slices are sequenced.
 
-  At all other times a session operates only in its own slice worktree(s). The
-  per-session write-ahead checkpoint is **not** one of these three — it is off-`main`
-  per-session `.git/` state.
+Same-clone coordination uses validated state plus Git-ref CAS in the common ref store:
 
-**Multi-session invariants.**
+- `refs/loom/lock` protects only short shared coordination/publication sections;
+- `refs/loom/claims/<slice>` is the per-slice claim;
+- exact-SHA create/value/delete `git update-ref` CAS is required;
+- lease freshness is the only cross-session liveness signal;
+- a detached session-identity-checked renewer refreshes held leases;
+- stale steals are freshness-gated value CAS; release is owner-verified delete CAS;
+- every shared-state mutation verifies current lock ownership immediately first; and
+- identifiers and computed paths are validated and contained under `.git/loom`.
 
-- Every shared-`main` write happens **inside** the cross-session lock; there are
-  exactly **three** (claim, lease-renew, land+finalize). No unguarded living-doc or
-  `handoff.md` write is left open.
-- A force-clear of the lock **or** a lease is a **staleness-gated value-CAS steal** (ADR
-  0016) gated on **holder-lease freshness** — a lease not renewed within the TTL (for the
-  lock ref: a holder `lease-timestamp` older than the `lock-TTL`) —
-  [ADR 0015](../ADR/0015-lease-renewal-heartbeat-liveness.md); worktree-list membership and
-  the process pid are **not** liveness signals. A live-but-busy holder keeps its lease fresh
-  via its out-of-band renewer (which now heartbeats the lock ref too) and is **never**
-  cleared; a losing steal-CAS is a clean, retryable failure.
-- The cold-restart anchor is **off-`main`, per-session, under `.git/`**, keyed by a
-  `session-id` **stable across restart and never pid-derived**; the shared `handoff.md`
-  stays on `main`, written at land under the lock.
-- Disjoint slice files stay conflict-free **by construction** and **lock-free** (ADR
-  0008 preserved); only the irreducibly-shared `main` critical section is locked.
-- Uniform author-neutral identity (ADR 0003) is **untouched**: the `session-id` is
-  out-of-band coordination metadata and any recorded `pid`/`start-time` is out-of-band
-  bookkeeping for the session's **own** renewer (never a cross-session liveness gate —
-  ADR 0015), **never** commit/author metadata, so cross-session commits stay
-  indistinguishable to the blind evaluator; only the session spawns (ADR 0001). The holder
-  record lives in a `refs/loom/*` **blob** (via `git hash-object -w`, no author/committer
-  metadata) and those refs are **never** `refs/heads/*` branch history and **never** appear
-  in the blind code-evaluator's slice-commit diff (ADR 0016 / ADR 0003). No new `Status:`
-  token — the lease is coordination bookkeeping in a `refs/loom/claims/<slice>` ref (with
-  the slice listed in `slice-plans/README.md`'s Active region, ADR 0008's index bucket), not
-  a lifecycle state (spec 03 unchanged).
-- **Substrate is now decided (ADR 0016); values remain deferred.** The lock/claim primitive
-  is **fixed** as git-native `update-ref` **CAS** on the common ref store —
-  `refs/loom/lock` + `refs/loom/claims/<slice>` (create-only, value, and delete CAS on the
-  exact read SHA; ABA-safe by construction) — no longer the open `mkdir`-dir-vs-ref-CAS
-  parameter. These refs **must** live in the **common (shared) ref store** (never a
-  per-worktree / `refs/worktree/` namespace, which would defeat cross-session visibility).
-  Two re-implementation notes carry from the ADR 0016 review: **(a) loose-blob cleanup** —
-  each CAS supersedes the prior holder blob, leaving it unreferenced; these are reclaimed by
-  ordinary `git gc` (noted, not over-specified); **(b) renewer↔release coordination** —
-  because the renewer mutates the lock/claim ref's SHA, the main thread's release/`land`
-  must CAS against the **current** ref value, not a remembered stale SHA. Still deferred to
-  the POSIX-sh helper slice (loom's third executable file, shell-gated): the `lock-TTL` and
-  slice-lease TTL values, the exact renew-cadence fraction, the holder-blob field encoding,
-  the exact ref names / create-only sentinel, the detached-renewer spawn/reap primitive, the
-  **portable** capture of the process start-time for the `{session-pid,
-  session-pid-start-time}` identity gate, and the per-session `.git/` state
-  location/derivation. This spec records the **contract**, not the implementation. (Liveness
-  itself is **no longer** a deferred parameter — ADR 0015 fixes it as lease freshness.)
+Role work, review, evaluation, candidate construction, merging, and gates happen
+outside the publish lock. Claim acquisition does not write tracked local or remote
+target state. Final living docs/index changes exist only in the candidate.
 
-## Human checkpoints
+These refs coordinate sessions sharing one common Git directory. They do not exclude
+duplicate work across clones. Only a configured remote-claim/provider adapter may make
+that stronger claim.
 
-The loop pauses and returns to the owner when: the scope boundary is reached; an
-owner-claimed gate is reached; an artifact exceeds the round limit (escalation =
-pause + summary, see [03](03-artifact-lifecycle.md)); an **infrastructure block** is
-detected — the infrastructure-blocked escalation
-([03](03-artifact-lifecycle.md) / [ADR 0017](../ADR/0017-infrastructure-blocked-escalation.md)),
-same pause + summary shape but **not** round-counted; or a role reports it cannot
-proceed without owner input. On every pause the orchestrator ensures
-`status/handoff.md` reflects the next step.
+## Remote-first landing
 
-The infrastructure-blocked escalation is **detect-on-failure only** — loom cannot
-poll account limit state, so it reacts to a spend/usage/quota limit, 429, 5xx,
-classifier-unavailable error, or a workflow whose sub-agents crashed on such. On
-detection the orchestrator does **not** treat the result as a valid FAIL / `ran-clean`
-/ finding set, does **not** consume a round-limit count, **halts** rather than
-retry-looping into the same limit, **write-ahead checkpoints** (ADR 0013), and
-pauses + summarizes to the owner (naming the block and how to resume). The full
-contract lives in [03](03-artifact-lifecycle.md) (*Infrastructure-blocked
-escalation*); the degraded-review case is handled in *Automated review before a slice
-lands* above.
+Every initialized repository configures a remote name, full target ref, and one mode:
 
-## One-off invocation
+| Mode | Publication boundary | Support condition |
+|---|---|---|
+| `remote-direct` | non-force fast-forward target update | required first implementation; unprotected target |
+| `pr-per-slice` | provider-confirmed merge of one candidate | only with a conforming configured provider adapter |
+| `merge-queue` | queue-confirmed merge result | only with a conforming configured provider adapter |
 
-Each role is also runnable directly ([07](07-command-surface.md)). A one-off is a
-single cold-agent pass: read files, do the job, write/commit, set status, return —
-without the orchestrator chaining the next role.
+Mode is never inferred or silently changed. Network loss, credentials, protection, or
+adapter failure preserves `Ready to Publish` and its claim.
+
+The landing helper:
+
+1. Fetches the configured target and resolves the exact base SHA.
+2. Creates a disposable integration branch/worktree at that SHA; local `main` is not
+   consulted as authority.
+3. Integrates only the current slice and deterministic finalization artifacts.
+4. Runs the integrated gate and all review/evaluation checks affected by integration.
+5. Re-fetches immediately before publication. If the target moved, it rebuilds from
+   the new SHA and reruns affected checks.
+6. Publishes without force using the configured mode while holding the same-clone lock
+   only for final compare, publication, fresh verification, and receipt update.
+7. Independently reads the remote, verifies the exact result, records the receipt,
+   releases the claim, and performs idempotent cleanup.
+
+The receipt binds slice/session, remote/full target ref, mode, slice head, initial and
+final bases, candidate/result SHA, gate/review/evaluation evidence hashes,
+helper/protocol/product versions, and publication/verification outcome.
+
+A successful command response is not proof. `Landed` exists only after remote
+verification and a matching receipt. Local `main` may be fast-forwarded afterward when
+clean; failure to do so has no lifecycle effect. Loom never force-pushes.
+
+## Human checkpoints and recovery
+
+On any pause the orchestrator persists the exact pending action, evidence locations,
+claim/candidate state, and resume command. Infrastructure failure is detected on
+failure, not predicted: it consumes no merits round and stops blind retries. A crash
+after remote publication is recovered by fresh remote verification and idempotent
+receipt/cleanup; if the exact published result cannot be proven, the owner decides.

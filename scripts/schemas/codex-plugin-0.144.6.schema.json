@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/scripts/schemas/codex-plugin-0.144.6.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["name", "version", "description", "author", "homepage", "repository", "license", "keywords", "skills"],
+  "properties": {
+    "name": { "const": "loom" }, "version": { "const": "0.2.0" }, "description": { "type": "string", "minLength": 1 },
+    "author": { "type": "object", "additionalProperties": false, "required": ["name", "email"], "properties": { "name": { "type": "string", "minLength": 1 }, "email": { "type": "string", "minLength": 3 } } },
+    "homepage": { "type": "string", "format": "uri" }, "repository": { "type": "string", "format": "uri" }, "license": { "const": "MIT" },
+    "keywords": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "skills": { "const": "./skills/" }
+  }
+}

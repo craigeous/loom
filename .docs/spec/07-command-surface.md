@@ -1,43 +1,59 @@
-# 07 — Command Surface
+# 07 — Client Invocation Surface
 
 Status: Approved
 
-loom is a Claude Code **plugin**. Plugin components are **namespaced by plugin
-name** — there is no bare `/loom`; commands are `/loom:<name>` and agents are
-`loom:<role>` (confirmed empirically at M1 install). See
-[10 — Packaging](10-packaging.md).
+## Authority
 
-## Commands (`plugins/loom/commands/`)
+ADRs [0007](../ADR/0007-namespaced-command-surface.md) and
+[0018](../ADR/0018-shared-core-and-client-adapters.md).
 
-One file per command (each surfaces as `/loom:<filename>`):
+The canonical surface is eight workflow intents backed by shared skills. Invocation
+syntax is adapter-specific and behaviorally equivalent, not textually identical.
 
-| Command | File | What it does |
-|---|---|---|
-| `/loom:run [scope]` | `run.md` | The **orchestrator** — detect init mode, take scope + claimed gates, drive the driver loop. |
-| `/loom:research <topic>` | `research.md` | One-off researcher pass → cited `.docs/research/` note. |
-| `/loom:plan` | `plan.md` | One-off planner pass → ADR / spec / slice-plan. |
-| `/loom:eval-plan [artifact]` | `eval-plan.md` | One-off **blind** plan/research review → verdict. |
-| `/loom:develop [slice]` | `develop.md` | One-off developer pass → implement + gate. |
-| `/loom:eval-code [slice]` | `eval-code.md` | One-off **blind** code review → verdict. |
-| `/loom:status` | `status.md` | Print `.docs/` state; no agents, no writes. |
-| `/loom:init` | `init.md` | Initialize / align this repo to loom. |
+## Explicit intent mapping
 
-## Agents (`plugins/loom/agents/`)
+| Intent | Shared workflow asset | Claude Code | Codex |
+|---|---|---|---|
+| Run orchestrator | `loom-run` | `/loom:run` | `$loom-run` |
+| Research | `loom-research` | `/loom:research` | `$loom-research` |
+| Plan | `loom-plan` | `/loom:plan` | `$loom-plan` |
+| Evaluate research/plan | `loom-eval-plan` | `/loom:eval-plan` | `$loom-eval-plan` |
+| Develop | `loom-develop` | `/loom:develop` | `$loom-develop` |
+| Evaluate code | `loom-eval-code` | `/loom:eval-code` | `$loom-eval-code` |
+| Report status | `loom-status` | `/loom:status` | `$loom-status` |
+| Initialize/align | `loom-init` | `/loom:init` | `$loom-init` |
 
-The five roles the commands spawn via the Task tool, namespaced `loom:<role>`:
-`loom:researcher` (haiku), `loom:planner` (opus), `loom:plan-evaluator` (opus),
-`loom:developer` (sonnet), `loom:code-evaluator` (opus).
+Documentation and conformance tests use explicit forms. Codex may also select a skill
+implicitly, but implicit selection is convenience and not the tested contract. Claude
+has no bare `/loom`; its plugin namespace remains `loom:<name>`. Loom does not
+advertise Claude slash commands as Codex syntax.
 
-## Orchestrated vs one-off
+## Shared workflows and thin adapters
 
-`/loom:run` chains roles automatically within the declared scope, pausing at
-claimed gates and stopping at the scope boundary. The one-off commands each run a
-single cold-agent pass and stop — for targeted manual work ("just re-evaluate this
-plan"). Both spawn the same agents against the same files; only the chaining
-differs.
+Canonical workflow bodies live under `plugins/loom/skills/loom-*/SKILL.md` and call
+shared role/protocol/playbook references. Claude `commands/*.md` files are thin launch
+adapters that route the slash command to the matching shared skill. Codex discovers
+and invokes the shared skills natively. Duplicating full workflow policy in a command
+adapter is a conformance defect.
 
-## Shared logic
+All eight forms use the same status machine, controlled-input evaluation, local-review
+protocol, helper contracts, and bounded returns. A one-off command/skill performs one
+cold pass and stops; it does not weaken any required preparation, validation, or
+recording step.
 
-The orchestrator rules common to all commands live in the playbook at
-`skills/loom-playbook/references/orchestration.md` (+ `status-machine.md`); each
-command file is thin and references them, so behavior stays consistent.
+## Role launch mapping
+
+Claude launches one of five namespaced native role adapters:
+`loom:researcher`, `loom:planner`, `loom:plan-evaluator`, `loom:developer`, or
+`loom:code-evaluator`. Codex launches a generic cold subagent loaded with the matching
+shared role contract. Neither surface exposes auxiliary finder workers as lifecycle
+commands; the orchestrator launches them only within `loom-local-review/v1`.
+
+## Supported surfaces
+
+- Claude Code plugin support is release-tested at the declared CLI floor.
+- Codex plugin support is release-tested for Codex CLI. ChatGPT desktop is supported
+  only for a release whose embedded Codex plugin API passes the same matrix.
+- Codex IDE plugin installation is not a v0.2 supported surface. Repository skills
+  may be documented as an unguaranteed fallback and must not be labeled full plugin
+  support.

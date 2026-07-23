@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # precompact-write-ahead-backstop.sh — PreCompact hook guard (ADR 0013 §Decision 5)
 #
 # Enforces the write-ahead invariant: before compacting, check whether .docs/
