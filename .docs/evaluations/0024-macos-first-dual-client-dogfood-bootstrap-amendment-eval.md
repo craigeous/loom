@@ -91,3 +91,38 @@ decision assessments. The remaining Round 0 mechanical-evidence finding stays op
 only because of the two defects above. Two BLOCKERs require `FAIL`; the ADR returns
 to `Draft`, and owner acceptance remains unavailable until a cold re-evaluation
 passes.
+
+---
+
+Verdict: PASS
+Round: 2
+Evidence mode: `loom-repository-bootstrap/v1`
+Bootstrap-ratification: degraded ADR 0024 one-time ratification
+Isolation: not established under ADR 0022
+Release conformance: not established
+Run: `adr-0024-9edeab5-ratification-r2`
+Reviewed artifact commit: `9edeab5205b86a77d1e95fc28586d9083f7ad2bd`
+Reviewed artifact tree: `c73992826163452136e2299578f1e1387bac7104`
+Reviewed artifact blob: `cc661a984e7c9a552393faed3cac3b54cb027b56`
+Manifest SHA-256: `6439983084e6eb0013ac7aa2014c34c4b83c3ebbc5d3574ddac97d71a53bff31`
+Input-inventory SHA-256: `00c7db166d39f9f773b41460df6d736f5cc2dcac4c1d4f94c788632919cc1119`
+Publication-evidence inventory SHA-256: `0dfcb894f1277866fb734353ceb16b6e36c1cf476289797473043e941913d04c`
+Evaluator verdict SHA-256: `74e2ddfbd28d812d1ef948ef632a8448e823b1c4d25ce923f932085e0eb63cc6`
+
+## Round 2 findings
+
+None. All eight required decision assessments passed with no BLOCKER, MAJOR, or
+MINOR finding.
+
+## Round 2 assessment
+
+The cold evaluator validated all 37 sealed input entries, all 15 publication-evidence
+entries, both prior raw verdicts, the exact revision, transition evidence, and all
+declared authority/artifact Git blob IDs. Independent parsing confirmed contiguous
+32-commit and 21-commit chains, 40/57 historical path unions, 40/52 net path
+inventories, classification closure, and full 40-character object IDs. Both Round 1
+BLOCKERs are closed.
+
+This `PASS` is necessary but not sufficient for acceptance. Per ADR 0024, the owner
+must read the final proposed ADR and this verdict and explicitly accept the proposal
+before its narrowly staged authority activates.
