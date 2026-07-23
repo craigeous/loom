@@ -594,3 +594,26 @@ authorized post-merits path classes. `SEC-PUB-001` is rejected: M0 requires stat
 repository-path containment but does not establish a same-user concurrent-writer
 security boundary. Rebuild the atomic archive with no gate-policy change and keep
 the immutable ADR link resolvable through an authorized non-active plan pointer.
+
+---
+
+## Integrated publication evaluation — round 1
+
+Verdict: PASS
+Round: 1
+Required next round: none
+
+- Run: `ci-baseline-publication-c7bd84d-fbebaa3-r1`
+- Reviewed head: `fbebaa3ce840c4b43931d2a7e96653cef539afe7`
+- Reviewed tree: `a896f990303739e675d1d8f1e0609ea3b3076ded`
+- Manifest SHA-256: `02295f622bbd8722763ef1a8b3ba0976ffbdda214005a8a9ce1e66234e642a56`
+- Clean aggregate SHA-256: `182f54d83d6351909f476b557ee66bf1061b074758f33ef1d65973c22b5f7d90`
+- Evaluator verdict SHA-256: `474cbcdf4d90b6b384c68a4655ae9beb0d1080f3744a6686ed67bfad652434a5`
+- Hosted CI run `29971823871`: all four required cells passed 257 tests.
+
+`COR-001` is closed and `SEC-PUB-001` remains rejected under the approved M0 threat
+model. All three auxiliary workers were clean. The evaluator's fresh Bash 3.2 lane
+passed 257/257 from `2026-07-23T01:49:56Z` to `01:53:36Z`; Bash 5.3 passed 257/257
+from `01:54:04Z` to `01:57:37Z`. Both exact clones ended clean with unchanged head
+and tree. No BLOCKER, MAJOR, or MINOR remains. This is publication evidence only;
+it does not claim `Landed`, release conformance, a release, or tag authority.

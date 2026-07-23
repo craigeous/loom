@@ -686,3 +686,21 @@ The distinct evaluator confirmed `COR-001` as a BLOCKER and rejected
 passed 257/257 strictly sequentially, but green gates cannot override publication
 authority. Round 1 must remove the gate-policy delta and retain link validity using
 only authorized declared-plan/archive-index/evaluation/living-status paths.
+
+---
+
+# Integrated publication review — ci-baseline round 1
+
+- Run: `ci-baseline-publication-c7bd84d-fbebaa3-r1`
+- Base: `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`
+- Head: `fbebaa3ce840c4b43931d2a7e96653cef539afe7`
+- Head tree: `a896f990303739e675d1d8f1e0609ea3b3076ded`
+- Manifest SHA-256: `02295f622bbd8722763ef1a8b3ba0976ffbdda214005a8a9ce1e66234e642a56`
+- Input-inventory SHA-256: `79099c2fa5b1b9bd1f137cac2ff49b9ac3069f1ba96c10411cb006d0314ad657`
+- Clean aggregate SHA-256: `182f54d83d6351909f476b557ee66bf1061b074758f33ef1d65973c22b5f7d90`
+
+Correctness, test sufficiency, and security each returned exact-bound `PASS` with
+zero findings. The allowlist is unchanged from the reviewed merits head, the ADR
+0023 target resolves through an explicitly non-active declared-plan pointer, the
+archived file is the sole completed plan, and all 11 post-merits paths are within
+ADR 0024's permitted finalization classes.

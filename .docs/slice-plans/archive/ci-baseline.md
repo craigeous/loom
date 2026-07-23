@@ -864,3 +864,9 @@ not success.
   ADR 0024's post-merits finalization authority. Round 1 removes that entry and keeps
   the immutable ADR 0023 link resolvable with a non-active pointer at the declared
   plan path; the archived plan remains the sole completed plan artifact.
+- Publication review round 1 passed on exact head
+  `fbebaa3ce840c4b43931d2a7e96653cef539afe7`: three cold workers returned no
+  findings, the distinct evaluator confirmed `COR-001` closed, hosted CI passed all
+  four 257-test cells, and fresh Bash 3.2/Bash 5.3 evaluator gates passed 257/257.
+  Final evidence recording still requires an exact-candidate gate before guarded
+  publication and remote verification.
