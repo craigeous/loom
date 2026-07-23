@@ -6,17 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Phase:** **Repository improvement M0 publication in progress under ADR 0024.**
-  The `ci-baseline` atomic candidate prospectively lands the reproducible gate and
-  static dual-client contract. It is not authoritative until fresh remote verification,
-  receipt, and transition settlement. Next after settlement:
-  `macos-dogfood-program-amendment`, then `macos-dual-client-dogfood`.
-- **Last action:** ADR 0024 was independently ratified and explicitly owner-accepted;
-  protected transition sequence 1 at
-  `e2248d870857fce128568a90ee8025c58d59514d` activated the two exact macOS dogfood
-  slice permissions. This candidate replays only the sealed prerequisite-authority
-  and M0 chains from exact remote base
-  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`.
+- **Phase:** **Private Apple-silicon dual-client dogfood checkpoint.** M0 is settled
+  on remote `main` at `51b249e`. The documentation-only
+  `macos-dogfood-program-amendment` candidate has cold plan-evaluation PASS round 0
+  and is prospectively finalized for protected publication. The next slice after
+  settlement is `macos-dual-client-dogfood`.
+- **Last action:** accepted ADR 0024 was integrated without rewriting; the improvement
+  plan, spec index and eight frozen specs, canonical project instructions, CLAUDE/AGENTS
+  adapters, README, and indexes were synchronized. The exact `ee37a20` review candidate
+  passed 257/257 under Bash 3.2 and 5.3. Cold reevaluation resolved all six round-0
+  findings with no current finding; raw verdict SHA-256 is
+  `a723530e2a1ebbb7e7f7fee5366ab5df74d549f9cd57c8a30dd9caa0ed75f79c`.
 - **Last action:** **`claude-md-slim-down` slice landed** (code-eval PASS, pure-docs). The
   **CLAUDE.md-digest-discipline thread is COMPLETE**: research note
   `2026-07-03-claude-md-digest-discipline.md` (Approved) → spec 08 § "Shape and Concision

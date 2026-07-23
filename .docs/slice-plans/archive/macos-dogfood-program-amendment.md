@@ -1,6 +1,6 @@
 # macOS-first dual-client dogfood program amendment
 
-Status: Approved
+Status: Archived
 Target specs: [00-overview.md](../spec/00-overview.md),
 [02-roles.md](../spec/02-roles.md),
 [03-artifact-lifecycle.md](../spec/03-artifact-lifecycle.md),
@@ -169,3 +169,6 @@ The planning/evaluation candidate must mechanically prove:
 - 2026-07-23: Round-0 corrections are present as one planner-authored set: literal
   allowlist, per-spec matrix, whole-file digest/byte renderer contract, full bootstrap
   prerequisites, and bounded mechanical assertions. The exact set is resubmitted.
+- 2026-07-23: The cold FAIL-resolving reevaluation passed round 0 with all six prior
+  findings resolved and no current findings. The exact candidate passed 257/257 under
+  Bash 3.2 and Bash 5.3 before landing-only archival.

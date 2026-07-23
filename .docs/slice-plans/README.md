@@ -17,12 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [macos-dogfood-program-amendment.md](macos-dogfood-program-amendment.md) — `Approved` —
-  synchronize the frozen specs, improvement program, canonical instructions, and
-  user-facing docs for the private Apple-silicon Claude Code + Codex dogfood checkpoint
-  while preserving the full v0.2 release matrix.
+> None. `macos-dual-client-dogfood` is the next slice to plan after the program
+> amendment publication settles.
 
 ## Archived plans
+
+- [archive/macos-dogfood-program-amendment.md](archive/macos-dogfood-program-amendment.md) — `Archived` —
+  accepted ADR 0024 synchronized into the improvement program, frozen specs,
+  canonical instructions, root client adapters, indexes, and user-facing docs while
+  preserving the full v0.2 release matrix; cold plan evaluation PASS round 0.
 
 - [archive/ci-baseline.md](archive/ci-baseline.md) — `Archived` —
   M0 reproducible repository gate and static Claude Code/Codex compatibility baseline;

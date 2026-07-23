@@ -16,15 +16,13 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
-- **Repository improvement M0 publication is the active checkpoint.** ADR 0024 passed
-  cold ratification and was explicitly accepted. Protected transition sequence 1
-  (`e2248d870857fce128568a90ee8025c58d59514d`) activates exactly
-  `macos-dogfood-program-amendment` and `macos-dual-client-dogfood`. The atomic
-  `ci-baseline` candidate is built from exact configured remote base
-  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`; its archived plan and prospective
-  landing text remain non-authoritative until remote verification, receipt, and
-  transition settlement. After settlement, plan/evaluate the program amendment, then
-  the Apple-silicon Claude Code + Codex behavioral dogfood slice. Do not claim v0.2
+- **The macOS program amendment is the active publication checkpoint.** M0 is verified
+  and settled on remote `main` at `51b249e`. Accepted ADR 0024 and its ratification
+  chain are integrated unchanged. The complete program/spec/instruction/docs set passed
+  cold plan evaluation round 0; both Bash lanes passed 257/257. Publish this finalized
+  docs-only candidate through ADR 0023 intent, non-force target update, fresh receipt,
+  and settlement. Then plan and implement `macos-dual-client-dogfood` for real isolated
+  Claude Code 2.1.216 + Codex CLI 0.144.6 behavior on Darwin `arm64`. Do not claim v0.2
   release conformance; Linux and macOS Intel remain mandatory for release.
 
 - **Post-M4: CLAUDE.md Shape and Concision Discipline — COMPLETE.** Research note
