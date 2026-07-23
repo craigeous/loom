@@ -35,6 +35,8 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Approved` (
 - [0020 — Remote Publication Is the Landing Authority](0020-remote-publication-is-the-landing-authority.md) — partially supersedes ADR 0014's shared-local-`main`, no-push landing model
 - [0021 — Loom-Owned Local Review Protocol](0021-loom-owned-local-review-protocol.md) — replaces ADR 0010/0011's external review-command dependency while preserving evaluator verdict authority
 - [0022 — Controlled-Input Independent Evaluation and Its Isolation Boundary](0022-controlled-input-independent-evaluation.md) — corrects ADR 0004's overbroad blind-evaluation claim and defines the sanitized boundary
+- [0023 — Repository Self-Hosting Bootstrap Transition](0023-repository-self-hosting-bootstrap-transition.md) — authorizes the protected, append-only transition used while Loom's review, evaluation, and remote-publication machinery becomes self-hosting
+- [0024 — macOS-First Dual-Client Dogfood Bootstrap Amendment](0024-macos-first-dual-client-dogfood-bootstrap-amendment.md) — authorizes one exact transition amendment and two named Apple-silicon macOS dogfood slices without changing the v0.2 release gate
 
 ## In Review
 
