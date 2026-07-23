@@ -30,7 +30,8 @@ agent** on the model best suited to its job, hands off work through files in
 257-test gate and static Claude Code/Codex packaging contracts are on remote `main`.
 Claude Code behavior exists; Codex CLI behavior is not yet claimed. Accepted ADR 0024
 inserts a private Darwin `arm64` checkpoint before M1 without changing the v0.2
-Ubuntu/macOS-Intel release obligations. The authoritative design lives in
+Ubuntu/macOS-Intel release obligations or its M0 through M7 release gate. The
+authoritative design lives in
 [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); decisions are in
 [`.docs/ADR/`](.docs/ADR/README.md).
