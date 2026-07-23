@@ -1,2 +1,3 @@
 # source path<TAB>exact link target<TAB>reason; empty by default
 .docs/ADR/0016-git-native-ref-cas-lock-mechanism.md	../slice-plans/multi-session-lock-helper-plan.md	The referenced completed plan moved to the excluded archive tree.
+.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md	../slice-plans/ci-baseline.md	The referenced completed plan moved to the excluded archive tree during atomic publication finalization.

@@ -1,6 +1,6 @@
 # Reproducible local check and dual-platform CI baseline
 
-Status: Ready to Publish
+Status: Archived
 Target specs: [08-playbook.md](../spec/08-playbook.md),
 [10-packaging.md](../spec/10-packaging.md)
 Authority: [ADR 0018](../ADR/0018-shared-core-and-client-adapters.md),
@@ -847,3 +847,16 @@ not success.
   passed 257/257 tests, and ended with unchanged exact trees, clean status, and
   matching inventories. The slice advances to `Ready to Publish`; it is not yet
   `Landed`, and no release or tag is authorized by this result.
+
+### Prospective publication finalization (2026-07-23)
+
+- The atomic publication candidate archives this plan and records the `ci-baseline`
+  slice as prospectively landed from configured remote base
+  `c7bd84d997afb32f6159628eb840a9dd8d2d3dca`.
+- The candidate replays the sealed 32-commit prerequisite-authority segment and
+  21-commit M0 segment without rewriting, ending at reviewed evidence head
+  `cd6b5e17e04168d8e8472b4c55600c6a2aa6a5b9` before finalization.
+- These `Archived`/`Landed` statements have no authority while local. They become
+  authoritative only after non-force publication, fresh exact remote verification,
+  a bound receipt, and protected-transition settlement under ADRs 0020, 0023, and
+  0024.
