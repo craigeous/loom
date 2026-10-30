@@ -347,10 +347,9 @@ fi
 acquire_lock
 fetch_target
 if [ "$BASE" != "$(state_get .baseCommit)" ]; then
-    # The target moved while building: leave the lock, then rebuild and gate unlocked.
+    # The target moved while building: leave the lock; the next run rebuilds and gates unlocked.
     release_lock
-    build
-    die 3 "contention: target moved, candidate rebuilt at $CAND; fresh review evidence bound to $CAND is required before publication"
+    die 3 "contention: target moved from $(state_get .baseCommit) to $BASE; will rebuild next run (fresh review evidence needed)"
 fi
 lock_ok
 set_attempt true
@@ -373,8 +372,8 @@ if [ "$REMOTE_SHA" != "$CAND" ]; then
     if [ -n "$FETCHED" ] && [ "$FETCHED" = "$REMOTE_SHA" ]; then
         rc=0
         ancestry "$CAND" "$REMOTE_SHA" || rc=$?
-        if [ "$rc" = 0 ]; then
-            # The server accepted the candidate and another publisher then advanced: containment.
+        if [ "$PUSH" = rejected ] && [ "$rc" = 0 ]; then
+            # The push was rejected but the candidate is already contained in the remote target.
             write_receipt "$PUSH" contained "$REMOTE_SHA"
             lock_ok 10
             finish

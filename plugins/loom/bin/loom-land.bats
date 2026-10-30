@@ -282,15 +282,21 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     git -C "$REMOTE" cat-file -e "$new:moved.txt"
 }
 
-@test "target movement while acquiring the lock rebuilds and exits 3" {
+@test "target movement while acquiring the lock releases the lock, exits 3 and rebuilds on the next run" {
     prepare
     stub_coord "if [ \"\$1\" = lock-acquire ] && [ ! -e '$WORK/moved' ]; then touch '$WORK/moved'; ( cd '$OTHER' && git pull -q origin main && echo m >m.txt && git add m.txt && git commit -q -m m && git push -q origin main ) >/dev/null 2>&1; fi"
     land --evidence "$WORK/ev.json"
     [ "$status" -eq 3 ]
-    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" != "$CAND" ]
+    [[ "$stderr" == *"will rebuild next run"* ]]
+    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" = "$CAND" ]
     [ "$(remote_main)" != "$CAND" ]
     [ -n "$(claims)" ]
     [ -z "$(coordr lock-holder)" ]
+    unset LOOM_COORD_BIN
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" != "$CAND" ]
+    [ "$(jq -r .baseCommit "$SDIR/candidate.json")" = "$(remote_main)" ]
 }
 
 @test "non-fast-forward push race is rejected without force and keeps the claim" {
@@ -779,7 +785,11 @@ preparef() {
     [ ! -e "$LOCKLOG" ]
     [ -n "$(claims)" ]
     [ -z "$(coordr lock-holder)" ]
+    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" = "$CAND" ]
     unset LOOM_COORD_BIN
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [ ! -e "$LOCKLOG" ]
     evidence "$(jq -r .candidateSha "$SDIR/candidate.json")"
     landf --evidence "$WORK/ev.json"
     [ "$status" -eq 0 ]
@@ -879,4 +889,26 @@ EOS
     [ "$(pushes)" = 1 ]
     [ -z "$(claims)" ]
     [ "$(remote_main)" = "$CAND" ]
+}
+
+@test "coordination-state: a push reported successful whose remote tip is not the candidate is not contained" {
+    managed
+    preparef
+    REAL_GIT="$(command -v git)"
+    mkdir -p "$WORK/fakebin"
+    cat >"$WORK/fakebin/git" <<EOS
+#!/bin/sh
+case " \$* " in *" push "*)
+    "$REAL_GIT" "\$@" || exit 1
+    ( cd "$OTHER" && "$REAL_GIT" pull -q origin main && echo c >c.txt && "$REAL_GIT" add c.txt && "$REAL_GIT" commit -q -m c && "$REAL_GIT" push -q origin main ) >/dev/null 2>&1
+    exit 0 ;;
+esac
+exec "$REAL_GIT" "\$@"
+EOS
+    chmod +x "$WORK/fakebin/git"
+    PATH="$WORK/fakebin:$PATH" landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    [ ! -e "$SDIR/publication-receipt.json" ]
+    [ -n "$(claims)" ]
 }
