@@ -372,6 +372,185 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# T7f-T7i — session_id grammar parity with loom-coord
+# ---------------------------------------------------------------------------
+
+@test "T7f session_id with single dots is accepted" {
+    make_repo
+    backstop "$(mk_json manual sess.1.a)"
+    [ "$status" -eq 0 ]
+    [ "$(read_marker sess.1.a)" = "$DOCS_SHA" ]
+}
+
+@test "T7g session_id containing .. fails closed" {
+    make_repo
+    backstop "$(mk_json manual sess..1)"
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-compact." ]
+}
+
+@test "T7h session_id with a leading non-alphanumeric fails closed" {
+    make_repo
+    backstop "$(mk_json manual -bad)"
+    [ "$status" -eq 2 ]
+    backstop "$(mk_json manual .hidden)"
+    [ "$status" -eq 2 ]
+    backstop "$(mk_json manual _bad)"
+    [ "$status" -eq 2 ]
+    [ ! -d "$REPO/.git/loom/precompact" ]
+}
+
+@test "T7i non-string JSON session_id fails closed" {
+    make_repo
+    JSON="$(printf '{"trigger":"manual","session_id":123,"cwd":"%s"}' "$REPO")"
+    backstop "$JSON"
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-compact." ]
+}
+
+# ---------------------------------------------------------------------------
+# T12b — log record shape, control-character stripping, cap fallback
+# ---------------------------------------------------------------------------
+
+@test "T12b auto no-progress log is <timestamp>TAB<session>TAB<anchor>" {
+    make_repo
+    write_marker s12b "$DOCS_SHA"
+    backstop "$(mk_json auto s12b)"
+    [ "$status" -eq 0 ]
+    line="$(cat "$(session_dir s12b)/log")"
+    tab=$'\t'
+    [[ "$line" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z${tab}s12b${tab}${DOCS_SHA}$ ]]
+    [ -z "$(find "$(session_dir s12b)" -name '.tmp.*')" ]
+}
+
+@test "T12b log helper strips control characters" {
+    dir="$(mktemp -d)"
+    eval "$(sed -n '/^_loom_mktemp()/,/^}/p;/^_loom_append_bounded_log()/,/^}/p' "$HOOK")"
+    export LOOM_PRECOMPACT_LOG_CAP=5
+    _loom_append_bounded_log "$dir/log" "$(printf 'a\033[31m\001b\177c\td')"
+    [ "$(cat "$dir/log")" = "$(printf 'a[31mbc\td')" ]
+    rm -rf "$dir"
+}
+
+@test "T12b invalid or leading-zero LOOM_PRECOMPACT_LOG_CAP falls back to 200" {
+    make_repo
+    write_marker s12c "$DOCS_SHA"
+    LOG="$(session_dir s12c)/log"
+    for cap in abc 08 0 -3 ''; do
+        seq 1 250 >"$LOG"
+        run env CLAUDE_PLUGIN_ROOT="$REAL_ROOT" LOOM_PRECOMPACT_LOG_CAP="$cap" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json auto s12c)"
+        [ "$status" -eq 0 ]
+        [ "$(wc -l <"$LOG" | tr -d ' ')" -eq 200 ]
+    done
+}
+
+# ---------------------------------------------------------------------------
+# T14-T18 — coordinated sessions (loom-coord checkpoints), worktrees
+# ---------------------------------------------------------------------------
+
+COORD="${BATS_TEST_DIRNAME}/../bin/loom-coord"
+
+# coord <sub> <sid> [stdin] — run the real loom-coord inside REPO
+coord() {
+    (cd "$REPO" && printf '%s' "${3:-}" | "$COORD" "$1" --session "$2" >/dev/null)
+}
+
+@test "T14 coordinated session: first-run allow, block with remediation, advance unblocks" {
+    make_repo
+    coord session-start sc1
+    backstop "$(mk_json manual sc1)"
+    [ "$status" -eq 0 ]
+    [[ "$(read_marker sc1)" == checkpoint:* ]]
+
+    msg="loom write-ahead backstop: session checkpoint has not advanced before manual compaction (ADR 0013); write an advanced checkpoint via loom-coord checkpoint-write --session sc1, then retry."
+    backstop "$(mk_json manual sc1)"
+    [ "$status" -eq 2 ]
+    [ "$output" = "$msg" ]
+    backstop_codex "$(mk_json manual sc1)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf '{"continue":false,"stopReason":"%s"}' "$msg")" ]
+
+    # rewriting identical checkpoint bytes does not advance
+    coord checkpoint-write sc1 "state-1"
+    backstop "$(mk_json manual sc1)"
+    [ "$status" -eq 0 ]
+    coord checkpoint-write sc1 "state-1"
+    backstop "$(mk_json manual sc1)"
+    [ "$status" -eq 2 ]
+
+    coord checkpoint-write sc1 "state-2"
+    backstop "$(mk_json manual sc1)"
+    [ "$status" -eq 0 ]
+}
+
+@test "T15 one coordinated session's advance never unblocks another" {
+    make_repo
+    coord session-start sA
+    coord session-start sB
+    backstop "$(mk_json manual sA)"
+    [ "$status" -eq 0 ]
+    backstop "$(mk_json manual sB)"
+    [ "$status" -eq 0 ]
+    coord checkpoint-write sA "advanced"
+    add_docs_commit
+    backstop "$(mk_json manual sA)"
+    [ "$status" -eq 0 ]
+    backstop "$(mk_json manual sB)"
+    [ "$status" -eq 2 ]
+}
+
+@test "T16 coordinated session dir without checkpoint file records checkpoint:none" {
+    make_repo
+    mkdir -p "$REPO/.git/loom/session-sc16"
+    backstop "$(mk_json manual sc16)"
+    [ "$status" -eq 0 ]
+    [ "$(read_marker sc16)" = "checkpoint:none" ]
+    backstop "$(mk_json manual sc16)"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"loom-coord checkpoint-write --session sc16"* ]]
+    printf 'x\n' >"$REPO/.git/loom/session-sc16/checkpoint"
+    backstop "$(mk_json manual sc16)"
+    [ "$status" -eq 0 ]
+}
+
+@test "T17 concurrent compactions across sessions keep markers intact, no temp files" {
+    make_repo
+    coord session-start s-adv
+    coord session-start s-stale
+    backstop "$(mk_json manual s-adv)"
+    backstop "$(mk_json manual s-stale)"
+    coord checkpoint-write s-adv "next"
+    run_pid=()
+    for i in 1 2 3 4 5 6; do
+        for sid in s-adv s-stale; do
+            env CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual "$sid")" >"$BATS_TEST_TMPDIR/$sid.$i.out" 2>&1 &
+            run_pid+=($!)
+        done
+    done
+    for p in "${run_pid[@]}"; do wait "$p" || true; done
+    [[ "$(read_marker s-adv)" == checkpoint:* ]]
+    [[ "$(read_marker s-stale)" == checkpoint:* ]]
+    [ -z "$(find "$REPO/.git/loom/precompact" -name '.tmp.*')" ]
+    backstop "$(mk_json manual s-stale)"
+    [ "$status" -eq 2 ]
+    backstop "$(mk_json manual s-adv)"
+    [ "$status" -eq 2 ]
+}
+
+@test "T18 linked worktree resolves the common git dir" {
+    make_repo
+    git -C "$REPO" worktree add -q "$REPO-wt" -b wt-branch
+    OTHERDIR="$REPO-wt"
+    JSON="$(printf '{"trigger":"manual","session_id":"s18","cwd":"%s"}' "$OTHERDIR")"
+    backstop "$JSON"
+    [ "$status" -eq 0 ]
+    [ -f "$REPO/.git/loom/precompact/s18/marker" ]
+    backstop "$JSON"
+    [ "$status" -eq 2 ]
+    git -C "$REPO" worktree remove --force "$OTHERDIR"
+}
+
+# ---------------------------------------------------------------------------
 # RED-GREEN sentinel — proves the trigger-enum guard is exercised
 # ---------------------------------------------------------------------------
 

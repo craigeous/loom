@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [precompact-per-session.md](precompact-per-session.md) — `Approved` — M3 slice 2:
+- [precompact-per-session.md](precompact-per-session.md) — `Implemented` — M3 slice 2:
   per-session PreCompact write-ahead backstop (`<git-common-dir>/loom/precompact/<session-id>/{marker,log}`),
   coordinated session checkpoint validation (`loom-coord checkpoint-write`), `loom-coord`
   session-id grammar parity, atomic marker/log writes, and multi-session isolation tests.

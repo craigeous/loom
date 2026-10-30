@@ -1,6 +1,6 @@
 # Per-Session PreCompact Write-Ahead Backstop (`precompact-per-session`)
 
-Status: Approved
+Status: Implemented
 Target specs: 04-orchestrator.md, 08-client-adapters.md
 Target size: <= 240 LOC net change (keep this plan document <= 250 lines)
 
@@ -186,6 +186,23 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
   ```bash
   TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check
   ```
+
+## Implementation Evidence
+
+- `TMPDIR=/private/tmp LOOM_TEST_BASH="$(command -v bash)" LOOM_EXPECTED_BASH_VERSION="^[345]\\." bats plugins/loom/hooks/precompact-write-ahead-backstop.bats`
+  — 45 tests, 0 failures (existing `T1`–`T13`, `RED-GREEN`, 6 `hook-wire-v1`
+  fixtures, root-preference test unchanged; new `T7f`–`T7i`, `T12b` x3, `T14`–`T18`).
+- `shfmt -i 4 -d` on the hook and the Bats file: clean. `shellcheck -s bash` on the
+  hook: clean; on the Bats file only the four pre-existing info-level findings remain
+  (SC2016 line 16, SC2030/SC2031 around the fixture helper), none from new code.
+- `/bin/bash -n` on the hook: ok. `node scripts/validate-repository.mjs --root . --all`:
+  passed.
+- Acceptance mapping: grammar/type checks → `T7f`–`T7i`; log record, control-character
+  stripping and cap fallback → `T12b`; coordinated checkpoint anchor and
+  remediation on both wires → `T14`, `T16`; cross-session isolation → `T15`;
+  concurrency/no leftover `.tmp.*` → `T17`; common-git-dir sharing → `T18`.
+- Not run in this pass: the full `scripts/check` repository gate (left to the code
+  evaluator).
 
 ## Notes
 

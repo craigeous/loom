@@ -8,8 +8,10 @@
 # no-progress event is recorded to that session's bounded log instead.
 #
 # State is per validated session under
-#   <git-dir>/loom/precompact/<session-id>/marker  (last .docs/-touching commit SHA)
-#   <git-dir>/loom/precompact/<session-id>/log     (bounded no-progress-auto log)
+#   <git-common-dir>/loom/precompact/<session-id>/marker  (progress anchor: the
+#     session's loom-coord checkpoint hash when coordinated, else the last
+#     .docs/-touching commit SHA)
+#   <git-common-dir>/loom/precompact/<session-id>/log     (bounded no-progress-auto log)
 # writes are atomic (write-to-temp, rename-into-place); the log is capped at
 # LOOM_PRECOMPACT_LOG_CAP lines. session_id is validated against a strict
 # allowlist charset before it is ever used as a path component or log field
@@ -110,31 +112,66 @@ _loom_hook_block() {
     esac
 }
 
+# _loom_valid_session_id <sid> — loom-coord's identifier grammar:
+# ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ with no ".." substring.
+_loom_valid_session_id() {
+    local sid="$1"
+    [ -n "$sid" ] && [ "${#sid}" -le 128 ] || return 1
+    case "$sid" in
+    [!A-Za-z0-9]* | *[!A-Za-z0-9._-]* | *..*) return 1 ;;
+    esac
+    return 0
+}
+
+# _loom_mktemp <dir> — temp file in the target directory (same filesystem so
+# the final rename is atomic); falls back when mktemp is absent from PATH.
+_loom_mktemp() {
+    local dir="$1"
+    mktemp "$dir/.tmp.XXXXXX" 2>/dev/null || {
+        local tmp="$dir/.tmp.$$.$RANDOM"
+        : >"$tmp" || return 1
+        printf '%s' "$tmp"
+    }
+}
+
 # _loom_atomic_write <path> <content> — write-to-temp then rename-into-place.
 _loom_atomic_write() {
     local path="$1" content="$2" dir tmp
     dir=$(dirname -- "$path")
     mkdir -p "$dir" 2>/dev/null || return 1
-    tmp="$dir/.tmp.$$.$RANDOM"
-    printf '%s\n' "$content" >"$tmp" || return 1
-    mv -f -- "$tmp" "$path"
+    tmp=$(_loom_mktemp "$dir") || return 1
+    if ! printf '%s\n' "$content" >"$tmp" || ! mv -f -- "$tmp" "$path"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
 }
 
 # _loom_append_bounded_log <path> <line> — append, keep only the last
-# LOOM_PRECOMPACT_LOG_CAP lines, written atomically (write-to-temp, rename).
+# LOOM_PRECOMPACT_LOG_CAP lines (positive decimal integer without leading
+# zero, else 200), control characters stripped, written atomically.
 _loom_append_bounded_log() {
-    local path="$1" line="$2" dir tmp keep
+    local path="$1" line="$2" dir tmp keep cap="$LOOM_PRECOMPACT_LOG_CAP"
+    case "$cap" in
+    [1-9] | [1-9][0-9]*) ;;
+    *) cap=200 ;;
+    esac
+    case "$cap" in
+    *[!0-9]*) cap=200 ;;
+    esac
     dir=$(dirname -- "$path")
     mkdir -p "$dir" 2>/dev/null || return 1
-    tmp="$dir/.tmp.$$.$RANDOM"
-    keep=$((LOOM_PRECOMPACT_LOG_CAP - 1))
+    tmp=$(_loom_mktemp "$dir") || return 1
+    keep=$((cap - 1))
     if [ -f "$path" ] && [ "$keep" -gt 0 ]; then
         tail -n "$keep" "$path" >"$tmp" 2>/dev/null || : >"$tmp"
     else
         : >"$tmp"
     fi
-    printf '%s\n' "$line" >>"$tmp"
-    mv -f -- "$tmp" "$path"
+    if ! printf '%s\n' "$line" | LC_ALL=C tr -d '\000-\010\013-\037\177' >>"$tmp" ||
+        ! mv -f -- "$tmp" "$path"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
 }
 
 # --- resolve client (spec 10 root binding) ---
@@ -153,20 +190,21 @@ if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
     _loom_hook_block "$CLIENT" "$INVALID_REASON"
 fi
 
+# --- both fields must be JSON strings before any string extraction ---
+if ! printf '%s' "$INPUT" | jq -e '(.trigger | type == "string") and (.session_id | type == "string")' >/dev/null 2>&1; then
+    _loom_hook_block "$CLIENT" "$INVALID_REASON"
+fi
+
 # --- trigger: only "manual" and "auto" are accepted current input ---
-TRIGGER=$(printf '%s' "$INPUT" | jq -r '.trigger // empty' 2>/dev/null)
+TRIGGER=$(printf '%s' "$INPUT" | jq -r '.trigger' 2>/dev/null)
 case "$TRIGGER" in
 manual | auto) ;;
 *) _loom_hook_block "$CLIENT" "$INVALID_REASON" ;;
 esac
 
-# --- session_id: required, strict allowlist charset, bounded length ---
-SESSION=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
-case "$SESSION" in
-'') _loom_hook_block "$CLIENT" "$INVALID_REASON" ;;
-*[!A-Za-z0-9_-]*) _loom_hook_block "$CLIENT" "$INVALID_REASON" ;;
-esac
-if [ "${#SESSION}" -gt 128 ]; then
+# --- session_id: required, loom-coord identifier grammar, bounded length ---
+SESSION=$(printf '%s' "$INPUT" | jq -r '.session_id' 2>/dev/null)
+if ! _loom_valid_session_id "$SESSION"; then
     _loom_hook_block "$CLIENT" "$INVALID_REASON"
 fi
 
@@ -183,7 +221,8 @@ if [ -z "$REPO_ROOT" ]; then
     _loom_hook_allow
 fi
 
-GITDIR=$(git -C "$REPO_ROOT" rev-parse --git-dir 2>/dev/null)
+GITDIR=$(git -C "$REPO_ROOT" rev-parse --git-common-dir 2>/dev/null) ||
+    GITDIR=$(git -C "$REPO_ROOT" rev-parse --git-dir 2>/dev/null)
 if [ -z "$GITDIR" ]; then
     _loom_hook_allow
 fi
@@ -196,11 +235,29 @@ STATE_DIR="$GITDIR/loom/precompact/$SESSION"
 MARKER="$STATE_DIR/marker"
 LOG="$STATE_DIR/log"
 
-# --- compute current progress anchor (last .docs/-touching commit) ---
-CUR=$(git -C "$REPO_ROOT" log -1 --format=%H -- .docs 2>/dev/null)
-if [ -z "$CUR" ]; then
-    # No .docs/ history — nothing to guard, fail-open
-    _loom_hook_allow
+# --- compute current progress anchor ---
+# A session coordinated through loom-coord (--session <session_id> or
+# LOOM_SESSION_ID) anchors on its own checkpoint file; otherwise the last
+# .docs/-touching commit is the repository-wide anchor.
+SESSION_COORD_DIR="$GITDIR/loom/session-$SESSION"
+SESSION_CHECKPOINT="$SESSION_COORD_DIR/checkpoint"
+COORDINATED=0
+if [ -f "$SESSION_CHECKPOINT" ]; then
+    COORDINATED=1
+    CHK_SHA=$(git -C "$REPO_ROOT" hash-object -- "$SESSION_CHECKPOINT" 2>/dev/null) || CHK_SHA=""
+    if [ -z "$CHK_SHA" ]; then
+        _loom_hook_allow
+    fi
+    CUR="checkpoint:$CHK_SHA"
+elif [ -d "$SESSION_COORD_DIR" ]; then
+    COORDINATED=1
+    CUR="checkpoint:none"
+else
+    CUR=$(git -C "$REPO_ROOT" log -1 --format=%H -- .docs 2>/dev/null)
+    if [ -z "$CUR" ]; then
+        # No .docs/ history — nothing to guard, fail-open
+        _loom_hook_allow
+    fi
 fi
 
 # --- first run for this session: marker absent/unreadable → record and allow ---
@@ -217,10 +274,13 @@ fi
 
 # --- no progress (CUR == PREV) ---
 if [ "$TRIGGER" = "manual" ]; then
+    if [ "$COORDINATED" -eq 1 ]; then
+        _loom_hook_block "$CLIENT" "loom write-ahead backstop: session checkpoint has not advanced before manual compaction (ADR 0013); write an advanced checkpoint via loom-coord checkpoint-write --session ${SESSION}, then retry."
+    fi
     _loom_hook_block "$CLIENT" "loom write-ahead backstop: .docs/ has not advanced before manual compaction (ADR 0013); commit a .docs/ checkpoint, then retry."
 else
     # auto: append bounded observation log line, never block (never-wedge)
     TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u)
-    _loom_append_bounded_log "$LOG" "$(printf '%s\t%s' "$TIMESTAMP" "$CUR")"
+    _loom_append_bounded_log "$LOG" "$(printf '%s\t%s\t%s' "$TIMESTAMP" "$SESSION" "$CUR")"
     _loom_hook_allow
 fi
