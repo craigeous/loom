@@ -76,3 +76,4 @@ rewritten when a later decision supersedes their subject.
 - [`role-governance-guard-eval.md`](role-governance-guard-eval.md) — `role-governance-guard` code evaluation (Round 2: PASS)
 - [`remote-first-integration-candidate-plan-eval.md`](remote-first-integration-candidate-plan-eval.md) — `remote-first-integration-candidate` slice-plan evaluation (Round 0: PASS)
 - [`remote-first-integration-candidate-eval.md`](remote-first-integration-candidate-eval.md) — `remote-first-integration-candidate` code evaluation (Round 2: PASS)
+- [`coordination-state-separation-plan-eval.md`](coordination-state-separation-plan-eval.md) — `coordination-state-separation` slice-plan evaluation (Round 0: FAIL)
