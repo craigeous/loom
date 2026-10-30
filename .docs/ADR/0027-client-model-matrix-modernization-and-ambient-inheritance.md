@@ -1,6 +1,7 @@
 # 0027 — Ambient Model Inheritance, Model Matrix Modernization, and Dogfood Antigravity Adapter
 
-Status: Draft
+Status: Accepted
+Partially supersedes: ADR 0002, ADR 0018
 Date: 2026-10-30
 
 ## Context

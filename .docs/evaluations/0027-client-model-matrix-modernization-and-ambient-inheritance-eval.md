@@ -1,20 +1,25 @@
-# Evaluation — ADR 0027 Client Model Matrix Modernization, Ambient Inheritance, and Antigravity Ratification
+# Evaluation — ADR 0027 Ambient Model Inheritance, Model Matrix Modernization, and Dogfood Antigravity Adapter
 
 Artifact: `.docs/ADR/0027-client-model-matrix-modernization-and-ambient-inheritance.md`
-Authority: spec 00-overview, spec 02-roles, spec 10-packaging, ADR 0002, ADR 0018, plan-eval-rubric.md, severity.md
-Round: 0
-Verdict: FAIL
+Authority: spec 00-overview, spec 02-roles, spec 10-packaging, ADR 0002, ADR 0018, ADR 0024, plan-eval-rubric.md, severity.md
+Round: 1
+Verdict: PASS
 
-## Findings
+Revision diff inspected: `git diff 9485f53..d3e722f` (ADR 0027 only).
 
-1. **[BLOCKER] Silent supersession of ADR 0018 / ADR 0002.** The ADR reverses ADR 0018 §3 ("tested model … SHALL not silently fall back to an untested model") and ADR 0002's tier-only policy, but never states that it supersedes or amends either. Only spec 10 is named in Consequences. Rubric: "No silent supersession."
-2. **[BLOCKER] Contradicts spec 10 / spec 02 invariants without a spec-change path.** Spec 10 says "inheriting a session model or effort is nonconforming", "A missing, unavailable … selector fails launch", and forbids "model fallback". Spec 02 says a missing or untested mapping is an error and adapters never fall back. ADR 0027 mandates ambient inheritance, hardcoded family-default fallback, and a 24h-cached dynamic discovery. Specs are frozen and change only via planner + cold plan evaluation; the ADR claims spec 10 "is amended" as a Consequence rather than scheduling an explicit spec amendment, and does not reconcile spec 02 at all.
-3. **[BLOCKER] Antigravity "first-class client family" conflicts with spec 00/10 and ADR 0024.** Spec 00 defines Loom as dual-client (Claude Code + Codex) with a release-gated two-adapter floor; ADR 0024 / CLAUDE.md say private dogfood is not public support or release conformance. The ADR adds a third family and a `claude -> codex -> antigravity -> claude` cycle with no ADR 0018/0019/0022 reconciliation, no floors, no compatibility-matrix/fixture/release-gate implications, and no mention of the 0dd3db9 adapter's current private status.
-4. **[MAJOR] Not traceable.** No research note or cited evidence for the Codex error text, `agy models` behavior, Antigravity model IDs, or quota claims. Rubric requires citing the research/problem resolved.
-5. **[MAJOR] Exact model IDs in the Decision.** `gpt-6.1-terra`, `claude-opus-5-5-high`, `gemini-4-argon-*` are release data per ADR 0018/spec 02, and ADR 0002 says speak in tiers. Defaults belong in the matrix, not the ADR.
-6. **[MAJOR] Undefined/underspecified mechanisms.** `.docs/loom-models.json` (schema, precedence vs `--model`/ambient/matrix), `--effort` (Claude has no effort control per spec 10), "valid" ambient model, cache location/invalidation, and "open model family patterns" (§4) vs fail-closed schema validation are not defined. Ambient inheritance also undermines the cold, reproducible role invocation and the doctor's ability to substantiate supported mode; not addressed.
-7. **[MAJOR] Consequences not honest.** No follow-on work (spec 02/10 amendment, matrix v-bump, schema/fixture/test changes, doctor checks, ADR 0018 status note) and no forecloses/risks (weaker reproducibility, silent model drift affecting blind-review comparability, third-client support burden).
-8. **[MINOR]** Status/header fine; "Draft" appropriate. Section 4 "current baseline floors" is vague.
+## Round 0 finding resolution
 
-## Required for Round 1
-State explicit (partial) supersession of ADR 0002/0018; scope the Antigravity ratification against spec 00/ADR 0024 or defer it to a separate ADR; route spec 02/10 changes through a named planner spec amendment; cite research; move concrete IDs to matrix data; define precedence and pinning/discovery contracts; add honest Consequences.
+1. **[BLOCKER] Silent supersession — RESOLVED.** §1 explicitly partially supersedes ADR 0002 and ADR 0018 §3 and states what remains in force.
+2. **[BLOCKER] Spec 02/10 contradiction without a path — RESOLVED.** §5.1 schedules a formal planner spec amendment for specs 02 and 10 (inheritance, precedence, matrix v0.3.0); Follow-On Work lists it. Specs stay frozen until that amendment passes cold plan evaluation; the ADR is Draft and does not claim the specs are already amended.
+3. **[BLOCKER] Antigravity vs spec 00 / ADR 0024 — RESOLVED.** §4 recasts Antigravity as a private dogfood adapter under ADR 0024 and states it leaves the public dual-client obligations (spec 00, ADR 0019) unchanged. "First-class" language is removed.
+4. **[MAJOR] Traceability — RESOLVED (adequately).** Context now states the concrete problems (the Codex retirement error, the quota error, commit `0dd3db9`) and references ADRs/specs by link. No research note is cited, but the rubric accepts "research/problem".
+5. **[MAJOR] Exact model IDs in the Decision — RESOLVED.** The Decision names no model IDs. They remain only as Context examples, and defaults are delegated to the matrix.
+6. **[MAJOR] Undefined mechanisms — RESOLVED to ADR altitude.** The four-tier precedence is defined (CLI > `.docs/loom-models.json` > ambient > matrix). The cache path and TTL are specified, and Claude effort is explicitly omitted on the wire. The `.docs/loom-models.json` schema and the "conforming to supported provider families" test are left to the scheduled spec amendment and schema work.
+7. **[MAJOR] Consequences — RESOLVED.** The ADR now names trade-offs (machine-to-machine variation, mitigated by logging the effective model), the test-matrix burden, and follow-on work (spec amendments, matrix v0.3.0, schemas, launcher).
+8. **[MINOR] Vague "baseline floors" — RESOLVED** (matrix v0.3.0 floors).
+
+## Residual notes (non-blocking, not goalpost shifts)
+
+- The spec amendment MUST define the `.docs/loom-models.json` schema, the ambient-validity test, and the cache invalidation rule. It must also address blind-review comparability under ambient drift, since the effective-model logging is only a mitigation.
+- The ADR has no `Supersedes`/`Amends` header line, though §1 states it in the body. Consider adding one at acceptance.
+- The rotation `claude -> codex -> antigravity -> claude` should be explicitly scoped to private dogfood runs in the spec amendment.
