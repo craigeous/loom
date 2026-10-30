@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: In Progress
+Status: Needs Clarification
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -105,6 +105,11 @@ push, idempotent cleanup, and mirror-update failure after verified success. Exer
 same-clone and separate-clone races and Bash 3.2 compatibility through the full gate.
 
 ## Notes
+
+**Implementation question:** What authoritative input and status establish that a
+slice is ready before mutation, particularly for `--candidate-only` before the
+candidate-specific review? Step 1 requires rejecting non-ready slices but defines
+no readiness lookup or check.
 
 **Implementation question:** How can the helper establish that evidence supplied
 after a target move is fresh and applies to the rebuilt candidate? The evidence
