@@ -120,6 +120,14 @@ open when unset so normal user and developer sessions are never disrupted.
 - Deviation: the closed `loom-role-launch-v1` schema gained an optional
   `antigravity.environment.LOOM_ROLE` property so the launch definition validates.
 
+### Code-eval Round 0 fixes (3 MAJOR)
+
+- Landing exception no longer short-circuits: other runners are checked independently of `scripts/check`.
+- Git global options with values (`-C`, `-c`, `--git-dir`, `--work-tree`, `--namespace`, ...) are skipped before the subcommand.
+- Quoted words without whitespace/separators are de-quoted (`'bats'`, `"commit"`); other quoted segments are still deleted as arguments.
+- Added 3 Bats tests with negative controls (`echo 'bats'`, `git log --grep="bats"`); role-governance-guard.bats: 17/17 pass; shfmt/shellcheck clean.
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (after fixes).
+
 ## Revision Log
 
 | Round | Summary of in-place changes |

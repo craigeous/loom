@@ -111,7 +111,11 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 # Stage A/B/C de-quote (as git-identity-guard.sh)
 DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")
-STRIPPED=$(printf '%s' "$DEESC" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+# Quoted words with no whitespace/separators are de-quoted (so 'bats' and "commit"
+# still count as command words); other quoted segments are deleted (arguments).
+STRIPPED=$(printf '%s' "$DEESC" | sed \
+    -e "s/'\([^' [:space:];&|()]*\)'/\1/g" -e 's/"\([^" [:space:];&|()]*\)"/\1/g' \
+    -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 DQ=$(printf '%s' "$STRIPPED" | tr -cd '"' | wc -c | tr -d ' ')
 SQ=$(printf '%s' "$STRIPPED" | tr -cd "'" | wc -c | tr -d ' ')
 if [ $((DQ % 2)) -ne 0 ] || [ $((SQ % 2)) -ne 0 ]; then
@@ -121,17 +125,21 @@ fi
 # Command-start anchor: line start or after ; & | ( and optional env assignments.
 START='(^|[;&|(])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*'
 PATHPFX='([^[:space:]]*/)?'
+# git global options, including value-taking ones (-C <p>, -c <k=v>, --git-dir <p>, ...)
+GITOPT='((-C|-c)[[:space:]]+[^[:space:]]+[[:space:]]+|--(git-dir|work-tree|namespace|super-prefix|config-env)([[:space:]]+|=)[^[:space:]]+[[:space:]]+|-[^[:space:]]+[[:space:]]+)'
 
 case "$LOOM_ROLE" in
 orchestrator)
     if printf '%s' "$STRIPPED" | grep -qE "${START}(bash[[:space:]]+|sh[[:space:]]+)?${PATHPFX}scripts/check([[:space:]]|\$)"; then
         [ "${LOOM_ALLOW_ORCHESTRATOR_GATE:-}" = "1" ] || _loom_hook_block "$CLIENT" "$ORCH_REASON"
-    elif printf '%s' "$STRIPPED" | grep -qE "${START}(${PATHPFX}bats|${PATHPFX}pytest|cargo[[:space:]]+test|npm[[:space:]]+test)([[:space:]]|\$)"; then
+    fi
+    # Independent of the landing-gate exception: other runners are always blocked.
+    if printf '%s' "$STRIPPED" | grep -qE "${START}(${PATHPFX}bats|${PATHPFX}pytest|cargo[[:space:]]+test|npm[[:space:]]+test)([[:space:]]|\$)"; then
         _loom_hook_block "$CLIENT" "$ORCH_REASON"
     fi
     ;;
 plan-evaluator | code-evaluator)
-    if printf '%s' "$STRIPPED" | grep -qE "${START}git[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(commit|push|merge|rebase|cherry-pick|apply|reset[[:space:]]+(.*[[:space:]])?--hard)([[:space:]]|\$)"; then
+    if printf '%s' "$STRIPPED" | grep -qE "${START}git[[:space:]]+${GITOPT}*(commit|push|merge|rebase|cherry-pick|apply|reset[[:space:]]+(.*[[:space:]])?--hard)([[:space:]]|\$)"; then
         _loom_hook_block "$CLIENT" "$EVAL_REASON"
     fi
     ;;

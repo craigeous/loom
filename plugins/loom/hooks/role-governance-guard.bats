@@ -94,6 +94,46 @@ EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or che
     done
 }
 
+@test "landing exception does not unlock other runners in compound commands" {
+    GATE=1 guard orchestrator "scripts/check && bats foo.bats"
+    [ "$status" -eq 2 ]
+    GATE=1 guard orchestrator "bats foo.bats; scripts/check"
+    [ "$status" -eq 2 ]
+    GATE=1 guard orchestrator "scripts/check"
+    [ "$status" -eq 0 ]
+}
+
+@test "evaluators block git mutation behind value-taking global options" {
+    local c
+    for c in "git -C /tmp commit -m x" "git -c user.name=x commit -m x" "git --git-dir /tmp/g push" "git --git-dir=/tmp/g -C /tmp reset --hard" "git --no-pager -C . merge x"; do
+        guard code-evaluator "$c"
+        [ "$status" -eq 2 ]
+        guard plan-evaluator "$c"
+        [ "$status" -eq 2 ]
+    done
+    guard code-evaluator "git -C /tmp log --oneline"
+    [ "$status" -eq 0 ]
+}
+
+@test "quoted command words are de-quoted; quoted arguments are ignored" {
+    guard orchestrator "'bats' tests"
+    [ "$status" -eq 2 ]
+    guard orchestrator "\"cargo\" test"
+    [ "$status" -eq 2 ]
+    guard code-evaluator "git 'commit' -m x"
+    [ "$status" -eq 2 ]
+    guard code-evaluator 'git "commit" -m x'
+    [ "$status" -eq 2 ]
+    guard orchestrator "echo 'bats'"
+    [ "$status" -eq 0 ]
+    guard orchestrator "echo 'a; bats'"
+    [ "$status" -eq 0 ]
+    guard code-evaluator 'git log --grep="bats"'
+    [ "$status" -eq 0 ]
+    guard code-evaluator "git log --grep='commit'"
+    [ "$status" -eq 0 ]
+}
+
 @test "missing or empty command allows" {
     run env LOOM_ROLE=orchestrator CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<'{"tool_input":{}}'
     [ "$status" -eq 0 ]
