@@ -17,7 +17,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-*(No active plans)*
+- [role-governance-guardrails.md](role-governance-guardrails.md) — `Plan Review` —
+  deterministic pre-tool role governance hook, dynamic model discovery & pinning
+  (`agy models`, `gpt-6.1-*`, `.docs/loom-models.json`), and bounded worker return envelope.
 
 ## Archived plans
 
