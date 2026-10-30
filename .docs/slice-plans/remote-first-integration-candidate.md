@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: Needs Clarification
+Status: In Progress
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -31,7 +31,12 @@ are outside the boundary. Never force-push or silently switch modes.
    required for publication, but not candidate-only preparation. Validate its schema,
    candidate SHA, nonempty gate
    matching the effective `--gate`, and both 64-character hexadecimal SHA-256 fields. Reject malformed inputs, unsupported modes,
-   missing tools or required evidence, and non-ready slices before mutation. Document its
+   missing tools or required evidence before mutation. Require `--head` to resolve to a
+   commit with `git rev-parse --verify --quiet "<head>^{commit}"` and the calling
+   session to hold the active slice claim, verified by `loom-coord verify-claim
+   --session <sid> --slice <slice>` (or the claim ref). For publication also require
+   valid `loom-evidence/v1` evidence whose `candidateSha` matches the candidate.
+   Document its
    invocation and exit codes in its usage: 0 verified success, 1 usage error,
    3 contention or retry exhaustion, 5 ownership failure, 10 operational or
    unverifiable failure (including stop for owner action); every
@@ -111,6 +116,14 @@ slice is ready before mutation, particularly for `--candidate-only` before the
 candidate-specific review? Step 1 requires rejecting non-ready slices but defines
 no readiness lookup or check.
 
+**Resolved (Round 4):** Candidate-only readiness requires a valid `--head` commit
+object and the calling session's active claim for `--slice`, checked via
+`loom-coord verify-claim --session <sid> --slice <slice>` or the claim ref.
+Remote-direct publication additionally requires supplied `loom-evidence/v1`
+evidence whose `candidateSha` matches the candidate SHA. `loom-land` does not
+inspect arbitrary markdown status strings; readiness is defined by commit validity,
+claim ownership and evidence matching.
+
 **Implementation question:** How can the helper establish that evidence supplied
 after a target move is fresh and applies to the rebuilt candidate? The evidence
 schema contains only opaque hashes and the gate command, while the candidate SHA
@@ -161,3 +174,4 @@ caller must supply it, and old hashes alone cannot establish that review occurre
 | 1 | Specify durable JSON state, inputs, exit codes, size budget and post-push recovery. |
 | 2 | Clarify merge inputs, evidence schema and rebuild verification boundaries. |
 | 3 / Clarification | Bind evidence to candidate SHA and specify candidate-only and target-movement review handoff. |
+| 4 / Clarification | Define readiness by commit validity, claim ownership and candidate-bound publication evidence. |
