@@ -2,7 +2,7 @@
 
 Artifact: `.docs/slice-plans/role-governance-guard.md`
 Verdict: FAIL
-Round: 0
+Round: 1
 Authority: spec 02, 04, 08; ADR 0004, 0012, 0027; plan-eval-rubric.md; severity.md
 
 ## Findings
@@ -69,3 +69,31 @@ Authority: spec 02, 04, 08; ADR 0004, 0012, 0027; plan-eval-rubric.md; severity.
 
 Authority: fail (3). Executable: fail (2, 5). Verified sketches: fail (1, 2).
 Single-purpose: fail (6). Structure/size sections present. Verification named: partial (4).
+
+---
+
+# Round 1 re-review (revision d39b55c..fa52014)
+
+Non-expansion rule applied: only Round 0 findings are checked; no new criteria introduced.
+
+| # | Sev | Status | Basis |
+|---|---|---|---|
+| 1 | BLOCKER | Resolved | Step 2 now specifies Claude exit 2/stderr and Codex `deny` JSON exit 0 per spec 08, with single-line <=512-byte reasons. |
+| 2 | BLOCKER | Resolved | Unset `LOOM_ROLE` fails open; enforcement only on explicit role. Claude launch no longer claims an env producer. |
+| 3 | BLOCKER | Resolved (accepted) | `LOOM_ALLOW_ORCHESTRATOR_GATE=1` exception preserves spec 04's root gate rerun; plan now cites no ADR 0012 prohibition. |
+| 4 | MAJOR | **Unresolved** | Plan still never addresses `hook-wire-v1` fixtures, the "12-case" product/CLAUDE.md counts, or ordering/combined-block behavior of two `PreToolUse` hooks in one matcher. The diff and revision log are silent; Verification adds no fixture check. |
+| 5 | MAJOR | Resolved | Stage A/B/C anchoring on the de-quoted leading word plus negative tests (`git log --grep=bats`, `echo bats`). Evaluator mutation list's intentional scope (no `git add`/`checkout`/redirects) remains unstated but is not blocking. |
+| 6 | MAJOR | Resolved | Schema dropped and deferred. |
+| 7 | MAJOR | Resolved | Scope shrank; 200 LOC is plausible after dropping schema and Claude launcher work. |
+| 8 | MINOR | Partial | Orchestrator `LOOM_ROLE=orchestrator` producer is vague ("explicitly exported when driving orchestration workflows"); no `rg`/`jq` mechanical check added. |
+
+## Verdict rationale
+
+Finding 4 is a MAJOR from Round 0 that the revision did not touch. Spec 08 makes the
+hook-wire fixtures byte-exact per client/event/outcome, and adding a second PreToolUse
+hook changes that product. Required fix (no new criteria): state whether the guard gets
+its own fixtures or shares a dispatcher, update fixture/doc counts, and state
+hook ordering/combined-block behavior; add a verification step for it. Optionally name the
+orchestrator `LOOM_ROLE` producer (Finding 8).
+
+Verdict: FAIL
