@@ -23,9 +23,10 @@ refs themselves:
    "Claim before working a slice" step 2). That is a tracked-main mutation in the
    claim/work-start path and contradicts ADR 0020 §4 and spec 04.
 2. `loom-land` integrates only the slice head. Nothing builds the finalization
-   artifacts (roadmap, progress, handoff, archived plan, index) inside the candidate,
-   so a successful remote update cannot yet be proven to carry "exactly one slice plus
-   its finalization artifacts".
+   artifacts (archived plan, index, progress, handoff, roadmap) inside the candidate,
+   and the helper builds the candidate (running the gate) while holding the publish
+   lock and tracks the candidate manifest, so a successful remote update cannot yet be
+   proven to carry "exactly one slice plus its finalization artifacts" with a short lock.
 
 This slice closes both and adds the concurrency tests the improvement plan requires.
 Single purpose: separate coordination state (refs + session state) from tracked state,
@@ -46,8 +47,8 @@ and make candidate-time finalization the only writer of living docs.
   inode-swapping, no internal helper monkeypatching; `--finalize` is a
   caller-supplied command run in the disposable worktree with the same trust as
   `--gate` (spec 00 Non-goals: no OS-level hostile-code containment).
-- Branch-protection rejection remains the existing exit-10 unverified-publication
-  result; no mode fallback.
+- Branch-protection rejection (push failed, remote unchanged) remains the exit-10
+  unverified result; no mode fallback.
 
 ## Steps
 
@@ -66,56 +67,77 @@ and make candidate-time finalization the only writer of living docs.
    Add the release rule: release only after verified direct publication (helper exit
    0), confirmed PR merge, or confirmed queue completion.
 3. `.docs/slice-plans/README.md` convention (this slice's own registration is the
-   only edit made here): an Active entry is written when a plan is committed on its
-   slice branch/candidate, never by claim acquisition. Note this in the "Active plans"
-   intro.
-4. `plugins/loom/bin/loom-land`: add optional `--finalize <cmd>` (parsed with `--gate`;
-   usage header updated). In `build()`, after the merge and before the manifest commit,
-   run `(cd "$WT" && bash -c "$FINALIZE")`; fail with exit 10 on nonzero; if it
-   changed the tree, `git add -A` excluding `.loom/` and commit
-   `Finalize slice $SLICE` as one commit. The finalize string joins the
-   candidate-reuse key in `write_state` so a changed command forces a rebuild. The
-   candidate is thereby merge(slice) + one finalization commit + manifest. No tracked
-   file on local `main` is touched; the existing fast-forward mirror update after
-   verified publication is unchanged.
-5. `plugins/loom/bin/loom-land` precondition: before `build`, require the slice head's
-   plan (`.docs/slice-plans/$SLICE.md`, when present at `$HEAD_SHA`) to carry
-   `Status: Ready to Publish`; otherwise `die 1`. A missing plan file is allowed so
-   existing tests and non-loom-plan repos keep working. Reads use
-   `git show "$HEAD_SHA:…"`, never the working tree or local `main`.
-6. `plugins/loom/bin/loom-land` network failure: confirm `fetch_target` failure maps to
-   exit 10 with state and claim untouched and no local-main change; adjust only if the
-   new test shows a gap (expected: none).
-7. `plugins/loom/bin/loom-land.bats`: add a section `# ---- coordination-state
-   separation ----` with a helper `slice_commit <clone> <name>` that creates
-   `slice-<name>` with a plan at `.docs/slice-plans/<name>.md` (`Status: Ready to
-   Publish`) plus `<name>.txt`, claims it for a second session, and a
-   `FIN` command that appends a line to `.docs/status/progress.md`. Tests:
-   a. *claim and work-start leave tracked main untouched*: after `setup`, local `main`
-      SHA and `git status --porcelain` equal their pre-claim values and no
-      `refs/heads/main` commit mentions the claim; `list-claims` shows the slice.
-   b. *publication carries exactly one slice plus finalization*: publish slice A with
-      `--finalize`; `git log --first-parent`/`diff-tree` over base..remote show the
-      slice files, the finalization file set only, and `.loom/candidate-manifest.json`
-      — no other paths and exactly one merge of `slice-a`.
-   c. *second session cannot publish the first session's unrelated local-main
-      history*: commit `unrelated.txt` on session 1's local `main` (ahead), publish
-      slice B from session 2's clone; remote tree lacks `unrelated.txt`, and session
-      1's later publish (after rebuild) still lacks it.
-   d. *rejected publisher rebuilds against the new target*: extend the existing
-      separate-clone race with `--finalize`; loser exits 3, candidate `baseCommit`
-      equals the winner's candidate, finalization is re-applied on the new base
-      (progress file contains both slices' lines after the loser's second run with
-      fresh evidence).
-   e. *offline publication keeps everything*: set the push/fetch URL to a nonexistent
-      path; run publish; exit 10, local `main` SHA unchanged, claim present,
-      `list-claims` non-empty, plan on slice head still `Ready to Publish`, no receipt.
-   f. *plan not Ready to Publish is rejected before mutation* (exit 1, remote untouched).
-   g. *post-publication cleanup crash recovers without a second push*: reuse
-      `count_hook`; kill cleanup by stubbing `release-claim` to fail once (existing
-      `stub_coord`), rerun, assert `pushes` stays 1 and the claim is released.
-8. Run the full gate (see Verification); record shell-format fixes only inside the
-   files above.
+   only edit made here): the Active index and every other living doc (progress,
+   handoff, roadmap) change only inside the integration candidate, never on a slice
+   branch or `main` and never by claim acquisition. Note this in the "Active plans"
+   intro; slice-branch plan status edits stay in the plan file itself.
+4. `plugins/loom/bin/loom-land` manifest: stop committing `.loom/candidate-manifest.json`.
+   Write it to `$SDIR/candidate-manifest.json` (private session dir, untracked recovery
+   state per spec 03). The candidate is merge(slice) + one finalization commit; its
+   tree contains no `.loom/` path. Recovery reads state from `$SDIR` as today.
+5. `plugins/loom/bin/loom-land` finalization (new `--finalize <cmd>`, usage updated).
+   Contract: pure function of the candidate tree plus exported `LOOM_SLICE`,
+   `LOOM_BASE`, `LOOM_SLICE_HEAD`; no clock, network, or randomness.
+   - Precondition (fail-closed, exit 1, before any mutation): if `.docs/slice-plans/
+     $SLICE.md` exists at `$HEAD_SHA` (read with `git show`, never the working tree or
+     local `main`) it must say `Status: Ready to Publish` AND `--finalize` must be
+     given. No plan file keeps non-loom repos and existing tests working.
+   - In `build()`, after the merge, run `(cd "$WT" && bash -c "$FINALIZE")`; nonzero
+     exit is exit 10 with state, claim, and remote untouched. Commit the result as one
+     `Finalize slice $SLICE` commit with author/committer date and identity taken from
+     the slice head commit, so identical inputs yield an identical SHA.
+   - Completeness check on a managed slice (exit 1, no push, candidate discarded
+     unless gate-green): the active plan path is gone, `.docs/slice-plans/archive/
+     $SLICE.md` exists, and `.docs/slice-plans/README.md`, `.docs/status/progress.md`,
+     `.docs/status/handoff.md`, `.docs/roadmap.md` each differ from `$BASE`.
+   - The finalize string joins the reuse key in `write_state`; changing it forces a
+     rebuild at a new SHA, so evidence bound to the old candidate is rejected (exit
+     3, fresh evidence required). A failed finalize never writes `candidateSha`.
+6. `plugins/loom/bin/loom-land` lock scope: rebuild and gate run only outside
+   `refs/loom/lock`. Order: build+gate (unlocked) -> acquire lock -> re-fetch/compare
+   -> push -> remote verification -> receipt -> unlock. If the re-fetch shows the base
+   moved, release the lock and exit 3 (state kept, `publishAttempt` still false, no
+   rebuild under the lock); the next run rebuilds and gates unlocked and needs fresh
+   evidence for the new candidate SHA.
+7. `plugins/loom/bin/loom-land` rejected-push recovery. A push is *positively rejected*
+   only when `git push` failed AND `ls-remote` succeeded AND the remote SHA is not
+   `$CAND`, is not contained in the candidate, and descends from `$BASE`. Then reset
+   `publishAttempt` to false and exit 3 (rebuild next run, no owner action). Every other
+   outcome (push ok but remote differs, `ls-remote` unreadable, remote unrelated to
+   `$BASE`) stays uncertain: `publishAttempt` remains true and exit 10 owner action
+   applies unchanged. Network failure in `fetch_target` stays exit 10, state untouched.
+8. `plugins/loom/bin/loom-land.bats`: add `# ---- coordination-state separation ----`
+   with helper `slice_commit <clone> <name>` (slice branch with a Ready to Publish
+   plan at `.docs/slice-plans/<name>.md`, `<name>.txt`, status docs on base) and `FIN`,
+   a deterministic script that `git mv`s the plan to `archive/`, and appends the slice
+   to README, progress, handoff, and roadmap. Update only the existing test at
+   `loom-land.bats:189` to assert the manifest is in `$SDIR`, not the tree. Tests:
+   a. *claim/work-start leave tracked main untouched*: local `main` SHA and
+      `git status --porcelain` unchanged after claim; `list-claims` shows the slice.
+   b. *publication carries exactly one slice plus finalization*: remote tree base..tip
+      shows only slice files and the five finalization paths, one merge of `slice-a`,
+      and no `.loom/` path.
+   c. *unrelated session-1 local-main history is never published*, also after rebuild.
+   d. *missing/incomplete finalization is rejected*: no `--finalize` on a managed
+      slice, and a `FIN` that skips handoff each exit 1, remote and claim untouched.
+   e. *finalization is repeatable*: delete state and candidate ref, rebuild with
+      `--candidate-only`; both runs give the same SHA. A failing `FIN` exits 10, writes
+      no `candidateSha`, keeps the claim, and leaves the remote unchanged.
+   f. *changed finalize command invalidates the candidate*: rerun with an altered
+      `FIN`; SHA differs, old evidence is rejected with exit 3, matching new evidence
+      publishes.
+   g. *lock scope*: a gate/finalize stub records whether `refs/loom/lock` exists;
+      it never does at gate time. A target move between build and lock exits 3 without
+      running the gate under the lock.
+   h. *positive rejection is recoverable*: loser exits 3, `publishAttempt` false, next
+      run rebuilds on the winner's base (progress has both slices' lines) with fresh
+      evidence and publishes. Uncertain case (stubbed unreadable `ls-remote`) keeps
+      `publishAttempt` true and exits 10 on rerun.
+   i. *offline publication keeps everything* (exit 10, `main` SHA unchanged, claim and
+      `Ready to Publish` plan present, no receipt).
+   j. *post-publication cleanup crash recovers without a second push* (`count_hook`,
+      failing `release-claim` once via `stub_coord`; `pushes` stays 1, claim released).
+9. Run the full gate (see Verification); shell-format fixes stay inside the files above.
 
 ## Verification
 
@@ -134,20 +156,19 @@ shellcheck -s bash plugins/loom/bin/loom-land
 TMPDIR=/private/tmp bats --filter "coordination-state|finalize|offline|Ready to Publish" plugins/loom/bin/loom-land.bats
 ```
 
-New behavior is proven by tests 7a–7g. The 37 existing `loom-land.bats` tests and the
-`loom-coord.bats` suite must pass unchanged (regression proof that claim/lock/lease
+New behavior is proven by tests 8a–8j. The existing `loom-land.bats` tests (except the
+single manifest assertion in step 8) and the `loom-coord.bats` suite must pass unchanged (regression proof that claim/lock/lease
 and receipt semantics are untouched). A mechanical `rg -n "Active region on main|from
 current local .main."` over `plugins/loom` must return no hits after steps 1–2. Net
-change estimate: ~25 LOC `loom-land`, ~120 LOC bats, ~30 LOC docs.
+change estimate: ~70 LOC `loom-land`, ~150 LOC bats, ~25 LOC docs.
 
 ## Notes
 
-_No clarification requests._ Open design point for plan evaluation: `--finalize` is a
-generic command hook (mirrors `--gate`) rather than the helper hard-coding which living
-docs to edit; the orchestrator's finalize script owns the file list per spec 03.
+_No clarification requests._ `--finalize` stays a caller-supplied command (mirrors `--gate`), but the helper now enforces its output set; the orchestrator's script owns file contents per spec 03.
 
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Manifest moved to untracked `$SDIR` (not committed); finalization required and completeness-checked fail-closed for all five artifacts, deterministic and reuse-keyed; rebuild/gate moved outside the publish lock; positive push rejection recovers (exit 3) while uncertain pushes keep exit 10; Active index writes reserved for the candidate; tests 8d–8h added |

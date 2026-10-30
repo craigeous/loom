@@ -17,10 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [coordination-state-separation.md](coordination-state-separation.md) — `Plan Review` (plan-eval Round 0 FAIL) —
+- [coordination-state-separation.md](coordination-state-separation.md) — `Plan Review` (Round 1 re-evaluation after Round 0 FAIL) —
   ADR 0020 milestone M2 slice 2: remove tracked-main writes from the claim/work-start path
-  (playbook), finalize living docs only inside the integration candidate (`loom-land --finalize`),
-  require `Ready to Publish` before publication, and prove concurrent-publisher, offline, and
+  (playbook), finalize living docs only inside the integration candidate (`loom-land --finalize`, fail-closed),
+  keep the manifest untracked, publish with a short lock and recoverable push rejection, require `Ready to Publish`, and prove concurrent-publisher, offline, and
   cleanup-recovery behavior in Bats.
 
 ## Archived plans
