@@ -42,7 +42,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 
 ## In Review
 
-None.
+- [0027 — Client Model Matrix Modernization, Ambient Inheritance, and Antigravity Ratification](0027-client-model-matrix-modernization-and-ambient-inheritance.md) — amends spec 10; ambient model inheritance by default with optional pinning; role-profile reasoning effort policy; ratifies Antigravity as first-class client family.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 
