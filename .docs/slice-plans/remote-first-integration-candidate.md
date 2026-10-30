@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: Needs Clarification
+Status: In Progress
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -25,9 +25,9 @@ are outside the boundary. Never force-push or silently switch modes.
 1. Add executable `plugins/loom/bin/loom-land`, Bash 3.2 compatible with
    `set -euo pipefail`; require invocation by absolute path. Define and validate
    explicit inputs for repository, configured remote, full `refs/heads/...` target,
-   remote-direct mode, slice and session IDs, immutable slice head, finalization
-   inputs, `--gate <cmd>` (default `scripts/check`), and `--evidence <path>`
-   (a JSON manifest containing review evidence hashes). Reject malformed inputs, unsupported modes,
+   remote-direct mode, slice and session IDs, immutable slice head, `--gate <cmd>` (default `scripts/check`), and `--evidence <path>`
+   (the JSON evidence object specified in Notes). Validate its schema, nonempty gate
+   matching the effective `--gate`, and both 64-character hexadecimal SHA-256 fields. Reject malformed inputs, unsupported modes,
    missing tools or evidence, and non-ready slices before mutation. Document its
    invocation and exit codes in its usage: 0 verified success, 1 usage error,
    3 contention or retry exhaustion, 5 ownership failure, 10 operational or
@@ -35,22 +35,26 @@ are outside the boundary. Never force-push or silently switch modes.
    nonzero result preserves claim and recovery evidence.
 2. Fetch the configured target into an isolated ref and resolve its exact commit.
    Create a uniquely named disposable branch and worktree at that SHA, integrating
-   only the specified slice head. Fail on conflicts; never consult local main. In
-   that worktree prepare the slice candidate manifest and final tracked plan,
-   evaluation, archive, index and living-status changes, then commit them. The
-   tracked manifest binds slice/session, remote/ref/mode, slice head and initial
-   base and evidence inputs; do not embed its own candidate SHA in its commit.
-3. Run the applicable integrated gate and review/evaluation checks against the
-   exact committed candidate, recording candidate SHA and evidence hashes outside
-   the candidate. Reject a dirty or changed candidate after checks. Build, finalize
+   only the specified slice head. Fail on conflicts; never consult local main. Code and slice-level documentation already committed at `--head` (including
+   prepared evaluations and archived plans) enter by the standard git merge. Do
+   not invent transformations for plans, evaluations, archives, indexes or living
+   status: any such changes must already be committed on the slice branch. Commit
+   `.loom/candidate-manifest.json` binding slice/session, remote/ref/mode, slice
+   head, base commit and evidence hashes; do not embed its own candidate SHA.
+3. Run the specified gate against the exact committed candidate, recording candidate
+   SHA and supplied evidence hashes outside the candidate. The hashes are opaque
+   caller-supplied bindings: their syntax is validated, but they do not prove review
+   content or authorize an invented review command. Reject a dirty or changed candidate after checks. Build, finalize
    and check outside the lock. Write candidate state as JSON at `<git-dir>/loom/session-<sid>/candidate.json`,
    atomically via a temporary file and `mv`; include the candidate SHA, inputs and
    evidence hashes needed for recovery. Preserve it on failure; do not mistake candidate Landed text for publication.
 4. Use `loom-coord lock-acquire` for the session, then `lock-verify` before each
    protected mutation and `lock-release` on every exit only if owned. Re-fetch
    and compare the exact target under the lock. If moved, release it, discard the
-   disposable candidate and rebuild from the new base, repeating all affected
-   gate and review checks. Bound retries and return recoverable failure on exhaustion.
+   disposable candidate and rebuild from the new base, rerunning `--gate` against the rebuilt candidate. A merge conflict exits 3;
+   a gate failure exits 10, preserving candidate state. Review of the rebuilt SHA
+   requires fresh external evidence; do not treat prior hashes as proof of review
+   of the new candidate or publish until that evidence is supplied. Bound retries and return recoverable failure on exhaustion.
    A lost or expired lock stops publication; never release another session's lock.
 5. Under the lock push the candidate SHA to the full target ref with ordinary
    non-force push; verify independently with a fresh remote ref read that equals
@@ -89,7 +93,30 @@ same-clone and separate-clone races and Bash 3.2 compatibility through the full 
 
 ## Notes
 
-Which explicit finalization inputs and transformations define the tracked plan, evaluation, archive, index and living-status changes for arbitrary managed repositories? What is the evidence JSON schema and how must review hashes and review checks be validated and rerun against a rebuilt candidate? The plan names these obligations but does not specify their interfaces or verification rules; implementing them by guess would invent publication authority.
+**Resolved (Round 2):** The explicit finalization input is the committed slice
+`--head`: code and slice-level docs, including any prepared evaluations, archived
+plans, index and living-status edits, are incorporated by standard git merge. No
+generic document transformation is authorized. The tracked candidate manifest binds
+the slice/session, remote/ref/mode, slice head, base commit and evidence hashes.
+
+`--evidence <path>` accepts this JSON object (SHA-256 values are 64 hex digits):
+
+```json
+{
+  "schema": "loom-evidence/v1",
+  "gate": "<cmd>",
+  "gateEvidenceSha256": "<hex>",
+  "reviewEvidenceSha256": "<hex>"
+}
+```
+
+Validate the schema, fields, hash syntax and gate equality with the effective
+`--gate`; the file supplies hashes, not review artifacts or a review command, so
+hash contents and review execution cannot be independently verified from this
+interface. On target movement rebuild from the new base and rerun the gate; conflict
+exits 3 and gate failure exits 10 with candidate state preserved. A rebuilt candidate
+needs fresh external candidate-specific review evidence before publication; the
+caller must supply it, and old hashes alone cannot establish that review occurred.
 
 ## Revision Log
 
@@ -97,3 +124,4 @@ Which explicit finalization inputs and transformations define the tracked plan, 
 |---|---|
 | 0 | Initial draft |
 | 1 | Specify durable JSON state, inputs, exit codes, size budget and post-push recovery. |
+| 2 | Clarify merge inputs, evidence schema and rebuild verification boundaries. |
