@@ -1,8 +1,8 @@
 # Per-Session PreCompact Write-Ahead Backstop (`precompact-per-session`)
 
-Status: Draft
+Status: Plan Review
 Target specs: 04-orchestrator.md, 08-client-adapters.md
-Target size: <= 180 LOC net change (keep this plan document <= 250 lines)
+Target size: <= 240 LOC net change (keep this plan document <= 250 lines)
 
 ## Context
 
@@ -14,13 +14,19 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
 
 1. **Coordinated session checkpoints are ignored:** High-frequency orchestrator
    checkpoints written by `loom-coord checkpoint-write --session <sid>` live at
-   `<git-common-dir>/loom/session-<sid>/checkpoint` (untracked under `.git/loom/`,
-   per spec 04 `## Thin-orchestrator invariant`). The hook currently computes its
-   progress anchor (`CUR`) solely from `git log -1 --format=%H -- .docs`. As a
-   result, `loom-coord checkpoint-write` does not advance the session's
-   compaction marker, and in a multi-session repository one session's `.docs/`
-   commit advances `CUR` for another coordinated session whose own per-session
-   checkpoint has not moved.
+   `<git-common-dir>/loom/session-<sid>/checkpoint` — per
+   `plugins/loom/bin/loom-coord` (`STATE_DIR="$GITDIR/loom"`, `_with_session_dir`
+   and `_session_checkpoint_write_op` writing `$STATE_DIR/session-<id>/checkpoint`,
+   with `<id>` bound from `--session <sid>` or `LOOM_SESSION_ID`) and spec 04
+   `## Thin-orchestrator invariant`. When the orchestrator starts `loom-coord`
+   with `--session <client-session-id>` (or sets `LOOM_SESSION_ID` to match the
+   client hook's `session_id`), the hook's `$SESSION` equals `loom-coord`'s
+   `<sid>` and its checkpoint file is `<git-common-dir>/loom/session-$SESSION/checkpoint`.
+   The hook currently computes its progress anchor (`CUR`) solely from
+   `git log -1 --format=%H -- .docs`. As a result, `loom-coord checkpoint-write`
+   does not advance the session's compaction marker, and in a multi-session
+   repository one session's `.docs/` commit advances `CUR` for another
+   coordinated session whose own per-session checkpoint has not moved.
 2. **Worktree git-dir resolution:** The hook resolves `git rev-parse --git-dir`
    rather than `git rev-parse --git-common-dir`, which splits `.git/loom/` paths
    when invoked from a session worktree.
@@ -32,18 +38,26 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
    `T7a`, missing or invalid `session_id` fails closed with `"Loom hook input
    invalid for pre-compact."` rather than sharing a fallback `default` marker.)
 4. **Remediation & log hardening:** Coordinated sessions need a block message
-   that names `loom-coord checkpoint-write --session <sid>` (while uncoordinated
-   sessions preserve the byte-exact `hook-wire-v1` fixture message `"commit a
-   .docs/ checkpoint, then retry"`), and `_loom_append_bounded_log` /
-   `_loom_atomic_write` need `mktemp`-backed atomic temp files, `LOOM_PRECOMPACT_LOG_CAP`
-   integer validation, control-character sanitization, and `<timestamp>\t<session>\t<anchor>`
-   log records.
+   that instructs the caller to write an advanced checkpoint via
+   `loom-coord checkpoint-write --session <sid>` (while uncoordinated sessions
+   preserve the byte-exact `hook-wire-v1` fixture message `"commit a .docs/
+   checkpoint, then retry"`), and `_loom_append_bounded_log` /
+   `_loom_atomic_write` need `mktemp`-backed atomic temp files,
+   `LOOM_PRECOMPACT_LOG_CAP` integer validation (invalid or leading-zero values
+   fall back to `200`), control-character sanitization, and
+   `<timestamp>\t<session>\t<anchor>` log records.
 
 ## Out of Scope & Threat-Model Boundary
 
 - **Out of scope:** Modifying `plugins/loom/bin/loom-coord`, changing the frozen
   `plugins/loom/hooks/fixtures/hook-wire-v1/` fixture files, changing
   `plugins/loom/hooks/hooks.json`, or modifying `.docs/spec/` / `.docs/ADR/`.
+- **Session-binding scope:** Multi-session checkpoint isolation applies to
+  coordinated sessions that bind their `loom-coord` session to the client hook
+  `session_id` (via `--session <client-session-id>` or `LOOM_SESSION_ID`
+  matching `session_id`); uncoordinated sessions (without a
+  `<git-common-dir>/loom/session-$SESSION` directory) continue to share the
+  repository-wide `.docs` commit anchor.
 - **Threat-model boundary (`.docs/spec/00-overview.md` `## Non-goals`):** Same-user
   local filesystem trust boundary under `.git/loom/`. This slice defends against
   cross-session marker/checkpoint bleed, path traversal or option injection via
@@ -75,7 +89,8 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
      in the target directory via `mktemp "$dir/.tmp.XXXXXX"` (falling back to
      `"$dir/.tmp.$$.$RANDOM"` if `mktemp` is unavailable in a minimal `PATH`),
      remove `"$tmp"` on write/rename failure, validate `LOOM_PRECOMPACT_LOG_CAP`
-     as a positive decimal integer (default `200`), and strip control characters
+     as a positive decimal integer matching `^[1-9][0-9]*$` (invalid or
+     leading-zero values fall back to `200`), and strip control characters
      (`LC_ALL=C tr -d '\000-\010\013-\037\177'`) from log lines before writing.
 
 2. **Resolve `--git-common-dir` and validate per-session coordinated checkpoints
@@ -83,7 +98,13 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
    - Resolve `GITDIR` via `git -C "$REPO_ROOT" rev-parse --git-common-dir 2>/dev/null`
      (falling back to `--git-dir`), relativized against `$REPO_ROOT` when not
      absolute, so linked worktrees share `<common-git-dir>/loom/`.
-   - Compute the per-session progress anchor `CUR` and `COORDINATED` flag as:
+   - Bind to `plugins/loom/bin/loom-coord`'s per-session state layout
+     (`STATE_DIR="$GITDIR/loom"`, `_with_session_dir` /
+     `_session_checkpoint_write_op` writing `<git-common-dir>/loom/session-<sid>/checkpoint`
+     when the orchestrator starts `loom-coord` with `--session <client-session-id>`
+     or `LOOM_SESSION_ID` matching the hook's `session_id`). Compute the
+     per-session progress anchor `CUR` and `COORDINATED` flag from
+     `<git-common-dir>/loom/session-$SESSION/checkpoint`:
      ```bash
      SESSION_COORD_DIR="$GITDIR/loom/session-$SESSION"
      SESSION_CHECKPOINT="$SESSION_COORD_DIR/checkpoint"
@@ -110,7 +131,7 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
    - When `$CUR != $PREV`, atomically update `$MARKER` to `$CUR` and allow.
    - When `$CUR == $PREV`:
      - On `TRIGGER="manual"`: if `COORDINATED=1`, block with
-       `"loom write-ahead backstop: session checkpoint has not advanced before manual compaction (ADR 0013); run loom-coord checkpoint-write --session ${SESSION}, then retry."`;
+       `"loom write-ahead backstop: session checkpoint has not advanced before manual compaction (ADR 0013); write an advanced checkpoint via loom-coord checkpoint-write --session ${SESSION}, then retry."`;
        if `COORDINATED=0`, block with the existing `hook-wire-v1` reason
        `"loom write-ahead backstop: .docs/ has not advanced before manual compaction (ADR 0013); commit a .docs/ checkpoint, then retry."`.
      - On `TRIGGER="auto"`: append `$(printf '%s\t%s\t%s' "$TIMESTAMP" "$SESSION" "$CUR")`
@@ -124,18 +145,23 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
      (`sess..1`), leading non-alphanumeric (`-bad`, `.hidden`), and non-string
      JSON `session_id` (`123`) fail closed (`status 2`).
    - Add `T12b`: auto no-progress log records `<timestamp>\t<session>\t<anchor>`,
-     strips control characters, and survives a non-numeric `LOOM_PRECOMPACT_LOG_CAP`.
-   - Add `T14`: coordinated session round-trip using real `plugins/loom/bin/loom-coord`
-     (`session-start` + `checkpoint-write`) — first-run allows, repeated manual
-     compaction blocks with the `loom-coord checkpoint-write --session <sid>`
+     strips control characters, and falls back to `200` on invalid or
+     leading-zero `LOOM_PRECOMPACT_LOG_CAP` (e.g. `abc`, `08`, `0`).
+   - Add `T14`: coordinated session round-trip invoking the real
+     `plugins/loom/bin/loom-coord session-start --session <sid>` and
+     `plugins/loom/bin/loom-coord checkpoint-write --session <sid>` bound to the
+     hook's `session_id` `<sid>` — first-run allows, repeated manual compaction
+     (or rewriting identical checkpoint bytes) blocks with the `"write an
+     advanced checkpoint via loom-coord checkpoint-write --session <sid>"`
      remediation (both Claude exit-2 and Codex JSON wire), and a subsequent
-     `loom-coord checkpoint-write` advances the checkpoint and unblocks compaction.
+     `loom-coord checkpoint-write --session <sid>` with advanced checkpoint
+     content unblocks compaction.
    - Add `T15`: two coordinated sessions (`sA`, `sB`) where `sA` advances via
      `loom-coord checkpoint-write --session sA` AND commits to `.docs/`; `sA`
      compacts (`status 0`) while `sB` remains blocked (`status 2`).
    - Add `T16`: coordinated session directory present without `checkpoint` file
      yet records `checkpoint:none` on first run, blocks on second manual run, and
-     unblocks after `loom-coord checkpoint-write`.
+     unblocks after `loom-coord checkpoint-write --session <sid>`.
    - Add `T17`: concurrent compactions across two sessions (`s-adv` advancing,
      `s-stale` unadvanced) run in parallel without marker corruption or leftover
      `.tmp.*` files.
@@ -146,19 +172,19 @@ slice `precompact-per-session` in `.docs/repository-improvement-plan.md`:
 
 - **Fast targeted iteration command:**
   ```bash
-  LOOM_TEST_BASH="$(command -v bash)" LOOM_EXPECTED_BASH_VERSION="^[345]\\." \
+  TMPDIR=/private/tmp LOOM_TEST_BASH="$(command -v bash)" LOOM_EXPECTED_BASH_VERSION="^[345]\\." \
     bats plugins/loom/hooks/precompact-write-ahead-backstop.bats
   ```
 - **Static checks on touched files:**
   ```bash
-  shfmt -d -i 4 -ci plugins/loom/hooks/precompact-write-ahead-backstop.sh \
+  shfmt -i 4 -d plugins/loom/hooks/precompact-write-ahead-backstop.sh \
     plugins/loom/hooks/precompact-write-ahead-backstop.bats
-  shellcheck plugins/loom/hooks/precompact-write-ahead-backstop.sh \
+  shellcheck -s bash plugins/loom/hooks/precompact-write-ahead-backstop.sh \
     plugins/loom/hooks/precompact-write-ahead-backstop.bats
   ```
 - **Full repository gate:**
   ```bash
-  node scripts/validate-repository.mjs --root /Users/craig/git/loom --all
+  TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check
   ```
 
 ## Notes
@@ -170,3 +196,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Cite `loom-coord` (`STATE_DIR="$GITDIR/loom"`, `_with_session_dir`/`_session_checkpoint_write_op`) and explicit `--session <client-session-id>`/`LOOM_SESSION_ID` binding + uncoordinated `.docs` boundary; specify `LOOM_PRECOMPACT_LOG_CAP` invalid/leading-zero fallback to 200 and `"write an advanced checkpoint"` remediation; raise target size to `<= 240 LOC`; fix `Verification` commands (`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`, `shfmt -i 4 -d`, `shellcheck -s bash`, `TMPDIR=/private/tmp` on `bats`). |
