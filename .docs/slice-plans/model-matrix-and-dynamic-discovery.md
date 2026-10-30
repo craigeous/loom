@@ -1,84 +1,76 @@
 # Model Matrix Modernization & Dynamic Discovery (`model-matrix-and-dynamic-discovery`)
 
 Status: Plan Review
-Target specs: 08-playbook.md, 10-packaging.md
+Target specs: 08-playbook.md, 10-packaging.md; Authority: accepted ADR 0027
 Target size: <= 180 LOC net change (keep this plan document <= 250 lines)
 
 ## Context
 
-Loom's compatibility matrix (`adapters/compatibility/v0.2.0.json`) and schemas
-currently lock Codex launches to deprecated model names (`gpt-5.6`, `gpt-5.6-terra`)
-via strict JSON schema enums. On modern Codex accounts, launching with `gpt-5.6`
-fails immediately:
-```
-ERROR: The 'gpt-5.6' model is not supported when using Codex with a ChatGPT account.
-```
-Simultaneously, Antigravity models (`agy models`) provide access to latest Anthropic
-models (`claude-opus-5-5-*`, `claude-sonnet-5-5-*`) and Gemini models (`gemini-4-argon-*`,
-`gemini-3.8-flash-*`), allowing developers to bypass direct Anthropic quota ceilings.
-However, `loom-launch-role` currently lacks:
-1. Support for modern `gpt-6*` model families in schemas and compatibility matrix.
-2. Dynamic discovery and 24h caching of available Antigravity models via `agy models`.
-3. Safe resolution of active Codex models from `~/.codex/config.toml` when unpinned.
-4. Explicit model and effort pinning flags (`--model <id>` and `--effort <level>`).
+Loom's compatibility matrix and launch schemas previously locked Codex launches
+to deprecated model names (`gpt-5.6*`), which fail on modern accounts (`ERROR: The
+'gpt-5.6' model is not supported`). Accepted ADR 0027 partially supersedes ADR 0002
+and ADR 0018 §3, authorizing ambient model inheritance as default, four-tier
+resolution precedence (CLI flags > repository config > ambient client > matrix fallback),
+role profile reasoning effort policy, and Antigravity as a private dogfood runtime adapter.
 
-This slice modernizes the compatibility matrix and schemas to support `gpt-6*`
-models, adds Antigravity discovery and caching, and provides CLI model/effort pinning.
+This slice implements ADR 0027's technical foundation:
+1. Updating schemas and bumping the compatibility matrix to `v0.3.0.json` to admit
+   modern model families (`gpt-6*` and open provider patterns).
+2. Implementing the four-tier model resolution precedence in `loom-launch-role`.
+3. Adding Antigravity dynamic model discovery with atomic 24-hour file caching.
+4. Supporting explicit `--model <id>` and `--effort <low|medium|high>` CLI overrides.
 
 ## Out of Scope & Threat-Model Boundary
 
-- Modifying pre-tool execution hooks or session interception (owned by the
-  follow-up `role-governance-guard` slice).
-- Altering the 5 canonical lifecycle roles or their profiles (Economy, Standard,
-  Deep review) defined in ADR 0002 / ADR 0018.
-- Arbitrary network lookups in tests: Bats tests must use local stubs/caches and
+- Session interception pre-tool hooks (owned by follow-up slice `role-governance-guard`).
+- Altering the 5 canonical lifecycle roles or their profiles (ADR 0002 / ADR 0018).
+- Live external network calls in tests: Bats tests must use local stubs/caches and
   never invoke live external APIs or live `codex exec`.
+- Modifying public v0.2 release obligations: Antigravity remains a private dogfood
+  adapter per ADR 0024 and ADR 0027 §4.
 
 ## Steps
 
 1. **Update Compatibility & Launch Schemas (`plugins/loom/schemas/`):**
-   - In `loom-compatibility-matrix-v1.schema.json`, broaden the Codex model
-     constraint to admit `gpt-6*` and `gpt-5.6*` models:
-     `"pattern": "^(gpt-6(\\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\\.6(-[a-z0-9]+)?)$"`
+   - In `loom-compatibility-matrix-v1.schema.json`:
+     - Allow version `0.3.0` (or `0.2.0|0.3.0`).
+     - Broaden Codex model constraint: `"pattern": "^(gpt-6(\\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\\.6(-[a-z0-9]+)?)$"`
    - In `loom-role-launch-v1.schema.json`:
-     - Update Codex model pattern similarly to permit `gpt-6.1-terra`,
-       `gpt-6.1-sol`, and `gpt-6-astra`.
-     - Add `antigravity` launch variant to `oneOf` with `model`,
-       `subagentName`, `rolePromptPath`, and `rolePromptSha256`.
+     - Broaden Codex model pattern similarly.
+     - Add `antigravity` variant to `oneOf` with `model`, `subagentName`,
+       `rolePromptPath`, and `rolePromptSha256`.
 
-2. **Update Compatibility Matrix (`plugins/loom/adapters/compatibility/v0.2.0.json`):**
-   - Update Codex profile defaults:
+2. **Add Compatibility Matrix `v0.3.0.json` (`plugins/loom/adapters/compatibility/`):**
+   - Create `adapters/compatibility/v0.3.0.json` with baseline floors:
      - `Economy`: `gpt-6.1-terra`, effort `low`
      - `Standard`: `gpt-6.1-terra`, effort `medium`
      - `Deep review`: `gpt-6.1-sol`, effort `high`
 
-3. **Add Dynamic Discovery, Caching & Pinning to `loom-launch-role`:**
+3. **Implement Four-Tier Model & Effort Resolution in `loom-launch-role`:**
    - In `plugins/loom/bin/loom-launch-role`:
-     - Add optional CLI flags: `--model <id>` and `--effort <low|medium|high>`.
-     - When `--model` is supplied, override the profile default while enforcing
-       valid effort levels.
-     - When client is `antigravity`:
-       - If `--model` is unset, check cache `${XDG_CACHE_HOME:-~/.cache}/loom/agy-models.json`
-         (valid if age <= 86400s). If expired or missing, query `agy models` (if
-         available) and cache the output.
-       - Map profile defaults:
-         - `Deep review`: `claude-opus-5-5-high` (fallback `gemini-4-argon-high`)
-         - `Standard`: `claude-sonnet-5-5-medium` (fallback `gemini-4-argon-medium`)
-         - `Economy`: `gemini-3.8-flash-low`
-     - When client is `codex`:
-       - If `--model` is unset, inspect `~/.codex/config.toml` for `model = "..."`;
-         if set and matching supported families, use it as the default base model;
-         otherwise use matrix defaults (`gpt-6.1-sol` for Deep review, `gpt-6.1-terra`
-         for Standard/Economy).
+     - Parse `--model <id>` and `--effort <low|medium|high>` flags.
+     - Enforce 4-tier precedence:
+       1. Explicit `--model` / `--effort` flags (fails closed `exit 2` if effort is invalid).
+       2. `.docs/loom-models.json` (if present and valid JSON).
+       3. Ambient client configuration:
+          - Codex: inspect `~/.codex/config.toml` for `model = "..."` (validating format).
+          - Antigravity: read cache `${XDG_CACHE_HOME:-~/.cache}/loom/agy-models.json`
+            (valid if age <= 86400s); if missing/stale, query `agy models` via atomic
+            temp file + `mv -f`. Map profile defaults (`Deep review` -> `claude-opus-5-5-high`,
+            `Standard` -> `claude-sonnet-5-5-medium`, `Economy` -> `gemini-3.8-flash-low`).
+          - Claude: floating tier selectors (`haiku`, `sonnet`, `opus`).
+       4. Compatibility matrix `v0.3.0.json` fallback.
+     - Profile reasoning effort: default `low` (Economy), `medium` (Standard),
+       `high` (Deep review); map effort suffix on Antigravity models.
 
-4. **Add Comprehensive Bats Tests (`plugins/loom/bin/loom-launch-role.bats`):**
+4. **Add Comprehensive Bats Test Suite (`plugins/loom/bin/loom-launch-role.bats`):**
    - Add tests for:
-     - `codex` launches producing `gpt-6.1-sol` for Deep review and `gpt-6.1-terra`
-       for Standard/Economy.
-     - `--model` and `--effort` CLI overrides successfully emitted in the launch JSON.
-     - Schema validation of the emitted JSON against `loom-role-launch-v1.schema.json`.
-     - `antigravity` dynamic model mapping with cached stub `agy models` output.
-     - Preserving existing cross-family evaluation rules and error exits.
+     - Codex launches inheriting ambient `gpt-6.1-*` model from config stub.
+     - Explicit `--model` and `--effort` CLI overrides emitted in launch JSON.
+     - Invalid `--effort` failing closed (`exit 2`).
+     - Antigravity cached discovery and profile mapping.
+     - Schema validation of emitted JSON against updated `loom-role-launch-v1.schema.json`.
+     - Preserving fail-closed cross-family evaluation rules.
 
 ## Verification
 
@@ -87,7 +79,7 @@ models, adds Antigravity discovery and caching, and provides CLI model/effort pi
 - **Static checks:**
   - `shfmt -i 4 -d plugins/loom/bin/loom-launch-role`
   - `shellcheck -s bash plugins/loom/bin/loom-launch-role`
-  - `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all`
+  - `node scripts/validate-repository.mjs --root . --all`
 - **Repository gate:**
   - Run via external Orca worker: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`
 
@@ -96,3 +88,4 @@ models, adds Antigravity discovery and caching, and provides CLI model/effort pi
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft replacing multi-purpose role-governance-guardrails with focused model matrix & discovery slice |
+| 1 | Cites accepted ADR 0027 as authority; defines 4-tier resolution precedence (CLI > repo > ambient > matrix); specifies matrix v0.3.0.json; adds fail-closed negative test cases |
