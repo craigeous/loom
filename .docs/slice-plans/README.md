@@ -17,9 +17,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [role-governance-guardrails.md](role-governance-guardrails.md) — `Plan Review` —
-  deterministic pre-tool role governance hook, dynamic model discovery & pinning
-  (`agy models`, `gpt-6.1-*`, `.docs/loom-models.json`), and bounded worker return envelope.
+- [model-matrix-and-dynamic-discovery.md](model-matrix-and-dynamic-discovery.md) — `Plan Review` —
+  modernize compatibility matrix & launch schemas to gpt-6*, dynamic Antigravity discovery
+  (agy models 24h cache), Codex config.toml detection, and CLI --model/--effort pinning.
 
 ## Archived plans
 

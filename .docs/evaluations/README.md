@@ -68,3 +68,4 @@ All other files in this directory remain durable historical verdicts and are not
 rewritten when a later decision supersedes their subject.
 - [`precompact-per-session-plan-eval.md`](precompact-per-session-plan-eval.md) — `precompact-per-session` slice-plan evaluation (Round 1: PASS)
 - [`precompact-per-session-eval.md`](precompact-per-session-eval.md) — `precompact-per-session` code evaluation (Round 0: PASS)
+- [`role-governance-guardrails-plan-eval.md`](role-governance-guardrails-plan-eval.md) — `role-governance-guardrails` slice-plan evaluation (Round 0: FAIL; split into focused slices)
