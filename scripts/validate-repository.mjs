@@ -268,14 +268,15 @@ function validateClientVisibleClaims() {
 const THIN_ADAPTER_MAX_LINES = 20;
 const THIN_ADAPTER_PATTERNS = [
   [/^plugins\/loom\/commands\/([^/]+)\.md$/, (name) => `skills/loom-${name}/SKILL.md`],
-  [/^plugins\/loom\/agents\/([^/]+)\.md$/, (name) => `roles/${name}.md`]
+  [/^plugins\/loom\/agents\/([^/]+)\.md$/, (name) => `roles/${name}.md`],
+  [/^\.agents\/skills\/(loom-[^/]+)\/SKILL\.md$/, (name) => `skills/${name}/SKILL.md`]
 ];
-// Claude commands/agents SHALL be thin routes to the shared canonical
-// skills/roles content (spec 10 "one distribution, two catalogs"; ADR 0018
-// decision 3): short, and pointing at the exact shared body it adapts. This
-// is a mechanical proxy against a divergent second implementation ("copying
-// helpers or workflow bodies into client directories is a conformance
-// failure").
+// Claude commands/agents and Antigravity .agents/skills SHALL be thin routes to
+// the shared canonical skills/roles content (spec 10 "one distribution, two
+// catalogs"; ADR 0018 decision 3): short, and pointing at the exact shared body
+// it adapts. This is a mechanical proxy against a divergent second
+// implementation ("copying helpers or workflow bodies into client directories
+// is a conformance failure").
 function validateThinAdapters() {
   let valid = true;
   for (const relative of files) {
@@ -388,16 +389,17 @@ async function validateMetadata() {
   const frontmatter = [
     [/^plugins\/loom\/commands\/[^/]+\.md$/, "scripts/schemas/command-frontmatter-v1.schema.json"],
     [/^plugins\/loom\/agents\/[^/]+\.md$/, "scripts/schemas/agent-frontmatter-v1.schema.json"],
-    [/^plugins\/loom\/skills\/.+\/SKILL\.md$/, "scripts/schemas/skill-frontmatter-v1.schema.json"]
+    [/^plugins\/loom\/skills\/.+\/SKILL\.md$/, "scripts/schemas/skill-frontmatter-v1.schema.json"],
+    [/^\.agents\/skills\/.+\/SKILL\.md$/, "scripts/schemas/skill-frontmatter-v1.schema.json"]
   ];
-  const names = { command: new Map(), agent: new Map(), skill: new Map() };
+  const names = { command: new Map(), agent: new Map(), skill: new Map(), antigravitySkill: new Map() };
   for (const relative of files) {
     const matched = frontmatter.find(([pattern]) => pattern.test(relative));
     if (!matched) continue;
     const value = parseFrontmatter(relative);
     if (!value) continue;
     validateValue(relative, value, matched[1], ajv);
-    const kind = relative.includes("/commands/") ? "command" : relative.includes("/agents/") ? "agent" : "skill";
+    const kind = relative.startsWith(".agents/skills/") ? "antigravitySkill" : relative.includes("/commands/") ? "command" : relative.includes("/agents/") ? "agent" : "skill";
     const componentName = value.name || (kind === "command" ? path.basename(relative, ".md") : undefined);
     if (componentName) {
       if (names[kind].has(componentName)) report(relative, `duplicate ${kind} name '${componentName}' (also ${names[kind].get(componentName)})`);

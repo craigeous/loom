@@ -37,11 +37,11 @@
 set -u
 
 ROLES=(researcher planner plan-evaluator developer code-evaluator)
-CLIENTS=(claude codex)
+CLIENTS=(claude codex antigravity)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex researcher|planner|plan-evaluator|developer|code-evaluator\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity researcher|planner|plan-evaluator|developer|code-evaluator\n' >&2
     exit 1
 }
 
@@ -166,6 +166,14 @@ _matrix_field() {
     printf '%s' "$1" | jq -r --arg p "$2" "[.profiles[] | select(.profile==\$p)] | .[0]$3 // empty"
 }
 
+_sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
 _launch_claude() {
     local root="$1" role="$2" profile="$3" selector="$4"
     local agent_path model tools cold_id
@@ -197,6 +205,25 @@ _launch_codex() {
         "$role" "$profile" "$cold_id" "$model" "$effort" "$(_json_argv_array "${argv[@]}")"
     codex_bin="${LOOM_LAUNCH_ROLE_CODEX_BIN:-codex}"
     exec env LOOM_LAUNCH_ROLE_ACTIVE=1 "$codex_bin" "${argv[@]}"
+}
+
+_launch_antigravity() {
+    local root="$1" role="$2" profile="$3"
+    local role_path roles_dir role_sha ag_model cold_id
+    [ -d "$root/roles" ] && [ ! -L "$root/roles" ] || _fail "roles directory is missing or symlinked"
+    roles_dir=$(_canon_dir "$root/roles") || _fail "cannot canonicalize roles directory"
+    role_path="$roles_dir/$role.md"
+    [ -f "$role_path" ] && [ ! -L "$role_path" ] || _fail "canonical role contract is missing or symlinked: $role"
+    role_sha=$(_sha256_file "$role_path") || _fail "cannot hash canonical role contract: $role"
+    case "$profile" in
+    Economy) ag_model="flash" ;;
+    Standard) ag_model="inherit" ;;
+    "Deep review") ag_model="pro" ;;
+    *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
+    esac
+    cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
+    printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level","antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s"}}\n' \
+        "$role" "$profile" "$cold_id" "$role" "$ag_model" "$(_json_escape "$role_path")" "$role_sha"
 }
 
 main() {
@@ -245,6 +272,9 @@ main() {
         [ -n "$model" ] || _fail "no Codex model mapped for profile: $profile"
         [ -n "$effort" ] || _fail "no Codex effort mapped for profile: $profile"
         _launch_codex "$root" "$role" "$profile" "$model" "$effort"
+        ;;
+    antigravity)
+        _launch_antigravity "$root" "$role" "$profile"
         ;;
     esac
 }

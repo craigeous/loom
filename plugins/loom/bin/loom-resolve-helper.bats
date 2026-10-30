@@ -354,3 +354,42 @@ resolve_env() {
     CLAUDE_PLUGIN_ROOT="$ROOT" resolve claude not-allowlisted
     [ "$status" -eq 2 ]
 }
+
+# ---------------------------------------------------------------------------
+# Antigravity positive & negative paths
+# ---------------------------------------------------------------------------
+
+@test "antigravity: resolves loom-coord from plugins/loom/skills/<skill>/SKILL.md" {
+    make_root
+    resolve antigravity "$SKILL" loom-coord
+    [ "$status" -eq 0 ]
+    [ "$output" = "$ROOT/bin/loom-coord" ]
+}
+
+@test "antigravity: resolves loom-coord from .agents/skills/<skill>/SKILL.md in a repo root" {
+    ROOT="$(mktemp -d)"
+    ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
+    mkdir -p "$ROOT/.agents/skills/loom-run" "$ROOT/plugins/loom/.claude-plugin" "$ROOT/plugins/loom/.codex-plugin" "$ROOT/plugins/loom/skills/loom-run" "$ROOT/plugins/loom/bin"
+    printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/plugins/loom/.claude-plugin/plugin.json"
+    printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/plugins/loom/.codex-plugin/plugin.json"
+    printf -- '---\nname: loom-run\ndescription: x\n---\nbody\n' >"$ROOT/.agents/skills/loom-run/SKILL.md"
+    printf -- '---\nname: loom-run\ndescription: x\n---\nbody\n' >"$ROOT/plugins/loom/skills/loom-run/SKILL.md"
+    printf '#!/usr/bin/env bash\necho hi\n' >"$ROOT/plugins/loom/bin/loom-coord"
+    chmod +x "$ROOT/plugins/loom/bin/loom-coord"
+    resolve antigravity "$ROOT/.agents/skills/loom-run/SKILL.md" loom-coord
+    [ "$status" -eq 0 ]
+    [ "$output" = "$ROOT/plugins/loom/bin/loom-coord" ]
+}
+
+@test "antigravity: frontmatter name mismatch in .agents/skills/<skill>/SKILL.md fails closed" {
+    ROOT="$(mktemp -d)"
+    ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
+    mkdir -p "$ROOT/.agents/skills/loom-run" "$ROOT/plugins/loom/.claude-plugin" "$ROOT/plugins/loom/.codex-plugin" "$ROOT/plugins/loom/bin"
+    printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/plugins/loom/.claude-plugin/plugin.json"
+    printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/plugins/loom/.codex-plugin/plugin.json"
+    printf -- '---\nname: wrong-name\ndescription: x\n---\nbody\n' >"$ROOT/.agents/skills/loom-run/SKILL.md"
+    printf '#!/usr/bin/env bash\necho hi\n' >"$ROOT/plugins/loom/bin/loom-coord"
+    chmod +x "$ROOT/plugins/loom/bin/loom-coord"
+    resolve antigravity "$ROOT/.agents/skills/loom-run/SKILL.md" loom-coord
+    [ "$status" -eq 2 ]
+}

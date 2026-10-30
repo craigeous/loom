@@ -50,7 +50,7 @@ EOF
 make_root() {
     ROOT="$(mktemp -d)"
     ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
-    mkdir -p "$ROOT/bin" "$ROOT/adapters/compatibility" "$ROOT/agents" "$ROOT/schemas" "$ROOT/skills"
+    mkdir -p "$ROOT/bin" "$ROOT/adapters/compatibility" "$ROOT/agents" "$ROOT/roles" "$ROOT/schemas" "$ROOT/skills"
     cp "$LAUNCH" "$ROOT/bin/loom-launch-role"
     chmod +x "$ROOT/bin/loom-launch-role"
     cp "$REPO_ROOT/plugins/loom/adapters/compatibility/v0.2.0.json" "$ROOT/adapters/compatibility/v0.2.0.json"
@@ -58,6 +58,7 @@ make_root() {
     local role
     for role in researcher planner plan-evaluator developer code-evaluator; do
         cp "$REPO_ROOT/plugins/loom/agents/$role.md" "$ROOT/agents/$role.md"
+        cp "$REPO_ROOT/plugins/loom/roles/$role.md" "$ROOT/roles/$role.md"
         mkdir -p "$ROOT/skills/loom-$role"
         cp "$REPO_ROOT/plugins/loom/skills/loom-$role/SKILL.md" "$ROOT/skills/loom-$role/SKILL.md"
     done
@@ -545,4 +546,44 @@ launch_env() {
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" -c 'cd /tmp && exec "$1" codex researcher' -- "$LAUNCH"
     [ "$status" -eq 0 ]
     [[ "$output" == *'"role":"researcher"'* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Antigravity positive & negative paths
+# ---------------------------------------------------------------------------
+
+@test "antigravity: researcher launches on Economy/flash with subagent tools disabled" {
+    launch antigravity researcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"antigravity"'* ]]
+    [[ "$output" == *'"role":"researcher"'* ]]
+    [[ "$output" == *'"profile":"Economy"'* ]]
+    [[ "$output" == *'"model":"flash"'* ]]
+    [[ "$output" == *'"enableSubagentTools":false'* ]]
+    [[ "$output" == *'"cold":true'* ]]
+    [[ "$output" == *'"delegation":false'* ]]
+}
+
+@test "antigravity: developer launches on Standard/inherit" {
+    launch antigravity developer
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"profile":"Standard"'* ]]
+    [[ "$output" == *'"model":"inherit"'* ]]
+}
+
+@test "antigravity: planner, plan-evaluator, and code-evaluator launch on Deep review/pro" {
+    for role in planner plan-evaluator code-evaluator; do
+        launch antigravity "$role"
+        [ "$status" -eq 0 ]
+        [[ "$output" == *'"profile":"Deep review"'* ]]
+        [[ "$output" == *'"model":"pro"'* ]]
+    done
+}
+
+@test "antigravity: missing canonical role contract fails closed" {
+    make_root
+    rm "$ROOT/roles/researcher.md"
+    run "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" antigravity researcher
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"canonical role contract is missing"* ]]
 }
