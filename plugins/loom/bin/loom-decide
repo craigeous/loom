@@ -391,15 +391,23 @@ cmd_eval_audit() {
             questions: {
                 scope_creep: {
                     type: "noul",
-                    question: "Did the changes introduce unrequested features, files, or abstractions outside the approved slice plan?"
+                    instructions: "Did the changes introduce unrequested features, files, or abstractions outside the approved slice plan?",
+                    criteria: {
+                        "true": "Modifies unrequested files or adds out-of-scope features",
+                        "false": "Stays strictly within the approved slice plan scope"
+                    }
                 },
                 unproven_acceptance_criteria: {
                     type: "noul",
-                    question: "Are any acceptance criteria from the plan lacking concrete test or gate evidence in the diff?"
+                    instructions: "Are any acceptance criteria from the plan lacking concrete test or gate evidence in the diff?",
+                    criteria: {
+                        "true": "One or more acceptance criteria lack test or gate proof",
+                        "false": "Every acceptance criterion is proven by tests or gate checks"
+                    }
                 },
                 defect_severity: {
                     type: "score",
-                    question: "Rate the severity of concrete bugs, security flaws, or regressions introduced by this diff.",
+                    instructions: "Rate the severity of concrete bugs, security flaws, or regressions introduced by this diff.",
                     criteria: [
                         "0: No defects; implementation matches plan and passes gates cleanly",
                         "1: Minor nit or non-blocking style question",
@@ -498,21 +506,29 @@ cmd_loop_health() {
             questions: {
                 wheel_spinning: {
                     type: "noul",
-                    question: "Is the developer loop repeating the same failing hypothesis or oscillating without net progress?"
+                    instructions: "Is the developer loop repeating the same failing hypothesis or oscillating without net progress?",
+                    criteria: {
+                        "true": "Consecutive attempts repeat the same root failure mode without progress",
+                        "false": "Attempts are making distinct progress toward fixing the failure"
+                    }
                 },
                 weakened_test_oracle: {
                     type: "noul",
-                    question: "Did recent attempts pass or attempt to pass by weakening assertions, deleting tests, or bypassing the gate?"
+                    instructions: "Did recent attempts pass or attempt to pass by weakening assertions, deleting tests, or bypassing the gate?",
+                    criteria: {
+                        "true": "Assertions were weakened, deleted, or stubbed to force a green test",
+                        "false": "Tests and gate checks remain intact and faithful to the plan"
+                    }
                 },
                 next_action: {
                     type: "choice",
-                    question: "Select the safest deterministic orchestrator action for the next iteration.",
-                    criteria: [
-                        "retry_local",
-                        "switch_model_family",
-                        "escalate_to_planner",
-                        "escalate_to_user"
-                    ]
+                    instructions: "Select the safest deterministic orchestrator action for the next iteration.",
+                    criteria: {
+                        "retry_local": "Continue local developer iteration",
+                        "switch_model_family": "Switch to a different client model family",
+                        "escalate_to_planner": "Return to planner to revise the slice plan",
+                        "escalate_to_user": "Pause and escalate the blocker to the owner"
+                    }
                 }
             }
         }') || _fail "failed to construct loop-health request payload"
@@ -628,7 +644,7 @@ cmd_route_role() {
             questions: {
                 slice_complexity: {
                     type: "score",
-                    question: "Estimate the reasoning and implementation complexity of this slice.",
+                    instructions: "Estimate the reasoning and implementation complexity of this slice.",
                     criteria: [
                         "0: Routine or mechanical update",
                         "1: Standard feature or bugfix slice",
@@ -637,12 +653,12 @@ cmd_route_role() {
                 },
                 target_client: {
                     type: "choice",
-                    question: "Select the optimal client family for this role.",
-                    criteria: [
-                        "claude",
-                        "codex",
-                        "antigravity"
-                    ]
+                    instructions: "Select the optimal client family for this role.",
+                    criteria: {
+                        "claude": "Anthropic Claude Code client",
+                        "codex": "OpenAI Codex CLI client",
+                        "antigravity": "Google DeepMind Antigravity client"
+                    }
                 }
             }
         }') || _fail "failed to construct route-role request payload"

@@ -1,6 +1,6 @@
 # Per-Session PreCompact Write-Ahead Backstop (`precompact-per-session`)
 
-Status: Plan Review
+Status: Draft
 Target specs: 04-orchestrator.md, 08-client-adapters.md
 Target size: <= 180 LOC net change (keep this plan document <= 250 lines)
 
