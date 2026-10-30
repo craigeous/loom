@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: In Progress
+Status: Implemented
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -165,6 +165,18 @@ interface. On target movement rebuild from the new base and rerun the gate; conf
 exits 3 and gate failure exits 10 with candidate state preserved. A rebuilt candidate
 needs fresh external candidate-specific review evidence before publication; the
 caller must supply it, and old hashes alone cannot establish that review occurred.
+
+## Verification Evidence
+
+- `shfmt -i 4 -d -ln bash plugins/loom/bin/loom-land` and `-ln bats ...loom-land.bats`: clean.
+- `shellcheck -s bash plugins/loom/bin/loom-land`: clean.
+- `bats plugins/loom/bin/loom-land.bats`: 22/22 pass (bare local remotes, no network).
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: "Discovered 546 Bats tests", 546/546 ok,
+  "All checks passed".
+- `node scripts/validate-repository.mjs --root . --all`: "Repository all validation passed".
+- Deviations: `loom-coord` has no `verify-claim` subcommand, so claim ownership is checked
+  through `loom-coord list-claims` (slice and session match), with no coord change.
+  `loom-land` is ~285 lines, over the 250-LOC target, to keep recovery and receipt handling.
 
 ## Revision Log
 
