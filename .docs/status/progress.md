@@ -6,7 +6,15 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — Remediation Workstreams 1–3 (`docs-and-agent-tuning`,
+- **Last action (2026-10-30) — M3 slice 2 (`precompact-per-session`) Landed:**
+  Landed per-session PreCompact write-ahead backstop under
+  `<git-common-dir>/loom/precompact/<session-id>/{marker,log}` with coordinated
+  session checkpoint integration (`loom-coord checkpoint-write`), atomic marker
+  writes, control-char-stripped log capping, and cross-session compaction isolation
+  (45/45 Bats tests, 508 total repo Bats tests passing). Evaluated blind by Codex
+  (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 0).
+
+- **Prior action (2026-10-30) — Remediation Workstreams 1–3 (`docs-and-agent-tuning`,
   `coord-and-hook-hardening`, and lean `dogfood-301-stabilize` fix):**
   1. **Spec/Doc Governance, Agent Tuning & Anti-Wheel-Spinning Guards:** Tuned all
      five `plugins/loom/roles/*.md`, evaluation rubrics/templates, `CLAUDE.md`,

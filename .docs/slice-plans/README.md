@@ -17,12 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [precompact-per-session.md](precompact-per-session.md) — `Ready to Publish` — M3 slice 2:
+*(No active plans)*
+
+## Archived plans
+
+- [archive/precompact-per-session.md](archive/precompact-per-session.md) — `Landed` — M3 slice 2:
   per-session PreCompact write-ahead backstop (`<git-common-dir>/loom/precompact/<session-id>/{marker,log}`),
   coordinated session checkpoint validation (`loom-coord checkpoint-write`), `loom-coord`
   session-id grammar parity, atomic marker/log writes, and multi-session isolation tests.
-
-## Archived plans
 
 - [archive/playbook-conformance.md](archive/playbook-conformance.md) — `Archived` —
   remediation-3, the first `docs-governance/v1` §7 slice under ADR 0026's **broadened** class
