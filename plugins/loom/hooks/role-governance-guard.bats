@@ -179,3 +179,14 @@ EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or che
     guard orchestrator 'echo "/tmp/my tools/bats"'
     [ "$status" -eq 0 ]
 }
+
+@test "quoted executable paths with spaces are blocked after env assignments" {
+    guard orchestrator 'FOO=1 "/tmp/my tools/bats" tests'
+    [ "$status" -eq 2 ]
+    guard orchestrator 'FOO=1 "/tmp/space dir/scripts/check"'
+    [ "$status" -eq 2 ]
+    GATE=1 guard orchestrator 'FOO=1 "/tmp/space dir/scripts/check"'
+    [ "$status" -eq 0 ]
+    guard orchestrator 'echo FOO=1 "/tmp/my tools/bats"'
+    [ "$status" -eq 0 ]
+}

@@ -114,9 +114,9 @@ DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")
 # Quoted words with no whitespace/separators are de-quoted (so 'bats' and "commit"
 # still count as command words); other quoted segments are deleted (arguments).
 # A quoted word at command position may contain spaces (a path such as
-# "/tmp/my tools/bats"); its spaces become '_' first so it is de-quoted too.
+# "/tmp/my tools/bats", optionally after env assignments); its spaces become '_' first so it is de-quoted too.
 STRIPPED=$(printf '%s' "$DEESC" | sed -E \
-    -e ':a' -e "s/(^|[;&|(])([[:space:]]*[\"'][^\"' ]*) /\\1\\2_/; ta" | sed \
+    -e ':a' -e "s/(^|[;&|(])([[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*[\"'][^\"' ]*) /\\1\\2_/; ta" | sed \
     -e "s/'\([^' [:space:];&|()]*\)'/\1/g" -e 's/"\([^" [:space:];&|()]*\)"/\1/g' \
     -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 DQ=$(printf '%s' "$STRIPPED" | tr -cd '"' | wc -c | tr -d ' ')

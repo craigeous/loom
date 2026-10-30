@@ -134,6 +134,12 @@ open when unset so normal user and developer sessions are never disrupted.
 - Added 1 Bats test (4 assertions: blocked bats path, blocked/allowed `scripts/check` path with and without `LOOM_ALLOW_ORCHESTRATOR_GATE=1`, negative control `echo "/tmp/my tools/bats"`); role-governance-guard.bats: 18/18 via the gate.
 - `shfmt -i 4 -d` / `shellcheck -s bash` clean; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (545 Bats cases).
 
+### Code-eval Round 2 fix (1 MAJOR)
+
+- The de-quoting loop now accepts leading environment assignments at command position (same prefix as the guard's START pattern), so `FOO=1 "/tmp/my tools/bats" tests` and `FOO=1 "/tmp/space dir/scripts/check"` are blocked for the orchestrator; quoted arguments are still ignored.
+- Added 1 Bats test (4 assertions: blocked bats path, blocked/allowed `scripts/check` path without/with `LOOM_ALLOW_ORCHESTRATOR_GATE=1`, negative control `echo FOO=1 "/tmp/my tools/bats"`); role-governance-guard.bats: 19/19 via the gate.
+- `shfmt -i 4 -d` / `shellcheck -s bash` clean; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed. The standalone fast run needs `LOOM_TEST_BASH` and `LOOM_EXPECTED_BASH_VERSION` set by the gate, so it was exercised through the gate only.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
