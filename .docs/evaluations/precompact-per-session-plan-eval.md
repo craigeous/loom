@@ -1,35 +1,55 @@
 # Evaluation: precompact-per-session (slice-plan)
 
-Verdict: FAIL
+Verdict: PASS
 Round: 1
-Reviewed against: `.docs/repository-improvement-plan.md` §"Slice: `precompact-per-session`" (lines 495-522); `.docs/spec/04-orchestrator.md` (`## Thin-orchestrator invariant`, coordination containment rule ~L397); `.docs/spec/00-overview.md` `## Non-goals`; current tree `plugins/loom/hooks/precompact-write-ahead-backstop.{sh,bats}`; `plan-eval-rubric.md`; `severity.md`.
+Reviewed against: Round 1 findings (this file's prior FAIL); revision diff `git diff e6d64fa..fbb17d2 -- .docs/slice-plans/precompact-per-session.md`; `plugins/loom/bin/loom-coord` (header L20-25, `SESSION_ID="${LOOM_SESSION_ID:-}"` L108, `cmd_checkpoint_write` / `cmd_session_start`); `.docs/spec/00-overview.md` `## Non-goals`; `gates` convention in project CLAUDE.md.
 
-> Round note: this is the first review of a fresh artifact (requested as Round 0).
-> Per the counting rule, a FAIL increments the counter, so this FAIL is recorded as
-> `Round: 1`. A later PASS resolving it repeats `Round: 1`.
+> Round note: this is a re-review under the Round >= 1 non-expansion rule. Only Round 1
+> findings and the revision diff were checked. A PASS resolving a Round 1 FAIL keeps
+> `Round: 1` per the counting rule.
 
-## Findings
+## Round 1 findings — resolution
 
-- [MAJOR] **The session-ID binding between the hook and `loom-coord` is assumed, never sourced or established.** — `## Context` item 1, Step 2 sketch (`SESSION_COORD_DIR="$GITDIR/loom/session-$SESSION"`), T14/T15/T16. The hook's `$SESSION` is the client-supplied hook `session_id` (for Claude Code, the host's own session identifier). The plan treats it as identical to the `<sid>` passed to `loom-coord session-start` / `checkpoint-write --session <sid>`, and treats `<git-common-dir>/loom/session-<sid>/checkpoint` as the exact on-disk layout. The plan cites spec 04 `## Thin-orchestrator invariant` for this, but that section only says restart state is "per-session and untracked under the common Git directory". It names neither the path nor how the id is derived. If the orchestrator's `loom-coord` session id is not the client hook `session_id`, the `COORDINATED=1` branch never fires in production. Every coordinated session would then silently fall back to the repository-wide `.docs` anchor, which is the very cross-session bleed the slice is meant to close, and the improvement-plan criterion "validate advancement of the actual per-session checkpoint written by `loom-coord checkpoint-write`" would go unmet. T14–T16 pass the same literal sid to both sides, so they would pass even though they prove nothing about that binding. `loom-coord` is explicitly out of scope to modify, so the plan must pin its layout and id contract to a citable authority. That authority was not in this review's read scope, so I could not verify the claim mechanically. An independent developer could implement this wrongly.
-- [MAJOR] **The Verification section names the wrong full gate and static-check flags that fail on unchanged code.** — `## Verification`. (a) The "Full repository gate" is `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all`, which hardcodes one machine's absolute path. The project's shell gate is `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`, run once on the candidate commit. (b) `shfmt -d -i 4 -ci` adds `-ci` (indent switch cases). The existing hook writes `case` arms flush with `case` (e.g. `manual | auto) ;;` at L158-161, and L41-44, L73-78, L101-110), and so does the plan's own `_loom_valid_session_id` sketch. The prescribed format check would therefore flag unchanged lines and new code that follows the plan exactly. (c) `shellcheck` is given without `-s bash`. Following the plan's verification as written either fails spuriously or skips the real gate.
-- [MINOR] Handling of an invalid `LOOM_PRECOMPACT_LOG_CAP` is underspecified. Step 1 says "validate ... as a positive decimal integer (default `200`)" but does not say whether an invalid value falls back to 200 (T12b implies it does) or fails. It also does not say whether leading zeros are rejected: Bash `$((08 - 1))` is an arithmetic error. State "invalid or leading-zero → 200".
-- [MINOR] The remediation path depends on checkpoint content changing. The anchor is `git hash-object` of the checkpoint file, so a `checkpoint-write` that rewrites byte-identical content (same next action, no timestamp) does not unblock. That is arguably correct given spec 04's starvation rule, but the coordinated block message should say "write an advanced checkpoint" so the improvement plan's "manual remediation always provides a real path forward" is honest.
-- [MINOR] Residual bleed for uncoordinated sessions is not stated. Sessions without a `session-<sid>` directory still share the repository-wide `.docs` anchor. Add one line to `## Out of Scope & Threat-Model Boundary` saying multi-session isolation is guaranteed only for coordinated sessions.
-- [MINOR] The fast bats command omits `TMPDIR=/private/tmp`, which the project convention uses on macOS. The 180-LOC budget also looks tight for roughly 50 LOC of script changes plus nine new tests, including worktree and concurrency fixtures. Consider whether the budget is realistic.
+- [MAJOR] **Session-ID binding unsourced — RESOLVED.** `## Context` item 1 and Step 2 now cite
+  `loom-coord`'s layout (`STATE_DIR="$GITDIR/loom"`, `_with_session_dir`,
+  `_session_checkpoint_write_op` writing `$STATE_DIR/session-<id>/checkpoint`). I verified this
+  mechanically: the `loom-coord` header documents `$STATE_DIR/session-<id>/checkpoint`, the id comes
+  from `--session` or `LOOM_SESSION_ID` (L108), and `checkpoint-write` runs through
+  `_with_session_dir ... require`. The plan takes the "narrow the claim honestly" option from the
+  Required changes. The binding is stated as conditional on the orchestrator starting `loom-coord`
+  with `--session <client-session-id>` or `LOOM_SESSION_ID`. A new `Session-binding scope` bullet
+  says isolation applies only to coordinated sessions bound this way, and that uncoordinated
+  sessions keep the shared `.docs` anchor. This also resolves the MINOR on residual bleed for
+  uncoordinated sessions. T14 now invokes the real `loom-coord session-start` and
+  `checkpoint-write` with the hook's `session_id`. No new protocol is invented, and `loom-coord`
+  stays out of scope.
+- [MAJOR] **Wrong gate / flags — RESOLVED.** The Verification section now uses
+  `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`, `shfmt -i 4 -d` (no `-ci`), and
+  `shellcheck -s bash`. The machine-specific absolute path is gone.
+- [MINOR] **`LOOM_PRECOMPACT_LOG_CAP` fallback — RESOLVED.** The plan now uses `^[1-9][0-9]*$`, with
+  invalid or leading-zero values falling back to 200. T12b covers `abc`, `08`, `0`.
+- [MINOR] **Remediation wording — RESOLVED.** The coordinated block message now says "write an
+  advanced checkpoint via loom-coord checkpoint-write --session ${SESSION}". T14 covers
+  identical-bytes rewrite still blocking.
+- [MINOR] **Residual uncoordinated bleed — RESOLVED** (see the session-binding scope bullet above).
+- [MINOR] **`TMPDIR` on the fast bats command and LOC budget — RESOLVED.** The fast command now
+  sets `TMPDIR=/private/tmp`, and the target size is raised to <= 240 LOC. The plan is 199 lines,
+  within the 250 cap.
 
-## Required changes (for FAIL)
+## New findings
 
-1. In `## Context` (and, where needed, Step 2), cite the authority that fixes the `loom-coord` checkpoint layout (`<git-common-dir>/loom/session-<sid>/checkpoint`) and the derivation of `<sid>`. That means the governing ADR/spec section or the exact `loom-coord` function. State explicitly that the hook's `session_id` equals the `loom-coord` session id, and how that is guaranteed (e.g. the orchestrator starts its coord session with the client session id). If that is not guaranteed today, choose one minimal option and state it: either narrow the slice's claim honestly, or define the minimal lookup the hook uses. Do not invent a new protocol. Make T14 reflect the real binding, not just a shared literal.
-2. Replace the full-gate line with `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` (no absolute machine path). Drop `-ci` from `shfmt` (use `shfmt -i 4 -d`) and add `-s bash` to `shellcheck`.
+None. The revision diff touches only the items above; no regressions were introduced.
 
 ## Notes
 
-- Strengths: the plan follows the canonical structure (`Target size:`, explicit `## Out of Scope & Threat-Model Boundary`, numbered file-scoped steps, Revision Log) and stays well under 250 lines. It preserves the byte-exact `hook-wire-v1` uncoordinated reason and leaves the frozen fixtures alone. It keeps the fail-closed `INVALID_REASON` path for missing or non-string `trigger`/`session_id`, which is consistent with the existing T6a/T6d/T7a. The `--git-common-dir` switch uses `git -C "$REPO_ROOT"`, so a relative `.git` result is correctly relativized for the main worktree. The new reason stays under the 512-byte sanitizer bound even with a 128-character sid. The tightened session-id grammar is still compatible with every existing test id.
-- The threat model is proportional and consistent with `00-overview.md` `## Non-goals`. No same-user `.git/loom` tampering defenses are demanded.
-- Neither MAJOR requires redesign. Each is a citation/clarification plus a one-line command fix.
+- Residual (non-blocking, not a finding): whether the real orchestrator in production starts
+  `loom-coord` with the client hook `session_id` is outside this slice and is honestly stated as a
+  precondition. Without that binding the hook degrades to the existing `.docs` anchor, which is
+  the status quo, so the slice is no worse and is safe to implement.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
-| 1 | plan | FAIL | First review. MAJOR: hook `session_id` ↔ `loom-coord` sid / checkpoint path is unsourced (coordinated branch may be dead in production, tests vacuous). MAJOR: wrong full gate and shfmt `-ci` / shellcheck flags. Four MINORs. |
+| 1 | plan | FAIL | First review. MAJOR: hook `session_id` ↔ `loom-coord` sid / checkpoint path unsourced. MAJOR: wrong full gate and shfmt `-ci` / shellcheck flags. Four MINORs. |
+| 1 (re-review) | plan | PASS | Revision cites and verifies the `loom-coord` layout, narrows the isolation claim to bound coordinated sessions, and fixes the gate commands. All MINORs addressed. No new findings. |
