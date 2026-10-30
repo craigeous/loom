@@ -1,6 +1,6 @@
 # Model Matrix Modernization & Dynamic Discovery (`model-matrix-and-dynamic-discovery`)
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 08-playbook.md, 10-packaging.md; Authority: accepted ADR 0027
 Target size: <= 180 LOC net change (keep this plan document <= 250 lines)
 

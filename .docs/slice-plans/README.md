@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [model-matrix-and-dynamic-discovery.md](model-matrix-and-dynamic-discovery.md) — `Implemented` —
+- [model-matrix-and-dynamic-discovery.md](model-matrix-and-dynamic-discovery.md) — `Ready to Publish` —
   modernize compatibility matrix & launch schemas to gpt-6*, dynamic Antigravity discovery
   (agy models 24h cache), Codex config.toml detection, and CLI --model/--effort pinning.
 
