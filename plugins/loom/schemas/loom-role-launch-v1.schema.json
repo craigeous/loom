@@ -82,7 +82,13 @@
             "enableSubagentTools": { "type": "boolean" },
             "enableWriteTools": { "type": "boolean" },
             "rolePromptPath": { "type": "string", "minLength": 1 },
-            "rolePromptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            "rolePromptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "environment": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["LOOM_ROLE"],
+              "properties": { "LOOM_ROLE": { "type": "string", "minLength": 1 } }
+            }
           }
         }
       }

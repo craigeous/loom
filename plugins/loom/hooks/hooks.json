@@ -8,6 +8,10 @@
           {
             "type": "command",
             "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}/hooks/git-identity-guard.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}/hooks/role-governance-guard.sh\""
           }
         ]
       }

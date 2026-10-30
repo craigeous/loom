@@ -53,7 +53,9 @@ Requested scope: the workflow argument (if empty, ask).
    budget. If a restart re-derives the *same* action with no new commit since,
    that's a starvation loop → **escalate** (pause + summary), don't re-attempt. See
    orchestration.md → *Restart safely*.
-3. **Driver loop:**
+3. **Driver loop:** (export `LOOM_ROLE=orchestrator` for the orchestration pass so the
+   role-governance guard blocks direct test-suite runs; `LOOM_ALLOW_ORCHESTRATOR_GATE=1`
+   permits only the spec 04 landing-gate `scripts/check` rerun.)
    a. Scan `.docs/` **`Status:` lines + git** (the `loom-status` digest, **not**
       artifact bodies) → current state.
    b. Pick the next action from the dispatch table (status-machine.md). If none, or

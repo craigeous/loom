@@ -326,7 +326,7 @@ _launch_codex() {
     printf '{"schema":"loom-role-launch/v1","client":"codex","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"codex":{"model":"%s","effort":"%s","sandbox":"read-only","webSearch":false,"argv":%s}}\n' \
         "$role" "$profile" "$cold_id" "$cross_json" "$model" "$effort" "$(_json_argv_array "${argv[@]}")"
     codex_bin="${LOOM_LAUNCH_ROLE_CODEX_BIN:-codex}"
-    exec env LOOM_LAUNCH_ROLE_ACTIVE=1 "$codex_bin" "${argv[@]}"
+    exec env LOOM_LAUNCH_ROLE_ACTIVE=1 LOOM_ROLE="$role" "$codex_bin" "${argv[@]}"
 }
 
 _launch_antigravity() {
@@ -358,8 +358,8 @@ _launch_antigravity() {
         fi
     fi
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
-    printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s"}}\n' \
-        "$role" "$profile" "$cold_id" "$cross_json" "$role" "$(_json_escape "$ag_model")" "$(_json_escape "$role_path")" "$role_sha"
+    printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s","environment":{"LOOM_ROLE":"%s"}}}\n' \
+        "$role" "$profile" "$cold_id" "$cross_json" "$role" "$(_json_escape "$ag_model")" "$(_json_escape "$role_path")" "$role_sha" "$role"
 }
 
 main() {

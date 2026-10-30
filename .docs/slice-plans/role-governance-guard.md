@@ -1,6 +1,6 @@
 # Role Governance Guard & Anti-Drift Boundary (`role-governance-guard`)
 
-Status: In Progress
+Status: Implemented
 Target specs: 02-roles.md, 04-orchestrator.md, 08-playbook.md; Authority: accepted ADR 0004, ADR 0012, ADR 0027
 Target size: <= 200 LOC net change (keep this plan document <= 250 lines)
 
@@ -109,6 +109,16 @@ open when unset so normal user and developer sessions are never disrupted.
   - `node scripts/validate-repository.mjs --root . --all`
 - **Repository gate:**
   - Run via external Orca worker: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`
+
+## Implementation Evidence
+
+- `role-governance-guard.bats`: 14/14 pass (Bash 3.2 and gate run).
+- `shfmt -i 4 -d` / `shellcheck -s bash` on the hook: clean.
+- `hooks.json` ordering jq check: true; `hook-wire-v1` fixture count: 48; `rg LOOM_ROLE` launcher: ok.
+- `node scripts/validate-repository.mjs --root . --all`: passed.
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed.
+- Deviation: the closed `loom-role-launch-v1` schema gained an optional
+  `antigravity.environment.LOOM_ROLE` property so the launch definition validates.
 
 ## Revision Log
 
