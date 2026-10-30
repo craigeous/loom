@@ -174,6 +174,12 @@ caller must supply it, and old hashes alone cannot establish that review occurre
 - `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: "Discovered 546 Bats tests", 546/546 ok,
   "All checks passed".
 - `node scripts/validate-repository.mjs --root . --all`: "Repository all validation passed".
+- Code-eval Round 0 fixes: recovery validates the receipt against slice/session/candidate and, when
+  writing one, holds the verified publish lock and records the freshly fetched target as `resultSha`;
+  an unresolved prior publication attempt (`publishAttempt` in candidate state) not contained in the
+  target stops with exit 10 and preserves state; verification uses the push destination
+  (`pushurl`, else `url`); build failures map to exit 10. `bats plugins/loom/bin/loom-land.bats`:
+  30/30 pass (8 new regression tests). Full gate result recorded in the commit message of the fix.
 - Deviations: `loom-coord` has no `verify-claim` subcommand, so claim ownership is checked
   through `loom-coord list-claims` (slice and session match), with no coord change.
   `loom-land` is ~285 lines, over the 250-LOC target, to keep recovery and receipt handling.

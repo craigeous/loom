@@ -377,3 +377,98 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     [ -n "$(claims)" ]
     [ ! -f "$SDIR/publication-receipt.json" ]
 }
+
+@test "recovery rejects a receipt left by a different slice and writes a current one" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/main"
+    mkdir -p "$SDIR"
+    jq -n '{schema: "loom-receipt/v1", slice: "slice-old", session: "s1", candidateSha: "deadbeef"}' >"$SDIR/publication-receipt.json"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .slice "$SDIR/publication-receipt.json")" = slice-a ]
+    [ "$(jq -r .candidateSha "$SDIR/publication-receipt.json")" = "$CAND" ]
+    [ -z "$(claims)" ]
+}
+
+@test "stale receipt from another slice cannot release a claim without the claim" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/main"
+    coordr lock-acquire --session s1 >/dev/null
+    coordr release-claim slice-a --session s1 >/dev/null
+    coordr lock-release --session s1 >/dev/null
+    jq -n '{slice: "slice-old", session: "s1", candidateSha: "deadbeef"}' >"$SDIR/publication-receipt.json"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 5 ]
+    [ "$(jq -r .slice "$SDIR/publication-receipt.json")" = slice-old ]
+}
+
+@test "recovery after remote advancement records the observed target as resultSha" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/main"
+    other_push later.txt
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .resultSha "$SDIR/publication-receipt.json")" = "$(remote_main)" ]
+    [ "$(remote_main)" != "$CAND" ]
+    [ -z "$(claims)" ]
+}
+
+@test "recovery receipt write requires the publish lock" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/main"
+    (cd "$REPO" && "$COORD" session-start --session s2 >/dev/null && "$COORD" lock-acquire --session s2 >/dev/null)
+    LOOM_LOCK_RETRIES=1 land --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [ ! -f "$SDIR/publication-receipt.json" ]
+    [ -n "$(claims)" ]
+}
+
+@test "uncertain prior push not contained in the target stops for owner action" {
+    prepare
+    printf '#!/bin/sh\nexit 1\n' >"$REMOTE/hooks/update"
+    chmod +x "$REMOTE/hooks/update"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    rm "$REMOTE/hooks/update"
+    other_push moved.txt
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" = "$CAND" ]
+    [ "$(git -C "$REPO" rev-parse refs/loom/land/s1/candidate)" = "$CAND" ]
+    [ -n "$(claims)" ]
+}
+
+@test "verification reads the push destination, not the fetch URL" {
+    prepare
+    git init -q --bare -b main "$WORK/mirror.git"
+    git -C "$REPO" push -q "$WORK/mirror.git" main
+    git -C "$REPO" config remote.origin.pushurl "$WORK/mirror.git"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(git -C "$WORK/mirror.git" rev-parse refs/heads/main)" = "$CAND" ]
+    [ "$(remote_main)" != "$CAND" ]
+}
+
+@test "rejected push to a distinct pushurl is not verified from the fetch repository" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/side"
+    git init -q --bare -b main "$WORK/mirror.git"
+    printf '#!/bin/sh\nexit 1\n' >"$WORK/mirror.git/hooks/update"
+    chmod +x "$WORK/mirror.git/hooks/update"
+    git -C "$REPO" config remote.origin.pushurl "$WORK/mirror.git"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ ! -f "$SDIR/publication-receipt.json" ]
+    [ -n "$(claims)" ]
+}
+
+@test "operational git failure while building the candidate exits 10 and keeps the claim" {
+    REAL_GIT="$(command -v git)"
+    mkdir -p "$WORK/fakebin"
+    printf '#!/bin/sh\ncase " $* " in *" worktree add "*) exit 1 ;; esac\nexec "%s" "$@"\n' "$REAL_GIT" >"$WORK/fakebin/git"
+    chmod +x "$WORK/fakebin/git"
+    PATH="$WORK/fakebin:$PATH" land --candidate-only
+    [ "$status" -eq 10 ]
+    [ -n "$(claims)" ]
+}

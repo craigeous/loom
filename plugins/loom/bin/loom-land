@@ -107,14 +107,17 @@ WT="$GITDIR/loom/land-$SID/wt"
 BR="loom-land/$SID-$SLICE"
 CAND_REF="refs/loom/land/$SID/candidate"
 TGT_REF="refs/loom/land/$SID/target"
-LOCKED=0 CAND="" BASE="" INIT_BASE="" CLAIM=0
+LOCKED=0 CAND="" BASE="" INIT_BASE="" CLAIM=0 TIP=""
 
 coord() { (cd "$REPO" && "$COORD" "$@"); }
+
+# receipt_matches <jq expr> <expected> — the existing receipt binds the expected values
+receipt_matches() { [ -f "$RECEIPT" ] && [ "$(jq -r "$1" "$RECEIPT" 2>/dev/null || true)" = "$2" ]; }
 
 claims=$(coord list-claims) || die 10 "cannot list claims"
 if printf '%s\n' "$claims" | awk -F'\t' -v s="$SLICE" -v c="$SID" '$1 == s && $2 == c { f = 1 } END { exit !f }'; then
     CLAIM=1
-elif [ "$CAND_ONLY" = 1 ] || [ ! -f "$RECEIPT" ]; then
+elif [ "$CAND_ONLY" = 1 ] || ! receipt_matches '[.slice,.session] | join("|")' "$SLICE|$SID"; then
     die 5 "session $SID does not hold the claim for $SLICE"
 fi
 
@@ -153,6 +156,13 @@ atomic_jq() { # atomic_jq <dest> <jq args...> <filter>
         die 10 "cannot write $dest"
     fi
 }
+set_attempt() { # set_attempt true|false — record whether a publication attempt is outstanding
+    local tmp="$STATE.tmp.$$"
+    if ! { jq --argjson a "$1" '.publishAttempt = $a' "$STATE" >"$tmp" && mv "$tmp" "$STATE"; }; then
+        rm -f "$tmp"
+        die 10 "cannot update $STATE"
+    fi
+}
 state_get() { [ -f "$STATE" ] && jq -r "($1) // empty" "$STATE" 2>/dev/null || true; }
 
 fetch_target() {
@@ -176,28 +186,28 @@ build() {
     local prev
     cleanup_wt
     prev=$(state_get .candidateSha)
-    mkdir -p "$(dirname "$WT")"
+    mkdir -p "$(dirname "$WT")" || die 10 "cannot create candidate worktree directory"
     git -C "$REPO" config user.name >/dev/null 2>&1 || export GIT_AUTHOR_NAME=loom-land GIT_COMMITTER_NAME=loom-land
     git -C "$REPO" config user.email >/dev/null 2>&1 || export GIT_AUTHOR_EMAIL=loom-land@localhost GIT_COMMITTER_EMAIL=loom-land@localhost
     if [ -n "$prev" ] && [ "$(git -C "$REPO" rev-parse --verify --quiet "$CAND_REF" || true)" = "$prev" ] &&
         [ "$(state_get '[.slice,.session,.remote,.targetRef,.mode,.sliceHead,.baseCommit] | join("|")')" = "$SLICE|$SID|$REMOTE|$TARGET_REF|$MODE|$HEAD_SHA|$BASE" ]; then
-        git -C "$REPO" worktree add -q -b "$BR" "$WT" "$prev" >&2
+        git -C "$REPO" worktree add -q -b "$BR" "$WT" "$prev" >&2 || die 10 "cannot create candidate worktree"
     else
-        git -C "$REPO" worktree add -q -b "$BR" "$WT" "$BASE" >&2
+        git -C "$REPO" worktree add -q -b "$BR" "$WT" "$BASE" >&2 || die 10 "cannot create candidate worktree"
         if ! git -C "$WT" merge -q --no-ff -m "Integrate slice $SLICE" "$HEAD_SHA" >&2; then
             git -C "$WT" merge --abort >/dev/null 2>&1 || true
             die 3 "merge conflict integrating $HEAD_SHA onto $BASE"
         fi
-        mkdir -p "$WT/.loom"
+        mkdir -p "$WT/.loom" || die 10 "cannot create candidate manifest directory"
         jq -n --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" --arg tr "$TARGET_REF" --arg mo "$MODE" \
             --arg sh "$HEAD_SHA" --arg ba "$BASE" \
             '{slice: $sl, session: $se, remote: $re, targetRef: $tr, mode: $mo, sliceHead: $sh, baseCommit: $ba}' \
-            >"$WT/.loom/candidate-manifest.json"
-        git -C "$WT" add -f .loom/candidate-manifest.json
-        git -C "$WT" commit -q -m "Add loom candidate manifest for $SLICE" >&2
+            >"$WT/.loom/candidate-manifest.json" || die 10 "cannot write candidate manifest"
+        git -C "$WT" add -f .loom/candidate-manifest.json || die 10 "cannot stage candidate manifest"
+        git -C "$WT" commit -q -m "Add loom candidate manifest for $SLICE" >&2 || die 10 "cannot commit candidate manifest"
     fi
-    CAND=$(git -C "$WT" rev-parse HEAD)
-    git -C "$REPO" update-ref "$CAND_REF" "$CAND"
+    CAND=$(git -C "$WT" rev-parse HEAD) || die 10 "cannot resolve candidate"
+    git -C "$REPO" update-ref "$CAND_REF" "$CAND" || die 10 "cannot record candidate ref"
     write_state
     (cd "$WT" && bash -c "$GATE") >&2 || die 10 "gate failed for candidate $CAND (state preserved)"
     [ -z "$(git -C "$WT" status --porcelain)" ] && [ "$(git -C "$WT" rev-parse HEAD)" = "$CAND" ] ||
@@ -224,6 +234,7 @@ finish() {
     release_lock
     cleanup_wt
     git -C "$REPO" update-ref -d "$CAND_REF" || true
+    [ ! -f "$STATE" ] || set_attempt false
     if [ "$(git -C "$REPO" symbolic-ref -q HEAD || true)" = "$TARGET_REF" ] &&
         [ -z "$(git -C "$REPO" status --porcelain)" ]; then
         git -C "$REPO" merge -q --ff-only "$CAND" >/dev/null 2>&1 || log "local mirror not fast-forwarded (ignored)"
@@ -244,10 +255,24 @@ if [ "$CAND_ONLY" = 0 ] && [ -n "$PREV_CAND" ] && [ "$PREV_CAND" = "$EV_SHA" ] &
     git -C "$REPO" merge-base --is-ancestor "$PREV_CAND" "$TGT_REF" 2>/dev/null; then
     log "candidate $PREV_CAND already contained in $REMOTE $TARGET_REF; completing without republishing"
     CAND="$PREV_CAND"
-    BASE=$(state_get .baseCommit)
-    INIT_BASE="$BASE"
-    [ -f "$RECEIPT" ] || write_receipt recovered contained "$CAND"
+    if ! receipt_matches '[.slice,.session,.candidateSha] | join("|")' "$SLICE|$SID|$CAND"; then
+        [ "$CLAIM" = 1 ] || die 5 "no receipt for $SLICE candidate $CAND and session $SID does not hold the claim"
+        acquire_lock
+        lock_ok 10
+        fetch_target # refresh remote truth under the lock; the receipt records the observed target
+        git -C "$REPO" merge-base --is-ancestor "$CAND" "$TGT_REF" 2>/dev/null ||
+            die 10 "candidate $CAND no longer contained in $REMOTE $TARGET_REF; owner action required"
+        TIP="$BASE"
+        BASE=$(state_get .baseCommit)
+        INIT_BASE="$BASE"
+        write_receipt recovered contained "$TIP"
+        lock_ok 10
+    fi
     finish
+fi
+# An earlier publication attempt whose outcome is unknown must not be overwritten.
+if [ -n "$PREV_CAND" ] && [ "$(state_get .publishAttempt)" = true ]; then
+    die 10 "prior publication of $PREV_CAND is unresolved and not contained in $REMOTE $TARGET_REF; owner action required (state preserved)"
 fi
 [ "$CLAIM" = 1 ] || die 5 "session $SID does not hold the claim for $SLICE"
 
@@ -272,11 +297,15 @@ if [ "$BASE" != "$(state_get .baseCommit)" ]; then
         die 3 "contention: target moved, candidate rebuilt at $CAND; fresh review evidence bound to $CAND is required before publication"
 fi
 lock_ok
+# Verify against the push destination, which may differ from the fetch URL.
+PUSH_DEST=$(git -C "$REPO" config --get "remote.$REMOTE.pushurl" || git -C "$REPO" config --get "remote.$REMOTE.url" || printf '%s' "$REMOTE")
+set_attempt true
 PUSH=pushed
 git -C "$REPO" push --quiet "$REMOTE" "$CAND:$TARGET_REF" >&2 || PUSH=rejected
-REMOTE_SHA=$(git -C "$REPO" ls-remote "$REMOTE" "$TARGET_REF" | awk 'NR == 1 { print $1 }') || REMOTE_SHA=""
+REMOTE_SHA=$(git -C "$REPO" ls-remote "$PUSH_DEST" "$TARGET_REF" | awk 'NR == 1 { print $1 }') || REMOTE_SHA=""
 if [ "$REMOTE_SHA" != "$CAND" ]; then
     if [ "$PUSH" = rejected ] && [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$BASE" ]; then
+        set_attempt false # cleanly rejected: nothing landed, rebuild is safe
         die 3 "push rejected: target moved to $REMOTE_SHA; re-run to rebuild (fresh review evidence needed)"
     fi
     die 10 "push $PUSH but remote target ${REMOTE_SHA:-unreadable} != candidate $CAND; unverified"
