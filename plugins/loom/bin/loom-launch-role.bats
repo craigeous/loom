@@ -587,3 +587,116 @@ launch_env() {
     [ "$status" -eq 2 ]
     [[ "$output" == *"canonical role contract is missing"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# Cross-family evaluation guards & multi-client routing
+# ---------------------------------------------------------------------------
+
+@test "cross-family: --author-client same-family rejection on plan-evaluator and code-evaluator" {
+    launch claude plan-evaluator --author-client claude
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: plan-evaluator client (claude) matches author client (claude)"* ]]
+
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex code-evaluator --author-client codex
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: code-evaluator client (codex) matches author client (codex)"* ]]
+    [ ! -e "$RECORD" ]
+
+    launch antigravity plan-evaluator --author-client antigravity
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: plan-evaluator client (antigravity) matches author client (antigravity)"* ]]
+}
+
+@test "cross-family: --author-client cross-family acceptance emits authorClient and crossFamilyVerified" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client claude
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"codex"'* ]]
+    [[ "$output" == *'"role":"plan-evaluator"'* ]]
+    [[ "$output" == *'"authorClient":"claude"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    launch claude code-evaluator --author-client codex
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"claude"'* ]]
+    [[ "$output" == *'"role":"code-evaluator"'* ]]
+    [[ "$output" == *'"authorClient":"codex"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+}
+
+@test "cross-family: LOOM_REQUIRE_CROSS_FAMILY_EVAL=1 without author client fails closed" {
+    launch_env LOOM_REQUIRE_CROSS_FAMILY_EVAL=1 -- claude plan-evaluator
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation required but no author client was supplied"* ]]
+
+    launch_env LOOM_REQUIRE_CROSS_FAMILY_EVAL=1 -- antigravity code-evaluator
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation required but no author client was supplied"* ]]
+}
+
+@test "cross-family: auto client deterministically routes claude->codex->antigravity->claude" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch auto plan-evaluator --author-client claude
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"codex"'* ]]
+    [[ "$output" == *'"authorClient":"claude"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    launch auto plan-evaluator --author-client codex
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"antigravity"'* ]]
+    [[ "$output" == *'"authorClient":"codex"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    launch auto code-evaluator --author-client antigravity
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"claude"'* ]]
+    [[ "$output" == *'"authorClient":"antigravity"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    launch auto plan-evaluator
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation required but no author client was supplied"* ]]
+}
+
+@test "cross-family: --routing-file positive routing and same-family rejection under requireCrossFamilyEval" {
+    make_root
+    make_stub
+    local routing_ok="$ROOT/routing-ok.json"
+    cat >"$routing_ok" <<'EOF'
+{
+  "schema": "loom-role-routing/v1",
+  "requireCrossFamilyEval": true,
+  "routes": {
+    "researcher": "antigravity",
+    "planner": "claude",
+    "plan-evaluator": "codex",
+    "developer": "claude",
+    "code-evaluator": "codex"
+  }
+}
+EOF
+    run "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto researcher --routing-file "$routing_ok"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"antigravity"'* ]]
+    [[ "$output" == *'"role":"researcher"'* ]]
+
+    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto plan-evaluator --routing-file "$routing_ok"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"client":"codex"'* ]]
+    [[ "$output" == *'"authorClient":"claude"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    local routing_bad_plan="$ROOT/routing-bad-plan.json"
+    jq '.routes["plan-evaluator"] = "claude"' "$routing_ok" >"$routing_bad_plan"
+    run "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto plan-evaluator --routing-file "$routing_bad_plan"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: plan-evaluator client (claude) matches author client (claude)"* ]]
+
+    local routing_bad_code="$ROOT/routing-bad-code.json"
+    jq '.routes["developer"] = "codex" | .routes["code-evaluator"] = "codex"' "$routing_ok" >"$routing_bad_code"
+    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto code-evaluator --routing-file "$routing_bad_code"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: code-evaluator client (codex) matches author client (codex)"* ]]
+}

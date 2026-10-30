@@ -41,7 +41,7 @@ CLIENTS=(claude codex antigravity)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex|antigravity researcher|planner|plan-evaluator|developer|code-evaluator\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity] [--routing-file /abs/path]\n' >&2
     exit 1
 }
 
@@ -174,8 +174,17 @@ _sha256_file() {
     fi
 }
 
+_next_client_in_cycle() {
+    case "$1" in
+    claude) printf 'codex' ;;
+    codex) printf 'antigravity' ;;
+    antigravity) printf 'claude' ;;
+    *) return 1 ;;
+    esac
+}
+
 _launch_claude() {
-    local root="$1" role="$2" profile="$3" selector="$4"
+    local root="$1" role="$2" profile="$3" selector="$4" cross_json="${5:-}"
     local agent_path model tools cold_id
     agent_path="$root/agents/$role.md"
     [ -f "$agent_path" ] || _fail "agent adapter is missing: $role"
@@ -184,12 +193,12 @@ _launch_claude() {
     [ "$model" = "$selector" ] || _fail "agent adapter model does not match the compatibility matrix tier: $role"
     _csv_contains "$tools" "Agent" && _fail "agent adapter grants the forbidden Agent capability: $role"
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
-    printf '{"schema":"loom-role-launch/v1","client":"claude","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level","claude":{"selector":"%s","agentCapability":false}}\n' \
-        "$role" "$profile" "$cold_id" "$selector"
+    printf '{"schema":"loom-role-launch/v1","client":"claude","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"claude":{"selector":"%s","agentCapability":false}}\n' \
+        "$role" "$profile" "$cold_id" "$cross_json" "$selector"
 }
 
 _launch_codex() {
-    local root="$1" role="$2" profile="$3" model="$4" effort="$5"
+    local root="$1" role="$2" profile="$3" model="$4" effort="$5" cross_json="${6:-}"
     local skill_path schema_path cold_id argv codex_bin
     skill_path="$root/skills/loom-$role/SKILL.md"
     [ -f "$skill_path" ] || _fail "codex role skill is missing: $role"
@@ -201,14 +210,14 @@ _launch_codex() {
         --sandbox read-only --model "$model" -c "model_reasoning_effort=$effort"
         -c "tools.web_search=false" --output-schema "$schema_path" "\$loom-$role"
     )
-    printf '{"schema":"loom-role-launch/v1","client":"codex","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level","codex":{"model":"%s","effort":"%s","sandbox":"read-only","webSearch":false,"argv":%s}}\n' \
-        "$role" "$profile" "$cold_id" "$model" "$effort" "$(_json_argv_array "${argv[@]}")"
+    printf '{"schema":"loom-role-launch/v1","client":"codex","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"codex":{"model":"%s","effort":"%s","sandbox":"read-only","webSearch":false,"argv":%s}}\n' \
+        "$role" "$profile" "$cold_id" "$cross_json" "$model" "$effort" "$(_json_argv_array "${argv[@]}")"
     codex_bin="${LOOM_LAUNCH_ROLE_CODEX_BIN:-codex}"
     exec env LOOM_LAUNCH_ROLE_ACTIVE=1 "$codex_bin" "${argv[@]}"
 }
 
 _launch_antigravity() {
-    local root="$1" role="$2" profile="$3"
+    local root="$1" role="$2" profile="$3" cross_json="${4:-}"
     local role_path roles_dir role_sha ag_model cold_id
     [ -d "$root/roles" ] && [ ! -L "$root/roles" ] || _fail "roles directory is missing or symlinked"
     roles_dir=$(_canon_dir "$root/roles") || _fail "cannot canonicalize roles directory"
@@ -222,15 +231,38 @@ _launch_antigravity() {
     *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
     esac
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
-    printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level","antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s"}}\n' \
-        "$role" "$profile" "$cold_id" "$role" "$ag_model" "$(_json_escape "$role_path")" "$role_sha"
+    printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s"}}\n' \
+        "$role" "$profile" "$cold_id" "$cross_json" "$role" "$ag_model" "$(_json_escape "$role_path")" "$role_sha"
 }
 
 main() {
-    [ "$#" -eq 2 ] || _usage
+    [ "$#" -ge 2 ] || _usage
     local client="$1" role="$2"
-    _is_member "$client" "${CLIENTS[@]}" || _usage
+    shift 2
+    if [ "$client" != "auto" ] && ! _is_member "$client" "${CLIENTS[@]}"; then
+        _usage
+    fi
     _is_member "$role" "${ROLES[@]}" || _usage
+
+    local author_client="${LOOM_AUTHOR_CLIENT:-}"
+    local routing_file="${LOOM_ROUTING_FILE:-}"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --author-client)
+            [ "$#" -ge 2 ] || _usage
+            author_client="$2"
+            shift 2
+            ;;
+        --routing-file)
+            [ "$#" -ge 2 ] || _usage
+            routing_file="$2"
+            shift 2
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
 
     case "$0" in
     /*) ;;
@@ -242,6 +274,74 @@ main() {
     _guard_delegation_env
 
     command -v jq >/dev/null 2>&1 || _fail "jq is required"
+
+    local require_cross_family=0
+    case "${LOOM_REQUIRE_CROSS_FAMILY_EVAL:-}" in
+    "" | 0 | false | no) ;;
+    *) require_cross_family=1 ;;
+    esac
+
+    if [ -n "$routing_file" ]; then
+        case "$routing_file" in
+        /*) ;;
+        *) _fail "routing file must be an absolute path" ;;
+        esac
+        [ -f "$routing_file" ] && [ ! -L "$routing_file" ] || _fail "routing file is missing or symlinked"
+        local routing_json routing_schema routing_require_cross
+        routing_json=$(cat -- "$routing_file" 2>/dev/null) || _fail "cannot read routing file"
+        routing_schema=$(printf '%s' "$routing_json" | jq -r '.schema // empty' 2>/dev/null) || _fail "routing file is not valid JSON"
+        [ "$routing_schema" = "loom-role-routing/v1" ] || _fail "routing file schema mismatch"
+        routing_require_cross=$(printf '%s' "$routing_json" | jq -r 'if .requireCrossFamilyEval == true then "1" else "0" end')
+        if [ "$routing_require_cross" = "1" ]; then
+            require_cross_family=1
+            if [ -z "$author_client" ]; then
+                case "$role" in
+                plan-evaluator)
+                    author_client=$(printf '%s' "$routing_json" | jq -r '.routes["planner"] // empty')
+                    ;;
+                code-evaluator)
+                    author_client=$(printf '%s' "$routing_json" | jq -r '.routes["developer"] // empty')
+                    ;;
+                esac
+            fi
+        fi
+        if [ "$client" = "auto" ]; then
+            client=$(printf '%s' "$routing_json" | jq -r --arg r "$role" '.routes[$r] // empty')
+            [ -n "$client" ] || _fail "no client route mapped for role: $role"
+            _is_member "$client" "${CLIENTS[@]}" || _fail "invalid routed client for role $role: $client"
+        fi
+    fi
+
+    if [ -n "$author_client" ]; then
+        _is_member "$author_client" "${CLIENTS[@]}" || _fail "invalid author client: $author_client"
+    fi
+
+    if [ "$client" = "auto" ]; then
+        case "$role" in
+        plan-evaluator | code-evaluator)
+            [ -n "$author_client" ] || _fail "cross-family evaluation required but no author client was supplied"
+            client=$(_next_client_in_cycle "$author_client") || _fail "cannot resolve auto client for author: $author_client"
+            ;;
+        *)
+            _fail "auto client requires --routing-file for role: $role"
+            ;;
+        esac
+    fi
+
+    local cross_json=""
+    case "$role" in
+    plan-evaluator | code-evaluator)
+        if [ "$require_cross_family" -eq 1 ] && [ -z "$author_client" ]; then
+            _fail "cross-family evaluation required but no author client was supplied"
+        fi
+        if [ -n "$author_client" ]; then
+            if [ "$client" = "$author_client" ]; then
+                _fail "cross-family evaluation violation: $role client ($client) matches author client ($author_client)"
+            fi
+            cross_json=$(printf ',"authorClient":"%s","crossFamilyVerified":true' "$(_json_escape "$author_client")")
+        fi
+        ;;
+    esac
 
     local script_dir root matrix_path matrix_json schema_ok matrix_version role_key profile
     script_dir=$(_canon_dir "$(dirname -- "$0")") || _fail "cannot canonicalize script directory"
@@ -263,7 +363,7 @@ main() {
         local selector
         selector=$(_matrix_field "$matrix_json" "$profile" ".claude.selector")
         [ -n "$selector" ] || _fail "no Claude selector mapped for profile: $profile"
-        _launch_claude "$root" "$role" "$profile" "$selector"
+        _launch_claude "$root" "$role" "$profile" "$selector" "$cross_json"
         ;;
     codex)
         local model effort
@@ -271,10 +371,10 @@ main() {
         effort=$(_matrix_field "$matrix_json" "$profile" ".codex.effort")
         [ -n "$model" ] || _fail "no Codex model mapped for profile: $profile"
         [ -n "$effort" ] || _fail "no Codex effort mapped for profile: $profile"
-        _launch_codex "$root" "$role" "$profile" "$model" "$effort"
+        _launch_codex "$root" "$role" "$profile" "$model" "$effort" "$cross_json"
         ;;
     antigravity)
-        _launch_antigravity "$root" "$role" "$profile"
+        _launch_antigravity "$root" "$role" "$profile" "$cross_json"
         ;;
     esac
 }
