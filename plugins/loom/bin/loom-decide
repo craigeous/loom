@@ -1,0 +1,954 @@
+#!/usr/bin/env bash
+# loom-decide — deterministic SystemOne / Jev decision-model helper for loom.
+#
+# Provides:
+#   - Deterministic pre-compression ("State Skeletons" + diff compression)
+#     for markdown artifacts and git diffs (`skeleton-doc`, `skeleton-diff`).
+#   - Fail-closed decision gates backed by a SystemOne-compatible `/v1/systemone`
+#     or `/v1/decisions` endpoint (`eval-audit`, `loop-health`, `route-role`).
+#   - Opt-in execution: when `LOOM_SYSTEMONE_ENABLED` is `0`/`false`/unset and
+#     `--require` is not passed, gates emit a deterministic `status: "skipped"`
+#     JSON record and exit 0 so offline/standard workflows never block.
+#
+# FAIL DIRECTION: fail-closed.
+# Exit codes:
+#   0 — pass / decided (or skipped when disabled and not required)
+#   1 — usage error (bad argument shape)
+#   2 — fail-closed: threshold exceeded, low confidence, invalid config/response,
+#       or required gate invoked while disabled
+set -u
+
+_usage() {
+    cat >&2 <<'EOF'
+usage:
+  loom-decide skeleton-doc <abs-markdown-path>
+  loom-decide skeleton-diff <abs-repo-root> [base-ref]
+  loom-decide secret-status [--service <name>] [--account <name>] [--config <abs-path>]
+  loom-decide secret-set [--service <name>] [--account <name>] [--stdin | --tty | --gui] [--config <abs-path>]
+  loom-decide eval-audit (--plan <abs-path> --diff <abs-path> | --state <abs-path>) [--config <abs-path>] [--require]
+  loom-decide loop-health --attempts <abs-jsonl-path> [--config <abs-path>] [--require]
+  loom-decide route-role --role <role> --state <abs-path> [--author-client <claude|codex|antigravity>] [--config <abs-path>] [--require]
+EOF
+    exit 1
+}
+
+_fail() {
+    printf 'loom-decide: %s\n' "$1" >&2
+    exit 2
+}
+
+_require_abs_file() {
+    local path="$1" label="$2"
+    case "$path" in
+    /*) ;;
+    *) _fail "$label must be an absolute path: $path" ;;
+    esac
+    [ -f "$path" ] || _fail "$label is not a regular file: $path"
+    [ ! -L "$path" ] || _fail "$label must not be a symlink: $path"
+}
+
+_require_abs_dir() {
+    local path="$1" label="$2"
+    case "$path" in
+    /*) ;;
+    *) _fail "$label must be an absolute path: $path" ;;
+    esac
+    [ -d "$path" ] || _fail "$label is not a directory: $path"
+    [ ! -L "$path" ] || _fail "$label must not be a symlink: $path"
+}
+
+# _skeleton_doc_text <file> — extract YAML frontmatter and structured headings
+# (`## Acceptance criteria`, `## Files to touch`, `## Steps`, `## Verification`,
+# `## Decision`, `## Consequences`, `## Rubric`, `## Findings`, `## Verdict`)
+# while stripping narrative prose sections.
+_skeleton_doc_text() {
+    local file="$1"
+    awk '
+        NR == 1 && $0 == "---" {
+            in_fm = 1
+            print
+            next
+        }
+        in_fm {
+            print
+            if ($0 == "---") {
+                in_fm = 0
+            }
+            next
+        }
+        /^# / {
+            print
+            next
+        }
+        /^## / {
+            heading = tolower($0)
+            if (heading ~ /^## (acceptance criteria|files to touch|steps|verification|decision|consequences|rubric|findings|verdict|scope|gates|non-goals)/) {
+                keep = 1
+                print
+            } else {
+                keep = 0
+            }
+            next
+        }
+        keep {
+            if ($0 ~ /^[[:space:]]*$/) {
+                if (!last_blank) {
+                    print ""
+                    last_blank = 1
+                }
+            } else {
+                print
+                last_blank = 0
+            }
+        }
+    ' "$file"
+}
+
+cmd_skeleton_doc() {
+    [ "$#" -eq 1 ] || _usage
+    local file="$1"
+    _require_abs_file "$file" "markdown file"
+    _skeleton_doc_text "$file"
+}
+
+cmd_skeleton_diff() {
+    if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+        _usage
+    fi
+    local repo="$1"
+    local base_ref="${2:-HEAD}"
+    _require_abs_dir "$repo" "repo root"
+    git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+        _fail "not a git repository: $repo"
+    printf '### git diff --stat (%s)\n' "$base_ref"
+    git -C "$repo" diff --stat "$base_ref" -- . ':(exclude).docs/evaluations' 2>/dev/null ||
+        git -C "$repo" diff --stat 2>/dev/null ||
+        _fail "git diff --stat failed in $repo"
+    printf '\n### git diff -U0 (%s)\n' "$base_ref"
+    git -C "$repo" diff -U0 "$base_ref" -- . ':(exclude).docs/evaluations' 2>/dev/null ||
+        git -C "$repo" diff -U0 2>/dev/null ||
+        _fail "git diff -U0 failed in $repo"
+}
+
+# Configuration defaults
+CFG_ENABLED="${LOOM_SYSTEMONE_ENABLED:-0}"
+CFG_URL="${LOOM_SYSTEMONE_URL:-https://api.typesafe.ai/v1/systemone}"
+CFG_API_KEY="${LOOM_SYSTEMONE_API_KEY:-${TYPESAFE_API_KEY:-}}"
+CFG_KEYCHAIN_SERVICE="${LOOM_SYSTEMONE_KEYCHAIN_SERVICE:-loom-systemone}"
+CFG_KEYCHAIN_ACCOUNT="${LOOM_SYSTEMONE_KEYCHAIN_ACCOUNT:-typesafe}"
+CFG_MODEL="${LOOM_SYSTEMONE_MODEL:-jev-latest}"
+CFG_MAX_BYTES="${LOOM_SYSTEMONE_MAX_BYTES:-24576}"
+CURL_BIN="${LOOM_DECIDE_CURL_BIN:-curl}"
+SECURITY_BIN="${LOOM_DECIDE_SECURITY_BIN:-security}"
+OSASCRIPT_BIN="${LOOM_DECIDE_OSASCRIPT_BIN:-osascript}"
+POWERSHELL_BIN="${LOOM_DECIDE_POWERSHELL_BIN:-powershell.exe}"
+SECRET_TOOL_BIN="${LOOM_DECIDE_SECRET_TOOL_BIN:-secret-tool}"
+UNAME_OUT="${LOOM_DECIDE_OS_OVERRIDE:-$(uname -s 2>/dev/null || printf 'unknown')}"
+
+_detect_os_family() {
+    case "$UNAME_OUT" in
+    Darwin* | macos) printf 'macos' ;;
+    MINGW* | MSYS* | CYGWIN* | Windows_NT | windows) printf 'windows' ;;
+    Linux* | linux) printf 'linux' ;;
+    *) printf 'unknown' ;;
+    esac
+}
+
+_os_backend_name() {
+    case "$(_detect_os_family)" in
+    macos) printf 'macos-keychain' ;;
+    windows) printf 'windows-dpapi-vault' ;;
+    linux) printf 'linux-secret-service' ;;
+    *) printf 'unsupported' ;;
+    esac
+}
+
+_lookup_os_secret() {
+    local service="${1:-$CFG_KEYCHAIN_SERVICE}" account="${2:-$CFG_KEYCHAIN_ACCOUNT}"
+    local os_fam kc_key=""
+    os_fam="$(_detect_os_family)"
+    case "$os_fam" in
+    macos)
+        if command -v "$SECURITY_BIN" >/dev/null 2>&1; then
+            kc_key=$("$SECURITY_BIN" find-generic-password -s "$service" -a "$account" -w 2>/dev/null) ||
+                kc_key=$("$SECURITY_BIN" find-generic-password -s "$service" -w 2>/dev/null) ||
+                kc_key=""
+        fi
+        ;;
+    windows)
+        if command -v "$POWERSHELL_BIN" >/dev/null 2>&1; then
+            kc_key=$("$POWERSHELL_BIN" -NoProfile -NonInteractive -Command "
+                \$p = Join-Path \$env:APPDATA ('loom\\secrets\\' + '$service' + '_' + '$account' + '.dpapi');
+                if (Test-Path \$p) {
+                    \$sec = Get-Content -Path \$p -Raw | ConvertTo-SecureString;
+                    \$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR(\$sec);
+                    try { [Runtime.InteropServices.Marshal]::PtrToStringAuto(\$bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR(\$bstr) }
+                }
+            " 2>/dev/null | tr -d '\r\n') || kc_key=""
+        fi
+        ;;
+    linux)
+        if command -v "$SECRET_TOOL_BIN" >/dev/null 2>&1; then
+            kc_key=$("$SECRET_TOOL_BIN" lookup service "$service" account "$account" 2>/dev/null) || kc_key=""
+        fi
+        ;;
+    esac
+    if [ -n "$kc_key" ]; then
+        printf '%s' "$kc_key"
+        return 0
+    fi
+    return 1
+}
+
+_resolve_keychain_api_key() {
+    [ -z "$CFG_API_KEY" ] || return 0
+    local resolved=""
+    if resolved=$(_lookup_os_secret "$CFG_KEYCHAIN_SERVICE" "$CFG_KEYCHAIN_ACCOUNT"); then
+        CFG_API_KEY="$resolved"
+    fi
+}
+
+_load_config_file() {
+    local cfg="$1"
+    _require_abs_file "$cfg" "config file"
+    local schema
+    schema=$(jq -r '.schema // empty' "$cfg" 2>/dev/null) || _fail "invalid JSON in config file: $cfg"
+    [ "$schema" = "loom-systemone-config/v1" ] || _fail "unsupported config schema '$schema' (expected loom-systemone-config/v1)"
+
+    local file_enabled file_url file_model file_max_bytes file_kc_service file_kc_account
+    file_enabled=$(jq -r 'if has("enabled") then (.enabled | tostring) else "" end' "$cfg" 2>/dev/null) || _fail "malformed enabled in config"
+    file_url=$(jq -r '.url // empty' "$cfg" 2>/dev/null) || _fail "malformed url in config"
+    file_model=$(jq -r '.model // empty' "$cfg" 2>/dev/null) || _fail "malformed model in config"
+    file_max_bytes=$(jq -r 'if has("max_bytes") then (.max_bytes | tostring) else "" end' "$cfg" 2>/dev/null) || _fail "malformed max_bytes in config"
+    file_kc_service=$(jq -r '.keychain_service // empty' "$cfg" 2>/dev/null) || _fail "malformed keychain_service in config"
+    file_kc_account=$(jq -r '.keychain_account // empty' "$cfg" 2>/dev/null) || _fail "malformed keychain_account in config"
+
+    if [ -z "${LOOM_SYSTEMONE_ENABLED+x}" ] && [ -n "$file_enabled" ]; then
+        CFG_ENABLED="$file_enabled"
+    fi
+    if [ -z "${LOOM_SYSTEMONE_URL+x}" ] && [ -n "$file_url" ]; then
+        CFG_URL="$file_url"
+    fi
+    if [ -z "${LOOM_SYSTEMONE_MODEL+x}" ] && [ -n "$file_model" ]; then
+        CFG_MODEL="$file_model"
+    fi
+    if [ -z "${LOOM_SYSTEMONE_MAX_BYTES+x}" ] && [ -n "$file_max_bytes" ]; then
+        CFG_MAX_BYTES="$file_max_bytes"
+    fi
+    if [ -z "${LOOM_SYSTEMONE_KEYCHAIN_SERVICE+x}" ] && [ -n "$file_kc_service" ]; then
+        CFG_KEYCHAIN_SERVICE="$file_kc_service"
+    fi
+    if [ -z "${LOOM_SYSTEMONE_KEYCHAIN_ACCOUNT+x}" ] && [ -n "$file_kc_account" ]; then
+        CFG_KEYCHAIN_ACCOUNT="$file_kc_account"
+    fi
+}
+
+_is_enabled() {
+    case "$CFG_ENABLED" in
+    1 | true | TRUE | yes | YES) return 0 ;;
+    0 | false | FALSE | no | NO | "") return 1 ;;
+    *) _fail "invalid LOOM_SYSTEMONE_ENABLED value: $CFG_ENABLED" ;;
+    esac
+}
+
+_handle_disabled_or_validate_cfg() {
+    local gate="$1" require_flag="$2"
+    if ! _is_enabled; then
+        if [ "$require_flag" -eq 1 ]; then
+            jq -cn --arg gate "$gate" '{
+                schema: "loom-decision/v1",
+                gate: $gate,
+                status: "fail",
+                reason: "systemone_disabled_but_required"
+            }'
+            _fail "gate '$gate' requires SystemOne but LOOM_SYSTEMONE_ENABLED is disabled"
+        fi
+        jq -cn --arg gate "$gate" '{
+            schema: "loom-decision/v1",
+            gate: $gate,
+            status: "skipped",
+            reason: "systemone_disabled"
+        }'
+        exit 0
+    fi
+
+    case "$CFG_MAX_BYTES" in
+    '' | *[!0-9]*) _fail "LOOM_SYSTEMONE_MAX_BYTES must be a positive integer: $CFG_MAX_BYTES" ;;
+    esac
+    [ "$CFG_MAX_BYTES" -gt 0 ] || _fail "LOOM_SYSTEMONE_MAX_BYTES must be > 0"
+
+    _resolve_keychain_api_key
+
+    case "$CFG_URL" in
+    https://api.typesafe.ai/*)
+        [ -n "$CFG_API_KEY" ] || _fail "LOOM_SYSTEMONE_API_KEY (or macOS Keychain service '$CFG_KEYCHAIN_SERVICE') is required when targeting $CFG_URL"
+        ;;
+    http://* | https://*) ;;
+    *)
+        _fail "LOOM_SYSTEMONE_URL must be an http:// or https:// URL: $CFG_URL"
+        ;;
+    esac
+}
+
+# _call_systemone <payload-json> <long-context-flag:0|1>
+_call_systemone() {
+    local payload="$1" long_ctx="$2"
+    local curl_args=(-sS -X POST "$CFG_URL" -H "Content-Type: application/json")
+    if [ -n "$CFG_API_KEY" ]; then
+        curl_args+=(-H "Authorization: Bearer $CFG_API_KEY")
+    fi
+    if [ "$long_ctx" -eq 1 ]; then
+        curl_args+=(-H "TypeSafe-Danger-Zone-Long-Context: true")
+    fi
+    curl_args+=(-d "$payload")
+
+    local response
+    response=$("$CURL_BIN" "${curl_args[@]}" 2>/dev/null) || _fail "SystemOne HTTP request failed ($CFG_URL)"
+    [ -n "$response" ] || _fail "empty response from SystemOne endpoint ($CFG_URL)"
+    printf '%s' "$response" | jq -e '((.results // .answers) | type) == "object"' >/dev/null 2>&1 ||
+        _fail "invalid SystemOne response (missing .results or .answers object)"
+    printf '%s' "$response" | jq -c 'if .results then . else . + {results: .answers} end'
+}
+
+cmd_eval_audit() {
+    local plan_path="" diff_path="" state_path="" cfg_path="" require_flag=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --plan)
+            [ "$#" -ge 2 ] || _usage
+            plan_path="$2"
+            shift 2
+            ;;
+        --diff)
+            [ "$#" -ge 2 ] || _usage
+            diff_path="$2"
+            shift 2
+            ;;
+        --state)
+            [ "$#" -ge 2 ] || _usage
+            state_path="$2"
+            shift 2
+            ;;
+        --config)
+            [ "$#" -ge 2 ] || _usage
+            cfg_path="$2"
+            shift 2
+            ;;
+        --require)
+            require_flag=1
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+
+    if [ -n "$state_path" ]; then
+        if [ -n "$plan_path" ] || [ -n "$diff_path" ]; then
+            _usage
+        fi
+        _require_abs_file "$state_path" "state file"
+    else
+        if [ -z "$plan_path" ] || [ -z "$diff_path" ]; then
+            _usage
+        fi
+        _require_abs_file "$plan_path" "plan file"
+        _require_abs_file "$diff_path" "diff file"
+    fi
+
+    [ -n "$cfg_path" ] && _load_config_file "$cfg_path"
+    _handle_disabled_or_validate_cfg "eval-audit" "$require_flag"
+
+    local raw_state compressed=0 long_ctx=0 byte_len
+    if [ -n "$state_path" ]; then
+        raw_state=$(cat "$state_path") || _fail "cannot read state file: $state_path"
+    else
+        raw_state=$(printf '=== PLAN ===\n%s\n\n=== DIFF ===\n%s\n' "$(cat "$plan_path")" "$(cat "$diff_path")")
+    fi
+
+    byte_len=${#raw_state}
+    if [ "$byte_len" -gt "$CFG_MAX_BYTES" ]; then
+        compressed=1
+        if [ -n "$plan_path" ]; then
+            raw_state=$(printf '=== PLAN SKELETON ===\n%s\n\n=== DIFF ===\n%s\n' "$(_skeleton_doc_text "$plan_path")" "$(cat "$diff_path")")
+        elif [ -n "$state_path" ]; then
+            raw_state=$(_skeleton_doc_text "$state_path")
+        fi
+        byte_len=${#raw_state}
+        if [ "$byte_len" -gt "$CFG_MAX_BYTES" ]; then
+            long_ctx=1
+        fi
+    fi
+
+    local payload response
+    payload=$(jq -cn \
+        --arg model "$CFG_MODEL" \
+        --arg state "$raw_state" \
+        '{
+            model: $model,
+            state: $state,
+            questions: {
+                scope_creep: {
+                    type: "noul",
+                    question: "Did the changes introduce unrequested features, files, or abstractions outside the approved slice plan?"
+                },
+                unproven_acceptance_criteria: {
+                    type: "noul",
+                    question: "Are any acceptance criteria from the plan lacking concrete test or gate evidence in the diff?"
+                },
+                defect_severity: {
+                    type: "score",
+                    question: "Rate the severity of concrete bugs, security flaws, or regressions introduced by this diff.",
+                    criteria: [
+                        "0: No defects; implementation matches plan and passes gates cleanly",
+                        "1: Minor nit or non-blocking style question",
+                        "2: Concrete bug, missing edge-case check, or partial acceptance criterion",
+                        "3: Critical defect, safety violation, or broken contract"
+                    ]
+                }
+            }
+        }') || _fail "failed to construct eval-audit request payload"
+
+    response=$(_call_systemone "$payload" "$long_ctx") || exit 2
+
+    local verdict_json status_code
+    verdict_json=$(printf '%s' "$response" | jq -ce \
+        --argjson compressed "$compressed" \
+        --argjson long_ctx "$long_ctx" '
+        .results as $r |
+        ($r.scope_creep.noul // null) as $sc |
+        ($r.unproven_acceptance_criteria.noul // null) as $uac |
+        ($r.defect_severity.score // null) as $sev |
+        ($r.defect_severity.confidence // null) as $conf |
+        if ($sc | type) != "number" or ($uac | type) != "number" or ($sev | type) != "number" or ($conf | type) != "number" then
+            error("missing numeric eval-audit metrics")
+        else
+            (
+                if $sc >= 0.70 then ["scope_creep_exceeded"] else [] end +
+                if $uac >= 0.70 then ["unproven_acceptance_criteria_exceeded"] else [] end +
+                if $sev >= 2.0 then ["defect_severity_exceeded"] else [] end +
+                if $conf < 0.70 then ["low_confidence"] else [] end
+            ) as $reasons |
+            {
+                schema: "loom-decision/v1",
+                gate: "eval-audit",
+                status: (if ($reasons | length) == 0 then "pass" else "fail" end),
+                compressed: ($compressed == 1),
+                long_context: ($long_ctx == 1),
+                metrics: {
+                    scope_creep: $sc,
+                    unproven_acceptance_criteria: $uac,
+                    defect_severity: $sev,
+                    confidence: $conf
+                },
+                reasons: $reasons
+            }
+        end
+    ' 2>/dev/null) || _fail "malformed eval-audit metrics in SystemOne response"
+
+    printf '%s\n' "$verdict_json"
+    status_code=$(printf '%s' "$verdict_json" | jq -r '.status')
+    [ "$status_code" = "pass" ] && exit 0
+    exit 2
+}
+
+cmd_loop_health() {
+    local attempts_path="" cfg_path="" require_flag=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --attempts)
+            [ "$#" -ge 2 ] || _usage
+            attempts_path="$2"
+            shift 2
+            ;;
+        --config)
+            [ "$#" -ge 2 ] || _usage
+            cfg_path="$2"
+            shift 2
+            ;;
+        --require)
+            require_flag=1
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+
+    [ -n "$attempts_path" ] || _usage
+    _require_abs_file "$attempts_path" "attempts file"
+    [ -n "$cfg_path" ] && _load_config_file "$cfg_path"
+    _handle_disabled_or_validate_cfg "loop-health" "$require_flag"
+
+    local state_text long_ctx=0
+    state_text=$(cat "$attempts_path") || _fail "cannot read attempts file: $attempts_path"
+    if [ "${#state_text}" -gt "$CFG_MAX_BYTES" ]; then
+        long_ctx=1
+    fi
+
+    local payload response
+    payload=$(jq -cn \
+        --arg model "$CFG_MODEL" \
+        --arg state "$state_text" \
+        '{
+            model: $model,
+            state: $state,
+            questions: {
+                wheel_spinning: {
+                    type: "noul",
+                    question: "Is the developer loop repeating the same failing hypothesis or oscillating without net progress?"
+                },
+                weakened_test_oracle: {
+                    type: "noul",
+                    question: "Did recent attempts pass or attempt to pass by weakening assertions, deleting tests, or bypassing the gate?"
+                },
+                next_action: {
+                    type: "choice",
+                    question: "Select the safest deterministic orchestrator action for the next iteration.",
+                    criteria: [
+                        "retry_local",
+                        "switch_model_family",
+                        "escalate_to_planner",
+                        "escalate_to_user"
+                    ]
+                }
+            }
+        }') || _fail "failed to construct loop-health request payload"
+
+    response=$(_call_systemone "$payload" "$long_ctx") || exit 2
+
+    local verdict_json status_code
+    verdict_json=$(printf '%s' "$response" | jq -ce '
+        .results as $r |
+        ($r.wheel_spinning.noul // null) as $ws |
+        ($r.weakened_test_oracle.noul // null) as $wto |
+        ($r.next_action.choice // null) as $action |
+        ($r.next_action.confidence // 1.0) as $conf |
+        if ($ws | type) != "number" or ($wto | type) != "number" or ($action | type) != "string" then
+            error("missing loop-health metrics")
+        else
+            (
+                if $ws >= 0.70 then ["wheel_spinning_detected"] else [] end +
+                if $wto >= 0.65 then ["weakened_test_oracle_detected"] else [] end +
+                if $action != "retry_local" then ["non_local_escalation_required"] else [] end +
+                if $conf < 0.70 then ["low_confidence"] else [] end
+            ) as $reasons |
+            {
+                schema: "loom-decision/v1",
+                gate: "loop-health",
+                status: (if ($reasons | length) == 0 then "pass" else "fail" end),
+                next_action: $action,
+                metrics: {
+                    wheel_spinning: $ws,
+                    weakened_test_oracle: $wto,
+                    confidence: $conf
+                },
+                reasons: $reasons
+            }
+        end
+    ' 2>/dev/null) || _fail "malformed loop-health metrics in SystemOne response"
+
+    printf '%s\n' "$verdict_json"
+    status_code=$(printf '%s' "$verdict_json" | jq -r '.status')
+    [ "$status_code" = "pass" ] && exit 0
+    exit 2
+}
+
+cmd_route_role() {
+    local role="" state_path="" author_client="" cfg_path="" require_flag=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --role)
+            [ "$#" -ge 2 ] || _usage
+            role="$2"
+            shift 2
+            ;;
+        --state)
+            [ "$#" -ge 2 ] || _usage
+            state_path="$2"
+            shift 2
+            ;;
+        --author-client)
+            [ "$#" -ge 2 ] || _usage
+            author_client="$2"
+            shift 2
+            ;;
+        --config)
+            [ "$#" -ge 2 ] || _usage
+            cfg_path="$2"
+            shift 2
+            ;;
+        --require)
+            require_flag=1
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+
+    [ -n "$role" ] || _usage
+    [ -n "$state_path" ] || _usage
+    case "$role" in
+    researcher | planner | plan-evaluator | developer | code-evaluator) ;;
+    *) _usage ;;
+    esac
+    if [ -n "$author_client" ]; then
+        case "$author_client" in
+        claude | codex | antigravity) ;;
+        *) _usage ;;
+        esac
+    fi
+
+    _require_abs_file "$state_path" "state file"
+    [ -n "$cfg_path" ] && _load_config_file "$cfg_path"
+    _handle_disabled_or_validate_cfg "route-role" "$require_flag"
+
+    local state_text long_ctx=0
+    state_text=$(_skeleton_doc_text "$state_path")
+    if [ -z "$state_text" ]; then
+        state_text=$(cat "$state_path")
+    fi
+    if [ "${#state_text}" -gt "$CFG_MAX_BYTES" ]; then
+        long_ctx=1
+    fi
+
+    local payload response
+    payload=$(jq -cn \
+        --arg model "$CFG_MODEL" \
+        --arg role "$role" \
+        --arg author "$author_client" \
+        --arg state "$state_text" \
+        '{
+            model: $model,
+            state: ("role: " + $role + "\nauthor_client: " + $author + "\n\n" + $state),
+            questions: {
+                slice_complexity: {
+                    type: "score",
+                    question: "Estimate the reasoning and implementation complexity of this slice.",
+                    criteria: [
+                        "0: Routine or mechanical update",
+                        "1: Standard feature or bugfix slice",
+                        "2: Deep architectural or security-critical slice"
+                    ]
+                },
+                target_client: {
+                    type: "choice",
+                    question: "Select the optimal client family for this role.",
+                    criteria: [
+                        "claude",
+                        "codex",
+                        "antigravity"
+                    ]
+                }
+            }
+        }') || _fail "failed to construct route-role request payload"
+
+    response=$(_call_systemone "$payload" "$long_ctx") || exit 2
+
+    local verdict_json status_code
+    verdict_json=$(printf '%s' "$response" | jq -ce \
+        --arg role "$role" \
+        --arg author "$author_client" '
+        .results as $r |
+        ($r.slice_complexity.score // 1.0) as $complexity |
+        ($r.target_client.choice // null) as $raw_choice |
+        ($r.target_client.confidence // 0.0) as $conf |
+        ($r.target_client.probabilities // {}) as $probs |
+        if ($raw_choice | type) != "string" or ($conf | type) != "number" then
+            error("missing route-role target_client fields")
+        else
+            (
+                if ($role == "plan-evaluator" or $role == "code-evaluator") and ($author != "") then
+                    if ($probs | length) > 0 then
+                        (
+                            ["claude", "codex", "antigravity"]
+                            | map(select(. != $author))
+                            | sort_by(-($probs[.] // 0.0))
+                            | .[0]
+                        )
+                    elif $raw_choice != $author then
+                        $raw_choice
+                    else
+                        (
+                            ["claude", "codex", "antigravity"]
+                            | map(select(. != $author))
+                            | .[0]
+                        )
+                    end
+                else
+                    $raw_choice
+                end
+            ) as $selected |
+            (
+                if $conf < 0.70 then ["low_confidence"] else [] end +
+                if ($selected == null or $selected == "") then ["no_eligible_client"] else [] end
+            ) as $reasons |
+            {
+                schema: "loom-decision/v1",
+                gate: "route-role",
+                status: (if ($reasons | length) == 0 then "pass" else "fail" end),
+                role: $role,
+                author_client: (if $author == "" then null else $author end),
+                selected_client: $selected,
+                cross_family_enforced: (($role == "plan-evaluator" or $role == "code-evaluator") and ($author != "")),
+                metrics: {
+                    slice_complexity: $complexity,
+                    confidence: $conf
+                },
+                reasons: $reasons
+            }
+        end
+    ' 2>/dev/null) || _fail "malformed route-role metrics in SystemOne response"
+
+    printf '%s\n' "$verdict_json"
+    status_code=$(printf '%s' "$verdict_json" | jq -r '.status')
+    [ "$status_code" = "pass" ] && exit 0
+    exit 2
+}
+
+cmd_secret_status() {
+    local service="" account="" cfg_path=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --service)
+            [ "$#" -ge 2 ] || _usage
+            service="$2"
+            shift 2
+            ;;
+        --account)
+            [ "$#" -ge 2 ] || _usage
+            account="$2"
+            shift 2
+            ;;
+        --config)
+            [ "$#" -ge 2 ] || _usage
+            cfg_path="$2"
+            shift 2
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+
+    [ -n "$cfg_path" ] && _load_config_file "$cfg_path"
+    [ -n "$service" ] || service="$CFG_KEYCHAIN_SERVICE"
+    [ -n "$account" ] || account="$CFG_KEYCHAIN_ACCOUNT"
+
+    local os_fam backend source="none" configured="false"
+    os_fam="$(_detect_os_family)"
+    backend="$(_os_backend_name)"
+    if [ -n "$CFG_API_KEY" ]; then
+        configured="true"
+        source="env"
+    elif _lookup_os_secret "$service" "$account" >/dev/null 2>&1; then
+        configured="true"
+        source="$backend"
+    fi
+
+    jq -cn \
+        --arg os "$os_fam" \
+        --arg backend "$backend" \
+        --arg service "$service" \
+        --arg account "$account" \
+        --arg source "$source" \
+        --argjson configured "$configured" \
+        '{
+            schema: "loom-decision/v1",
+            action: "secret-status",
+            os: $os,
+            backend: $backend,
+            service: $service,
+            account: $account,
+            source: $source,
+            configured: $configured
+        }'
+    exit 0
+}
+
+cmd_secret_set() {
+    local service="" account="" cfg_path="" mode="auto"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --service)
+            [ "$#" -ge 2 ] || _usage
+            service="$2"
+            shift 2
+            ;;
+        --account)
+            [ "$#" -ge 2 ] || _usage
+            account="$2"
+            shift 2
+            ;;
+        --config)
+            [ "$#" -ge 2 ] || _usage
+            cfg_path="$2"
+            shift 2
+            ;;
+        --stdin)
+            mode="stdin"
+            shift
+            ;;
+        --tty)
+            mode="tty"
+            shift
+            ;;
+        --gui)
+            mode="gui"
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+
+    [ -n "$cfg_path" ] && _load_config_file "$cfg_path"
+    [ -n "$service" ] || service="$CFG_KEYCHAIN_SERVICE"
+    [ -n "$account" ] || account="$CFG_KEYCHAIN_ACCOUNT"
+
+    local os_fam backend secret_val=""
+    os_fam="$(_detect_os_family)"
+    backend="$(_os_backend_name)"
+    [ "$os_fam" != "unknown" ] || _fail "unsupported OS for native secret storage: $UNAME_OUT"
+
+    # Windows GUI/TTY prompt + DPAPI storage can run in one PowerShell pass so the
+    # plaintext secret never even crosses a pipe into bash memory.
+    if [ "$os_fam" = "windows" ] && [ "$mode" != "stdin" ]; then
+        command -v "$POWERSHELL_BIN" >/dev/null 2>&1 || _fail "powershell.exe is required on Windows"
+        "$POWERSHELL_BIN" -NoProfile -Command "
+            \$ErrorActionPreference = 'Stop';
+            \$dir = Join-Path \$env:APPDATA 'loom\\secrets';
+            New-Item -ItemType Directory -Force -Path \$dir | Out-Null;
+            \$p = Join-Path \$dir ('$service' + '_' + '$account' + '.dpapi');
+            \$sec = Read-Host -Prompt 'Enter TypeSafe / SystemOne API Key (hidden)' -AsSecureString;
+            if (\$sec.Length -eq 0) { throw 'Empty secret' }
+            \$sec | ConvertFrom-SecureString | Set-Content -Path \$p -NoNewline
+        " >/dev/null 2>&1 || _fail "failed to prompt and store secret in Windows DPAPI vault"
+    else
+        case "$mode" in
+        stdin)
+            IFS= read -r secret_val || true
+            ;;
+        gui)
+            if [ "$os_fam" = "macos" ]; then
+                command -v "$OSASCRIPT_BIN" >/dev/null 2>&1 || _fail "osascript is required for --gui on macOS"
+                secret_val=$("$OSASCRIPT_BIN" -e 'Tell application "System Events" to display dialog "Enter TypeSafe / SystemOne API Key (stored in macOS Keychain, never shown in chat):" default answer "" with title "Loom SystemOne Key" with hidden answer' -e 'text returned of result' 2>/dev/null) ||
+                    _fail "macOS GUI secret prompt was cancelled or failed"
+            elif [ "$os_fam" = "linux" ] && command -v zenity >/dev/null 2>&1; then
+                secret_val=$(zenity --password --title="Loom SystemOne Key" 2>/dev/null) ||
+                    _fail "Linux GUI secret prompt was cancelled or failed"
+            else
+                _fail "GUI prompt is not available on $os_fam"
+            fi
+            ;;
+        tty)
+            [ -r /dev/tty ] || _fail "/dev/tty is not readable for interactive secret prompt"
+            printf 'Enter TypeSafe / SystemOne API Key (hidden): ' >/dev/tty
+            IFS= read -r -s secret_val </dev/tty || true
+            printf '\n' >/dev/tty
+            ;;
+        auto)
+            if [ "$os_fam" = "macos" ] && command -v "$OSASCRIPT_BIN" >/dev/null 2>&1; then
+                secret_val=$("$OSASCRIPT_BIN" -e 'Tell application "System Events" to display dialog "Enter TypeSafe / SystemOne API Key (stored in macOS Keychain, never shown in chat):" default answer "" with title "Loom SystemOne Key" with hidden answer' -e 'text returned of result' 2>/dev/null) || secret_val=""
+            fi
+            if [ -z "$secret_val" ] && [ -r /dev/tty ] && [ -t 0 ]; then
+                printf 'Enter TypeSafe / SystemOne API Key (hidden): ' >/dev/tty
+                IFS= read -r -s secret_val </dev/tty || true
+                printf '\n' >/dev/tty
+            fi
+            ;;
+        esac
+
+        secret_val="${secret_val%$'\r'}"
+        secret_val="${secret_val%$'\n'}"
+        [ -n "$secret_val" ] || _fail "no secret provided (cancelled or empty)"
+
+        case "$os_fam" in
+        macos)
+            command -v "$SECURITY_BIN" >/dev/null 2>&1 || _fail "security CLI is required on macOS"
+            "$SECURITY_BIN" add-generic-password -U -s "$service" -a "$account" -w "$secret_val" >/dev/null 2>&1 ||
+                _fail "failed to store secret in macOS Keychain"
+            ;;
+        windows)
+            command -v "$POWERSHELL_BIN" >/dev/null 2>&1 || _fail "powershell.exe is required on Windows"
+            printf '%s' "$secret_val" | "$POWERSHELL_BIN" -NoProfile -NonInteractive -Command "
+                \$ErrorActionPreference = 'Stop';
+                \$plain = [Console]::In.ReadToEnd();
+                if ([string]::IsNullOrEmpty(\$plain)) { throw 'Empty secret' }
+                \$dir = Join-Path \$env:APPDATA 'loom\\secrets';
+                New-Item -ItemType Directory -Force -Path \$dir | Out-Null;
+                \$p = Join-Path \$dir ('$service' + '_' + '$account' + '.dpapi');
+                \$sec = ConvertTo-SecureString \$plain -AsPlainText -Force;
+                \$sec | ConvertFrom-SecureString | Set-Content -Path \$p -NoNewline
+            " >/dev/null 2>&1 || _fail "failed to store secret in Windows DPAPI vault"
+            ;;
+        linux)
+            command -v "$SECRET_TOOL_BIN" >/dev/null 2>&1 || _fail "secret-tool (libsecret) is required on Linux"
+            printf '%s' "$secret_val" | "$SECRET_TOOL_BIN" store --label="Loom SystemOne ($service/$account)" service "$service" account "$account" >/dev/null 2>&1 ||
+                _fail "failed to store secret via secret-tool"
+            ;;
+        esac
+        secret_val=""
+    fi
+
+    jq -cn \
+        --arg os "$os_fam" \
+        --arg backend "$backend" \
+        --arg service "$service" \
+        --arg account "$account" \
+        '{
+            schema: "loom-decision/v1",
+            action: "secret-set",
+            os: $os,
+            backend: $backend,
+            service: $service,
+            account: $account,
+            configured: true
+        }'
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+case "$0" in
+/*) ;;
+*) _fail "must be invoked by absolute path" ;;
+esac
+
+[ "$#" -ge 1 ] || _usage
+SUBCOMMAND="$1"
+shift
+
+case "$SUBCOMMAND" in
+skeleton-doc)
+    cmd_skeleton_doc "$@"
+    ;;
+skeleton-diff)
+    cmd_skeleton_diff "$@"
+    ;;
+secret-status)
+    cmd_secret_status "$@"
+    ;;
+secret-set)
+    cmd_secret_set "$@"
+    ;;
+eval-audit)
+    cmd_eval_audit "$@"
+    ;;
+loop-health)
+    cmd_loop_health "$@"
+    ;;
+route-role)
+    cmd_route_role "$@"
+    ;;
+*)
+    _usage
+    ;;
+esac
