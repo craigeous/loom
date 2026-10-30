@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: In Progress
+Status: Needs Clarification
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -92,6 +92,12 @@ push, idempotent cleanup, and mirror-update failure after verified success. Exer
 same-clone and separate-clone races and Bash 3.2 compatibility through the full gate.
 
 ## Notes
+
+**Implementation question:** How can the helper establish that evidence supplied
+after a target move is fresh and applies to the rebuilt candidate? The evidence
+schema contains only opaque hashes and the gate command, while the candidate SHA
+is created inside the invocation. Please specify the candidate-specific review
+handoff and how a subsequent invocation binds that evidence before publication.
 
 **Resolved (Round 2):** The explicit finalization input is the committed slice
 `--head`: code and slice-level docs, including any prepared evaluations, archived
