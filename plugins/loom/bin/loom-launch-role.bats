@@ -53,7 +53,7 @@ make_root() {
     mkdir -p "$ROOT/bin" "$ROOT/adapters/compatibility" "$ROOT/agents" "$ROOT/roles" "$ROOT/schemas" "$ROOT/skills"
     cp "$LAUNCH" "$ROOT/bin/loom-launch-role"
     chmod +x "$ROOT/bin/loom-launch-role"
-    cp "$REPO_ROOT/plugins/loom/adapters/compatibility/v0.2.0.json" "$ROOT/adapters/compatibility/v0.2.0.json"
+    cp "$REPO_ROOT/plugins/loom/adapters/compatibility/v0.3.0.json" "$ROOT/adapters/compatibility/v0.3.0.json"
     cp "$REPO_ROOT/plugins/loom/schemas/loom-role-launch-v1.schema.json" "$ROOT/schemas/loom-role-launch-v1.schema.json"
     local role
     for role in researcher planner plan-evaluator developer code-evaluator; do
@@ -62,6 +62,14 @@ make_root() {
         mkdir -p "$ROOT/skills/loom-$role"
         cp "$REPO_ROOT/plugins/loom/skills/loom-$role/SKILL.md" "$ROOT/skills/loom-$role/SKILL.md"
     done
+}
+
+# Hermetic ambient state: no real ~/.codex, agy cache, or agy binary is read.
+setup() {
+    export HOME="$BATS_TEST_TMPDIR/home"
+    export XDG_CACHE_HOME="$BATS_TEST_TMPDIR/cache"
+    export LOOM_LAUNCH_ROLE_AGY_BIN="$BATS_TEST_TMPDIR/no-agy"
+    mkdir -p "$HOME"
 }
 
 teardown() {
@@ -150,51 +158,51 @@ launch_env() {
 # Positive: Codex, all five roles (all three profiles), stubbed child
 # ---------------------------------------------------------------------------
 
-@test "codex: researcher launches on Economy/gpt-5.6-terra/low" {
+@test "codex: researcher launches on Economy/gpt-6.1-terra/low" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Economy"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6-terra"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
     [[ "$output" == *'"effort":"low"'* ]]
     run cat "$RECORD"
     [[ "$output" == *'ACTIVE=1'* ]]
     [[ "$output" == *'ARG:$loom-researcher'* ]]
 }
 
-@test "codex: developer launches on Standard/gpt-5.6/medium" {
+@test "codex: developer launches on Standard/gpt-6.1-terra/medium" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex developer
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Standard"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
     [[ "$output" == *'"effort":"medium"'* ]]
 }
 
-@test "codex: planner launches on Deep review/gpt-5.6/high" {
+@test "codex: planner launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
-@test "codex: plan-evaluator launches on Deep review/gpt-5.6/high" {
+@test "codex: plan-evaluator launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
-@test "codex: code-evaluator launches on Deep review/gpt-5.6/high" {
+@test "codex: code-evaluator launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex code-evaluator
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
@@ -216,7 +224,7 @@ launch_env() {
     [[ "$output" == *'ARG:--sandbox'* ]]
     [[ "$output" == *'ARG:read-only'* ]]
     [[ "$output" == *'ARG:--model'* ]]
-    [[ "$output" == *'ARG:gpt-5.6-terra'* ]]
+    [[ "$output" == *'ARG:gpt-6.1-terra'* ]]
     [[ "$output" == *'ARG:model_reasoning_effort=low'* ]]
     [[ "$output" == *'ARG:tools.web_search=false'* ]]
     [[ "$output" == *'ARG:--output-schema'* ]]
@@ -236,7 +244,7 @@ launch_env() {
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
     [ "$status" -eq 0 ]
     run awk '/ARG:--model/{getline; print}' "$RECORD"
-    [ "$output" = "ARG:gpt-5.6-terra" ]
+    [ "$output" = "ARG:gpt-6.1-terra" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -269,7 +277,7 @@ launch_env() {
 }
 
 @test "usage: never accepts a caller-supplied vendor selector as an argument" {
-    launch codex researcher gpt-5.6-terra
+    launch codex researcher gpt-6.1-terra
     [ "$status" -eq 1 ]
 }
 
@@ -417,7 +425,7 @@ launch_env() {
 @test "codex: missing compatibility matrix fails closed" {
     make_root
     make_stub
-    rm "$ROOT/adapters/compatibility/v0.2.0.json"
+    rm "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"compatibility matrix is missing"* ]]
@@ -426,8 +434,8 @@ launch_env() {
 @test "codex: wrong matrix schema identity fails closed" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"schema mismatch"* ]]
@@ -436,8 +444,8 @@ launch_env() {
 @test "codex: wrong matrix version fails closed" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.version = "9.9.9"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.version = "9.9.9"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"version mismatch"* ]]
@@ -446,8 +454,8 @@ launch_env() {
 @test "codex: a role absent from every profile's consumers fails closed (role/profile drift)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .consumers) = []' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .consumers) = []' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no profile mapped for role"* ]]
@@ -456,8 +464,8 @@ launch_env() {
 @test "codex: a missing model for the resolved profile fails closed (unavailable model)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.model)' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.model)' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no Codex model mapped"* ]]
@@ -466,8 +474,8 @@ launch_env() {
 @test "codex: a missing effort for the resolved profile fails closed (unavailable effort)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.effort)' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.effort)' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no Codex effort mapped"* ]]
@@ -476,8 +484,8 @@ launch_env() {
 @test "codex: a substituted model for the resolved profile is used verbatim and validated only by enumeration in the schema" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex.model) = "renamed-model"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex.model) = "renamed-model"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 0 ]
     [[ "$output" == *'"model":"renamed-model"'* ]]
@@ -509,8 +517,8 @@ launch_env() {
     make_stub
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 0 ]
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
 }
@@ -699,4 +707,189 @@ EOF
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto code-evaluator --routing-file "$routing_bad_code"
     [ "$status" -eq 2 ]
     [[ "$output" == *"cross-family evaluation violation: code-evaluator client (codex) matches author client (codex)"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Model/effort resolution (ADR 0027): flags > repo config > ambient > matrix
+# ---------------------------------------------------------------------------
+
+write_codex_config() {
+    mkdir -p "$HOME/.codex"
+    printf '%s\n' "$@" >"$HOME/.codex/config.toml"
+}
+
+# write_agy_cache <fetchedAt> <model...> — owner-only cache, as the launcher writes it.
+write_agy_cache() {
+    local at="$1"
+    shift
+    mkdir -p "$XDG_CACHE_HOME/loom"
+    printf '%s\n' "$@" | jq -Rn --argjson t "$at" '{fetchedAt: $t, models: [inputs | select(length > 0)]}' >"$XDG_CACHE_HOME/loom/agy-models.json"
+    chmod 600 "$XDG_CACHE_HOME/loom/agy-models.json"
+}
+
+make_agy_stub() {
+    make_stub
+    AGY_STUB="$STUB_DIR/agy-stub"
+    printf '#!/usr/bin/env bash\nprintf "Fetching available models...\\n"\nprintf "claude-opus-5-5-high\\tClaude Opus 5.5 (High)\\n"\nprintf "claude-opus-5-5-low\\tClaude Opus 5.5 (Low)\\n"\nprintf "gemini-3.8-flash-low\\tFlash (Low)\\n"\n' >"$AGY_STUB"
+    chmod +x "$AGY_STUB"
+}
+
+@test "model: codex inherits an ambient gpt-6.1 model from config.toml" {
+    make_stub
+    write_codex_config '# user config' 'model = "gpt-6.1-sol"  # pinned' 'model_reasoning_effort = "low"' '[profiles.x]' 'model = "bogus"'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
+    [[ "$output" == *'"effort":"low"'* ]]
+}
+
+@test "model: --model and --effort override ambient config and are emitted" {
+    make_stub
+    write_codex_config 'model = "gpt-6.1-sol"'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --model gpt-6.1-terra --effort low
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
+    [[ "$output" == *'"effort":"low"'* ]]
+    run cat "$RECORD"
+    [[ "$output" == *'ARG:model_reasoning_effort=low'* ]]
+}
+
+@test "model: repo config outranks ambient config; flags outrank repo config" {
+    make_stub
+    write_codex_config 'model = "gpt-6.1-sol"'
+    mkdir -p "$BATS_TEST_TMPDIR/proj/.docs"
+    printf '{"codex":{"model":"gpt-6.1-terra","effort":"medium"}}' >"$BATS_TEST_TMPDIR/proj/.docs/loom-models.json"
+    cd "$BATS_TEST_TMPDIR/proj"
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
+    [[ "$output" == *'"effort":"medium"'* ]]
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --model gpt-6.1-sol --effort high
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
+    [[ "$output" == *'"effort":"high"'* ]]
+}
+
+@test "model: corrupt or invalid repo config fails closed" {
+    mkdir -p "$BATS_TEST_TMPDIR/proj/.docs"
+    cd "$BATS_TEST_TMPDIR/proj"
+    printf '{not json' >.docs/loom-models.json
+    launch codex planner
+    [ "$status" -eq 2 ]
+    printf '{"codex":{"model":"bad@model"}}' >.docs/loom-models.json
+    launch codex planner
+    [ "$status" -eq 2 ]
+}
+
+@test "model: emitted codex and antigravity launches validate against the launch schema" {
+    make_stub
+    local schema="$REPO_ROOT/plugins/loom/schemas/loom-role-launch-v1.schema.json"
+    run node -e 'require("fs")' # node is part of the repository toolchain
+    [ "$status" -eq 0 ]
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --model gpt-6.1-sol
+    [ "$status" -eq 0 ]
+    printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/codex.json"
+    launch antigravity planner
+    [ "$status" -eq 0 ]
+    printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/agy.json"
+    jq -e --slurpfile s "$schema" '. as $d | $s[0].oneOf | map(select(.properties.client.const == $d.client))[0] | (.required - ($d | keys)) == []' "$BATS_TEST_TMPDIR/codex.json"
+    jq -e --slurpfile s "$schema" '. as $d | $s[0].oneOf | map(select(.properties.client.const == $d.client))[0] | ((.required - ($d | keys)) == []) and (($d.antigravity | keys) - (.properties.antigravity.properties | keys) == [])' "$BATS_TEST_TMPDIR/agy.json"
+}
+
+@test "model: antigravity maps Deep review to the cached opus high variant" {
+    write_agy_cache "$(date +%s)" claude-opus-5-5-low claude-opus-5-5-high gemini-3.8-flash-high
+    launch antigravity planner
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"claude-opus-5-5-high"'* ]]
+    launch antigravity planner --effort low
+    [[ "$output" == *'"model":"claude-opus-5-5-low"'* ]]
+}
+
+@test "model: antigravity explicit --model is used verbatim; empty or malformed fails closed" {
+    write_agy_cache "$(date +%s)" claude-opus-5-5-high
+    launch antigravity planner --model custom-model.1
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"custom-model.1"'* ]]
+    launch antigravity planner --model ""
+    [ "$status" -eq 0 ] # empty flag is treated as unset (falls through the tiers)
+    launch antigravity planner --model 'bad"model'
+    [ "$status" -eq 2 ]
+}
+
+@test "model: stale cache triggers discovery and an atomic owner-only rewrite" {
+    make_agy_stub
+    write_agy_cache "$(($(date +%s) - 90000))" old-model-high
+    LOOM_LAUNCH_ROLE_AGY_BIN="$AGY_STUB" launch antigravity planner
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"claude-opus-5-5-high"'* ]]
+    f="$XDG_CACHE_HOME/loom/agy-models.json"
+    [ "$(ls -l "$f" | cut -c1-10)" = "-rw-------" ]
+    jq -e '.models | index("claude-opus-5-5-high")' "$f"
+    [ "$(find "$XDG_CACHE_HOME/loom" -type f | wc -l | tr -d ' ')" = "1" ]
+}
+
+@test "model: fresh cache is used without invoking agy" {
+    make_agy_stub
+    write_agy_cache "$(date +%s)" claude-opus-5-5-high
+    printf '#!/usr/bin/env bash\nexit 1\n' >"$AGY_STUB"
+    LOOM_LAUNCH_ROLE_AGY_BIN="$AGY_STUB" launch antigravity planner
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"claude-opus-5-5-high"'* ]]
+}
+
+@test "model: missing, corrupted, or group-readable agy cache with no agy falls back to profile floors" {
+    launch antigravity planner
+    [[ "$output" == *'"model":"pro"'* ]]
+    mkdir -p "$XDG_CACHE_HOME/loom"
+    printf 'garbage' >"$XDG_CACHE_HOME/loom/agy-models.json"
+    chmod 600 "$XDG_CACHE_HOME/loom/agy-models.json"
+    launch antigravity researcher
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"model":"flash"'* ]]
+    write_agy_cache "$(date +%s)" claude-opus-5-5-high
+    chmod 644 "$XDG_CACHE_HOME/loom/agy-models.json"
+    launch antigravity planner
+    [[ "$output" == *'"model":"pro"'* ]]
+}
+
+@test "model: claude --model selects a tier selector; other values fail closed" {
+    launch claude researcher --model haiku
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"selector":"haiku"'* ]]
+    launch claude researcher --model gpt-6.1-sol
+    [ "$status" -eq 2 ]
+}
+
+@test "model: invalid --effort fails closed" {
+    launch claude researcher --effort foo
+    [ "$status" -eq 2 ]
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher --effort foo
+    [ "$status" -eq 2 ]
+    [ ! -e "$RECORD" ]
+}
+
+@test "model: invalid --model for codex fails closed" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher --model invalid@model
+    [ "$status" -eq 2 ]
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher --model gpt-4o
+    [ "$status" -eq 2 ]
+    [ ! -e "$RECORD" ]
+}
+
+@test "model: unsupported or malformed ambient codex model fails closed" {
+    make_stub
+    write_codex_config 'model = "gpt-4o"'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
+    [ "$status" -eq 2 ]
+    write_codex_config 'model = gpt-6.1-sol'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
+    [ "$status" -eq 2 ]
+    [ ! -e "$RECORD" ]
+}
+
+@test "model: cross-family evaluation is still enforced with overrides" {
+    launch codex code-evaluator --author-client codex --model gpt-6.1-sol
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation"* ]]
 }

@@ -1,6 +1,6 @@
 # Model Matrix Modernization & Dynamic Discovery (`model-matrix-and-dynamic-discovery`)
 
-Status: Approved
+Status: Implemented
 Target specs: 08-playbook.md, 10-packaging.md; Authority: accepted ADR 0027
 Target size: <= 180 LOC net change (keep this plan document <= 250 lines)
 
@@ -94,6 +94,15 @@ This slice implements ADR 0027's technical foundation:
   - `node scripts/validate-repository.mjs --root . --all`
 - **Repository gate:**
   - Run via external Orca worker: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`
+
+## Verification Evidence
+
+- `bats plugins/loom/bin/loom-launch-role.bats` (bash 3.2): 75/75 ok (60 existing re-pinned to
+  matrix v0.3.0 + 15 new model/effort/discovery tests).
+- `shfmt -i 4 -d` and `shellcheck -s bash` on the launcher: clean.
+- `node scripts/validate-repository.mjs --root . --all`: passed.
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: "All checks passed", 0 `not ok`.
+- `scripts/check-toolchain.json` digest for the matrix schema re-pinned.
 
 ## Revision Log
 

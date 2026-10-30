@@ -44,11 +44,39 @@
           "additionalProperties": false,
           "required": ["model", "effort", "sandbox", "webSearch", "argv"],
           "properties": {
-            "model": { "enum": ["gpt-5.6-terra", "gpt-5.6"] },
+            "model": { "type": "string", "pattern": "^(gpt-6(\\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\\.6(-[a-z0-9]+)?)$" },
             "effort": { "enum": ["low", "medium", "high"] },
             "sandbox": { "const": "read-only" },
             "webSearch": { "const": false },
             "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "client", "role", "profile", "coldId", "cold", "delegation", "permissions", "antigravity"],
+      "properties": {
+        "schema": { "const": "loom-role-launch/v1" },
+        "client": { "const": "antigravity" },
+        "role": { "enum": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"] },
+        "profile": { "enum": ["Economy", "Standard", "Deep review"] },
+        "coldId": { "type": "string", "minLength": 1 },
+        "cold": { "const": true },
+        "delegation": { "const": false },
+        "permissions": { "const": "one-level" },
+        "antigravity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subagentName", "model", "enableSubagentTools", "enableWriteTools", "rolePromptPath", "rolePromptSha256"],
+          "properties": {
+            "subagentName": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 },
+            "enableSubagentTools": { "type": "boolean" },
+            "enableWriteTools": { "type": "boolean" },
+            "rolePromptPath": { "type": "string", "minLength": 1 },
+            "rolePromptSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
           }
         }
       }

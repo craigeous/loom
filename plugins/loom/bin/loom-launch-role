@@ -8,9 +8,17 @@
 #
 # The caller supplies only a client and a role. Every model/tier/effort value is
 # derived from the tracked, versioned compatibility matrix
-# (adapters/compatibility/v0.2.0.json) resolved relative to this script's own
+# (adapters/compatibility/v0.3.0.json) resolved relative to this script's own
 # physical location -- never from a caller-supplied vendor selector, a bare
 # PATH lookup, CLAUDE_PLUGIN_ROOT, PLUGIN_ROOT, or CODEX_HOME.
+#
+# Model/effort resolution (ADR 0027 section 2), highest precedence first:
+#   1. --model <id> / --effort low|medium|high flags
+#   2. .docs/loom-models.json (project root; {"<client>":{"model","effort"}})
+#   3. ambient client config (codex: ~/.codex/config.toml `model`;
+#      antigravity: `agy models`, cached 24h; claude: floating tier selector)
+#   4. the compatibility matrix floor
+# Every explicit/repo/ambient value is validated and fails closed (exit 2).
 #
 # Claude launches never spawn a process: this prints one line of normalized
 # effective launch configuration (schema loom-role-launch/v1) to stdout after
@@ -41,7 +49,7 @@ CLIENTS=(claude codex antigravity)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity] [--routing-file /abs/path]\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
     exit 1
 }
 
@@ -183,14 +191,107 @@ _next_client_in_cycle() {
     esac
 }
 
+CODEX_MODEL_RE='^(gpt-6(\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\.6(-[a-z0-9]+)?)$'
+AGY_MODEL_RE='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+AGY_CACHE_TTL=86400
+
+# _valid_model <client> <id> — the per-client --model / config admission rule.
+_valid_model() {
+    case "$1" in
+    claude) [ "$2" = haiku ] || [ "$2" = sonnet ] || [ "$2" = opus ] ;;
+    codex) [[ "$2" =~ $CODEX_MODEL_RE ]] ;;
+    antigravity) [[ "$2" =~ $AGY_MODEL_RE ]] ;;
+    *) return 1 ;;
+    esac
+}
+
+_valid_effort() {
+    [ "$1" = low ] || [ "$1" = medium ] || [ "$1" = high ]
+}
+
+# _repo_field <client> <field> — value from <project root>/.docs/loom-models.json
+# (tier 2); empty when the file is absent; fails closed when it is not JSON.
+_repo_field() {
+    local top cfg
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || top="$PWD"
+    cfg="$top/.docs/loom-models.json"
+    [ -f "$cfg" ] || return 0
+    jq -e . "$cfg" >/dev/null 2>&1 || _fail "repository model config is not valid JSON: .docs/loom-models.json"
+    jq -r --arg c "$1" --arg f "$2" '((.[$c]? // {}) | objects | .[$f]?) | strings' "$cfg" 2>/dev/null
+}
+
+# _codex_ambient_model — top-level `model = "..."` from ~/.codex/config.toml
+# (tier 3); empty when absent; fails closed when malformed or unsupported.
+_codex_ambient_model() {
+    local cfg="${HOME:-}/.codex/config.toml" line val
+    [ -n "${HOME:-}" ] && [ -f "$cfg" ] || return 0
+    line=$(awk '/^[[:space:]]*\[/{exit} /^[[:space:]]*model[[:space:]]*=/{print; exit}' "$cfg")
+    [ -n "$line" ] || return 0
+    val=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*model[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')
+    [ -n "$val" ] || _fail "ambient Codex model is malformed in config.toml"
+    _valid_model codex "$val" || _fail "ambient Codex model is unsupported: $val"
+    printf '%s' "$val"
+}
+
+# _agy_models — available Antigravity model ids, one per line: a fresh (<= 24h)
+# owner-only cache, else `agy models` written back atomically (mode 0600).
+# Returns 1 when neither source is usable (caller falls back to the floor).
+_agy_models() {
+    local cache now fetched age bin ids dir tmp
+    cache="${XDG_CACHE_HOME:-${HOME:-}/.cache}/loom/agy-models.json"
+    now=$(date +%s)
+    # shellcheck disable=SC2012 # only the permission string of one known file is read
+    if [ -f "$cache" ] && [ ! -L "$cache" ] && [ "$(ls -l "$cache" | cut -c5-10)" = "------" ]; then
+        fetched=$(jq -r 'if (.fetchedAt | type) == "number" and (.models | type) == "array" then .fetchedAt else empty end' "$cache" 2>/dev/null)
+        case "$fetched" in
+        "" | *[!0-9]*) ;;
+        *)
+            age=$((now - fetched))
+            if [ "$age" -ge 0 ] && [ "$age" -le "$AGY_CACHE_TTL" ]; then
+                jq -r '.models[] | strings' "$cache"
+                return 0
+            fi
+            ;;
+        esac
+    fi
+    bin="${LOOM_LAUNCH_ROLE_AGY_BIN:-agy}"
+    command -v "$bin" >/dev/null 2>&1 || return 1
+    ids=$("$bin" models 2>/dev/null) || return 1
+    ids=$(printf '%s\n' "$ids" | awk -F'\t' 'NF >= 2 && $1 ~ /^[a-z0-9][a-z0-9._-]*$/ {print $1}')
+    [ -n "$ids" ] || return 1
+    dir=$(dirname -- "$cache")
+    if (umask 077 && mkdir -p "$dir") && tmp=$(umask 077 && mktemp "$dir/agy-models.XXXXXX" 2>/dev/null); then
+        if printf '%s\n' "$ids" | jq -Rn --argjson t "$now" '{fetchedAt: $t, models: [inputs | select(length > 0)]}' >"$tmp" 2>/dev/null &&
+            chmod 600 "$tmp" && mv -f "$tmp" "$cache"; then
+            :
+        else
+            rm -f "$tmp"
+        fi
+    fi
+    printf '%s\n' "$ids"
+}
+
+# _agy_pick <models> <profile> <effort> — newest model of the profile's family
+# carrying the effort suffix; empty when none matches.
+_agy_pick() {
+    local family
+    case "$2" in
+    Economy) family=flash ;;
+    Standard) family=sonnet ;;
+    "Deep review") family=opus ;;
+    *) return 0 ;;
+    esac
+    printf '%s\n' "$1" | grep -E -- "${family}.*-$3\$" | sort -rV | head -n 1
+}
+
 _launch_claude() {
-    local root="$1" role="$2" profile="$3" selector="$4" cross_json="${5:-}"
+    local root="$1" role="$2" profile="$3" selector="$4" cross_json="${5:-}" matrix_selector="${6:-$4}"
     local agent_path model tools cold_id
     agent_path="$root/agents/$role.md"
     [ -f "$agent_path" ] || _fail "agent adapter is missing: $role"
     model=$(_frontmatter_field "$agent_path" model) || _fail "agent adapter has no model field: $role"
     tools=$(_frontmatter_field "$agent_path" tools) || _fail "agent adapter has no tools field: $role"
-    [ "$model" = "$selector" ] || _fail "agent adapter model does not match the compatibility matrix tier: $role"
+    [ "$model" = "$matrix_selector" ] || _fail "agent adapter model does not match the compatibility matrix tier: $role"
     _csv_contains "$tools" "Agent" && _fail "agent adapter grants the forbidden Agent capability: $role"
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
     printf '{"schema":"loom-role-launch/v1","client":"claude","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"claude":{"selector":"%s","agentCapability":false}}\n' \
@@ -217,22 +318,36 @@ _launch_codex() {
 }
 
 _launch_antigravity() {
-    local root="$1" role="$2" profile="$3" cross_json="${4:-}"
-    local role_path roles_dir role_sha ag_model cold_id
+    local root="$1" role="$2" profile="$3" cross_json="${4:-}" ag_model="${5:-}" effort="${6:-}"
+    local role_path roles_dir role_sha cold_id models picked
     [ -d "$root/roles" ] && [ ! -L "$root/roles" ] || _fail "roles directory is missing or symlinked"
     roles_dir=$(_canon_dir "$root/roles") || _fail "cannot canonicalize roles directory"
     role_path="$roles_dir/$role.md"
     [ -f "$role_path" ] && [ ! -L "$role_path" ] || _fail "canonical role contract is missing or symlinked: $role"
     role_sha=$(_sha256_file "$role_path") || _fail "cannot hash canonical role contract: $role"
     case "$profile" in
-    Economy) ag_model="flash" ;;
-    Standard) ag_model="inherit" ;;
-    "Deep review") ag_model="pro" ;;
+    Economy) [ -n "$effort" ] || effort=low ;;
+    Standard) [ -n "$effort" ] || effort=medium ;;
+    "Deep review") [ -n "$effort" ] || effort=high ;;
     *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
     esac
+    if [ -z "$ag_model" ]; then
+        models=$(_agy_models) || models=""
+        picked=""
+        [ -z "$models" ] || picked=$(_agy_pick "$models" "$profile" "$effort")
+        if [ -n "$picked" ]; then
+            ag_model="$picked"
+        else
+            case "$profile" in
+            Economy) ag_model="flash" ;;
+            Standard) ag_model="inherit" ;;
+            *) ag_model="pro" ;;
+            esac
+        fi
+    fi
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
     printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s"}}\n' \
-        "$role" "$profile" "$cold_id" "$cross_json" "$role" "$ag_model" "$(_json_escape "$role_path")" "$role_sha"
+        "$role" "$profile" "$cold_id" "$cross_json" "$role" "$(_json_escape "$ag_model")" "$(_json_escape "$role_path")" "$role_sha"
 }
 
 main() {
@@ -246,6 +361,7 @@ main() {
 
     local author_client="${LOOM_AUTHOR_CLIENT:-}"
     local routing_file="${LOOM_ROUTING_FILE:-}"
+    local flag_model="" flag_effort=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --author-client)
@@ -258,11 +374,24 @@ main() {
             routing_file="$2"
             shift 2
             ;;
+        --model)
+            [ "$#" -ge 2 ] || _usage
+            flag_model="$2"
+            shift 2
+            ;;
+        --effort)
+            [ "$#" -ge 2 ] || _usage
+            flag_effort="$2"
+            shift 2
+            ;;
         *)
             _usage
             ;;
         esac
     done
+    if [ -n "$flag_effort" ]; then
+        _valid_effort "$flag_effort" || _fail "invalid --effort (expected low, medium, or high): $flag_effort"
+    fi
 
     case "$0" in
     /*) ;;
@@ -346,35 +475,49 @@ main() {
     local script_dir root matrix_path matrix_json schema_ok matrix_version role_key profile
     script_dir=$(_canon_dir "$(dirname -- "$0")") || _fail "cannot canonicalize script directory"
     root=$(_canon_dir "$script_dir/..") || _fail "cannot canonicalize plugin root"
-    matrix_path="$root/adapters/compatibility/v0.2.0.json"
+    matrix_path="$root/adapters/compatibility/v0.3.0.json"
     [ -f "$matrix_path" ] || _fail "compatibility matrix is missing"
     matrix_json=$(cat -- "$matrix_path" 2>/dev/null) || _fail "cannot read compatibility matrix"
     schema_ok=$(printf '%s' "$matrix_json" | jq -r '.schema // empty' 2>/dev/null) || _fail "compatibility matrix is not valid JSON"
     [ "$schema_ok" = "loom-compatibility-matrix/v1" ] || _fail "compatibility matrix schema mismatch"
     matrix_version=$(printf '%s' "$matrix_json" | jq -r '.version // empty')
-    [ "$matrix_version" = "0.2.0" ] || _fail "compatibility matrix version mismatch"
+    [ "$matrix_version" = "0.3.0" ] || _fail "compatibility matrix version mismatch"
 
     role_key=$(_role_key "$role")
     profile=$(printf '%s' "$matrix_json" | jq -r --arg r "$role_key" '[.profiles[] | select(.consumers[]? == $r)] | .[0].profile // empty')
     [ -n "$profile" ] || _fail "no profile mapped for role: $role"
+
+    local model_in="$flag_model" effort_in="$flag_effort"
+    [ -z "$flag_model" ] || _valid_model "$client" "$flag_model" || _fail "invalid --model for $client: $flag_model"
+    if [ -z "$model_in" ]; then
+        model_in=$(_repo_field "$client" model) || exit 2
+        [ -z "$model_in" ] || _valid_model "$client" "$model_in" || _fail "invalid repository model for $client: $model_in"
+    fi
+    if [ -z "$effort_in" ]; then
+        effort_in=$(_repo_field "$client" effort) || exit 2
+        [ -z "$effort_in" ] || _valid_effort "$effort_in" || _fail "invalid repository effort for $client: $effort_in"
+    fi
 
     case "$client" in
     claude)
         local selector
         selector=$(_matrix_field "$matrix_json" "$profile" ".claude.selector")
         [ -n "$selector" ] || _fail "no Claude selector mapped for profile: $profile"
-        _launch_claude "$root" "$role" "$profile" "$selector" "$cross_json"
+        _launch_claude "$root" "$role" "$profile" "${model_in:-$selector}" "$cross_json" "$selector"
         ;;
     codex)
         local model effort
-        model=$(_matrix_field "$matrix_json" "$profile" ".codex.model")
-        effort=$(_matrix_field "$matrix_json" "$profile" ".codex.effort")
+        model="$model_in"
+        [ -n "$model" ] || model=$(_codex_ambient_model) || exit 2
+        [ -n "$model" ] || model=$(_matrix_field "$matrix_json" "$profile" ".codex.model")
+        effort="$effort_in"
+        [ -n "$effort" ] || effort=$(_matrix_field "$matrix_json" "$profile" ".codex.effort")
         [ -n "$model" ] || _fail "no Codex model mapped for profile: $profile"
         [ -n "$effort" ] || _fail "no Codex effort mapped for profile: $profile"
         _launch_codex "$root" "$role" "$profile" "$model" "$effort" "$cross_json"
         ;;
     antigravity)
-        _launch_antigravity "$root" "$role" "$profile" "$cross_json"
+        _launch_antigravity "$root" "$role" "$profile" "$cross_json" "$model_in" "$effort_in"
         ;;
     esac
 }
