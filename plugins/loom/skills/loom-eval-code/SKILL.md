@@ -24,10 +24,15 @@ Target: the workflow argument (if empty, the next `Implemented` slice).
    the cold launch itself; Claude: launch natively per
    `roles/code-evaluator.md` / `agents/code-evaluator.md` using its printed
    configuration). Give it those blind inputs only.
-3. The role **re-runs the gate** (doesn't trust the claim) and produces its
+3. The role **re-runs the gate** (doesn't trust the claim; when full `scripts/check`
+   evidence is already bound to the exact reviewed commit, it runs fast static checks
+   plus the slice's target `.bats` suite(s) with `TMPDIR=/private/tmp`, or
+   `LOOM_BATS_JOBS=4 scripts/check` when a full rerun is required) and produces its
    verdict (PASS/FAIL + severity) to its confined scratch/output workspace, then
    returns — it does not write into `.docs/evaluations/`, set the status line, or
-   commit. The recorder/root installs the verdict under
+   commit. On Round >= 1, the evaluator verifies **only** that prior `Must Fix` items
+   were resolved without regressions and must not invent new `blocking`/`high`
+   findings on unchanged code. The recorder/root installs the verdict under
    `.docs/evaluations/<slice>-eval.md`, makes the status transition (**`Ready to
    Publish`** on PASS — a code-eval PASS does not by itself reach `Landed`;
    `In Progress` on FAIL), and commits author-neutral.

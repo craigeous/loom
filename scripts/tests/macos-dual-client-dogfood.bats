@@ -47,6 +47,13 @@ else
 fi
 mode="${LOOM_DOGFOOD_STUB_MODE:-ok}"
 [ -n "${LOOM_DOGFOOD_STUB_SLEEP:-}" ] && sleep "$LOOM_DOGFOOD_STUB_SLEEP"
+if [ -n "${LOOM_DOGFOOD_STUB_READY_FILE:-}" ] && [ -n "${LOOM_DOGFOOD_STUB_CONTINUE_FILE:-}" ]; then
+    : >"$LOOM_DOGFOOD_STUB_READY_FILE"
+    stub_wait_deadline=$(($(date +%s) + 10))
+    while [ ! -f "$LOOM_DOGFOOD_STUB_CONTINUE_FILE" ] && [ "$(date +%s)" -lt "$stub_wait_deadline" ]; do
+        sleep 0.05
+    done
+fi
 op=""
 if [ "${1:-}" = plugin ]; then
     case "${2:-}" in
@@ -111,7 +118,7 @@ EOF
 setup() {
     make_stub_client
     export LOOM_DOGFOOD_HANDSHAKE_TIMEOUT_SECONDS=6
-    unset LOOM_DOGFOOD_INJECT LOOM_DOGFOOD_STUB_MODE LOOM_DOGFOOD_SPAWN_ORPHAN LOOM_DOGFOOD_STUB_SLEEP
+    unset LOOM_DOGFOOD_INJECT LOOM_DOGFOOD_STUB_MODE LOOM_DOGFOOD_SPAWN_ORPHAN LOOM_DOGFOOD_STUB_SLEEP LOOM_DOGFOOD_STUB_READY_FILE LOOM_DOGFOOD_STUB_CONTINUE_FILE
     RUN_ROOT=""
     ORPHAN_PIDS=()
 }
@@ -478,7 +485,7 @@ assert_no_live_orphan() {
 
 @test "injection supervisor-die-while-worker-continues: durable worker identity prevents a hidden orphan; reconciles to recovered-after-apply" {
     prepare_run
-    LOOM_DOGFOOD_INJECT=supervisor-die-while-worker-continues mutate claude-install claude install
+    LOOM_DOGFOOD_INJECT=supervisor-die-while-worker-continues mutate_direct claude-install claude install || true
     # the worker (now the exec'd stub client) legitimately keeps running and
     # completes the mutation even though the supervisor died mid-flight.
     for _ in $(seq 1 40); do
@@ -682,26 +689,47 @@ assert_no_live_orphan() {
 
 @test "injection before:native-release (supervisor dies before granting release): the orchestrator resumes and grants the missed release exactly once; the worker -- blocked until then -- proceeds only after, and a clean retry completes" {
     prepare_run
-    # The worker structurally blocks on the native-release record before
-    # doing anything mutating (run_worker: _wait_for_record native-release
-    # precedes exec), so the mutation cannot have happened before this
-    # single, non-duplicated release grant. The dying supervisor also
-    # leaves nobody to write "terminal", so the first call can legitimately
-    # race to either an immediate "applied" or a "quarantine" pending a
-    # second reconciling call, exactly like the supervisor-die-while-
-    # worker-continues case; only the eventual outcome is asserted here.
-    LOOM_DOGFOOD_INJECT=before:native-release mutate claude-install claude install
-    for _ in $(seq 1 40); do
-        [ -e "$RUN_ROOT/claude-home/plugins/cache/loom/loom/0.2.0/plugin.json" ] && break
-        sleep 0.1
+    ready_file="$STUB_DIR/native-release.ready"
+    continue_file="$STUB_DIR/native-release.continue"
+    export LOOM_DOGFOOD_STUB_READY_FILE="$ready_file"
+    export LOOM_DOGFOOD_STUB_CONTINUE_FILE="$continue_file"
+    mutation_status=0
+    LOOM_DOGFOOD_INJECT=before:native-release \
+        mutate_direct claude-install claude install || mutation_status=$?
+    [ "$mutation_status" -eq 3 ]
+    for _ in $(seq 1 60); do
+        [ -f "$ready_file" ] && break
+        sleep 0.05
     done
-    [ -e "$RUN_ROOT/claude-home/plugins/cache/loom/loom/0.2.0/plugin.json" ]
+    [ -f "$ready_file" ]
+    [ ! -e "$RUN_ROOT/claude-home/plugins/cache/loom/loom/0.2.0/plugin.json" ]
     journal="$RUN_ROOT/control/journal/claude-install.1.ndjson"
-    run jq -r 'select(.type=="native-release")' "$journal"
-    [ "$(printf '%s\n' "$output" | grep -c native-release)" -eq 1 ]
-    mutate claude-install claude install
-    [ "$status" -eq 0 ]
-    [ "$output" = applied ]
+    jq -s -e '
+        ([.[] | select(.type=="native-hello")] | length) == 1 and
+        ([.[] | select(.type=="native-launch")] | length) == 1 and
+        ([.[] | select(.type=="native-release")] | length) == 1 and
+        ([to_entries[] | select(.value.type=="native-hello") | .key][0] <
+         [to_entries[] | select(.value.type=="native-launch") | .key][0]) and
+        ([to_entries[] | select(.value.type=="native-launch") | .key][0] <
+         [to_entries[] | select(.value.type=="native-release") | .key][0])
+    ' "$journal"
+    [ ! -e "$RUN_ROOT/control/journal/claude-install.2.ndjson" ]
+    : >"$continue_file"
+    final_status=3
+    retry_deadline=$(($(date +%s) + 5))
+    while [ "$final_status" -eq 3 ] && [ "$(date +%s)" -lt "$retry_deadline" ]; do
+        final_status=0
+        mutate_direct claude-install claude install || final_status=$?
+        [ "$final_status" -eq 0 ] || sleep 0.05
+    done
+    [ "$final_status" -eq 0 ]
+    [ -e "$RUN_ROOT/claude-home/plugins/cache/loom/loom/0.2.0/plugin.json" ]
+    jq -s -e '
+        ([.[] | select(.type=="native-launch")] | length) == 1 and
+        ([.[] | select(.type=="native-release")] | length) == 1 and
+        ([.[] | select(.type=="recovered-after-apply")] | length) == 1 and
+        ([.[] | select(.type=="applied" and .status=="recovered-after-apply")] | length) == 1
+    ' "$journal"
     # resolved within the SAME attempt: no second attempt was ever started.
     [ ! -e "$RUN_ROOT/control/journal/claude-install.2.ndjson" ]
 }

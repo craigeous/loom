@@ -22,9 +22,14 @@ Target: the workflow argument (if empty, the next `Approved` slice-plan).
    the cold launch itself; Claude: launch natively per `roles/developer.md` /
    `agents/developer.md` using its printed configuration). Give it the
    slice-plan path and target specs.
-2. The role sets `In Progress`, implements exactly the plan's scope, runs the full
-   gate (format → lint → test), records evidence, sets `Implemented`, and commits
-   author-neutral (a clean single-slice commit — the code evaluator reads its
-   diff). If the plan is wrong/ambiguous it stops, leaves a `## Notes` question,
-   sets `Needs Clarification` — it never edits specs/ADRs.
+2. The role sets `In Progress`, implements exactly the plan's scope, iterates with
+   fast targeted checks (`shfmt`, `shellcheck`, `bats --filter` on the touched suite
+   with `TMPDIR=/private/tmp` on macOS) before running the full gate once on the
+   candidate (`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`), records evidence,
+   sets `Implemented`, and commits author-neutral (a clean single-slice commit — the
+   code evaluator reads its diff). On Round >= 1 remediation, the developer fixes
+   **only** the `Must Fix (Round-0 Blocking Checklist)` items from the evaluation and
+   adds at most 1 regression test per blocker — never expanding state machines or test
+   matrices beyond the plan. If the plan is wrong/ambiguous it stops, leaves a
+   `## Notes` question, sets `Needs Clarification` — it never edits specs/ADRs.
 3. Verify the commit and resulting status; report readiness for `loom-eval-code`.

@@ -25,6 +25,13 @@ Notes:
   selected supported Bash, not `/bin/sh` or an incidental `env bash`.
 - Loom's complete pinned repository gate is `scripts/check`; it discovers the
   tracked script and Bats sets dynamically and exercises the actual selected Bash.
+- **Fast iteration vs final gate:** During inner-loop development and debugging, do
+  **not** re-run the entire repository `scripts/check` suite after every edit. Run
+  `shfmt`, `shellcheck`, `bash -n`, and `bats --filter <pattern> <test-file>` on the
+  touched files (with `TMPDIR=/private/tmp` on macOS so symlinked `$TMPDIR` tests do
+  not collide with `/var/folders`). Run full `scripts/check` once on the final
+  candidate commit (`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` when GNU
+  `parallel` is installed).
 - This is the first **learned** gate (recorded via the gate-learning mechanism,
   `references/gate-learning.md` Step 5); the next shell project loom encounters
   inherits it via the verified-gate path.

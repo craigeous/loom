@@ -634,6 +634,38 @@ _wait_for_record() {
     done
 }
 
+# _wait_for_release_or_writer_death <journal> <release-type>
+# <absolute-deadline> <writer-pid> <writer-birth> — gate-2-only wait.
+# Prints exactly released | writer-dead | timed-out.
+_wait_for_release_or_writer_death() {
+    local journal="$1" release_type="$2" deadline="$3" writer_pid="$4" writer_birth="$5"
+    while :; do
+        if _journal_has "$journal" "$release_type"; then
+            printf 'released\n'
+            return
+        fi
+        if ! _identity_alive "$writer_pid" "$writer_birth"; then
+            if _journal_has "$journal" "$release_type"; then
+                printf 'released\n'
+            else
+                printf 'writer-dead\n'
+            fi
+            return
+        fi
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+            if _journal_has "$journal" "$release_type"; then
+                printf 'released\n'
+            elif ! _identity_alive "$writer_pid" "$writer_birth"; then
+                printf 'writer-dead\n'
+            else
+                printf 'timed-out\n'
+            fi
+            return
+        fi
+        sleep "$POLL_INTERVAL"
+    done
+}
+
 # ---------------------------------------------------------------------------
 # Fixture-driven client argv/env/postcondition
 # ---------------------------------------------------------------------------
@@ -1009,29 +1041,40 @@ _reconcile_gate() {
     fi
 
     if [ -n "$writer_hello_type" ]; then
-        local writer_hello writer_pid writer_birth
+        local writer_hello writer_pid writer_birth writer_wait
         writer_hello=$(_journal_record "$journal" "$writer_hello_type")
         if [ -n "$writer_hello" ]; then
             writer_pid=$(printf '%s' "$writer_hello" | jq -r '.pid')
             writer_birth=$(printf '%s' "$writer_hello" | jq -r '.birth')
             if _identity_alive "$writer_pid" "$writer_birth"; then
-                if _wait_for_record "$journal" "$release_type" "$deadline" >/dev/null; then
+                writer_wait=$(_wait_for_release_or_writer_death \
+                    "$journal" "$release_type" "$deadline" "$writer_pid" "$writer_birth")
+                case "$writer_wait" in
+                released)
                     printf 'proceed\n'
                     return
-                fi
-                # The writer was alive through the whole deadline and still
-                # never released: do not race it or duplicate its write.
-                if _identity_alive "$writer_pid" "$writer_birth"; then
+                    ;;
+                timed-out)
                     printf 'quarantine\n'
                     return
-                fi
+                    ;;
+                writer-dead) ;;
+                *)
+                    printf 'quarantine\n'
+                    return
+                    ;;
+                esac
             fi
+        fi
+        if _journal_has "$journal" "$release_type"; then
+            printf 'proceed\n'
+            return
         fi
     fi
 
     pid=$(printf '%s' "$hello" | jq -r '.pid')
     birth=$(printf '%s' "$hello" | jq -r '.birth')
-    if _identity_alive "$pid" "$birth"; then
+    if [ "$(date +%s)" -lt "$deadline" ] && _identity_alive "$pid" "$birth"; then
         _write_release_pair "$journal" "$token" "$launch_type" "$release_type" "$pid"
         printf 'proceed\n'
         return

@@ -255,6 +255,14 @@ fresh artifact's first review is round 0. **One** counter per artifact across **
 review phases (plan-review FAILs + code-review FAILs accumulate toward the same 5).
 At **5** FAILs the orchestrator **stops and escalates = pause + summary** to the owner.
 
+**Goalpost-shift early escalation (anti-wheel-spinning guard).** Round 0 establishes
+the complete `Must Fix (Round-0 Blocking Checklist)` for an artifact. If a Round >= 1
+evaluation returns FAIL by introducing new `blocking` or `high` findings on code paths
+or plan clauses that were already present in Round 0 (rather than verifying the prior
+`Must Fix` items and checking for regressions caused by the remediation diff), the
+orchestrator must **pause and escalate to the owner after 2 consecutive FAILs** rather
+than burning up to 5 rounds in an expanding scope loop.
+
 See [spec 03 `## Round limits`](../../../../../.docs/spec/03-artifact-lifecycle.md)
 — especially the **Escalation contract (pause + summary)** subsection — for what the
 summary must contain and the owner-driven reset rule.

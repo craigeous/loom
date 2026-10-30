@@ -6,7 +6,32 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action — remediation-3 `playbook-conformance` (first exercise of ADR
+- **Last action (2026-10-30) — Remediation Workstreams 1–3 (`docs-and-agent-tuning`,
+  `coord-and-hook-hardening`, and lean `dogfood-301-stabilize` fix):**
+  1. **Spec/Doc Governance, Agent Tuning & Anti-Wheel-Spinning Guards:** Tuned all
+     five `plugins/loom/roles/*.md`, evaluation rubrics/templates, `CLAUDE.md`,
+     `gates/shell.md`, `loom-develop/SKILL.md`, `loom-eval-code/SKILL.md`,
+     `loom-run/SKILL.md`, and `orchestration.md` with Round 0 `Must Fix` freeze,
+     Round >= 1 non-expansion locks, 2-consecutive-FAIL goalpost-shift early
+     escalation, and fast targeted inner-loop test discipline (`bats --filter`,
+     `TMPDIR=/private/tmp`, `LOOM_BATS_JOBS=4`). Compacted `handoff.md` and
+     `progress.md` into `.docs/status/archive/` and reconciled
+     `.docs/slice-plans/README.md`.
+  2. **`loom-coord` Hardening, Hook Unification & Gate Speedup:** Landed physical
+     symlink containment (`_with_session_dir`), centralized lock ownership
+     (`lock_acquire`, `lock_verify_self`, `lock_heartbeat`, `lock_release_if_self`),
+     and fail-closed null-SHA CAS schema initialization (`_check_or_set_schema`) in
+     `plugins/loom/bin/loom-coord` (94/94 Bats tests); unified
+     `_loom_hook_select_client` in
+     `plugins/loom/hooks/precompact-write-ahead-backstop.sh` (32/32 Bats tests); and
+     added optional `LOOM_BATS_JOBS` parallel execution to `scripts/run-bats-under`.
+  3. **Lean `dogfood-301-stabilize` Fix:** Added `_wait_for_release_or_writer_death`
+     and final release reread to `_reconcile_gate` in
+     `scripts/macos-dual-client-dogfood` plus `mutate_direct` and the opt-in two-file
+     stub barrier in `scripts/tests/macos-dual-client-dogfood.bats`, eliminating the
+     test-301 flake while keeping the dogfood suite at 41 fast tests (464 total
+     repository Bats tests).
+- **Prior action — remediation-3 `playbook-conformance` (first exercise of ADR
   0026's broadened `docs-governance/v1` class).** Two things landed: (1) **ADR
   0026 carried to `main` at `Status: Accepted`** — broadens `docs-governance/v1`
   to admit the **prose body** of `plugins/loom/**/*.md` (skills/roles/agents/

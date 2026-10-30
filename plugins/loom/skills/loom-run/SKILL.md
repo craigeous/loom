@@ -103,6 +103,11 @@ Requested scope: the workflow argument (if empty, ask).
       (publish → verify remote → receipt → `Landed`).
    f. Honor the round limit (5 **FAIL** cycles per artifact → escalate = pause +
       summary; see spec 03 `## Round limits` for the counting + summary contract).
+      **Goalpost-shift early escalation:** if an artifact receives **2 consecutive
+      FAILs** where Round >= 1 introduces new `blocking`/`high` findings on paths or
+      invariants that were already present in Round 0 (moving the goalposts rather
+      than verifying Round 0's `Must Fix` checklist), pause and escalate to the owner
+      immediately instead of spinning through additional rounds.
       Also escalate — **same pause + summary, but NOT round-counted** — on an
       **infrastructure block** (spend/usage/quota limit, 429, 5xx,
       classifier-unavailable, or a limit-crashed workflow); detect-on-failure only

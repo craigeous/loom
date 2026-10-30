@@ -78,8 +78,10 @@ slice is considered `Implemented`. Verified gates ship in
 `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test`
 
 **Shell gate** (`gates/shell.md`) — Bash 3.2+ with pinned format, lint, syntax,
-runtime, metadata, link, and client-validation stages. Run the whole repository gate
-with `scripts/check`; it dynamically discovers tracked scripts and Bats tests.
+runtime, metadata, link, and client-validation stages. During iteration, run targeted
+checks (`shfmt -i 4 -d`, `shellcheck -s bash`, `bats --filter <pattern> <file>` with
+`TMPDIR=/private/tmp` on macOS); run the full repository gate once on the candidate
+commit (`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`).
 
 For other stacks, the unknown-stack path is specified in
 `plugins/loom/skills/loom-playbook/references/gate-learning.md` (inspect toolchain
