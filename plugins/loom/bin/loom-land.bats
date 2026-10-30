@@ -186,7 +186,8 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     [ "$(jq -r .baseCommit "$SDIR/candidate.json")" = "$before" ]
     [ "$(jq -r .sliceHead "$SDIR/candidate.json")" = "$HEAD_SHA" ]
     git -C "$REPO" cat-file -e "$output:feature.txt"
-    git -C "$REPO" show "$output:.loom/candidate-manifest.json" | jq -e '.slice == "slice-a" and .mode == "remote-direct"'
+    jq -e '.slice == "slice-a" and .mode == "remote-direct"' "$SDIR/candidate-manifest.json"
+    ! git -C "$REPO" ls-tree -r --name-only "$output" | grep -q '^\.loom/'
     [ -z "$(git -C "$REPO" branch --list 'loom-land/*')" ]
     [ ! -d "$REPO/.git/loom/land-s1/wt" ]
     [ -n "$(claims)" ]
@@ -521,17 +522,17 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     [ "$status" -eq 10 ]
 }
 
-@test "separate-clone publisher wins the race: loser is rejected, keeps state and stops on retry" {
+@test "separate-clone publisher wins the race: loser is rejected, resets the attempt and needs fresh evidence" {
     prepare
     stub_coord "if [ \"\$1\" = lock-verify ] && [ ! -e '$WORK/raced' ]; then touch '$WORK/raced'; ( cd '$OTHER' && git pull -q origin main && echo c1 >c1.txt && git add c1.txt && git commit -q -m c1 && git push -q origin main ) >/dev/null 2>&1; fi"
     land --evidence "$WORK/ev.json"
     [ "$status" -eq 3 ]
     winner="$(remote_main)"
     [ "$winner" = "$(git -C "$OTHER" rev-parse HEAD)" ]
-    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = false ]
     [ "$(git -C "$REPO" rev-parse refs/loom/land/s1/candidate)" = "$CAND" ]
     land --evidence "$WORK/ev.json"
-    [ "$status" -eq 10 ]
+    [ "$status" -eq 3 ]
     [ "$(remote_main)" = "$winner" ]
     [ -n "$(claims)" ]
 }
@@ -598,4 +599,284 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     [ "$(remote_main)" = "$moved" ]
     [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
     [ -n "$(claims)" ]
+}
+
+# ---- coordination-state separation -------------------------------------------
+
+# slice_commit <clone> <name> — status docs on base; slice branch br-<name> with a
+# Ready to Publish plan and <name>.txt. Sets SC_HEAD and leaves the clone on main.
+slice_commit() {
+    local c="$1" n="$2"
+    git -C "$c" checkout -q main
+    git -C "$c" pull -q origin main 2>/dev/null
+    if ! git -C "$c" cat-file -e main:.docs/status/progress.md 2>/dev/null; then
+        mkdir -p "$c/.docs/status" "$c/.docs/slice-plans/archive"
+        printf '# Slice Plans\n' >"$c/.docs/slice-plans/README.md"
+        printf '# Progress\n' >"$c/.docs/status/progress.md"
+        printf '# Handoff\n' >"$c/.docs/status/handoff.md"
+        printf '# Roadmap\n' >"$c/.docs/status/roadmap.md"
+        touch "$c/.docs/slice-plans/archive/.gitkeep"
+        git -C "$c" add .docs
+        git -C "$c" commit -q -m "status docs"
+        git -C "$c" push -q origin main
+    fi
+    git -C "$c" checkout -q -b "br-$n"
+    mkdir -p "$c/.docs/slice-plans"
+    printf '# %s\n\nStatus: Ready to Publish\n' "$n" >"$c/.docs/slice-plans/$n.md"
+    printf '%s\n' "$n" >"$c/$n.txt"
+    git -C "$c" add .
+    git -C "$c" commit -q -m "slice $n"
+    SC_HEAD="$(git -C "$c" rev-parse HEAD)"
+    git -C "$c" checkout -q main
+}
+
+# mkfin — FIN: a deterministic finalizer that archives the plan and appends to the four docs
+mkfin() {
+    export LOCKLOG="$WORK/lockseen"
+    cat >"$WORK/fin.sh" <<'EOS'
+set -e
+if git show-ref --verify --quiet refs/loom/lock; then echo x >>"${LOCKLOG:-/dev/null}"; fi
+mkdir -p .docs/slice-plans/archive
+git mv ".docs/slice-plans/$LOOM_SLICE.md" ".docs/slice-plans/archive/$LOOM_SLICE.md"
+for f in .docs/slice-plans/README.md .docs/status/progress.md .docs/status/handoff.md .docs/status/roadmap.md; do
+    case "$f" in *"${SKIP:-none-skip}"*) continue ;; esac
+    printf -- '- %s\n' "$LOOM_SLICE" >>"$f"
+done
+EOS
+    FIN="bash $WORK/fin.sh"
+}
+
+# managed — a Ready to Publish slice-a on top of the status docs, with FIN and its gate
+managed() {
+    slice_commit "$REPO" slice-a
+    HEAD_SHA="$SC_HEAD"
+    GATE="test -f slice-a.txt"
+    mkfin
+}
+
+landf() { land --finalize "$FIN" "$@"; }
+preparef() {
+    landf --candidate-only
+    [ "$status" -eq 0 ]
+    CAND="$output"
+    evidence "$CAND"
+}
+
+@test "coordination-state: claim and work start leave tracked main untouched" {
+    before="$(git -C "$REPO" rev-parse main)"
+    coordr lock-acquire --session s1 >/dev/null
+    coordr claim slice-x --session s1 >/dev/null
+    coordr lock-release --session s1 >/dev/null
+    [ "$(git -C "$REPO" rev-parse main)" = "$before" ]
+    [ -z "$(git -C "$REPO" status --porcelain)" ]
+    claims | grep -q '^slice-x'
+}
+
+@test "coordination-state: publication carries exactly one slice plus finalization" {
+    managed
+    base="$(remote_main)"
+    preparef
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    names="$(git -C "$REMOTE" diff --no-renames --name-only "$base" main | LC_ALL=C sort | tr '\n' ' ')"
+    [ "$names" = ".docs/slice-plans/README.md .docs/slice-plans/archive/slice-a.md .docs/status/handoff.md .docs/status/progress.md .docs/status/roadmap.md slice-a.txt " ]
+    [ "$(git -C "$REMOTE" rev-list --merges "$base..main" | wc -l | tr -d ' ')" = 1 ]
+    [ "$(git -C "$REMOTE" rev-list --count "$base..main")" = 3 ]
+    [ "$(git -C "$REMOTE" rev-parse "main^^2")" = "$HEAD_SHA" ]
+    [ "$(git -C "$REMOTE" log -1 --format=%s main)" = "Finalize slice slice-a" ]
+    ! git -C "$REMOTE" ls-tree -r --name-only main | grep -q '^\.loom/'
+    [ -z "$(claims)" ]
+}
+
+@test "coordination-state: unrelated local main history is never published, also after rebuild" {
+    managed
+    printf 'local\n' >"$REPO/local.txt"
+    git -C "$REPO" add local.txt
+    git -C "$REPO" commit -q -m "local only"
+    preparef
+    ! git -C "$REPO" cat-file -e "$CAND:local.txt" 2>/dev/null
+    other_push moved.txt
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    evidence "$(jq -r .candidateSha "$SDIR/candidate.json")"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    ! git -C "$REMOTE" cat-file -e main:local.txt 2>/dev/null
+    git -C "$REMOTE" cat-file -e main:moved.txt
+}
+
+@test "coordination-state: missing or incomplete finalize is rejected on a Ready to Publish slice" {
+    managed
+    before="$(remote_main)"
+    land --candidate-only
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"--finalize"* ]]
+    land --candidate-only --finalize "SKIP=handoff $FIN"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"handoff.md"* ]]
+    [ "$(remote_main)" = "$before" ]
+    [ -n "$(claims)" ]
+    [ ! -f "$SDIR/candidate.json" ]
+}
+
+@test "coordination-state: a plan that is not Ready to Publish is rejected" {
+    managed
+    git -C "$REPO" checkout -q "br-slice-a"
+    printf '# slice-a\n\nStatus: Implemented\n' >"$REPO/.docs/slice-plans/slice-a.md"
+    git -C "$REPO" commit -q -am "not ready"
+    HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
+    git -C "$REPO" checkout -q main
+    landf --candidate-only
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"Ready to Publish"* ]]
+}
+
+@test "coordination-state: finalize is repeatable across time and identity and a failing finalize writes nothing" {
+    managed
+    preparef
+    first="$CAND"
+    rm -f "$SDIR/candidate.json"
+    git -C "$REPO" update-ref -d refs/loom/land/s1/candidate
+    sleep 2
+    GIT_AUTHOR_DATE="2001-01-01T00:00:00Z" GIT_COMMITTER_DATE="2001-01-01T00:00:00Z" \
+        GIT_AUTHOR_NAME=Other GIT_COMMITTER_NAME=Other GIT_AUTHOR_EMAIL=o@example.com GIT_COMMITTER_EMAIL=o@example.com \
+        landf --candidate-only
+    [ "$status" -eq 0 ]
+    [ "$output" = "$first" ]
+    [ "$(git -C "$REPO" rev-parse "$first^")" = "$(git -C "$REPO" rev-parse "$output^")" ]
+    before="$(remote_main)"
+    rm -f "$SDIR/candidate.json"
+    git -C "$REPO" update-ref -d refs/loom/land/s1/candidate
+    landf --candidate-only --finalize "false"
+    [ "$status" -eq 10 ]
+    [ ! -f "$SDIR/candidate.json" ]
+    [ -n "$(claims)" ]
+    [ "$(remote_main)" = "$before" ]
+}
+
+@test "coordination-state: a changed finalize command invalidates the candidate evidence" {
+    managed
+    preparef
+    old="$CAND"
+    landf --finalize "$FIN; echo more >>.docs/status/progress.md" --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [[ "$stderr" == *"fresh review evidence"* ]]
+    new="$(jq -r .candidateSha "$SDIR/candidate.json")"
+    [ "$new" != "$old" ]
+    evidence "$new"
+    landf --finalize "$FIN; echo more >>.docs/status/progress.md" --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(remote_main)" = "$new" ]
+}
+
+@test "coordination-state: gate and finalize never run under the publish lock" {
+    managed
+    GATE="test -f slice-a.txt && { if git show-ref --verify --quiet refs/loom/lock; then echo x >>$LOCKLOG; fi; }"
+    preparef
+    stub_coord "if [ \"\$1\" = lock-acquire ] && [ ! -e '$WORK/moved' ]; then touch '$WORK/moved'; ( cd '$OTHER' && git pull -q origin main && echo m >m.txt && git add m.txt && git commit -q -m m && git push -q origin main ) >/dev/null 2>&1; fi"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [ ! -e "$LOCKLOG" ]
+    [ -n "$(claims)" ]
+    [ -z "$(coordr lock-holder)" ]
+    unset LOOM_COORD_BIN
+    evidence "$(jq -r .candidateSha "$SDIR/candidate.json")"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ ! -e "$LOCKLOG" ]
+}
+
+@test "coordination-state: a positively rejected push resets the attempt and the loser rebuilds on the winner" {
+    managed
+    preparef
+    stub_coord "if [ \"\$1\" = lock-verify ] && [ ! -e '$WORK/raced' ]; then touch '$WORK/raced'; ( cd '$OTHER' && git pull -q origin main && echo '- winner' >>.docs/status/progress.md && git commit -q -am winner && git push -q origin main ) >/dev/null 2>&1; fi"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    winner="$(remote_main)"
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = false ]
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    [ "$(remote_main)" = "$winner" ]
+    new="$(jq -r .candidateSha "$SDIR/candidate.json")"
+    [ "$new" != "$CAND" ]
+    evidence "$new"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    git -C "$REMOTE" show main:.docs/status/progress.md | grep -q -- '- winner'
+    git -C "$REMOTE" show main:.docs/status/progress.md | grep -q -- '- slice-a'
+    [ -z "$(claims)" ]
+}
+
+@test "coordination-state: an unreadable remote after a failed push stays uncertain with exit 10" {
+    managed
+    preparef
+    REAL_GIT="$(command -v git)"
+    mkdir -p "$WORK/fakebin"
+    printf '#!/bin/sh\ncase " $* " in *" push "*|*" ls-remote "*) exit 1 ;; esac\nexec "%s" "$@"\n' "$REAL_GIT" >"$WORK/fakebin/git"
+    chmod +x "$WORK/fakebin/git"
+    PATH="$WORK/fakebin:$PATH" landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    [ -n "$(claims)" ]
+}
+
+@test "coordination-state: a failed push the server accepted and another publisher advanced is contained, not repushed" {
+    managed
+    preparef
+    REAL_GIT="$(command -v git)"
+    mkdir -p "$WORK/fakebin"
+    cat >"$WORK/fakebin/git" <<EOS
+#!/bin/sh
+case " \$* " in *" push "*)
+    echo x >>"$WORK/ourpushes"
+    "$REAL_GIT" "\$@" || exit 1
+    ( cd "$OTHER" && "$REAL_GIT" pull -q origin main && echo c >c.txt && "$REAL_GIT" add c.txt && "$REAL_GIT" commit -q -m c && "$REAL_GIT" push -q origin main ) >/dev/null 2>&1
+    exit 1 ;;
+esac
+exec "$REAL_GIT" "\$@"
+EOS
+    chmod +x "$WORK/fakebin/git"
+    PATH="$WORK/fakebin:$PATH" landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(wc -l <"$WORK/ourpushes" | tr -d ' ')" = 1 ]
+    git -C "$REMOTE" merge-base --is-ancestor "$CAND" main
+    [ "$(remote_main)" != "$CAND" ]
+    [ "$(jq -r .verification "$SDIR/publication-receipt.json")" = contained ]
+    [ -z "$(claims)" ]
+}
+
+@test "coordination-state: offline publication keeps main, claim and Ready to Publish plan" {
+    managed
+    preparef
+    before="$(git -C "$REPO" rev-parse main)"
+    rmain="$(remote_main)"
+    mv "$REMOTE" "$REMOTE.off"
+    landf --evidence "$WORK/ev.json"
+    mv "$REMOTE.off" "$REMOTE"
+    [ "$status" -eq 10 ]
+    [ "$(git -C "$REPO" rev-parse main)" = "$before" ]
+    [ "$(remote_main)" = "$rmain" ]
+    [ -n "$(claims)" ]
+    [ ! -f "$SDIR/publication-receipt.json" ]
+    git -C "$REPO" show "$HEAD_SHA:.docs/slice-plans/slice-a.md" | grep -q '^Status: Ready to Publish'
+}
+
+@test "coordination-state: post-publication cleanup crash recovers without a second push" {
+    managed
+    count_hook
+    preparef
+    stub_coord "if [ \"\$1\" = release-claim ] && [ ! -e '$WORK/crashed' ]; then touch '$WORK/crashed'; exit 10; fi"
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(pushes)" = 1 ]
+    [ -n "$(claims)" ]
+    unset LOOM_COORD_BIN
+    landf --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(pushes)" = 1 ]
+    [ -z "$(claims)" ]
+    [ "$(remote_main)" = "$CAND" ]
 }

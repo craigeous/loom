@@ -340,7 +340,7 @@ coordination*.* Opt-in: a single-session run may skip coordination entirely.
 
 When the owner runs multiple `/loom:run` sessions concurrently, each session uses
 the `loom-coord` CLI (bare command on `$PATH`; ships at `plugins/loom/bin/loom-coord`)
-to serialize writes to the shared `main` checkout.
+to serialize claim registration and the short publish section.
 The orchestrator's driver-loop obligations:
 
 **At session kickoff:**
@@ -352,13 +352,12 @@ The orchestrator's driver-loop obligations:
 1. `loom-coord lock-acquire --session <id>` — acquire the cross-session lock.
    `0` acquired → proceed; `3` busy (backoff exhausted) → defer this main-side op,
    keep working other slices, retry later; `10` → abort.
-2. Re-read Active/claim state from current local `main`, still **under the
-   lock** — the coordination mechanic is unchanged. `list-claims` (unlocked
-   pre-scan) is a pre-filter only; claim liveness is always re-checked under the
-   lock via the `refs/loom/claims/<slice>` lease refs. Local `main` is never the
-   landing/dispatch/claim **authority** (ADR 0020 §1; spec 03 §"Dispatch rules"
-   — "Dispatch never derives landing, claims, or current authority from local
-   `main`").
+2. Derive active-session state from `loom-coord list-claims` plus slice artifacts on
+   the slice branch or fetched remote target, still **under the lock**. `list-claims`
+   (unlocked pre-scan) is a pre-filter only; claim liveness is always re-checked
+   under the lock via the `refs/loom/claims/<slice>` lease refs. Local `main` is not
+   read as authority (ADR 0020 §1; spec 03 §"Dispatch rules" — "Dispatch never
+   derives landing, claims, or current authority from local `main`").
 3. `loom-coord claim <slice> --session <id>` — skip live-claimed slices (exit `4` →
    re-select another slice); `reclaim` stale ones (exit `6` holder still fresh →
    skip; exit `4` CAS failed → skip, holder alive).
@@ -367,8 +366,10 @@ The orchestrator's driver-loop obligations:
 5. `loom-coord lock-release --session <id>` — then create the worktree and dispatch.
 
 **The lock is NEVER held across a role spawn or while a role works in a worktree.**
-Claim registration and land+finalize are the only locked shared-`main` writes; all
-other session activity is lock-free in the session's own worktree.
+Claim registration writes only `refs/loom/*`; the publish section is the only locked
+remote write. All other session activity (including candidate build and gate) is
+lock-free in the session's own worktree. Release a claim only after verified direct
+publication (`loom-land` exit 0), confirmed PR merge, or confirmed queue completion.
 
 **Dispatch scan reads `.docs/` on current local `main`** (not the frozen slice
 worktree snapshot) for coordination convenience, but current dispatch/landing

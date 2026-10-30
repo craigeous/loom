@@ -1,6 +1,6 @@
 # Coordination State Separation
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md
 Target size: <= 250 LOC net change (keep this plan document <= 250 lines)
 
@@ -171,6 +171,19 @@ single manifest assertion in step 8) and the `loom-coord.bats` suite must pass u
 and receipt semantics are untouched). A mechanical `rg -n "Active region on main|from
 current local .main."` over `plugins/loom` must return no hits after steps 1–2. Net
 change estimate: ~70 LOC `loom-land`, ~150 LOC bats, ~25 LOC docs.
+
+## Implementation Evidence
+
+- Steps 1–8 implemented. `loom-land.bats` now has 50 tests (37 existing + 13 new for 8a–8j;
+  8h is three tests, plus a not-Ready-to-Publish precondition test); all pass under
+  `/bin/bash` 3.2. `shfmt -i 4`, `shellcheck -s bash`, and `bash -n` are clean.
+- Two existing assertions changed because step 7 supersedes them: the manifest test
+  (now asserts `$SDIR/candidate-manifest.json` and no `.loom/` in the tree) and the
+  separate-clone race test (loser now resets `publishAttempt` to false and the retry exits
+  3 instead of 10).
+- On target movement detected under the lock, `loom-land` releases the lock, rebuilds and
+  gates unlocked, and exits 3 (existing contention tests keep their rebuilt-candidate assertion).
+- Full gate: see the Final gate line below.
 
 ## Notes
 

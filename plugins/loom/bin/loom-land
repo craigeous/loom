@@ -7,11 +7,14 @@
 # Usage (absolute path only):
 #   loom-land --repo <path> --remote <name> --target-ref refs/heads/<b> \
 #       --mode remote-direct --slice <id> --session <sid> --head <sha> \
-#       [--gate <cmd>] [--evidence <file>] [--candidate-only]
+#       [--gate <cmd>] [--finalize <cmd>] [--evidence <file>] [--candidate-only]
 #
 # --evidence is required for publication: loom-evidence/v1 JSON with schema,
 # candidateSha, gate, gateEvidenceSha256, reviewEvidenceSha256 (hashes are opaque).
-# State: <git-dir>/loom/session-<sid>/{candidate,publication-receipt}.json
+# --finalize runs in the candidate worktree after the merge (env LOOM_SLICE, LOOM_BASE,
+#   LOOM_SLICE_HEAD) and is committed as one deterministic commit; it is required when the
+#   slice plan at the slice head says 'Status: Ready to Publish'.
+# State: <git-dir>/loom/session-<sid>/{candidate,candidate-manifest,publication-receipt}.json
 # Exit codes: 0 verified success, 1 usage/input error, 3 contention, conflict,
 #   retry exhaustion or target moved (fresh review evidence needed), 5 ownership
 #   failure, 10 operational/unverifiable failure (owner action). Every nonzero
@@ -44,7 +47,7 @@ safe_id() {
 }
 
 REPO="" REMOTE="" TARGET_REF="" MODE="" SLICE="" SID="" HEAD_REV="" EVIDENCE=""
-GATE="scripts/check" CAND_ONLY=0
+GATE="scripts/check" FINALIZE="" CAND_ONLY=0
 while [ $# -gt 0 ]; do
     case "$1" in
     --candidate-only)
@@ -52,7 +55,7 @@ while [ $# -gt 0 ]; do
         shift
         continue
         ;;
-    --repo | --remote | --target-ref | --mode | --slice | --session | --head | --gate | --evidence)
+    --repo | --remote | --target-ref | --mode | --slice | --session | --head | --gate | --finalize | --evidence)
         [ $# -ge 2 ] || die 1 "$1 requires a value"
         case "$1" in
         --repo) REPO="$2" ;;
@@ -63,6 +66,7 @@ while [ $# -gt 0 ]; do
         --session) SID="$2" ;;
         --head) HEAD_REV="$2" ;;
         --gate) GATE="$2" ;;
+        --finalize) FINALIZE="$2" ;;
         --evidence) EVIDENCE="$2" ;;
         esac
         shift 2
@@ -84,6 +88,17 @@ command -v jq >/dev/null 2>&1 || die 1 "jq is required"
 REPO=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) || die 1 "--repo is not a git repository"
 git -C "$REPO" remote get-url "$REMOTE" >/dev/null 2>&1 || die 1 "unknown remote: $REMOTE"
 HEAD_SHA=$(git -C "$REPO" rev-parse --verify --quiet "$HEAD_REV^{commit}") || die 1 "--head is not a valid commit"
+
+# A slice plan at the slice head (never the working tree or local main) makes the slice
+# managed: it must be Ready to Publish and a finalizer must be supplied.
+PLAN=".docs/slice-plans/$SLICE.md"
+MANAGED=0
+if PLAN_TXT=$(git -C "$REPO" show "$HEAD_SHA:$PLAN" 2>/dev/null); then
+    MANAGED=1
+    printf '%s\n' "$PLAN_TXT" | grep -q '^Status: Ready to Publish[[:space:]]*$' ||
+        die 1 "$PLAN at $HEAD_SHA is not 'Status: Ready to Publish'"
+    [ -n "$FINALIZE" ] || die 1 "managed slice $SLICE requires --finalize"
+fi
 
 EV_SHA="" EV_GH="" EV_RH=""
 if [ "$CAND_ONLY" = 0 ]; then
@@ -184,10 +199,43 @@ write_state() {
     mkdir -p "$SDIR" 2>/dev/null || die 10 "cannot create session directory"
     atomic_jq "$STATE" --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" --arg tr "$TARGET_REF" \
         --arg mo "$MODE" --arg sh "$HEAD_SHA" --arg ba "$BASE" --arg ca "$CAND" --arg ga "$GATE" \
-        --arg gh "$EV_GH" --arg rh "$EV_RH" \
+        --arg fz "$FINALIZE" --arg gh "$EV_GH" --arg rh "$EV_RH" \
         '{schema: "loom-candidate/v1", slice: $sl, session: $se, remote: $re, targetRef: $tr, mode: $mo,
-          sliceHead: $sh, baseCommit: $ba, candidateSha: $ca, gate: $ga,
+          sliceHead: $sh, baseCommit: $ba, candidateSha: $ca, gate: $ga, finalize: $fz,
           gateEvidenceSha256: $gh, reviewEvidenceSha256: $rh}'
+}
+
+# deterministic_identity — merge and finalization commits take identity and dates from the
+# slice head, so identical inputs yield an identical candidate SHA on any host at any time.
+deterministic_identity() {
+    local v
+    v=$(git -C "$REPO" log -1 --date=raw --format='%an|%ae|%ad|%cn|%ce|%cd' "$HEAD_SHA") ||
+        die 10 "cannot read slice head identity"
+    IFS='|' read -r GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE <<<"$v"
+    export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE
+}
+
+# finalize_candidate — run the caller's finalizer in the candidate worktree, commit its
+# output as one commit, and (managed slice) verify the finalization artifact set.
+finalize_candidate() {
+    local p
+    if [ -n "$FINALIZE" ]; then
+        (cd "$WT" && LOOM_SLICE="$SLICE" LOOM_BASE="$BASE" LOOM_SLICE_HEAD="$HEAD_SHA" bash -c "$FINALIZE") >&2 ||
+            die 10 "finalize failed (state, claim and remote untouched)"
+        if [ -n "$(git -C "$WT" status --porcelain)" ]; then
+            { git -C "$WT" add -A && git -C "$WT" commit -q -m "Finalize slice $SLICE"; } >&2 ||
+                die 10 "cannot commit finalization"
+        fi
+    fi
+    [ "$MANAGED" = 1 ] || return 0
+    [ ! -e "$WT/$PLAN" ] || die 1 "finalization incomplete: $PLAN still present"
+    [ -f "$WT/.docs/slice-plans/archive/$SLICE.md" ] || die 1 "finalization incomplete: archive/$SLICE.md missing"
+    for p in .docs/slice-plans/README.md .docs/status/progress.md .docs/status/handoff.md .docs/status/roadmap.md; do
+        if git -C "$WT" diff --quiet "$BASE" HEAD -- "$p" 2>/dev/null; then
+            die 1 "finalization incomplete: $p unchanged from base"
+        fi
+    done
+    return 0
 }
 
 # build — construct (or reuse) the candidate on $BASE in a disposable worktree,
@@ -197,10 +245,9 @@ build() {
     cleanup_wt
     prev=$(state_get .candidateSha)
     mkdir -p "$(dirname "$WT")" || die 10 "cannot create candidate worktree directory"
-    git -C "$REPO" config user.name >/dev/null 2>&1 || export GIT_AUTHOR_NAME=loom-land GIT_COMMITTER_NAME=loom-land
-    git -C "$REPO" config user.email >/dev/null 2>&1 || export GIT_AUTHOR_EMAIL=loom-land@localhost GIT_COMMITTER_EMAIL=loom-land@localhost
+    deterministic_identity
     if [ -n "$prev" ] && [ "$(git -C "$REPO" rev-parse --verify --quiet "$CAND_REF" || true)" = "$prev" ] &&
-        [ "$(state_get '[.slice,.session,.remote,.targetRef,.mode,.sliceHead,.baseCommit] | join("|")')" = "$SLICE|$SID|$REMOTE|$TARGET_REF|$MODE|$HEAD_SHA|$BASE" ]; then
+        [ "$(state_get '[.slice,.session,.remote,.targetRef,.mode,.sliceHead,.baseCommit,.finalize] | join("|")')" = "$SLICE|$SID|$REMOTE|$TARGET_REF|$MODE|$HEAD_SHA|$BASE|$FINALIZE" ]; then
         git -C "$REPO" worktree add -q -b "$BR" "$WT" "$prev" >&2 || die 10 "cannot create candidate worktree"
     else
         git -C "$REPO" worktree add -q -b "$BR" "$WT" "$BASE" >&2 || die 10 "cannot create candidate worktree"
@@ -208,17 +255,15 @@ build() {
             git -C "$WT" merge --abort >/dev/null 2>&1 || true
             die 3 "merge conflict integrating $HEAD_SHA onto $BASE"
         fi
-        mkdir -p "$WT/.loom" || die 10 "cannot create candidate manifest directory"
-        jq -n --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" --arg tr "$TARGET_REF" --arg mo "$MODE" \
-            --arg sh "$HEAD_SHA" --arg ba "$BASE" \
-            '{slice: $sl, session: $se, remote: $re, targetRef: $tr, mode: $mo, sliceHead: $sh, baseCommit: $ba}' \
-            >"$WT/.loom/candidate-manifest.json" || die 10 "cannot write candidate manifest"
-        git -C "$WT" add -f .loom/candidate-manifest.json || die 10 "cannot stage candidate manifest"
-        git -C "$WT" commit -q -m "Add loom candidate manifest for $SLICE" >&2 || die 10 "cannot commit candidate manifest"
+        finalize_candidate
     fi
     CAND=$(git -C "$WT" rev-parse HEAD) || die 10 "cannot resolve candidate"
     git -C "$REPO" update-ref "$CAND_REF" "$CAND" || die 10 "cannot record candidate ref"
     write_state
+    # The manifest is untracked recovery state: it never enters the candidate tree.
+    atomic_jq "$SDIR/candidate-manifest.json" --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" \
+        --arg tr "$TARGET_REF" --arg mo "$MODE" --arg sh "$HEAD_SHA" --arg ba "$BASE" \
+        '{slice: $sl, session: $se, remote: $re, targetRef: $tr, mode: $mo, sliceHead: $sh, baseCommit: $ba}'
     (cd "$WT" && bash -c "$GATE") >&2 || die 10 "gate failed for candidate $CAND (state preserved)"
     [ -z "$(git -C "$WT" status --porcelain)" ] && [ "$(git -C "$WT" rev-parse HEAD)" = "$CAND" ] ||
         die 10 "candidate $CAND was dirtied or changed by the gate"
@@ -302,21 +347,49 @@ fi
 acquire_lock
 fetch_target
 if [ "$BASE" != "$(state_get .baseCommit)" ]; then
+    # The target moved while building: leave the lock, then rebuild and gate unlocked.
+    release_lock
     build
-    [ "$CAND" = "$EV_SHA" ] ||
-        die 3 "contention: target moved, candidate rebuilt at $CAND; fresh review evidence bound to $CAND is required before publication"
+    die 3 "contention: target moved, candidate rebuilt at $CAND; fresh review evidence bound to $CAND is required before publication"
 fi
 lock_ok
 set_attempt true
 PUSH=pushed
 git -C "$REPO" push --quiet "$PUSH_DEST" "$CAND:$TARGET_REF" >&2 || PUSH=rejected
-REMOTE_SHA=$(git -C "$REPO" ls-remote "$PUSH_DEST" "$TARGET_REF" | awk 'NR == 1 { print $1 }') || REMOTE_SHA=""
+LS_OK=1
+REMOTE_SHA=$(git -C "$REPO" ls-remote "$PUSH_DEST" "$TARGET_REF" | awk 'NR == 1 { print $1 }') || LS_OK=0
 if [ "$REMOTE_SHA" != "$CAND" ]; then
-    if [ "$PUSH" = rejected ] && [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$BASE" ]; then
-        # publishAttempt stays set: a later run must find the candidate contained or stop for the owner
-        die 3 "push rejected: target moved to $REMOTE_SHA; publication attempt preserved, owner action needed to rebuild (fresh review evidence needed)"
+    # ancestry A B -> 0 A is an ancestor of B, 1 it is not, 2 unknown (missing objects or git error)
+    ancestry() {
+        local rc=0
+        git -C "$REPO" merge-base --is-ancestor "$1" "$2" >/dev/null 2>&1 || rc=$?
+        case "$rc" in 0 | 1) return "$rc" ;; *) return 2 ;; esac
+    }
+    FETCHED=""
+    if [ "$LS_OK" = 1 ] && [ -n "$REMOTE_SHA" ] &&
+        git -C "$REPO" fetch --quiet --no-tags "$PUSH_DEST" "+$TARGET_REF:$TGT_REF" >&2 2>/dev/null; then
+        FETCHED=$(git -C "$REPO" rev-parse --verify --quiet "$TGT_REF^{commit}" || true)
     fi
-    die 10 "push $PUSH but remote target ${REMOTE_SHA:-unreadable} != candidate $CAND; unverified"
+    if [ -n "$FETCHED" ] && [ "$FETCHED" = "$REMOTE_SHA" ]; then
+        rc=0
+        ancestry "$CAND" "$REMOTE_SHA" || rc=$?
+        if [ "$rc" = 0 ]; then
+            # The server accepted the candidate and another publisher then advanced: containment.
+            write_receipt "$PUSH" contained "$REMOTE_SHA"
+            lock_ok 10
+            finish
+        fi
+        if [ "$PUSH" = rejected ] && [ "$rc" = 1 ]; then
+            rc_in=0 rc_base=0
+            ancestry "$REMOTE_SHA" "$CAND" || rc_in=$?
+            ancestry "$BASE" "$REMOTE_SHA" || rc_base=$?
+            if [ "$rc_in" = 1 ] && [ "$rc_base" = 0 ]; then
+                set_attempt false
+                die 3 "push rejected: target moved to $REMOTE_SHA; will rebuild next run (fresh review evidence needed)"
+            fi
+        fi
+    fi
+    die 10 "push $PUSH but remote target ${REMOTE_SHA:-unreadable} != candidate $CAND; unverified (publication attempt preserved, owner action required)"
 fi
 write_receipt "$PUSH" verified "$REMOTE_SHA"
 lock_ok 10

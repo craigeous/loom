@@ -145,16 +145,17 @@ status replication.
 git worktree add -b <slice-branch> <session-owned-path> main
 ```
 
-**Multi-session (owner opt-in):** before creating the worktree, serialize via
-`loom-coord`:
+**Multi-session (owner opt-in):** before creating the worktree, register the claim
+via `loom-coord`. The lock serializes claim registration (which writes only
+`refs/loom/*`) and the short publish section only:
 
 1. `loom-coord lock-acquire --session <id>` — acquire the cross-session lock
    (`0` proceed; `3` busy/backoff exhausted → defer and retry later; `10` → abort).
-2. Re-read Active/claim state from current local `main`, still **under the
-   lock** — the coordination mechanic is unchanged. Claim liveness derives from
-   the `refs/loom/claims/<slice>` lease refs via `loom-coord`; local `main` is
-   never the landing/dispatch/claim **authority** (ADR 0020 §1; spec 03
-   §"Dispatch rules").
+2. Derive active-session state from `loom-coord list-claims` plus the slice
+   artifacts on the slice branch or the fetched remote target; claim liveness comes
+   from the `refs/loom/claims/<slice>` lease refs. Local `main` is not read as
+   authority (ADR 0020 §1; spec 03 §"Dispatch rules"). When durable in-progress
+   documentation is needed, commit it on the slice branch only.
 3. For each candidate slice:
    - `loom-coord claim <slice> --session <id>` — `0` claimed → proceed;
      `4` live peer already holds it → skip and re-select another slice;
@@ -165,9 +166,8 @@ git worktree add -b <slice-branch> <session-owned-path> main
      `6` holder still fresh → skip;
      `4` CAS failed (holder renewed between read and steal) → skip, holder alive;
      `5` lock not held or already owner.
-4. Record the slice in the `slice-plans/README.md` Active region on main.
-5. `loom-coord lock-release --session <id>` — release (`0` released; `5` not held).
-6. **Then** create the session-owned worktree and dispatch roles:
+4. `loom-coord lock-release --session <id>` — release (`0` released; `5` not held).
+5. **Then** create the session-owned worktree and dispatch roles:
 
 ```
 git worktree add -b <slice-branch> <session-owned-path> main
