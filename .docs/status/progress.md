@@ -6,7 +6,18 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — `role-governance-guard` Landed:**
+- **Last action (2026-10-30) — M2 slice 1 (`remote-first-integration-candidate`) Landed:**
+  Landed ADR 0020 remote publication landing authority helper (`plugins/loom/bin/loom-land`)
+  and Bats suite (`plugins/loom/bin/loom-land.bats`, 37 tests). Enforces candidate
+  preparation against the configured remote target ref, atomic verification against
+  the exact push destination (`remote.<name>.pushurl` / `url`), full receipt binding
+  checks against `loom-receipt/v1`, `publishAttempt` preservation across push attempts,
+  uncontained uncertain push fail-closed exit 10 (`stopping for owner action`), and
+  separate-clone multi-publisher contention recovery with rebuilt candidates and claim
+  preservation (583 repository Bats tests passing). Evaluated blind cross-family by
+  Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 2).
+
+- **Prior action (2026-10-30) — `role-governance-guard` Landed:**
   Landed mechanical pre-tool role governance hook (`role-governance-guard.sh`),
   second-hook registration in `hooks.json` under `PreToolUse` for `Bash`,
   `LOOM_ROLE` export across Codex, Antigravity (`loom-role-launch-v1` schema

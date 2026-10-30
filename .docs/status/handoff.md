@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M2 slice 1 `remote-first-integration-candidate` LANDED on `main` (2026-10-30):**
+  ADR 0020 landing authority helper (`plugins/loom/bin/loom-land`) and Bats suite
+  (`plugins/loom/bin/loom-land.bats`, 37 tests). Enforces candidate preparation against
+  remote target refs, exact push-destination verification, full receipt bindings,
+  fail-closed exit 10 on uncertain push, and competing separate-clone contention recovery (583 Bats tests).
 - **`role-governance-guard` LANDED on `main` (2026-10-30):**
   Pre-tool role governance hook (`role-governance-guard.sh`), `hooks.json` PreToolUse
   registration, `LOOM_ROLE` export, evaluator git mutation guard, and orchestrator test

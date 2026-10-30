@@ -17,9 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [remote-first-integration-candidate.md](remote-first-integration-candidate.md) — `Ready to Publish` — remote-direct candidate construction and publication.
+_None currently active._
 
 ## Archived plans
+
+- [archive/remote-first-integration-candidate.md](archive/remote-first-integration-candidate.md) — `Landed` —
+  ADR 0020 milestone M2 slice 1: remote publication as the landing authority through
+  `plugins/loom/bin/loom-land`, atomic push-destination verification, full receipt binding checks,
+  fail-closed exit 10 on uncertain publication, and 37 comprehensive Bats tests (583 total repo tests passing).
 
 - [archive/role-governance-guard.md](archive/role-governance-guard.md) — `Landed` —
   mechanical pre-tool role governance hook (`role-governance-guard.sh`), `LOOM_ROLE` export
