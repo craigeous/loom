@@ -1,6 +1,6 @@
 # Per-Session PreCompact Write-Ahead Backstop (`precompact-per-session`)
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 04-orchestrator.md, 08-client-adapters.md
 Target size: <= 240 LOC net change (keep this plan document <= 250 lines)
 
