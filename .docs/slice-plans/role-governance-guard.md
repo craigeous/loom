@@ -34,12 +34,14 @@ open when unset so normal user and developer sessions are never disrupted.
 
 ## Steps
 
-1. **Wire `LOOM_ROLE` Producer into `loom-launch-role` (`plugins/loom/bin/loom-launch-role`):**
+1. **Wire `LOOM_ROLE` Producer into `loom-launch-role` and Orchestrator:**
    - In `_launch_codex`: include `LOOM_ROLE="$role"` in the child environment via
      `exec env LOOM_LAUNCH_ROLE_ACTIVE=1 LOOM_ROLE="$role" ...`.
-   - In `_launch_antigravity`: export `LOOM_ROLE="$role"` in the launch definition.
-   - For orchestrator sessions: `LOOM_ROLE=orchestrator` is explicitly exported
-     when driving orchestration workflows.
+   - In `_launch_antigravity`: include `"LOOM_ROLE": "$role"` in the launch definition environment.
+   - For orchestrator sessions: `loom-run` (`plugins/loom/skills/loom-run/SKILL.md`)
+     and interactive root orchestration sessions explicitly export `LOOM_ROLE=orchestrator`.
+   - Unset `LOOM_ROLE` fails open in the guard so normal user sessions and subagents
+     lacking a role tag are never blocked.
 
 2. **Implement Pre-Tool Role Guard (`plugins/loom/hooks/role-governance-guard.sh`):**
    - Implements a fail-closed `PreToolUse` hook script for Claude Code and Codex
@@ -68,8 +70,17 @@ open when unset so normal user and developer sessions are never disrupted.
        - Deny with reason: `"Loom policy: Evaluators are read-only and cannot mutate git history or checkout."`
 
 3. **Register Guard in Hook Manifest (`plugins/loom/hooks/hooks.json`):**
-   - Add `role-governance-guard.sh` to the `PreToolUse` array for matcher `Bash`
-     alongside `git-identity-guard.sh`.
+   - Register `role-governance-guard.sh` in `PreToolUse` for matcher `Bash` as the second hook,
+     after `git-identity-guard.sh`.
+   - **Ordering & Combined-Block Behavior:** Hooks run sequentially. `git-identity-guard.sh`
+     runs first (identity integrity takes precedence); `role-governance-guard.sh` runs
+     second (role anti-drift). Whichever hook blocks halts execution. If both would
+     block (e.g. an evaluator executing `git commit --author=...`), the identity guard halts first.
+   - **Hook-Wire-v1 Fixture Invariant:** The canonical 12-case (48-file) `hook-wire-v1` product
+     in `plugins/loom/hooks/fixtures/hook-wire-v1/` remains strictly unchanged (spec 08 and
+     `CLAUDE.md`). `git-identity-guard.bats` continues to serve as the contract verifier for the
+     pre-tool-use wire fixtures; `role-governance-guard.bats` tests exact wire conformance
+     inline without altering fixture counts.
 
 4. **Add Comprehensive Bats Test Suite (`plugins/loom/hooks/role-governance-guard.bats`):**
    - Test unset `LOOM_ROLE` allows all commands (fail open).
@@ -85,6 +96,13 @@ open when unset so normal user and developer sessions are never disrupted.
 
 - **Fast inner-loop tests:**
   - `TMPDIR=/private/tmp bats plugins/loom/hooks/role-governance-guard.bats`
+- **Mechanical invariant checks:**
+  - Verify `hooks.json` registration & ordering:
+    `jq -e '.hooks.PreToolUse[0].hooks | length == 2 and (.[0].command | contains("git-identity-guard.sh")) and (.[1].command | contains("role-governance-guard.sh"))' plugins/loom/hooks/hooks.json`
+  - Verify 12-case `hook-wire-v1` product count is unchanged:
+    `[ "$(find plugins/loom/hooks/fixtures/hook-wire-v1 -type f | wc -l | tr -d ' ')" = "48" ]`
+  - Verify launcher propagation:
+    `rg -q 'LOOM_ROLE' plugins/loom/bin/loom-launch-role`
 - **Static checks:**
   - `shfmt -i 4 -d plugins/loom/hooks/role-governance-guard.sh`
   - `shellcheck -s bash plugins/loom/hooks/role-governance-guard.sh`
@@ -98,3 +116,4 @@ open when unset so normal user and developer sessions are never disrupted.
 |---|---|
 | 0 | Initial draft for role-governance-guard slice |
 | 1 | Reconciled Codex wire output to spec 08 (deny JSON, exit 0); unset LOOM_ROLE fails open; reconciled spec 04 orchestrator landing gate via LOOM_ALLOW_ORCHESTRATOR_GATE; dropped orphaned schema; specified Stage A/B/C command tokenization |
+| 2 | Resolved Finding 4 (MAJOR): specified hook ordering in hooks.json (identity guard first, role guard second; whichever blocks stops execution), documented that hook-wire-v1 12-case 48-file fixture count is preserved unchanged, and added mechanical verification checks; named orchestrator LOOM_ROLE producer in loom-run and interactive sessions (Finding 8) |
