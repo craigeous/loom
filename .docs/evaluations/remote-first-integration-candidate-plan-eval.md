@@ -1,34 +1,26 @@
 # Evaluation: remote-first-integration-candidate (slice-plan)
 
-Verdict: FAIL
+Verdict: PASS
 Round: 0
-Reviewed against: ADR 0020; repository-improvement-plan.md (slice `remote-first-integration-candidate`); specs 00-overview (Non-goals), 03-artifact-lifecycle, 04-orchestrator; plan-eval-rubric.md; severity.md; `loom-coord` lock_acquire / lock_verify_self / lock_release_if_self and subcommands (lock-acquire, lock-verify, lock-release, release-claim); templates/evaluation.md
+Reviewed against: ADR 0020; specs 00-overview (Non-goals), 03-artifact-lifecycle, 04-orchestrator; plan-eval-rubric.md; severity.md (anti-goalpost-moving, Round >= 1); `loom-coord` per-session state layout; revision diff c4d9f20..4f93687
 
 ## Findings
 
-- [MAJOR] Durable state interfaces are unspecified — Steps 3, 5, 6. The plan requires a "durable coordinator-state receipt", "durable candidate state" and recovery that reconstructs the receipt, but never names where each lives, its format, or how the receipt is written atomically. It also never says who supplies the "applicable integrated gate" command or the review-evidence format that Step 1 calls "explicit inputs". Two independent implementers could choose incompatible locations and formats, and Step 6 recovery and the receipt-field tests cannot be written without them.
-- [MINOR] Exit codes are incomplete — Step 1 lists 0/1/3/5/10 only. Retry exhaustion (Step 4), "stop for owner action" (Step 6), and a lock lost after push (Step 5) have no stated code. 3 for exhaustion and 10 for the others are the natural mapping; state it.
-- [MINOR] Size budget looks optimistic — `Target size: <= 200 LOC net` for a helper covering fetch, worktree, manifest, gate, locking, push, verify, receipt, recovery and cleanup, plus a bats suite with about 20 scenarios in Verification. Confirm whether the bats file counts toward the budget, and trim Verification to the cases that guard distinct failure modes.
-- [MINOR] Step 5 verifies lock ownership before `release-claim`, but does not say what happens if ownership is lost between a verified push and the receipt. Step 6 recovery presumably covers it; say so in one clause.
+No BLOCKER or MAJOR findings. Round 0 findings, checked against the revision diff:
 
-## Required changes (for FAIL)
-
-1. In Steps 1/3/5, name the durable location and format for the candidate state and the receipt. Reuse the existing per-session coordinator-state directory and the write-temp-then-rename idiom. Also name how the gate command and review evidence are supplied, for example as explicit input flags or a file path. Keep it to a sentence or two each.
+- [RESOLVED, was MAJOR] Durable state interfaces: Step 3 names `<git-dir>/loom/session-<sid>/candidate.json` and Step 5 names `.../publication-receipt.json`. Both are written atomically via temp file and `mv`, and the receipt fields are enumerated. Step 1 now supplies `--gate <cmd>` (default `scripts/check`) and `--evidence <path>` (JSON manifest of review evidence hashes). This is enough for independent implementers and for writing the recovery and receipt tests.
+- [RESOLVED, was MINOR] Exit codes: 3 now covers retry exhaustion, 10 covers stop for owner action, and 1 is renamed usage error.
+- [RESOLVED, was MINOR] Size budget: the budget now says <= 250 LOC for the implementation, excluding the bats suite, so the Round 0 ambiguity is gone.
+- [RESOLVED, was MINOR] Lock loss between verified push and receipt: Step 5 routes it to Step 6 recovery without republishing.
 
 ## Notes
 
-Verified, with no defects found:
-- **Structure and size:** The plan follows the slice-plan template, with Target size, an explicit Out of Scope & Threat-Model Boundary, a Revision Log, and 92 lines (well under 250).
-- **Scope:** Single-purpose, remote-direct only. No spec or ADR edits.
-- **Threat model:** The boundary matches spec 00 Non-goals.
-- **Fail-closed behavior:** The plan requires an absolute-path invocation, pre-mutation validation, and claim preservation on every nonzero exit.
-- **Lock semantics:** The plan uses `lock-acquire`, `lock-verify` before each mutation, and release only if owned. This matches `lock_acquire` (0/3/10), `lock_verify_self` (0/5/10) and `lock_release_if_self`.
-- **Landing flow:** The plan re-fetches under the lock and rebuilds on movement. It uses a non-force push with independent remote verification, and writes the receipt before `release-claim`.
-- **Recovery:** The plan recovers without republishing, and treats the mirror update as non-authoritative. All of this is consistent with ADR 0020 §1–3 and the improvement plan.
-- **Verification:** Named commands and tests cover the acceptance criteria.
+- The revision edits Steps in place and adds a Revision Log row, as the rubric requires. The plan is 100 lines, under the 250-line cap.
+- The path `<git-dir>/loom/session-<sid>/` matches `loom-coord`, which sets `STATE_DIR="$GITDIR/loom"` (loom-coord:164). Non-blocking: the developer should reuse that resolution instead of hardcoding the path.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
-| 0 | plan | FAIL | First review; one MAJOR (state/receipt/input interfaces unspecified), three MINORs. |
+| 0 | plan | FAIL | One MAJOR (state, receipt and input interfaces unspecified), three MINORs. |
+| 0 (re-review) | plan | PASS | MAJOR and all MINORs resolved by the revision. No new BLOCKER or MAJOR. |
