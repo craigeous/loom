@@ -1,6 +1,6 @@
 # Role Governance Guard & Anti-Drift Boundary (`role-governance-guard`)
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 02-roles.md, 04-orchestrator.md, 08-playbook.md; Authority: accepted ADR 0004, ADR 0012, ADR 0027
 Target size: <= 200 LOC net change (keep this plan document <= 250 lines)
 

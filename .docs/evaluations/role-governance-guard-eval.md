@@ -43,3 +43,13 @@ Reviewed: 3cc9856..d5337bc
 The revision blocks the reported unprefixed examples and adds quoted-argument and landing-exception controls; it does not fully resolve the existing finding.
 
 Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` reported “All checks passed” (545 Bats cases).
+
+## Round 2 resolution
+
+Verdict: PASS
+Round: 2
+Reviewed: d5337bc..5c3f4cc
+
+The remaining finding is resolved: command-position dequoting now handles leading environment assignments, and the regression covers the reported quoted path, the landing exception, and a quoted-argument negative control. This re-evaluation is confined to the existing finding.
+
+Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exited 0 and reported “All checks passed”.
