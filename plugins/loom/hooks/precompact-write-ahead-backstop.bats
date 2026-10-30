@@ -82,6 +82,13 @@ backstop_codex() {
 }
 
 teardown() {
+    if [ "${#BG_PIDS[@]}" -gt 0 ]; then
+        for p in "${BG_PIDS[@]}"; do
+            kill "$p" 2>/dev/null || true
+            wait "$p" 2>/dev/null || true
+        done
+        BG_PIDS=()
+    fi
     if [ -n "${REPO:-}" ] && [ -d "$REPO" ]; then rm -rf "$REPO"; fi
     if [ -n "${OTHERDIR:-}" ] && [ -d "$OTHERDIR" ]; then rm -rf "$OTHERDIR"; fi
     if [ -n "${NOTREPO:-}" ] && [ -d "$NOTREPO" ]; then rm -rf "$NOTREPO"; fi
@@ -501,16 +508,18 @@ coord() {
 
 @test "T16 coordinated session dir without checkpoint file records checkpoint:none" {
     make_repo
-    mkdir -p "$REPO/.git/loom/session-sc16"
+    coord session-start sc16
+    rm -f "$REPO/.git/loom/session-sc16/checkpoint"
     backstop "$(mk_json manual sc16)"
     [ "$status" -eq 0 ]
     [ "$(read_marker sc16)" = "checkpoint:none" ]
     backstop "$(mk_json manual sc16)"
     [ "$status" -eq 2 ]
     [[ "$output" == *"loom-coord checkpoint-write --session sc16"* ]]
-    printf 'x\n' >"$REPO/.git/loom/session-sc16/checkpoint"
+    coord checkpoint-write sc16 "advance-from-none"
     backstop "$(mk_json manual sc16)"
     [ "$status" -eq 0 ]
+    [[ "$(read_marker sc16)" == checkpoint:* ]]
 }
 
 @test "T17 concurrent compactions across sessions keep markers intact, no temp files" {
@@ -520,14 +529,15 @@ coord() {
     backstop "$(mk_json manual s-adv)"
     backstop "$(mk_json manual s-stale)"
     coord checkpoint-write s-adv "next"
-    run_pid=()
+    BG_PIDS=()
     for i in 1 2 3 4 5 6; do
         for sid in s-adv s-stale; do
             env CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual "$sid")" >"$BATS_TEST_TMPDIR/$sid.$i.out" 2>&1 &
-            run_pid+=($!)
+            BG_PIDS+=($!)
         done
     done
-    for p in "${run_pid[@]}"; do wait "$p" || true; done
+    for p in "${BG_PIDS[@]}"; do wait "$p" || true; done
+    BG_PIDS=()
     [[ "$(read_marker s-adv)" == checkpoint:* ]]
     [[ "$(read_marker s-stale)" == checkpoint:* ]]
     [ -z "$(find "$REPO/.git/loom/precompact" -name '.tmp.*')" ]
