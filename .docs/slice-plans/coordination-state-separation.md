@@ -84,12 +84,14 @@ and make candidate-time finalization the only writer of living docs.
      given. No plan file keeps non-loom repos and existing tests working.
    - In `build()`, after the merge, run `(cd "$WT" && bash -c "$FINALIZE")`; nonzero
      exit is exit 10 with state, claim, and remote untouched. Commit the result as one
-     `Finalize slice $SLICE` commit with author/committer date and identity taken from
-     the slice head commit, so identical inputs yield an identical SHA.
+     `Finalize slice $SLICE` commit. Both this commit and the preceding merge commit in
+     `build()` export fixed `GIT_AUTHOR_*`/`GIT_COMMITTER_*` name, email, and date taken
+     from the slice head commit (`git log -1 --format`), overriding the host identity
+     and clock, so identical inputs yield an identical SHA at any time or on any host.
    - Completeness check on a managed slice (exit 1, no push, candidate discarded
      unless gate-green): the active plan path is gone, `.docs/slice-plans/archive/
      $SLICE.md` exists, and `.docs/slice-plans/README.md`, `.docs/status/progress.md`,
-     `.docs/status/handoff.md`, `.docs/roadmap.md` each differ from `$BASE`.
+     `.docs/status/handoff.md`, `.docs/status/roadmap.md` each differ from `$BASE`.
    - The finalize string joins the reuse key in `write_state`; changing it forces a
      rebuild at a new SHA, so evidence bound to the old candidate is rejected (exit
      3, fresh evidence required). A failed finalize never writes `candidateSha`.
@@ -101,16 +103,20 @@ and make candidate-time finalization the only writer of living docs.
    evidence for the new candidate SHA.
 7. `plugins/loom/bin/loom-land` rejected-push recovery. A push is *positively rejected*
    only when `git push` failed AND `ls-remote` succeeded AND the remote SHA is not
-   `$CAND`, is not contained in the candidate, and descends from `$BASE`. Then reset
-   `publishAttempt` to false and exit 3 (rebuild next run, no owner action). Every other
-   outcome (push ok but remote differs, `ls-remote` unreadable, remote unrelated to
-   `$BASE`) stays uncertain: `publishAttempt` remains true and exit 10 owner action
+   `$CAND`, does not contain `$CAND` (`merge-base --is-ancestor $CAND <remote>` is false),
+   is not contained in the candidate, and descends from `$BASE`. Then reset
+   `publishAttempt` to false and exit 3 (rebuild next run, no owner action). If `$CAND`
+   is an ancestor of the remote (a failed push the server accepted, then another
+   publisher advanced), that is containment recovery as today: keep `publishAttempt`,
+   treat as landed, verify, receipt, release. If ancestry cannot be determined (missing
+   objects, git error), fail closed as uncertain. Every other outcome (push ok but
+   remote differs, `ls-remote` unreadable, remote unrelated to `$BASE`) stays uncertain: `publishAttempt` remains true and exit 10 owner action
    applies unchanged. Network failure in `fetch_target` stays exit 10, state untouched.
 8. `plugins/loom/bin/loom-land.bats`: add `# ---- coordination-state separation ----`
    with helper `slice_commit <clone> <name>` (slice branch with a Ready to Publish
    plan at `.docs/slice-plans/<name>.md`, `<name>.txt`, status docs on base) and `FIN`,
    a deterministic script that `git mv`s the plan to `archive/`, and appends the slice
-   to README, progress, handoff, and roadmap. Update only the existing test at
+   to README, progress, handoff, and `.docs/status/roadmap.md`. Update only the existing test at
    `loom-land.bats:189` to assert the manifest is in `$SDIR`, not the tree. Tests:
    a. *claim/work-start leave tracked main untouched*: local `main` SHA and
       `git status --porcelain` unchanged after claim; `list-claims` shows the slice.
@@ -121,7 +127,8 @@ and make candidate-time finalization the only writer of living docs.
    d. *missing/incomplete finalization is rejected*: no `--finalize` on a managed
       slice, and a `FIN` that skips handoff each exit 1, remote and claim untouched.
    e. *finalization is repeatable*: delete state and candidate ref, rebuild with
-      `--candidate-only`; both runs give the same SHA. A failing `FIN` exits 10, writes
+      `--candidate-only` after a different `GIT_*_DATE`/identity (and a sleep past one
+      second); both runs give the same SHA, including the merge parent. A failing `FIN` exits 10, writes
       no `candidateSha`, keeps the claim, and leaves the remote unchanged.
    f. *changed finalize command invalidates the candidate*: rerun with an altered
       `FIN`; SHA differs, old evidence is rejected with exit 3, matching new evidence
@@ -132,7 +139,10 @@ and make candidate-time finalization the only writer of living docs.
    h. *positive rejection is recoverable*: loser exits 3, `publishAttempt` false, next
       run rebuilds on the winner's base (progress has both slices' lines) with fresh
       evidence and publishes. Uncertain case (stubbed unreadable `ls-remote`) keeps
-      `publishAttempt` true and exits 10 on rerun.
+      `publishAttempt` true and exits 10 on rerun. Containment case: stub `git push` to
+      fail after pushing `$CAND`, then advance the remote with a descendant of `$CAND`;
+      `publishAttempt` stays true, no second push (`pushes` 1), exit 0 with receipt and
+      claim released.
    i. *offline publication keeps everything* (exit 10, `main` SHA unchanged, claim and
       `Ready to Publish` plan present, no receipt).
    j. *post-publication cleanup crash recovers without a second push* (`count_hook`,
@@ -172,3 +182,4 @@ _No clarification requests._ `--finalize` stays a caller-supplied command (mirro
 |---|---|
 | 0 | Initial draft |
 | 1 | Manifest moved to untracked `$SDIR` (not committed); finalization required and completeness-checked fail-closed for all five artifacts, deterministic and reuse-keyed; rebuild/gate moved outside the publish lock; positive push rejection recovers (exit 3) while uncertain pushes keep exit 10; Active index writes reserved for the candidate; tests 8d–8h added |
+| 2 | Rejection recovery now excludes remotes containing the candidate (containment recovery, attempt preserved, fail closed on unknown ancestry; test added); roadmap path corrected to `.docs/status/roadmap.md` in check and test finalizer; merge commit and finalization commit both use deterministic identity/date from the slice head, rebuild tested across times |
