@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_(none yet)_
+- [remote-first-integration-candidate.md](remote-first-integration-candidate.md) — `Plan Review` — remote-direct candidate construction and publication.
 
 ## Archived plans
 
