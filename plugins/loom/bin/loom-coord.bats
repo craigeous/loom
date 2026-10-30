@@ -50,6 +50,38 @@ state_dir() {
     printf '%s/.git/loom' "$REPO"
 }
 
+# make_victim_session <session-id> — install a session-dir symlink to an
+# external sentinel tree and record its byte/inventory manifest.
+make_victim_session() {
+    local sid="$1"
+    VICTIM="$(mktemp -d)"
+    mkdir -p "$VICTIM/nested" "$(state_dir)"
+    printf 'victim checkpoint\n' >"$VICTIM/checkpoint"
+    printf 'victim claim\n' >"$VICTIM/held-claims"
+    printf 'victim session pid\n' >"$VICTIM/session.pid"
+    printf 'victim session start\n' >"$VICTIM/session.starttime"
+    printf 'victim renewer pid\n' >"$VICTIM/renewer.pid"
+    printf 'victim renewer start\n' >"$VICTIM/renewer.starttime"
+    printf 'nested sentinel\n' >"$VICTIM/nested/sentinel"
+    ln -s "$VICTIM" "$(state_dir)/session-$sid"
+    VICTIM_BEFORE=$(victim_manifest)
+}
+
+# victim_manifest — stable inventory plus checksums for the current VICTIM tree.
+victim_manifest() {
+    (
+        cd "$VICTIM" || exit 1
+        LC_ALL=C find . -print | LC_ALL=C sort
+        LC_ALL=C find . -type f -exec cksum {} \; | LC_ALL=C sort
+    )
+}
+
+# assert_victim_unchanged — prove no victim path was added, removed, renamed,
+# or byte-modified.  The in-root unsafe link itself may be quarantined.
+assert_victim_unchanged() {
+    [ "$(victim_manifest)" = "$VICTIM_BEFORE" ]
+}
+
 # git_lock_sha — print current SHA of refs/loom/lock, or empty if absent
 git_lock_sha() {
     git -C "$REPO" rev-parse --verify "refs/loom/lock" 2>/dev/null || true
@@ -169,7 +201,12 @@ $(git -C "$REPO" worktree list --porcelain 2>/dev/null | awk '/^worktree /{print
 EOF
         rm -rf "$REPO"
     fi
+    if [ -n "${VICTIM:-}" ] && [ -d "${VICTIM:-}" ]; then
+        rm -rf "$VICTIM"
+    fi
     REPO=""
+    VICTIM=""
+    VICTIM_BEFORE=""
 }
 
 # ---------------------------------------------------------------------------
@@ -2041,5 +2078,314 @@ HOOK
     [ "$status" -eq 0 ]
     [ -d "$sess_dir" ]
     [ -f "$unexpected" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# CONT — coord-state-symlink-containment (M1): physical state/session boundary
+# ---------------------------------------------------------------------------
+
+@test "CONT-1 symlinked state root: session-start fails closed and victim is unchanged" {
+    make_repo
+    cd "$REPO"
+    VICTIM="$(mktemp -d)"
+    mkdir -p "$VICTIM/nested"
+    printf 'root sentinel\n' >"$VICTIM/nested/sentinel"
+    VICTIM_BEFORE=$(victim_manifest)
+    ln -s "$VICTIM" "$(state_dir)"
+
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-CONT1"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-2 symlinked session: start/checkpoint/bootstrap never read or write victim" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT2"
+    make_victim_session "$sid"
+
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-write "attacker overwrite" --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-read --session "$sid"
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"victim checkpoint"* ]]
+    assert_victim_unchanged
+
+    run env LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" session-bootstrap --session "$sid"
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"victim checkpoint"* ]]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-3 held-claim add/remove and session-end reject symlink without victim mutation" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT3"
+    make_victim_session "$sid"
+    make_live_holder "$sid"
+
+    run "$LOOM_TEST_BASH" "$COORD" claim "slice-CONT3-new" --session "$sid"
+    [ "$status" -ne 0 ]
+    [ -z "$(claim_ref_sha "slice-CONT3-new")" ]
+    assert_victim_unchanged
+
+    plant_claim_ref "slice-CONT3-owned" "$sid" "$(date +%s)"
+    run "$LOOM_TEST_BASH" "$COORD" release-claim "slice-CONT3-owned" --session "$sid"
+    [ "$status" -ne 0 ]
+    [ -n "$(claim_ref_sha "slice-CONT3-owned")" ]
+    assert_victim_unchanged
+
+    git -C "$REPO" update-ref -d "refs/loom/lock"
+    run env LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" session-end --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-4 child-path swap: checkpoint symlink is rejected and target bytes stay unchanged" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT4"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
+    [ "$status" -eq 0 ]
+
+    VICTIM="$(mktemp -d)"
+    printf 'swapped checkpoint sentinel\n' >"$VICTIM/checkpoint-target"
+    VICTIM_BEFORE=$(victim_manifest)
+    rm -f "$(state_dir)/session-$sid/checkpoint"
+    ln -s "$VICTIM/checkpoint-target" "$(state_dir)/session-$sid/checkpoint"
+
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-write "must not escape" --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-read --session "$sid"
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"swapped checkpoint sentinel"* ]]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-5 later session-dir swap is revalidated by lifecycle and cleanup paths" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT5"
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
+    [ "$status" -eq 0 ]
+    rm -rf "$(state_dir)/session-$sid"
+    make_victim_session "$sid"
+
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-write "later access" --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+
+    plant_claim_ref "slice-CONT5-stale" "$sid" "0"
+    run env LOOM_LEASE_TTL=1 LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" cleanup
+    [ "$status" -eq 0 ]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-6 renewer start/stop reject symlink and do not create process-state or temporaries" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT6"
+    make_victim_session "$sid"
+
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 \
+        "$LOOM_TEST_BASH" "$COORD" renewer-start "$$" --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "$sid"
+    [ "$status" -ne 0 ]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-6b detached renewer revalidates a swapped session before victim held-claims read" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT6b" sess_dir old_dir rpid trap_sha i
+    sess_dir="$(state_dir)/session-$sid"
+    old_dir="$BATS_TEST_TMPDIR/CONT6b-old-session"
+
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
+    [ "$status" -eq 0 ]
+    run env LOOM_RENEW_INTERVAL=1 LOOM_LOCK_RENEW_INTERVAL=1 \
+        "$LOOM_TEST_BASH" "$COORD" renewer-start "$$" --session "$sid"
+    [ "$status" -eq 0 ]
+    rpid=$(cat "$sess_dir/renewer.pid")
+    kill -0 "$rpid" 2>/dev/null
+
+    VICTIM="$(mktemp -d)"
+    mkdir -p "$VICTIM/nested"
+    cp "$sess_dir/session.pid" "$VICTIM/session.pid"
+    cp "$sess_dir/session.starttime" "$VICTIM/session.starttime"
+    printf 'slice-CONT6b-trap\n' >"$VICTIM/held-claims"
+    printf 'background sentinel\n' >"$VICTIM/nested/sentinel"
+    mv "$sess_dir" "$old_dir"
+    ln -s "$VICTIM" "$sess_dir"
+    plant_claim_ref "slice-CONT6b-trap" "$sid" "0"
+    trap_sha=$(claim_ref_sha "slice-CONT6b-trap")
+    VICTIM_BEFORE=$(victim_manifest)
+
+    i=0
+    while [ "$i" -lt 15 ] && kill -0 "$rpid" 2>/dev/null; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+    run ! kill -0 "$rpid" 2>/dev/null
+    [ "$(claim_ref_sha "slice-CONT6b-trap")" = "$trap_sha" ]
+    assert_victim_unchanged
+    teardown
+}
+
+@test "CONT-7 non-directory session object fails closed without unrelated mutation" {
+    make_repo
+    cd "$REPO"
+    mkdir -p "$(state_dir)"
+    printf 'non-directory sentinel\n' >"$(state_dir)/session-ses-CONT7"
+    printf 'unrelated sentinel\n' >"$(state_dir)/unrelated"
+
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "ses-CONT7"
+    [ "$status" -ne 0 ]
+    [ "$(cat "$(state_dir)/session-ses-CONT7")" = "non-directory sentinel" ]
+    [ "$(cat "$(state_dir)/unrelated")" = "unrelated sentinel" ]
+    teardown
+}
+
+@test "CONT-8 normal real-directory checkpoint, claim, bootstrap, renewer, and end stay green" {
+    make_repo
+    cd "$REPO"
+    local sid="ses-CONT8"
+
+    run "$LOOM_TEST_BASH" "$COORD" session-start --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-write "normal checkpoint" --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" checkpoint-read --session "$sid"
+    [ "$status" -eq 0 ]
+    [ "$output" = "normal checkpoint" ]
+
+    run "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" claim "slice-CONT8" --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" lock-release --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" session-bootstrap --session "$sid"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"checkpoint: normal checkpoint"* ]]
+
+    run env LOOM_RENEW_INTERVAL=60 "$LOOM_TEST_BASH" "$COORD" renewer-start "$$" --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" renewer-stop --session "$sid"
+    [ "$status" -eq 0 ]
+    run "$LOOM_TEST_BASH" "$COORD" session-end --session "$sid"
+    [ "$status" -eq 0 ]
+    [ ! -e "$(state_dir)/session-$sid" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# LOCK-OWN — coord-lock-ownership (M1): centralized ownership & forced-race
+# ---------------------------------------------------------------------------
+
+@test "LOCK-OWN-1 forced race: cleanup holds 2s lock, peer steals after expiry, cleanup aborts (exit 5), peer lock and stale claim survive" {
+    make_repo
+    cd "$REPO"
+
+    plant_claim_ref "slice-own1-stale" "ses-own1-dead" "0"
+
+    # Launch cleanup holding a 2s lock that pauses 3s before sweeping
+    LOOM_LOCK_TTL=2 LOOM_LOCK_RETRIES=1 LOOM_COORD_TEST_CLEANUP_SLEEP=3 \
+        "$LOOM_TEST_BASH" "$COORD" cleanup --session "ses-own1-cleanup" >/dev/null 2>&1 &
+    local cleanup_pid=$!
+
+    # Wait until ses-own1-cleanup acquires the lock, then wait for the 2s TTL to expire
+    sleep 2.3
+
+    # Peer steals the expired lock
+    run env LOOM_LOCK_TTL=2 LOOM_LOCK_RETRIES=2 \
+        "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-own1-peer"
+    [ "$status" -eq 0 ]
+    [ "$(holder_sid)" = "ses-own1-peer" ]
+
+    # Original cleanup wakes up and must abort with exit 5 without sweeping or releasing peer lock
+    local cleanup_rc=0
+    wait "$cleanup_pid" || cleanup_rc=$?
+    [ "$cleanup_rc" -eq 5 ]
+    [ "$(holder_sid)" = "ses-own1-peer" ]
+    [ -n "$(claim_ref_sha "slice-own1-stale")" ]
+    teardown
+}
+
+@test "LOCK-OWN-2 expired lock holder cannot claim or verify (exit 5)" {
+    make_repo
+    cd "$REPO"
+
+    # Plant an already-expired lock for ses-own2
+    make_dead_holder "ses-own2" "0"
+
+    run env LOOM_LOCK_TTL=2 "$LOOM_TEST_BASH" "$COORD" lock-verify --session "ses-own2"
+    [ "$status" -eq 5 ]
+
+    run env LOOM_LOCK_TTL=2 "$LOOM_TEST_BASH" "$COORD" claim "slice-own2" --session "ses-own2"
+    [ "$status" -eq 5 ]
+    [ -z "$(claim_ref_sha "slice-own2")" ]
+    teardown
+}
+
+# ---------------------------------------------------------------------------
+# SCHEMA-CAS — coord-schema-cas (M1): fail-closed null-SHA CAS schema init
+# ---------------------------------------------------------------------------
+
+@test "SCHEMA-CAS-1 schema ref write failure fails closed with exit 10 (never silently grants lock)" {
+    make_repo
+    cd "$REPO"
+
+    mkdir -p "$REPO/.git/hooks"
+    cat >"$REPO/.git/hooks/reference-transaction" <<'HOOK'
+#!/bin/sh
+if [ "$1" = "prepared" ]; then
+    while IFS=' ' read -r _o _n _r; do
+        case "$_r" in
+        refs/loom/schema) exit 1 ;;
+        esac
+    done
+fi
+exit 0
+HOOK
+    chmod +x "$REPO/.git/hooks/reference-transaction"
+
+    run env LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-schema-fail"
+    [ "$status" -eq 10 ]
+    [ -z "$(git_lock_sha)" ]
+    teardown
+}
+
+@test "SCHEMA-CAS-2 incompatible schema blocks lock-acquire (exit 10) but allows teardown/cleanup" {
+    make_repo
+    cd "$REPO"
+
+    local bad_sha
+    bad_sha=$(printf '999' | git -C "$REPO" hash-object -w --stdin)
+    git -C "$REPO" update-ref "refs/loom/schema" "$bad_sha"
+
+    run env LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" lock-acquire --session "ses-schema-bad"
+    [ "$status" -eq 10 ]
+
+    run env LOOM_LOCK_RETRIES=1 "$LOOM_TEST_BASH" "$COORD" cleanup --session "ses-schema-clean"
+    [ "$status" -eq 0 ]
     teardown
 }

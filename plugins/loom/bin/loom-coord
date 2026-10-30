@@ -243,51 +243,261 @@ validate_pid() {
     }
 }
 
-# _assert_state_path <path> — 0 iff <path> is textually rooted at "$STATE_DIR/".
-# Secondary guard; the identifier grammar (no "/", no "..") is the primary
-# containment guarantee.
-_assert_state_path() {
-    case "$1" in "$STATE_DIR"/*) return 0 ;; esac
-    return 1
+# _physical_dir <dir> — print the physical path of an existing real directory.
+# `cd -P` + `pwd -P` is available in Bash 3.2 and on both supported host families;
+# unlike realpath/readlink/stat it has no GNU/BSD option split.
+_physical_dir() (
+    [ ! -L "$1" ] && [ -d "$1" ] || return 1
+    CDPATH='' cd -P -- "$1" 2>/dev/null || return 1
+    pwd -P
+)
+
+# _state_dir_enter <create|existing> — enter the physical state root and prove it
+# is exactly the `loom` child of the physical git dir.  The caller runs in a
+# subshell, so subsequent relative operations retain the verified directory inode
+# even if the pathname is swapped concurrently.
+_state_dir_enter() {
+    local _mode="$1" _git_phys _state_phys _expected
+    _git_phys=$(_physical_dir "$GITDIR") || return 10
+    _expected="${_git_phys%/}/loom"
+
+    if [ ! -e "$STATE_DIR" ] && [ ! -L "$STATE_DIR" ]; then
+        [ "$_mode" = "create" ] || return 20
+        mkdir "$STATE_DIR" 2>/dev/null || return 10
+    fi
+    [ ! -L "$STATE_DIR" ] && [ -d "$STATE_DIR" ] || return 10
+    _state_phys=$(_physical_dir "$STATE_DIR") || return 10
+    [ "$_state_phys" = "$_expected" ] || return 10
+    CDPATH='' cd -P -- "$STATE_DIR" 2>/dev/null || return 10
+    [ "$(pwd -P)" = "$_expected" ] || return 10
 }
 
-# _remove_session_dir <sid> — remove a session dir by deleting KNOWN files then
-# rmdir (replaces "rm -rf" of a computed path).  No-op (quarantine) on an invalid
-# sid or a target not rooted at STATE_DIR.  rmdir leaves the dir intact if
-# unexpected files remain — quarantining malformed state instead of force-deleting.
+# _with_session_dir <sid> <create|require|optional> <operation> [args...]
+#
+# This is the single session-state boundary.  It validates the existing identifier
+# grammar, verifies/enters the physical state root, inspects the session entry
+# without following symlinks, optionally creates it, then enters and rechecks its
+# physical location before invoking an operation relative to that directory.
+# Return 20 means an optional/required session is absent; return 10 means unsafe
+# persisted state or another containment ambiguity.
+_with_session_dir() (
+    local _sid="$1" _mode="$2" _operation="$3"
+    local _entry _state_phys _session_phys _expected _state_mode
+    shift 3
+    _valid_identifier "$_sid" || return 10
+    _state_mode="existing"
+    [ "$_mode" = "create" ] && _state_mode="create"
+    _state_dir_enter "$_state_mode" || return $?
+    _state_phys=$(pwd -P) || return 10
+    _entry="session-$_sid"
+
+    if [ ! -e "$_entry" ] && [ ! -L "$_entry" ]; then
+        [ "$_mode" = "create" ] || return 20
+        mkdir "$_entry" 2>/dev/null || return 10
+    fi
+    [ ! -L "$_entry" ] && [ -d "$_entry" ] || return 10
+    _expected="${_state_phys%/}/$_entry"
+    _session_phys=$(_physical_dir "$_entry") || return 10
+    [ "$_session_phys" = "$_expected" ] || return 10
+    CDPATH='' cd -P -- "$_entry" 2>/dev/null || return 10
+    [ "$(pwd -P)" = "$_expected" ] || return 10
+    "$_operation" "$@"
+)
+
+_session_child_regular_or_absent() {
+    [ ! -L "$1" ] || return 10
+    if [ -e "$1" ]; then
+        [ -f "$1" ] || return 10
+    fi
+}
+
+_session_create_empty_child() {
+    local _child="$1"
+    _session_child_regular_or_absent "$_child" || return $?
+    [ -e "$_child" ] && return 0
+    (
+        set -C
+        : >"$_child"
+    ) 2>/dev/null || {
+        _session_child_regular_or_absent "$_child" || return $?
+        [ -f "$_child" ] || return 10
+    }
+}
+
+_session_atomic_replace() {
+    local _child="$1" _value_mode="$2" _value="${3:-}" _tmp
+    _session_child_regular_or_absent "$_child" || return $?
+    _tmp="${_child}.tmp.$$"
+    [ ! -e "$_tmp" ] && [ ! -L "$_tmp" ] || return 10
+    if [ "$_value_mode" = "stdin" ]; then
+        (
+            set -C
+            cat >"$_tmp"
+        ) 2>/dev/null || {
+            rm -f "$_tmp" 2>/dev/null || true
+            return 10
+        }
+    else
+        (
+            set -C
+            printf '%s\n' "$_value" >"$_tmp"
+        ) 2>/dev/null || {
+            rm -f "$_tmp" 2>/dev/null || true
+            return 10
+        }
+    fi
+    mv "$_tmp" "$_child" 2>/dev/null || {
+        rm -f "$_tmp" 2>/dev/null || true
+        return 10
+    }
+}
+
+_session_init_op() {
+    _session_create_empty_child checkpoint || return $?
+    _session_create_empty_child held-claims
+}
+
+_session_checkpoint_write_op() {
+    if [ -n "$EXTRA_ARGS" ]; then
+        _session_atomic_replace checkpoint value "$EXTRA_ARGS"
+    else
+        _session_atomic_replace checkpoint stdin
+    fi
+}
+
+_session_checkpoint_read_op() {
+    _session_child_regular_or_absent checkpoint || return $?
+    [ -f checkpoint ] || return 21
+    cat checkpoint
+}
+
+_session_held_preflight_op() {
+    _session_create_empty_child held-claims
+}
+
+_session_validate_held_op() {
+    _session_child_regular_or_absent held-claims
+}
+
+_session_add_held_claim_op() {
+    local _slice="$1" _tmp
+    _session_create_empty_child held-claims || return $?
+    grep -qxF "$_slice" held-claims 2>/dev/null && return 0
+    _tmp="held-claims.tmp.$$"
+    [ ! -e "$_tmp" ] && [ ! -L "$_tmp" ] || return 10
+    (
+        set -C
+        cat held-claims
+        printf '%s\n' "$_slice"
+    ) >"$_tmp" 2>/dev/null || {
+        rm -f "$_tmp" 2>/dev/null || true
+        return 10
+    }
+    mv "$_tmp" held-claims 2>/dev/null || {
+        rm -f "$_tmp" 2>/dev/null || true
+        return 10
+    }
+}
+
+_session_remove_held_claim_op() {
+    local _slice="$1" _tmp
+    _session_child_regular_or_absent held-claims || return $?
+    [ -f held-claims ] || return 0
+    _tmp="held-claims.tmp.$$"
+    [ ! -e "$_tmp" ] && [ ! -L "$_tmp" ] || return 10
+    (
+        set -C
+        grep -vxF "$_slice" held-claims >"$_tmp"
+    ) 2>/dev/null || {
+        [ -f "$_tmp" ] || return 10
+    }
+    mv "$_tmp" held-claims 2>/dev/null || {
+        rm -f "$_tmp" 2>/dev/null || true
+        return 10
+    }
+}
+
+_session_copy_held_claims_op() {
+    local _destination="$1"
+    _session_child_regular_or_absent held-claims || return $?
+    [ -f held-claims ] || return 21
+    cat held-claims >"$_destination"
+}
+
+_session_write_process_state_op() {
+    local _prefix="$1" _pid="$2" _start="$3"
+    _session_atomic_replace "$_prefix.pid" value "$_pid" || return $?
+    if [ -n "$_start" ]; then
+        _session_atomic_replace "$_prefix.starttime" value "$_start"
+    else
+        _session_child_regular_or_absent "$_prefix.starttime" || return $?
+        rm -f "$_prefix.starttime"
+    fi
+}
+
+_session_read_process_state_op() {
+    local _prefix="$1" _pid _start
+    _session_child_regular_or_absent "$_prefix.pid" || return $?
+    _session_child_regular_or_absent "$_prefix.starttime" || return $?
+    [ -f "$_prefix.pid" ] || return 21
+    _pid=$(cat "$_prefix.pid") || return 10
+    _start=""
+    if [ -f "$_prefix.starttime" ]; then
+        _start=$(cat "$_prefix.starttime") || return 10
+    fi
+    printf '%s\n%s\n' "$_pid" "$_start"
+}
+
+_session_remove_renewer_state_op() {
+    _session_child_regular_or_absent renewer.pid || return $?
+    _session_child_regular_or_absent renewer.starttime || return $?
+    rm -f renewer.pid renewer.starttime
+}
+
+_session_remove_op() {
+    local _entry
+    _entry=$(basename "$(pwd -P)") || return 10
+    rm -f checkpoint held-claims \
+        session.pid session.starttime renewer.pid renewer.starttime 2>/dev/null || true
+    rm -f ./*.tmp.* 2>/dev/null || true
+    CDPATH='' cd -P .. 2>/dev/null || return 10
+    rmdir "$_entry" 2>/dev/null || true
+}
+
+# _remove_session_dir <sid> — delete only known entries from a reverified real
+# session directory, then rmdir it if empty.  Unsafe objects are quarantined.
 _remove_session_dir() {
-    local sid="$1" d
-    _valid_identifier "$sid" || return 1
-    d="$STATE_DIR/session-$sid"
-    _assert_state_path "$d" || return 1
-    rm -f "$d/checkpoint" "$d/held-claims" \
-        "$d/session.pid" "$d/session.starttime" \
-        "$d/renewer.pid" "$d/renewer.starttime" 2>/dev/null || true
-    rm -f "$d"/*.tmp.* 2>/dev/null || true # atomic-write temp files (known pattern)
-    rmdir "$d" 2>/dev/null || true
-    return 0
+    _with_session_dir "$1" optional _session_remove_op
 }
 
-# _check_or_set_schema — verify refs/loom/schema matches SCHEMA_VERSION (W3 fix).
-# Fail-closed (exit 10) when a different version is found, so a concurrently-running
-# old or new incompatible invocation is detected before any mutation occurs.
-# If the ref is absent (first use), create it now.
+# _check_or_set_schema — verify refs/loom/schema matches SCHEMA_VERSION (W3 + coord-schema-cas).
+# Fail-closed (exit 10) on any hash, read, parse, or update failure, or when an
+# incompatible version is found. Initializes refs/loom/schema with a null-SHA
+# create-only CAS; if the CAS loses a race, re-reads and verifies the winner's version.
 _check_or_set_schema() {
     local _cur_sha _cur_ver _new_sha
     _cur_sha=$(git -C "$REPO_ROOT" rev-parse --verify "$SCHEMA_REF" 2>/dev/null || true)
-    if [ -n "$_cur_sha" ]; then
-        _cur_ver=$(git -C "$REPO_ROOT" cat-file blob "$_cur_sha" 2>/dev/null || true)
-        if [ "$_cur_ver" != "$SCHEMA_VERSION" ]; then
-            printf 'loom-coord: ref schema v%s found, expected v%s — aborting (incompatible version)\n' \
-                "$_cur_ver" "$SCHEMA_VERSION" >&2
+    if [ -z "$_cur_sha" ]; then
+        _new_sha=$(printf '%s' "$SCHEMA_VERSION" |
+            git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null) || _new_sha=""
+        if [ -z "$_new_sha" ]; then
+            printf 'loom-coord: cannot create schema blob\n' >&2
             exit 10
         fi
-    else
-        _new_sha=$(printf '%s' "$SCHEMA_VERSION" |
-            git -C "$REPO_ROOT" hash-object -w --stdin 2>/dev/null || true)
-        if [ -n "$_new_sha" ]; then
-            git -C "$REPO_ROOT" update-ref "$SCHEMA_REF" "$_new_sha" 2>/dev/null || true
+        if git -C "$REPO_ROOT" update-ref "$SCHEMA_REF" "$_new_sha" "$NULL_SHA" 2>/dev/null; then
+            return 0
         fi
+        _cur_sha=$(git -C "$REPO_ROOT" rev-parse --verify "$SCHEMA_REF" 2>/dev/null || true)
+        if [ -z "$_cur_sha" ]; then
+            printf 'loom-coord: cannot initialize schema ref\n' >&2
+            exit 10
+        fi
+    fi
+    _cur_ver=$(git -C "$REPO_ROOT" cat-file blob "$_cur_sha" 2>/dev/null) || _cur_ver=""
+    if [ "$_cur_ver" != "$SCHEMA_VERSION" ]; then
+        printf 'loom-coord: ref schema v%s found, expected v%s — aborting (incompatible version)\n' \
+            "$_cur_ver" "$SCHEMA_VERSION" >&2
+        exit 10
     fi
 }
 
@@ -375,39 +585,46 @@ claim_is_fresh() {
     [ $((_now - _epoch)) -lt "$LOOM_LEASE_TTL" ]
 }
 
-# _session_alive <sess_dir> — returns 0 if the recorded session process is alive
+# _session_alive_op — run inside the verified session directory; returns 0 if
+# the recorded session process is alive
 # under the reuse-robust identity gate: pid alive AND start-time still matches.
 # Used by the background renewer as its loop condition.
-_session_alive() {
-    local _sd="$1" _spid _sst _cur_st
-    _spid=$(cat "$_sd/session.pid" 2>/dev/null) || return 1
+_session_alive_op() {
+    local _spid _sst _cur_st
+    _session_child_regular_or_absent session.pid || return 1
+    _session_child_regular_or_absent session.starttime || return 1
+    _spid=$(cat session.pid 2>/dev/null) || return 1
     [ -z "$_spid" ] && return 1
-    _sst=$(cat "$_sd/session.starttime" 2>/dev/null) || return 1
+    _sst=$(cat session.starttime 2>/dev/null) || return 1
     kill -0 "$_spid" 2>/dev/null || return 1
     _cur_st=$(process_starttime "$_spid")
     [ "$_cur_st" = "$_sst" ]
 }
 
-# _renewer_alive <sess_dir> — returns 0 if the recorded renewer process is alive
+# _session_alive <sid> — revalidate the boundary on every liveness read.
+_session_alive() {
+    _with_session_dir "$1" require _session_alive_op
+}
+
+# _renewer_alive_op — run inside the verified session directory; returns 0 if
+# the recorded renewer process is alive
 # under the reuse-robust identity gate.  Used for duplicate-suppression in
 # renewer-start.
-_renewer_alive() {
-    local _sd="$1" _rpid _rst _cur_st
-    _rpid=$(cat "$_sd/renewer.pid" 2>/dev/null) || return 1
+_renewer_alive_op() {
+    local _rpid _rst _cur_st
+    _session_child_regular_or_absent renewer.pid || return 1
+    _session_child_regular_or_absent renewer.starttime || return 1
+    _rpid=$(cat renewer.pid 2>/dev/null) || return 1
     [ -z "$_rpid" ] && return 1
-    _rst=$(cat "$_sd/renewer.starttime" 2>/dev/null) || return 1
+    _rst=$(cat renewer.starttime 2>/dev/null) || return 1
     kill -0 "$_rpid" 2>/dev/null || return 1
     _cur_st=$(process_starttime "$_rpid")
     [ "$_cur_st" = "$_rst" ]
 }
 
-# lock_held_by_self — exits 0 if $SESSION_ID currently holds refs/loom/lock
-lock_held_by_self() {
-    local _sha _sid
-    _sha=$(read_lock_sha)
-    [ -z "$_sha" ] && return 1
-    _sid=$(decode_lock_field "$_sha" 1)
-    [ "$_sid" = "$SESSION_ID" ]
+# _renewer_alive <sid> — revalidate the boundary on every liveness read.
+_renewer_alive() {
+    _with_session_dir "$1" require _renewer_alive_op
 }
 
 # backoff_sleep <attempt>  (0-indexed; 0.2 0.4 0.8 1.6 3.2)
@@ -432,6 +649,126 @@ backoff_sleep() {
     3) sleep 2 ;;
     *) sleep 4 ;;
     esac
+}
+
+# lock_acquire [sid] — centralized git-CAS lock acquisition (coord-lock-ownership).
+# Returns:
+#   0  — lock acquired by <sid>
+#   3  — lock busy after LOOM_LOCK_RETRIES attempts
+#   10 — cannot create lock blob
+lock_acquire() {
+    local _sid="${1:-$SESSION_ID}" _attempt=0 _new_sha _cur_sha _h_ts _cur_epoch _elapsed
+    while true; do
+        _new_sha=$(_make_blob_for "$_sid")
+        if [ -z "$_new_sha" ]; then
+            return 10
+        fi
+        if git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_new_sha" "$NULL_SHA" 2>/dev/null; then
+            return 0
+        fi
+        _cur_sha=$(read_lock_sha)
+        if [ -n "$_cur_sha" ]; then
+            _h_ts=$(decode_lock_field "$_cur_sha" 2)
+            case "$_h_ts" in
+            '' | *[!0-9]*)
+                # Non-numeric ts -> treat as fresh (fail-closed)
+                ;;
+            *)
+                _cur_epoch=$(now)
+                _elapsed=$((_cur_epoch - _h_ts))
+                if [ "$_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
+                    _new_sha=$(_make_blob_for "$_sid")
+                    if [ -z "$_new_sha" ]; then
+                        return 10
+                    fi
+                    if git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_new_sha" "$_cur_sha" 2>/dev/null; then
+                        return 0
+                    fi
+                fi
+                ;;
+            esac
+        fi
+        _attempt=$((_attempt + 1))
+        if [ "$_attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
+            return 3
+        fi
+        backoff_sleep "$((_attempt - 1))"
+    done
+}
+
+# lock_verify_self [sid] — verify that <sid> currently owns a fresh, valid lock.
+# Checks: (1) ref exists, (2) blob decodes & validates, (3) holder == <sid>,
+# (4) lease is fresh (elapsed < LOOM_LOCK_TTL).
+# Returns:
+#   0  — held and fresh
+#   5  — absent, held by another session, or expired
+#   10 — unreadable/corrupt lock blob
+lock_verify_self() {
+    local _sid="${1:-$SESSION_ID}" _sha _blob _h_sid _h_ts _now
+    _sha=$(read_lock_sha)
+    [ -n "$_sha" ] || return 5
+    _blob=$(git -C "$REPO_ROOT" cat-file blob "$_sha" 2>/dev/null) || return 10
+    _h_sid=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $1}')
+    _h_ts=$(printf '%s' "$_blob" | awk -F'\t' 'NR==1{print $2}')
+    [ -n "$_h_sid" ] || return 10
+    _valid_identifier "$_h_sid" || return 10
+    case "$_h_ts" in
+    '' | *[!0-9]*) return 10 ;;
+    esac
+    [ "$_h_sid" = "$_sid" ] || return 5
+    _now=$(now)
+    case "$_now" in
+    '' | *[!0-9]*) return 10 ;;
+    esac
+    [ $((_now - _h_ts)) -lt "$LOOM_LOCK_TTL" ] || return 5
+    return 0
+}
+
+# lock_held_by_self — returns 0 iff $SESSION_ID holds a fresh lock
+lock_held_by_self() {
+    lock_verify_self "$SESSION_ID"
+}
+
+# lock_heartbeat [sid] — refresh the lock timestamp for <sid> via value-CAS if
+# <sid> still owns a fresh lock. Returns 0 if ownership remains valid, 5/10 otherwise.
+lock_heartbeat() {
+    local _sid="${1:-$SESSION_ID}" _cur_sha _new_sha _rc
+    lock_verify_self "$_sid"
+    _rc=$?
+    [ "$_rc" -eq 0 ] || return "$_rc"
+    _cur_sha=$(read_lock_sha)
+    [ -n "$_cur_sha" ] || return 5
+    _new_sha=$(_make_blob_for "$_sid")
+    [ -n "$_new_sha" ] || return 10
+    if git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_new_sha" "$_cur_sha" 2>/dev/null; then
+        return 0
+    fi
+    lock_verify_self "$_sid"
+}
+
+# lock_release_if_self [sid] — release refs/loom/lock ONLY if currently owned by <sid>.
+# Never deletes a ref merely because a prior SHA was read; confirms current holder == <sid>
+# before delete-CAS, retrying if the session's own renewer bumped the timestamp.
+# Returns 0 on release, 5 if not held by <sid>.
+lock_release_if_self() {
+    local _sid="${1:-$SESSION_ID}" _cur_sha _h_sid
+    _cur_sha=$(read_lock_sha)
+    [ -n "$_cur_sha" ] || return 5
+    _h_sid=$(decode_lock_field "$_cur_sha" 1)
+    [ "$_h_sid" = "$_sid" ] || return 5
+    while true; do
+        if git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_cur_sha" 2>/dev/null; then
+            return 0
+        fi
+        _cur_sha=$(read_lock_sha)
+        if [ -z "$_cur_sha" ]; then
+            return 0
+        fi
+        _h_sid=$(decode_lock_field "$_cur_sha" 1)
+        if [ "$_h_sid" != "$_sid" ]; then
+            return 5
+        fi
+    done
 }
 
 # slice_to_refname <slice> — map a slice name to a safe git ref path component.
@@ -474,34 +811,14 @@ decode_claim_field() {
         awk -F'\t' -v f="$_field" '{print $f}'
 }
 
-# held_claims_file — path to the session's held-claims file
-held_claims_file() {
-    printf '%s/session-%s/held-claims' "$STATE_DIR" "$SESSION_ID"
-}
-
 # add_held_claim <slice>
 add_held_claim() {
-    local slice="$1"
-    local hcf
-    hcf=$(held_claims_file)
-    mkdir -p "${STATE_DIR}/session-${SESSION_ID}" 2>/dev/null || true
-    if ! grep -qxF "$slice" "$hcf" 2>/dev/null; then
-        printf '%s\n' "$slice" >>"$hcf"
-    fi
+    _with_session_dir "$SESSION_ID" create _session_add_held_claim_op "$1"
 }
 
 # remove_held_claim <slice>
 remove_held_claim() {
-    local slice="$1"
-    local hcf
-    hcf=$(held_claims_file)
-    if [ ! -f "$hcf" ]; then
-        return 0
-    fi
-    local tmp
-    tmp="${hcf}.tmp.$$"
-    grep -vxF "$slice" "$hcf" 2>/dev/null >"$tmp" || true
-    mv "$tmp" "$hcf"
+    _with_session_dir "$SESSION_ID" optional _session_remove_held_claim_op "$1"
 }
 
 # assert_session — exit 1 if SESSION_ID is empty
@@ -513,9 +830,16 @@ assert_session() {
     validate_session_id "$SESSION_ID"
 }
 
-# assert_lock_held — exit 5 if caller does not hold the lock
+# assert_lock_held — exit 5 if caller does not hold a fresh lock (10 on corrupt blob)
 assert_lock_held() {
-    if ! lock_held_by_self; then
+    lock_verify_self "$SESSION_ID"
+    local _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+        return 0
+    elif [ "$_rc" -eq 10 ]; then
+        printf 'loom-coord %s: corrupt lock state\n' "$SUBCOMMAND" >&2
+        exit 10
+    else
         printf 'loom-coord %s: precondition failed — lock not held by session %s\n' "$SUBCOMMAND" "$SESSION_ID" >&2
         exit 5
     fi
@@ -526,56 +850,22 @@ assert_lock_held() {
 # ---------------------------------------------------------------------------
 cmd_lock_acquire() {
     assert_session
-
-    local attempt=0
-    while true; do
-        # Try create-only CAS: succeeds only if refs/loom/lock is absent
-        local new_sha
-        new_sha=$(_make_blob_for "$SESSION_ID")
-        if [ -z "$new_sha" ]; then
-            printf 'loom-coord lock-acquire: cannot create holder blob\n' >&2
-            exit 10
-        fi
-        if git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$new_sha" "$NULL_SHA" 2>/dev/null; then
-            printf 'acquired\n'
-            exit 0
-        fi
-
-        # Lock ref exists — check if stale (ADR 0015: liveness = ts freshness)
-        local cur_sha
-        cur_sha=$(read_lock_sha)
-        if [ -n "$cur_sha" ]; then
-            local h_ts
-            h_ts=$(decode_lock_field "$cur_sha" 2)
-            case "$h_ts" in
-            '' | *[!0-9]*)
-                # Non-numeric ts → treat as fresh (fail-closed); fall through
-                ;;
-            *)
-                local cur_epoch elapsed
-                cur_epoch=$(now)
-                elapsed=$((cur_epoch - h_ts))
-                if [ "$elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                    # Stale — attempt value-CAS steal (ABA-safe: old-value = exact read SHA)
-                    new_sha=$(_make_blob_for "$SESSION_ID")
-                    if [ -n "$new_sha" ] &&
-                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$new_sha" "$cur_sha" 2>/dev/null; then
-                        printf 'acquired\n'
-                        exit 0
-                    fi
-                    # Lost CAS race — fall through to backoff
-                fi
-                ;;
-            esac
-        fi
-
-        attempt=$((attempt + 1))
-        if [ "$attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
-            printf 'loom-coord lock-acquire: lock busy after %d retries\n' "$LOOM_LOCK_RETRIES" >&2
-            exit 3
-        fi
-        backoff_sleep "$((attempt - 1))"
-    done
+    lock_acquire "$SESSION_ID"
+    local _rc=$?
+    case "$_rc" in
+    0)
+        printf 'acquired\n'
+        exit 0
+        ;;
+    3)
+        printf 'loom-coord lock-acquire: lock busy after %d retries\n' "$LOOM_LOCK_RETRIES" >&2
+        exit 3
+        ;;
+    *)
+        printf 'loom-coord lock-acquire: cannot create holder blob\n' >&2
+        exit 10
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -583,41 +873,10 @@ cmd_lock_acquire() {
 # ---------------------------------------------------------------------------
 cmd_lock_release() {
     assert_session
-    # Re-read current SHA (renewer may have updated the blob's ts since acquire)
-    local cur_sha
-    cur_sha=$(read_lock_sha)
-    if [ -z "$cur_sha" ]; then
+    if ! lock_release_if_self "$SESSION_ID"; then
         printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
         exit 5
     fi
-    local h_sid
-    h_sid=$(decode_lock_field "$cur_sha" 1)
-    if [ "$h_sid" != "$SESSION_ID" ]; then
-        printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
-        exit 5
-    fi
-    # Delete-CAS with retry while sid==self (V4 fix): the session's own renewer may
-    # value-CAS-update the lock blob (keeping sid=self, bumping ts) between our read
-    # and the delete.  The delete-CAS correctly refuses (SHA changed), but the lock is
-    # still ours.  Re-read + retry converges because the renewer only bumps ts —
-    # sid stays self — so the next delete-CAS wins.  Exit 5 only when sid≠self or
-    # the ref is already gone (someone else stole/released it).
-    while true; do
-        if git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$cur_sha" 2>/dev/null; then
-            break # Released successfully
-        fi
-        # CAS refused — re-read current state
-        cur_sha=$(read_lock_sha)
-        if [ -z "$cur_sha" ]; then
-            break # Ref already gone — idempotent success
-        fi
-        h_sid=$(decode_lock_field "$cur_sha" 1)
-        if [ "$h_sid" != "$SESSION_ID" ]; then
-            printf 'loom-coord lock-release: lock not held by session %s\n' "$SESSION_ID" >&2
-            exit 5
-        fi
-        # Still ours (renewer bumped ts) — retry the delete-CAS
-    done
 }
 
 # ---------------------------------------------------------------------------
@@ -636,24 +895,22 @@ cmd_lock_holder() {
 # ---------------------------------------------------------------------------
 cmd_lock_verify() {
     assert_session
-    local cur_sha
-    cur_sha=$(read_lock_sha)
-    if [ -z "$cur_sha" ]; then
-        printf 'loom-coord lock-verify: no lock held\n' >&2
-        exit 5
-    fi
-    local h_sid
-    h_sid=$(decode_lock_field "$cur_sha" 1)
-    if [ -z "$h_sid" ]; then
-        printf 'loom-coord lock-verify: cannot read holder\n' >&2
-        exit 10
-    fi
-    if [ "$h_sid" = "$SESSION_ID" ]; then
+    lock_verify_self "$SESSION_ID"
+    local _rc=$?
+    case "$_rc" in
+    0)
         printf 'held\n'
         exit 0
-    fi
-    printf 'loom-coord lock-verify: lock held by %s, not %s\n' "$h_sid" "$SESSION_ID" >&2
-    exit 5
+        ;;
+    10)
+        printf 'loom-coord lock-verify: cannot read holder\n' >&2
+        exit 10
+        ;;
+    *)
+        printf 'loom-coord lock-verify: lock not held by %s\n' "$SESSION_ID" >&2
+        exit 5
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -668,6 +925,12 @@ cmd_claim() {
         exit 1
     fi
     validate_slice_name "$slice"
+    _with_session_dir "$SESSION_ID" optional _session_validate_held_op
+    local _claim_state_rc=$?
+    if [ "$_claim_state_rc" -ne 0 ] && [ "$_claim_state_rc" -ne 20 ]; then
+        printf 'loom-coord claim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
 
     # Check-then-act under the held lock; CAS on the claim ref provides extra safety.
     local _ref cur_sha cur_sid cur_ts new_sha
@@ -700,7 +963,10 @@ cmd_claim() {
             printf 'loom-coord claim: slice %s claimed by another session\n' "$slice" >&2
             exit 4
         fi
-        add_held_claim "$slice"
+        if ! add_held_claim "$slice"; then
+            printf 'loom-coord claim: unsafe session state for %s\n' "$SESSION_ID" >&2
+            exit 10
+        fi
         printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$(now)"
         exit 0
     fi
@@ -715,7 +981,10 @@ cmd_claim() {
         printf 'loom-coord claim: slice %s claimed by another session\n' "$slice" >&2
         exit 4
     fi
-    add_held_claim "$slice"
+    if ! add_held_claim "$slice"; then
+        printf 'loom-coord claim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
     printf 'claimed %s %s %s\n' "$slice" "$SESSION_ID" "$(now)"
     exit 0
 }
@@ -773,6 +1042,15 @@ cmd_release_claim() {
         exit 1
     fi
     validate_slice_name "$slice"
+    _with_session_dir "$SESSION_ID" optional _session_validate_held_op
+    local _rc_preflight=$?
+    case "$_rc_preflight" in
+    0 | 20) ;;
+    *)
+        printf 'loom-coord release-claim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+        ;;
+    esac
 
     local _ref cur_sha cur_sid
     _ref=$(claim_ref_for "$slice")
@@ -787,6 +1065,14 @@ cmd_release_claim() {
         git -C "$REPO_ROOT" update-ref -d "$_ref" "$cur_sha" 2>/dev/null || true
     fi
     remove_held_claim "$slice"
+    local _rc_remove=$?
+    case "$_rc_remove" in
+    0 | 20) ;;
+    *)
+        printf 'loom-coord release-claim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+        ;;
+    esac
     exit 0
 }
 
@@ -802,6 +1088,12 @@ cmd_reclaim() {
         exit 1
     fi
     validate_slice_name "$slice"
+    _with_session_dir "$SESSION_ID" optional _session_validate_held_op
+    local _reclaim_state_rc=$?
+    if [ "$_reclaim_state_rc" -ne 0 ] && [ "$_reclaim_state_rc" -ne 20 ]; then
+        printf 'loom-coord reclaim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
 
     local _ref cur_sha cur_sid cur_ts new_sha
     _ref=$(claim_ref_for "$slice")
@@ -848,7 +1140,10 @@ cmd_reclaim() {
             git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
         fi
     fi
-    add_held_claim "$slice"
+    if ! add_held_claim "$slice"; then
+        printf 'loom-coord reclaim: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
     printf 'reclaimed %s\n' "$slice"
     exit 0
 }
@@ -916,16 +1211,9 @@ cmd_session_start() {
     fi
 
     validate_session_id "$SESSION_ID"
-    local sess_dir
-    sess_dir="$STATE_DIR/session-$SESSION_ID"
-    _assert_state_path "$sess_dir" || exit 1
-    mkdir -p "$sess_dir"
-    # Idempotent — only create files if absent
-    if [ ! -f "$sess_dir/checkpoint" ]; then
-        : >"$sess_dir/checkpoint"
-    fi
-    if [ ! -f "$sess_dir/held-claims" ]; then
-        : >"$sess_dir/held-claims"
+    if ! _with_session_dir "$SESSION_ID" create _session_init_op; then
+        printf 'loom-coord session-start: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
     printf '%s\n' "$SESSION_ID"
     exit 0
@@ -936,15 +1224,15 @@ cmd_session_start() {
 # ---------------------------------------------------------------------------
 cmd_checkpoint_write() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
-    if [ ! -d "$sess_dir" ]; then
+    _with_session_dir "$SESSION_ID" require _session_checkpoint_write_op
+    local _rc=$?
+    if [ "$_rc" -eq 20 ]; then
         printf 'loom-coord checkpoint-write: session %s not started\n' "$SESSION_ID" >&2
         exit 5
     fi
-    if [ -n "$EXTRA_ARGS" ]; then
-        printf '%s\n' "$EXTRA_ARGS" >"$sess_dir/checkpoint"
-    else
-        cat >"$sess_dir/checkpoint"
+    if [ "$_rc" -ne 0 ]; then
+        printf 'loom-coord checkpoint-write: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
     exit 0
 }
@@ -954,11 +1242,15 @@ cmd_checkpoint_write() {
 # ---------------------------------------------------------------------------
 cmd_checkpoint_read() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
-    if [ -f "$sess_dir/checkpoint" ]; then
-        cat "$sess_dir/checkpoint"
-    fi
-    exit 0
+    _with_session_dir "$SESSION_ID" optional _session_checkpoint_read_op
+    local _rc=$?
+    case "$_rc" in
+    0 | 20 | 21) exit 0 ;;
+    *)
+        printf 'loom-coord checkpoint-read: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+        ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -966,90 +1258,81 @@ cmd_checkpoint_read() {
 # ---------------------------------------------------------------------------
 cmd_session_bootstrap() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
-    if [ ! -d "$sess_dir" ]; then
+    local _sb_claims
+    _sb_claims=$(mktemp) || exit 10
+    _with_session_dir "$SESSION_ID" require _session_copy_held_claims_op "$_sb_claims"
+    local _sb_state_rc=$?
+    if [ "$_sb_state_rc" -eq 20 ]; then
+        rm -f "$_sb_claims"
         printf 'loom-coord session-bootstrap: session %s not found\n' "$SESSION_ID" >&2
         exit 5
     fi
-
-    # Acquire lock to renew claims (git-CAS inline loop)
-    local _sb_got_lock=0
-    local _sb_attempt=0
-    while true; do
-        local _sb_new_sha
-        _sb_new_sha=$(_make_blob_for "$SESSION_ID")
-        if [ -n "$_sb_new_sha" ] &&
-            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_sb_new_sha" "$NULL_SHA" 2>/dev/null; then
-            _sb_got_lock=1
-            break
-        fi
-        local _sb_cur_sha
-        _sb_cur_sha=$(read_lock_sha)
-        if [ -n "$_sb_cur_sha" ]; then
-            local _sb_h_ts _sb_now _sb_elapsed
-            _sb_h_ts=$(decode_lock_field "$_sb_cur_sha" 2)
-            case "$_sb_h_ts" in
-            '' | *[!0-9]*) ;;
-            *)
-                _sb_now=$(now)
-                _sb_elapsed=$((_sb_now - _sb_h_ts))
-                if [ "$_sb_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                    _sb_new_sha=$(_make_blob_for "$SESSION_ID")
-                    if [ -n "$_sb_new_sha" ] &&
-                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_sb_new_sha" "$_sb_cur_sha" 2>/dev/null; then
-                        _sb_got_lock=1
-                        break
-                    fi
-                fi
-                ;;
-            esac
-        fi
-        _sb_attempt=$((_sb_attempt + 1))
-        if [ "$_sb_attempt" -ge "$LOOM_LOCK_RETRIES" ]; then
-            break
-        fi
-        backoff_sleep "$((_sb_attempt - 1))"
-    done
-
-    if [ "$_sb_got_lock" -ne 1 ]; then
-        printf 'loom-coord session-bootstrap: could not acquire lock\n' >&2
-        exit 3
+    if [ "$_sb_state_rc" -eq 21 ]; then
+        : >"$_sb_claims"
+    elif [ "$_sb_state_rc" -ne 0 ]; then
+        rm -f "$_sb_claims"
+        printf 'loom-coord session-bootstrap: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
 
-    # Renew each held claim via value-CAS on the claim ref
-    local hcf="$sess_dir/held-claims"
-    if [ -f "$hcf" ]; then
-        while IFS= read -r slice; do
-            [ -z "$slice" ] && continue
-            _valid_slice_name "$slice" || continue
-            local _ref cur_sha cur_sid new_sha
-            _ref=$(claim_ref_for "$slice")
-            cur_sha=$(read_claim_sha "$slice")
-            if [ -n "$cur_sha" ]; then
-                cur_sid=$(decode_claim_field "$cur_sha" 1)
-                if [ "$cur_sid" = "$SESSION_ID" ]; then
-                    new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
-                    if [ -n "$new_sha" ] &&
-                        git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
-                        printf 'renewed %s %s\n' "$slice" "$(now)"
-                    fi
+    # Acquire lock to renew claims via centralized lock_acquire
+    if ! lock_acquire "$SESSION_ID"; then
+        local _sb_lock_rc=$?
+        rm -f "$_sb_claims"
+        if [ "$_sb_lock_rc" -eq 3 ]; then
+            printf 'loom-coord session-bootstrap: could not acquire lock\n' >&2
+            exit 3
+        fi
+        printf 'loom-coord session-bootstrap: cannot create holder blob\n' >&2
+        exit 10
+    fi
+
+    # Renew each held claim via value-CAS on the claim ref (verifying lock ownership before each mutation)
+    local _sb_hb_rc=0
+    while IFS= read -r slice; do
+        [ -z "$slice" ] && continue
+        _valid_slice_name "$slice" || continue
+        if ! lock_heartbeat "$SESSION_ID"; then
+            _sb_hb_rc=$?
+            break
+        fi
+        local _ref cur_sha cur_sid new_sha
+        _ref=$(claim_ref_for "$slice")
+        cur_sha=$(read_claim_sha "$slice")
+        if [ -n "$cur_sha" ]; then
+            cur_sid=$(decode_claim_field "$cur_sha" 1)
+            if [ "$cur_sid" = "$SESSION_ID" ]; then
+                new_sha=$(_make_claim_blob_for "$SESSION_ID" "$slice")
+                if [ -n "$new_sha" ] &&
+                    git -C "$REPO_ROOT" update-ref "$_ref" "$new_sha" "$cur_sha" 2>/dev/null; then
+                    printf 'renewed %s %s\n' "$slice" "$(now)"
                 fi
             fi
-        done <"$hcf"
+        fi
+    done <"$_sb_claims"
+    rm -f "$_sb_claims"
+    if [ "$_sb_hb_rc" -ne 0 ]; then
+        printf 'loom-coord session-bootstrap: lock ownership lost during bootstrap\n' >&2
+        [ "$_sb_hb_rc" -eq 10 ] && exit 10
+        exit 5
     fi
 
-    # Release lock (delete-CAS)
-    local _sb_rel_sha
-    _sb_rel_sha=$(read_lock_sha)
-    if [ -n "$_sb_rel_sha" ]; then
-        git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_sb_rel_sha" 2>/dev/null || true
+    # Release lock only if still held by self
+    if ! lock_release_if_self "$SESSION_ID"; then
+        printf 'loom-coord session-bootstrap: lock ownership lost before release\n' >&2
+        exit 5
     fi
 
-    # Print checkpoint
-    local chk="$sess_dir/checkpoint"
-    if [ -f "$chk" ]; then
+    # Print checkpoint through a fresh boundary check.
+    local _sb_checkpoint
+    _sb_checkpoint=$(_with_session_dir "$SESSION_ID" require _session_checkpoint_read_op)
+    local _sb_checkpoint_rc=$?
+    if [ "$_sb_checkpoint_rc" -eq 0 ]; then
         printf 'checkpoint: '
-        cat "$chk"
+        printf '%s\n' "$_sb_checkpoint"
+    elif [ "$_sb_checkpoint_rc" -ne 21 ]; then
+        printf 'loom-coord session-bootstrap: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
     exit 0
 }
@@ -1059,51 +1342,33 @@ cmd_session_bootstrap() {
 # ---------------------------------------------------------------------------
 cmd_session_end() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
+    local _se_claims
+    _se_claims=$(mktemp) || exit 10
+    _with_session_dir "$SESSION_ID" optional _session_copy_held_claims_op "$_se_claims"
+    local _se_state_rc=$?
+    case "$_se_state_rc" in
+    0) ;;
+    20 | 21) : >"$_se_claims" ;;
+    *)
+        rm -f "$_se_claims"
+        printf 'loom-coord session-end: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+        ;;
+    esac
 
     # Release any still-held claims (self-locking).
-    # IMPORTANT: do NOT rm -rf the session dir when got_lock=0 — that would orphan
-    # claim registry rows (no held-claims backref → permanent double-grant risk).
-    if [ -f "$sess_dir/held-claims" ]; then
-        local attempt=0
-        local got_lock=0
-        while [ "$attempt" -lt "$LOOM_LOCK_RETRIES" ]; do
-            local _se_new_sha
-            _se_new_sha=$(_make_blob_for "$SESSION_ID")
-            if [ -n "$_se_new_sha" ] &&
-                git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_se_new_sha" "$NULL_SHA" 2>/dev/null; then
-                got_lock=1
-                break
-            fi
-            local _se_cur_sha
-            _se_cur_sha=$(read_lock_sha)
-            if [ -n "$_se_cur_sha" ]; then
-                local _se_h_ts _se_now _se_elapsed
-                _se_h_ts=$(decode_lock_field "$_se_cur_sha" 2)
-                case "$_se_h_ts" in
-                '' | *[!0-9]*) ;;
-                *)
-                    _se_now=$(now)
-                    _se_elapsed=$((_se_now - _se_h_ts))
-                    if [ "$_se_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                        _se_new_sha=$(_make_blob_for "$SESSION_ID")
-                        if [ -n "$_se_new_sha" ] &&
-                            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_se_new_sha" "$_se_cur_sha" 2>/dev/null; then
-                            got_lock=1
-                            break
-                        fi
-                    fi
-                    ;;
-                esac
-            fi
-            attempt=$((attempt + 1))
-            backoff_sleep "$((attempt - 1))"
-        done
-
-        if [ "$got_lock" -eq 1 ]; then
+    # IMPORTANT: do NOT remove the session dir when lock acquisition or ownership fails —
+    # that would orphan claim registry rows (no held-claims backref -> permanent double-grant risk).
+    if [ -s "$_se_claims" ]; then
+        if lock_acquire "$SESSION_ID"; then
+            local _se_hb_rc=0
             while IFS= read -r slice; do
                 [ -z "$slice" ] && continue
                 _valid_slice_name "$slice" || continue
+                if ! lock_heartbeat "$SESSION_ID"; then
+                    _se_hb_rc=$?
+                    break
+                fi
                 local _ref cur_sha cur_sid
                 _ref=$(claim_ref_for "$slice")
                 cur_sha=$(read_claim_sha "$slice")
@@ -1113,22 +1378,47 @@ cmd_session_end() {
                         git -C "$REPO_ROOT" update-ref -d "$_ref" "$cur_sha" 2>/dev/null || true
                     fi
                 fi
-            done <"$sess_dir/held-claims"
-            # Release lock (delete-CAS) then remove session dir
-            local _se_rel_sha
-            _se_rel_sha=$(read_lock_sha)
-            if [ -n "$_se_rel_sha" ]; then
-                git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_se_rel_sha" 2>/dev/null || true
+            done <"$_se_claims"
+            if [ "$_se_hb_rc" -ne 0 ]; then
+                rm -f "$_se_claims"
+                printf 'loom-coord session-end: lock ownership lost; claims not fully released\n' >&2
+                [ "$_se_hb_rc" -eq 10 ] && exit 10
+                exit 5
             fi
-            _remove_session_dir "$SESSION_ID"
+            if ! lock_release_if_self "$SESSION_ID"; then
+                rm -f "$_se_claims"
+                printf 'loom-coord session-end: lock ownership lost before release\n' >&2
+                exit 5
+            fi
+            if ! _remove_session_dir "$SESSION_ID"; then
+                rm -f "$_se_claims"
+                printf 'loom-coord session-end: unsafe session state for %s\n' "$SESSION_ID" >&2
+                exit 10
+            fi
         else
-            printf 'loom-coord session-end: could not acquire lock; claims not released\n' >&2
-            exit 3
+            local _se_lock_rc=$?
+            rm -f "$_se_claims"
+            if [ "$_se_lock_rc" -eq 3 ]; then
+                printf 'loom-coord session-end: could not acquire lock; claims not released\n' >&2
+                exit 3
+            fi
+            printf 'loom-coord session-end: cannot create holder blob\n' >&2
+            exit 10
         fi
     else
         # No held-claims file — safe to remove the session dir directly
         _remove_session_dir "$SESSION_ID"
+        local _se_remove_rc=$?
+        case "$_se_remove_rc" in
+        0 | 20) ;;
+        *)
+            rm -f "$_se_claims"
+            printf 'loom-coord session-end: unsafe session state for %s\n' "$SESSION_ID" >&2
+            exit 10
+            ;;
+        esac
     fi
+    rm -f "$_se_claims"
     exit 0
 }
 
@@ -1136,7 +1426,10 @@ cmd_session_end() {
 # Subcommand: cleanup (self-locking sweep)
 # ---------------------------------------------------------------------------
 cmd_cleanup() {
-    mkdir -p "$STATE_DIR"
+    if ! (_state_dir_enter create); then
+        printf 'loom-coord cleanup: unsafe state root\n' >&2
+        exit 10
+    fi
 
     if [ -n "$SESSION_ID" ]; then
         validate_session_id "$SESSION_ID"
@@ -1145,117 +1438,101 @@ cmd_cleanup() {
     # Prune stale worktree refs
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
-    # Acquire lock (git-CAS inline loop)
-    local attempt=0
-    local got_lock=0
     local cleanup_sid="${SESSION_ID:-cleanup-$$}"
-    while [ "$attempt" -lt "$LOOM_LOCK_RETRIES" ]; do
-        local _cl_new_sha
-        _cl_new_sha=$(_make_blob_for "$cleanup_sid")
-        if [ -n "$_cl_new_sha" ] &&
-            git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_cl_new_sha" "$NULL_SHA" 2>/dev/null; then
-            got_lock=1
-            break
+    if ! lock_acquire "$cleanup_sid"; then
+        local _cl_lock_rc=$?
+        if [ "$_cl_lock_rc" -eq 3 ]; then
+            printf 'loom-coord cleanup: could not acquire lock; claims sweep skipped\n' >&2
+            exit 3
         fi
-        local _cl_cur_sha
-        _cl_cur_sha=$(read_lock_sha)
-        if [ -n "$_cl_cur_sha" ]; then
-            local _cl_h_ts _cl_now _cl_elapsed
-            _cl_h_ts=$(decode_lock_field "$_cl_cur_sha" 2)
-            case "$_cl_h_ts" in
-            '' | *[!0-9]*) ;;
-            *)
-                _cl_now=$(now)
-                _cl_elapsed=$((_cl_now - _cl_h_ts))
-                if [ "$_cl_elapsed" -ge "$LOOM_LOCK_TTL" ]; then
-                    _cl_new_sha=$(_make_blob_for "$cleanup_sid")
-                    if [ -n "$_cl_new_sha" ] &&
-                        git -C "$REPO_ROOT" update-ref "$LOCK_REF" "$_cl_new_sha" "$_cl_cur_sha" 2>/dev/null; then
-                        got_lock=1
-                        break
-                    fi
-                fi
-                ;;
-            esac
-        fi
-        attempt=$((attempt + 1))
-        backoff_sleep "$((attempt - 1))"
-    done
+        printf 'loom-coord cleanup: cannot create holder blob\n' >&2
+        exit 10
+    fi
+
+    # Optional test-only delay hook for forced-race ownership tests
+    if [ -n "${LOOM_COORD_TEST_CLEANUP_SLEEP:-}" ]; then
+        sleep "$LOOM_COORD_TEST_CLEANUP_SLEEP" 2>/dev/null || true
+    fi
 
     local swept=0
     local skipped=0
 
-    # Claims mutation MUST be under the lock (F2: mutual exclusion on shared store).
-    # Iterate refs/loom/claims/* via a temp file to avoid subshell counter issues.
-    if [ "$got_lock" -eq 1 ]; then
-        local refs_tmp
-        refs_tmp=$(mktemp)
-        git -C "$REPO_ROOT" for-each-ref \
-            --format='%(refname) %(objectname)' \
-            "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
+    # Verify ownership before snapshotting/sweeping claims
+    if ! lock_verify_self "$cleanup_sid"; then
+        local _cl_pre_rc=$?
+        printf 'loom-coord cleanup: lock ownership lost before sweep\n' >&2
+        [ "$_cl_pre_rc" -eq 10 ] && exit 10
+        exit 5
+    fi
 
-        # Hoist worktree list once for the entire sweep (orphan-removal lookups only)
-        local wt_list
-        wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
+    local refs_tmp
+    refs_tmp=$(mktemp)
+    git -C "$REPO_ROOT" for-each-ref \
+        --format='%(refname) %(objectname)' \
+        "$CLAIMS_REF_PREFIX/" 2>/dev/null >"$refs_tmp" || true
 
-        while IFS=' ' read -r refname sha; do
-            [ -z "$refname" ] && continue
-            local sid ts
-            sid=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
-                awk -F'\t' '{print $1}')
-            ts=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
-                awk -F'\t' '{print $2}')
+    # Hoist worktree list once for the entire sweep (orphan-removal lookups only)
+    local wt_list
+    wt_list=$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
 
-            # R7: empty-sid or non-numeric ts → preserve fail-closed, count as skipped
-            case "$ts" in
-            '' | *[!0-9]*)
-                skipped=$((skipped + 1))
-                continue
-                ;;
-            esac
-            if [ -z "$sid" ]; then
-                skipped=$((skipped + 1))
-                continue
-            fi
-            if ! _valid_identifier "$sid"; then
-                skipped=$((skipped + 1))
-                continue
-            fi
-
-            # Liveness = lease freshness (ADR 0015)
-            if claim_is_fresh "$ts"; then
-                skipped=$((skipped + 1))
-            else
-                # V2 fix: delete-CAS FIRST; destroy resources only after the CAS
-                # confirms the claim was stale and unchanged.  If the holder renewed
-                # in the snapshot→destroy window (SHA changed), the CAS fails and we
-                # skip destruction — the holder is alive, its worktree survives.
-                if git -C "$REPO_ROOT" update-ref -d "$refname" "$sha" 2>/dev/null; then
-                    # CAS succeeded — safe to clean up orphan worktree + session dir
-                    local wt_path
-                    wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
-                    if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
-                        git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
-                    fi
-                    _remove_session_dir "$sid"
-                    swept=$((swept + 1))
-                else
-                    # CAS refused — holder renewed (alive); skip destruction
-                    skipped=$((skipped + 1))
-                fi
-            fi
-        done <"$refs_tmp"
-        rm -f "$refs_tmp"
-        # Release lock (delete-CAS)
-        local _cl_rel_sha
-        _cl_rel_sha=$(read_lock_sha)
-        if [ -n "$_cl_rel_sha" ]; then
-            git -C "$REPO_ROOT" update-ref -d "$LOCK_REF" "$_cl_rel_sha" 2>/dev/null || true
+    local _cl_hb_rc=0
+    while IFS=' ' read -r refname sha; do
+        [ -z "$refname" ] && continue
+        if ! lock_heartbeat "$cleanup_sid"; then
+            _cl_hb_rc=$?
+            break
         fi
-    else
-        # Could not acquire lock — refuse to mutate shared state (fail-closed)
-        printf 'loom-coord cleanup: could not acquire lock; claims sweep skipped\n' >&2
-        exit 3
+        local sid ts
+        sid=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
+            awk -F'\t' '{print $1}')
+        ts=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null |
+            awk -F'\t' '{print $2}')
+
+        # R7: empty-sid or non-numeric ts → preserve fail-closed, count as skipped
+        case "$ts" in
+        '' | *[!0-9]*)
+            skipped=$((skipped + 1))
+            continue
+            ;;
+        esac
+        if [ -z "$sid" ]; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+        if ! _valid_identifier "$sid"; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        # Liveness = lease freshness (ADR 0015)
+        if claim_is_fresh "$ts"; then
+            skipped=$((skipped + 1))
+        else
+            # V2 fix: delete-CAS FIRST; destroy resources only after the CAS
+            # confirms the claim was stale and unchanged.
+            if git -C "$REPO_ROOT" update-ref -d "$refname" "$sha" 2>/dev/null; then
+                local wt_path
+                wt_path=$(printf '%s\n' "$wt_list" | wt_sid_match "$sid")
+                if [ -n "$wt_path" ] && [ -d "$wt_path" ]; then
+                    git -C "$REPO_ROOT" worktree remove -f "$wt_path" 2>/dev/null || true
+                fi
+                _remove_session_dir "$sid"
+                swept=$((swept + 1))
+            else
+                skipped=$((skipped + 1))
+            fi
+        fi
+    done <"$refs_tmp"
+    rm -f "$refs_tmp"
+    if [ "$_cl_hb_rc" -ne 0 ]; then
+        printf 'loom-coord cleanup: lock ownership lost during sweep\n' >&2
+        [ "$_cl_hb_rc" -eq 10 ] && exit 10
+        exit 5
+    fi
+
+    if ! lock_release_if_self "$cleanup_sid"; then
+        printf 'loom-coord cleanup: lock ownership lost before release\n' >&2
+        exit 5
     fi
 
     printf 'swept %d dead claims; skipped %d live claims\n' "$swept" "$skipped"
@@ -1267,10 +1544,15 @@ cmd_cleanup() {
 # ---------------------------------------------------------------------------
 cmd_renewer_start() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
-    if [ ! -d "$sess_dir" ]; then
+    _with_session_dir "$SESSION_ID" require _session_validate_held_op
+    local _rs_state_rc=$?
+    if [ "$_rs_state_rc" -eq 20 ]; then
         printf 'loom-coord renewer-start: session %s not found\n' "$SESSION_ID" >&2
         exit 5
+    fi
+    if [ "$_rs_state_rc" -ne 0 ]; then
+        printf 'loom-coord renewer-start: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
 
     local spid="$EXTRA_ARGS"
@@ -1287,16 +1569,14 @@ cmd_renewer_start() {
         printf 'loom-coord renewer-start: cannot read start-time for pid %s\n' "$spid" >&2
         exit 10
     fi
-    # Atomic writes: write to a temp file then mv into place so readers never see
-    # a partial value (secondary fix).
-    local _atmp
-    _atmp="${sess_dir}/session.pid.tmp.$$"
-    printf '%s\n' "$spid" >"$_atmp" && mv "$_atmp" "${sess_dir}/session.pid"
-    _atmp="${sess_dir}/session.starttime.tmp.$$"
-    printf '%s\n' "$sst" >"$_atmp" && mv "$_atmp" "${sess_dir}/session.starttime"
+    if ! _with_session_dir "$SESSION_ID" require \
+        _session_write_process_state_op session "$spid" "$sst"; then
+        printf 'loom-coord renewer-start: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
 
     # Check-then-launch: do not start a second renewer (duplicate suppression)
-    if _renewer_alive "$sess_dir"; then
+    if _renewer_alive "$SESSION_ID"; then
         printf 'renewer-already-running\n'
         exit 0
     fi
@@ -1307,7 +1587,6 @@ cmd_renewer_start() {
 
     # Capture locals needed inside the detached subshell
     local _sid="$SESSION_ID"
-    local _sdir="$sess_dir"
     local _interval="$LOOM_RENEW_INTERVAL"
     local _lock_interval="$LOOM_LOCK_RENEW_INTERVAL"
     local _root="$REPO_ROOT"
@@ -1332,7 +1611,7 @@ cmd_renewer_start() {
         _tick=0
         _lease_every=$((_interval / _lock_interval))
         [ "$_lease_every" -lt 1 ] && _lease_every=1
-        while _session_alive "$_sdir"; do
+        while _session_alive "$_sid"; do
             sleep "$_lock_interval" 2>/dev/null || true
             _tick=$((_tick + 1))
 
@@ -1353,25 +1632,28 @@ cmd_renewer_start() {
 
             # Claim heartbeat every _lease_every ticks (slow cadence — claims have long TTL)
             if [ $((_tick % _lease_every)) -eq 0 ]; then
-                _hcf="$_sdir/held-claims"
-                if [ -f "$_hcf" ]; then
+                _claims_tmp=$(mktemp 2>/dev/null || true)
+                if [ -n "$_claims_tmp" ] &&
+                    _with_session_dir "$_sid" require \
+                        _session_copy_held_claims_op "$_claims_tmp"; then
                     while IFS= read -r _s; do
                         [ -z "$_s" ] && continue
                         sh "$_coord" renew "$_s" --session "$_sid" >/dev/null 2>&1 || true
-                    done <"$_hcf"
+                    done <"$_claims_tmp"
                 fi
+                [ -z "$_claims_tmp" ] || rm -f "$_claims_tmp"
             fi
         done
     ) </dev/null >/dev/null 2>&1 &
     local rpid=$!
     local rst
     rst=$(process_starttime "$rpid")
-    local _rtmp
-    _rtmp="${sess_dir}/renewer.pid.tmp.$$"
-    printf '%s\n' "$rpid" >"$_rtmp" && mv "$_rtmp" "${sess_dir}/renewer.pid"
-    if [ -n "$rst" ]; then
-        _rtmp="${sess_dir}/renewer.starttime.tmp.$$"
-        printf '%s\n' "$rst" >"$_rtmp" && mv "$_rtmp" "${sess_dir}/renewer.starttime"
+    if ! _with_session_dir "$SESSION_ID" require \
+        _session_write_process_state_op renewer "$rpid" "$rst"; then
+        kill "$rpid" 2>/dev/null || true
+        wait "$rpid" 2>/dev/null || true
+        printf 'loom-coord renewer-start: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
     fi
     printf 'renewer-started pid=%s\n' "$rpid"
     exit 0
@@ -1382,19 +1664,36 @@ cmd_renewer_start() {
 # ---------------------------------------------------------------------------
 cmd_renewer_stop() {
     assert_session
-    local sess_dir="$STATE_DIR/session-$SESSION_ID"
-    if [ ! -d "$sess_dir" ]; then
+    local _renewer_state
+    _renewer_state=$(mktemp) || exit 10
+    _with_session_dir "$SESSION_ID" require \
+        _session_read_process_state_op renewer >"$_renewer_state"
+    local _rt_state_rc=$?
+    if [ "$_rt_state_rc" -eq 20 ]; then
+        rm -f "$_renewer_state"
         printf 'loom-coord renewer-stop: session %s not found\n' "$SESSION_ID" >&2
         exit 5
     fi
-
-    local rpid rst cur_st
-    rpid=$(cat "$sess_dir/renewer.pid" 2>/dev/null) || rpid=""
-    if [ -z "$rpid" ]; then
+    if [ "$_rt_state_rc" -eq 21 ]; then
+        rm -f "$_renewer_state"
         printf 'no-renewer\n'
         exit 0
     fi
-    rst=$(cat "$sess_dir/renewer.starttime" 2>/dev/null) || rst=""
+    if [ "$_rt_state_rc" -ne 0 ]; then
+        rm -f "$_renewer_state"
+        printf 'loom-coord renewer-stop: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
+
+    local rpid rst cur_st
+    rpid=$(sed -n '1p' "$_renewer_state")
+    if [ -z "$rpid" ]; then
+        rm -f "$_renewer_state"
+        printf 'no-renewer\n'
+        exit 0
+    fi
+    rst=$(sed -n '2p' "$_renewer_state")
+    rm -f "$_renewer_state"
 
     # Identity gate (U5): only kill if start-time is known AND matches the live pid.
     # Empty rst means process_starttime failed at renewer-start time; we cannot
@@ -1408,7 +1707,10 @@ cmd_renewer_stop() {
             fi
         fi
     fi
-    rm -f "$sess_dir/renewer.pid" "$sess_dir/renewer.starttime"
+    if ! _with_session_dir "$SESSION_ID" require _session_remove_renewer_state_op; then
+        printf 'loom-coord renewer-stop: unsafe session state for %s\n' "$SESSION_ID" >&2
+        exit 10
+    fi
     printf 'renewer-stopped\n'
     exit 0
 }

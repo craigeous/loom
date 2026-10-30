@@ -2,3 +2,4 @@
 /.check-cache/
 /scripts/check-tools/node_modules/
 /scripts/node_modules
+/.tmp/

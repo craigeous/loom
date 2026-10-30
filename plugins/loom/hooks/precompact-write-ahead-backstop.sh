@@ -51,24 +51,19 @@ _loom_hook_validate_root() {
     [ "$name" = "loom" ] && [ "$version" = "0.2.0" ] || return 1
 }
 
-# _loom_hook_select_client — prints "claude" or "codex" and returns 0 only
-# when exactly one of PLUGIN_ROOT (Codex)/CLAUDE_PLUGIN_ROOT (Claude) validates.
-# Both valid (ambiguous) or neither valid (missing/mismatched) returns 1.
+# _loom_hook_select_client — prints "codex" when the Codex-specific root
+# validates, otherwise "claude" when the Claude-specific root validates.
+# Codex intentionally sets both roots for compatibility; preferring its
+# specific binding keeps the shared hook's Codex wire adapter selected.
 _loom_hook_select_client() {
-    local codex_ok=1 claude_ok=1
-    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0
-    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0
-    if [ "$codex_ok" -eq 0 ] && [ "$claude_ok" -eq 0 ]; then
-        return 1
-    elif [ "$codex_ok" -eq 0 ]; then
+    if _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json"; then
         printf 'codex'
         return 0
-    elif [ "$claude_ok" -eq 0 ]; then
+    elif _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json"; then
         printf 'claude'
         return 0
-    else
-        return 1
     fi
+    return 1
 }
 
 # _loom_hook_sanitize_reason <reason> — bounds/normalizes a policy reason to

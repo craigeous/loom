@@ -109,11 +109,20 @@ export LOOM_EXPECTED_BASH_VERSION="$expected_regex"
 export LOOM_TEST_BASH_PHYSICAL="$physical_bash"
 
 printf 'Selected Bash: %s (%s)\n' "$physical_bash" "$actual_version"
+bats_jobs_args=()
+case "${LOOM_BATS_JOBS:-}" in
+'' | 1 | *[!0-9]*) ;;
+*)
+    if [ "$LOOM_BATS_JOBS" -ge 2 ] && command -v parallel >/dev/null 2>&1; then
+        bats_jobs_args=(--jobs "$LOOM_BATS_JOBS")
+    fi
+    ;;
+esac
 set +e
 if [ "${#tests[@]}" -gt 0 ]; then
-    "$physical_bash" "$bats_entry" "$runtime_canary" "${tests[@]}"
+    "$physical_bash" "$bats_entry" "${bats_jobs_args[@]}" "$runtime_canary" "${tests[@]}"
 else
-    "$physical_bash" "$bats_entry" "$runtime_canary"
+    "$physical_bash" "$bats_entry" "${bats_jobs_args[@]}" "$runtime_canary"
 fi
 bats_status=$?
 set -e
