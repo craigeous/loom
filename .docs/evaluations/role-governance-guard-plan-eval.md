@@ -1,7 +1,7 @@
 # Evaluation: role-governance-guard (slice-plan)
 
 Artifact: `.docs/slice-plans/role-governance-guard.md`
-Verdict: FAIL
+Verdict: PASS
 Round: 1
 Authority: spec 02, 04, 08; ADR 0004, 0012, 0027; plan-eval-rubric.md; severity.md
 
@@ -96,4 +96,17 @@ its own fixtures or shares a dispatcher, update fixture/doc counts, and state
 hook ordering/combined-block behavior; add a verification step for it. Optionally name the
 orchestrator `LOOM_ROLE` producer (Finding 8).
 
-Verdict: FAIL
+---
+
+# Round 2 re-review (revision fa52014..48a25f9)
+
+Non-expansion rule applied: only Round 1 open items (Finding 4, Finding 8) are checked; no new criteria.
+
+| # | Sev | Status | Basis |
+|---|---|---|---|
+| 4 | MAJOR | Resolved | Step 3 now states ordering (identity guard first, role guard second; whichever blocks halts; identity wins on combined block) and the decision that `hook-wire-v1` (12-case, 48-file) stays unchanged, with the guard's wire conformance tested inline in its own bats. Verified: `hooks.json` has a single `Bash` PreToolUse entry with one hook and the fixture tree has 48 files, so the added `jq`/`find` checks are accurate and mechanical. |
+| 8 | MINOR | Resolved | Orchestrator producer named (`loom-run` SKILL.md, which exists, plus interactive root sessions); antigravity env parity specified; `rg`/`jq` mechanical checks added to Verification. |
+
+Findings 1-3, 5-7 remain resolved as recorded in Round 1 re-review. No goalpost shift.
+
+Verdict: PASS (Round stays 1 per counting rule; resolves Round 1 FAIL)
