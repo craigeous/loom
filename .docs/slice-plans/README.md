@@ -17,7 +17,11 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_None currently active._
+- [coordination-state-separation.md](coordination-state-separation.md) — `Plan Review` —
+  ADR 0020 milestone M2 slice 2: remove tracked-main writes from the claim/work-start path
+  (playbook), finalize living docs only inside the integration candidate (`loom-land --finalize`),
+  require `Ready to Publish` before publication, and prove concurrent-publisher, offline, and
+  cleanup-recovery behavior in Bats.
 
 ## Archived plans
 
