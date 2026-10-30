@@ -536,6 +536,52 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     [ -n "$(claims)" ]
 }
 
+@test "competing publishers in separate clones: winner lands, loser rebuilds and keeps claim" {
+    prepare
+    CAND_A="$CAND"
+    EV_A="$WORK/ev-a.json"
+    cp "$WORK/ev.json" "$EV_A"
+    # Clone 2: slice B, session s2, claim, candidate and evidence.
+    GATE_B="test -f featureb.txt"
+    git -C "$OTHER" pull -q origin main 2>/dev/null
+    git -C "$OTHER" checkout -q -b slice-b
+    printf 'featureb\n' >"$OTHER/featureb.txt"
+    git -C "$OTHER" add featureb.txt
+    git -C "$OTHER" commit -q -m featureb
+    HEAD_B="$(git -C "$OTHER" rev-parse HEAD)"
+    git -C "$OTHER" checkout -q main
+    otherc() { (cd "$OTHER" && "$LOOM_TEST_BASH" "$COORD" "$@"); }
+    otherc session-start --session s2 >/dev/null
+    otherc lock-acquire --session s2 >/dev/null
+    otherc claim slice-b --session s2 >/dev/null
+    otherc lock-release --session s2 >/dev/null
+    land_b() {
+        run --separate-stderr "$LOOM_TEST_BASH" "$LAND" --repo "$OTHER" --remote origin \
+            --target-ref refs/heads/main --mode remote-direct --slice slice-b --session s2 \
+            --head "$HEAD_B" --gate "$GATE_B" "$@"
+    }
+    land_b --candidate-only
+    [ "$status" -eq 0 ]
+    CAND_B="$output"
+    EV_B="$WORK/ev-b.json"
+    printf '{"schema":"loom-evidence/v1","candidateSha":"%s","gate":"%s","gateEvidenceSha256":"%s","reviewEvidenceSha256":"%s"}\n' \
+        "$CAND_B" "$GATE_B" "$(printf 'a%.0s' $(seq 1 64))" "$(printf 'b%.0s' $(seq 1 64))" >"$EV_B"
+    # Winner: clone 1 publishes slice A.
+    land --evidence "$EV_A"
+    [ "$status" -eq 0 ]
+    [ "$(remote_main)" = "$CAND_A" ]
+    [ -z "$(claims)" ]
+    # Loser: clone 2 detects target movement, rebuilds on candidate A and exits 3.
+    land_b --evidence "$EV_B"
+    [ "$status" -eq 3 ]
+    [ "$(remote_main)" = "$CAND_A" ]
+    ODIR="$OTHER/.git/loom/session-s2"
+    [ "$(jq -r .baseCommit "$ODIR/candidate.json")" = "$CAND_A" ]
+    [ "$(jq -r .candidateSha "$ODIR/candidate.json")" != "$CAND_B" ]
+    [ -n "$(otherc list-claims)" ]
+    [ -z "$(otherc lock-holder)" ]
+}
+
 @test "failed push preserves publishAttempt and the next run stops with exit 10" {
     prepare
     printf '#!/bin/sh\nexit 1\n' >"$REMOTE/hooks/update"

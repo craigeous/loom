@@ -187,6 +187,10 @@ caller must supply it, and old hashes alone cannot establish that review occurre
   stops with exit 10; session-directory creation failures exit 10. `bats plugins/loom/bin/loom-land.bats`:
   36/36 pass (6 new tests: push-destination recovery, receipt binding, receipt write failure,
   unwritable session directory, separate-clone race, preserved `publishAttempt`).
+- Code-eval Round 2 fix: a test where both separate clones run `loom-land` (clone 1 publishes slice A,
+  clone 2 then detects target movement for slice B, rebuilds on candidate A, exits 3 and keeps its
+  claim, with candidate.json updated). `bats plugins/loom/bin/loom-land.bats`: 37/37 pass; full gate
+  and `validate-repository.mjs --all` pass.
 - Deviations: `loom-coord` has no `verify-claim` subcommand, so claim ownership is checked
   through `loom-coord list-claims` (slice and session match), with no coord change.
   `loom-land` is ~285 lines, over the 250-LOC target, to keep recovery and receipt handling.
