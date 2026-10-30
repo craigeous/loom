@@ -454,6 +454,7 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     prepare
     git -C "$REPO" push -q origin "$CAND:refs/heads/side"
     git init -q --bare -b main "$WORK/mirror.git"
+    git -C "$REPO" push -q "$WORK/mirror.git" main
     printf '#!/bin/sh\nexit 1\n' >"$WORK/mirror.git/hooks/update"
     chmod +x "$WORK/mirror.git/hooks/update"
     git -C "$REPO" config remote.origin.pushurl "$WORK/mirror.git"
@@ -470,5 +471,85 @@ pushes() { wc -l <"$WORK/pushes" 2>/dev/null | tr -d ' ' || echo 0; }
     chmod +x "$WORK/fakebin/git"
     PATH="$WORK/fakebin:$PATH" land --candidate-only
     [ "$status" -eq 10 ]
+    [ -n "$(claims)" ]
+}
+
+@test "recovery verifies containment against the push destination, not the fetch URL" {
+    prepare
+    git init -q --bare -b main "$WORK/mirror.git"
+    git -C "$REPO" push -q "$WORK/mirror.git" main
+    git -C "$REPO" config remote.origin.pushurl "$WORK/mirror.git"
+    # The candidate sits on the fetch remote only; the push destination does not contain it.
+    git -C "$REPO" push -q "$REMOTE" "$CAND:refs/heads/main"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(git -C "$WORK/mirror.git" rev-parse refs/heads/main)" = "$CAND" ]
+    [ "$(jq -r .push "$SDIR/publication-receipt.json")" = pushed ]
+}
+
+@test "recovery rejects a receipt whose bindings differ and writes a current one" {
+    prepare
+    git -C "$REPO" push -q origin "$CAND:refs/heads/main"
+    jq -n --arg c "$CAND" --arg h "$HEAD_SHA" '{schema: "loom-receipt/v1", slice: "slice-a", session: "s1",
+        remote: "origin", targetRef: "refs/heads/main", mode: "remote-direct", candidateSha: $c, sliceHead: $h,
+        gateEvidenceSha256: "0", reviewEvidenceSha256: "0"}' >"$SDIR/publication-receipt.json"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .push "$SDIR/publication-receipt.json")" = recovered ]
+    [ "$(jq -r .gateEvidenceSha256 "$SDIR/publication-receipt.json")" = "$(printf 'a%.0s' $(seq 1 64))" ]
+    [ -z "$(claims)" ]
+}
+
+@test "receipt write failure exits 10 and preserves state and claim" {
+    prepare
+    # The push succeeds, then the session directory becomes read-only before the receipt is written.
+    printf '#!/bin/sh\nchmod a-w "%s"\n' "$SDIR" >"$REMOTE/hooks/post-receive"
+    chmod +x "$REMOTE/hooks/post-receive"
+    land --evidence "$WORK/ev.json"
+    chmod u+w "$SDIR"
+    [ ! -f "$SDIR/publication-receipt.json" ]
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .candidateSha "$SDIR/candidate.json")" = "$CAND" ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    [ -n "$(claims)" ]
+}
+
+@test "unwritable session directory exits 10" {
+    rm -rf "$SDIR"
+    printf 'x' >"$SDIR"
+    land --candidate-only
+    [ "$status" -eq 10 ]
+}
+
+@test "separate-clone publisher wins the race: loser is rejected, keeps state and stops on retry" {
+    prepare
+    stub_coord "if [ \"\$1\" = lock-verify ] && [ ! -e '$WORK/raced' ]; then touch '$WORK/raced'; ( cd '$OTHER' && git pull -q origin main && echo c1 >c1.txt && git add c1.txt && git commit -q -m c1 && git push -q origin main ) >/dev/null 2>&1; fi"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 3 ]
+    winner="$(remote_main)"
+    [ "$winner" = "$(git -C "$OTHER" rev-parse HEAD)" ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    [ "$(git -C "$REPO" rev-parse refs/loom/land/s1/candidate)" = "$CAND" ]
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(remote_main)" = "$winner" ]
+    [ -n "$(claims)" ]
+}
+
+@test "failed push preserves publishAttempt and the next run stops with exit 10" {
+    prepare
+    printf '#!/bin/sh\nexit 1\n' >"$REMOTE/hooks/update"
+    chmod +x "$REMOTE/hooks/update"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
+    rm "$REMOTE/hooks/update"
+    other_push moved.txt
+    moved="$(remote_main)"
+    land --evidence "$WORK/ev.json"
+    [ "$status" -eq 10 ]
+    [[ "$stderr" == *"owner action"* ]]
+    [ "$(remote_main)" = "$moved" ]
+    [ "$(jq -r .publishAttempt "$SDIR/candidate.json")" = true ]
     [ -n "$(claims)" ]
 }

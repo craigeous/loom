@@ -180,6 +180,13 @@ caller must supply it, and old hashes alone cannot establish that review occurre
   target stops with exit 10 and preserves state; verification uses the push destination
   (`pushurl`, else `url`); build failures map to exit 10. `bats plugins/loom/bin/loom-land.bats`:
   30/30 pass (8 new regression tests). Full gate result recorded in the commit message of the fix.
+- Code-eval Round 1 fixes: fetch, push and verification all use the resolved push destination
+  (`pushurl`, else `url`); recovery accepts a receipt only when schema, slice, session, remote,
+  targetRef, mode, candidateSha, sliceHead and both evidence hashes match; a rejected or uncertain
+  push keeps `publishAttempt` set, so a later run that cannot find the candidate in the target
+  stops with exit 10; session-directory creation failures exit 10. `bats plugins/loom/bin/loom-land.bats`:
+  36/36 pass (6 new tests: push-destination recovery, receipt binding, receipt write failure,
+  unwritable session directory, separate-clone race, preserved `publishAttempt`).
 - Deviations: `loom-coord` has no `verify-claim` subcommand, so claim ownership is checked
   through `loom-coord list-claims` (slice and session match), with no coord change.
   `loom-land` is ~285 lines, over the 250-LOC target, to keep recovery and receipt handling.

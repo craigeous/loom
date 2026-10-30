@@ -108,6 +108,8 @@ BR="loom-land/$SID-$SLICE"
 CAND_REF="refs/loom/land/$SID/candidate"
 TGT_REF="refs/loom/land/$SID/target"
 LOCKED=0 CAND="" BASE="" INIT_BASE="" CLAIM=0 TIP=""
+# Fetch, recovery and verification all inspect the exact push destination.
+PUSH_DEST=$(git -C "$REPO" config --get "remote.$REMOTE.pushurl" 2>/dev/null || git -C "$REPO" config --get "remote.$REMOTE.url" 2>/dev/null || printf '%s' "$REMOTE")
 
 coord() { (cd "$REPO" && "$COORD" "$@"); }
 
@@ -163,15 +165,23 @@ set_attempt() { # set_attempt true|false — record whether a publication attemp
         die 10 "cannot update $STATE"
     fi
 }
+# receipt_valid — the existing receipt binds every publication input of this run
+receipt_valid() {
+    [ -f "$RECEIPT" ] && jq -e --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" --arg tr "$TARGET_REF" \
+        --arg mo "$MODE" --arg ca "$CAND" --arg sh "$HEAD_SHA" --arg gh "$EV_GH" --arg rh "$EV_RH" \
+        '.schema == "loom-receipt/v1" and .slice == $sl and .session == $se and .remote == $re
+         and .targetRef == $tr and .mode == $mo and .candidateSha == $ca and .sliceHead == $sh
+         and .gateEvidenceSha256 == $gh and .reviewEvidenceSha256 == $rh' "$RECEIPT" >/dev/null 2>&1
+}
 state_get() { [ -f "$STATE" ] && jq -r "($1) // empty" "$STATE" 2>/dev/null || true; }
 
 fetch_target() {
-    git -C "$REPO" fetch --quiet --no-tags "$REMOTE" "+$TARGET_REF:$TGT_REF" >&2 || die 10 "cannot fetch $REMOTE $TARGET_REF"
+    git -C "$REPO" fetch --quiet --no-tags "$PUSH_DEST" "+$TARGET_REF:$TGT_REF" >&2 || die 10 "cannot fetch $REMOTE $TARGET_REF"
     BASE=$(git -C "$REPO" rev-parse --verify --quiet "$TGT_REF^{commit}") || die 10 "cannot resolve fetched target"
 }
 
 write_state() {
-    mkdir -p "$SDIR"
+    mkdir -p "$SDIR" 2>/dev/null || die 10 "cannot create session directory"
     atomic_jq "$STATE" --arg sl "$SLICE" --arg se "$SID" --arg re "$REMOTE" --arg tr "$TARGET_REF" \
         --arg mo "$MODE" --arg sh "$HEAD_SHA" --arg ba "$BASE" --arg ca "$CAND" --arg ga "$GATE" \
         --arg gh "$EV_GH" --arg rh "$EV_RH" \
@@ -244,7 +254,7 @@ finish() {
 }
 
 # --- main ----------------------------------------------------------------
-mkdir -p "$SDIR"
+mkdir -p "$SDIR" 2>/dev/null || die 10 "cannot create session directory"
 fetch_target
 INIT_BASE="$BASE"
 PREV_CAND=$(state_get .candidateSha)
@@ -255,7 +265,7 @@ if [ "$CAND_ONLY" = 0 ] && [ -n "$PREV_CAND" ] && [ "$PREV_CAND" = "$EV_SHA" ] &
     git -C "$REPO" merge-base --is-ancestor "$PREV_CAND" "$TGT_REF" 2>/dev/null; then
     log "candidate $PREV_CAND already contained in $REMOTE $TARGET_REF; completing without republishing"
     CAND="$PREV_CAND"
-    if ! receipt_matches '[.slice,.session,.candidateSha] | join("|")' "$SLICE|$SID|$CAND"; then
+    if ! receipt_valid; then
         [ "$CLAIM" = 1 ] || die 5 "no receipt for $SLICE candidate $CAND and session $SID does not hold the claim"
         acquire_lock
         lock_ok 10
@@ -297,16 +307,14 @@ if [ "$BASE" != "$(state_get .baseCommit)" ]; then
         die 3 "contention: target moved, candidate rebuilt at $CAND; fresh review evidence bound to $CAND is required before publication"
 fi
 lock_ok
-# Verify against the push destination, which may differ from the fetch URL.
-PUSH_DEST=$(git -C "$REPO" config --get "remote.$REMOTE.pushurl" || git -C "$REPO" config --get "remote.$REMOTE.url" || printf '%s' "$REMOTE")
 set_attempt true
 PUSH=pushed
-git -C "$REPO" push --quiet "$REMOTE" "$CAND:$TARGET_REF" >&2 || PUSH=rejected
+git -C "$REPO" push --quiet "$PUSH_DEST" "$CAND:$TARGET_REF" >&2 || PUSH=rejected
 REMOTE_SHA=$(git -C "$REPO" ls-remote "$PUSH_DEST" "$TARGET_REF" | awk 'NR == 1 { print $1 }') || REMOTE_SHA=""
 if [ "$REMOTE_SHA" != "$CAND" ]; then
     if [ "$PUSH" = rejected ] && [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$BASE" ]; then
-        set_attempt false # cleanly rejected: nothing landed, rebuild is safe
-        die 3 "push rejected: target moved to $REMOTE_SHA; re-run to rebuild (fresh review evidence needed)"
+        # publishAttempt stays set: a later run must find the candidate contained or stop for the owner
+        die 3 "push rejected: target moved to $REMOTE_SHA; publication attempt preserved, owner action needed to rebuild (fresh review evidence needed)"
     fi
     die 10 "push $PUSH but remote target ${REMOTE_SHA:-unreadable} != candidate $CAND; unverified"
 fi
