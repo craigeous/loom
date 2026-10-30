@@ -73,3 +73,4 @@ rewritten when a later decision supersedes their subject.
 - [`0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md`](0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md) — ADR 0027 plan evaluation (Round 1: PASS)
 - [`model-matrix-and-dynamic-discovery-eval.md`](model-matrix-and-dynamic-discovery-eval.md) — `model-matrix-and-dynamic-discovery` code evaluation (Round 1: PASS)
 - [`role-governance-guard-plan-eval.md`](role-governance-guard-plan-eval.md) — `role-governance-guard` slice-plan evaluation (Round 1: PASS)
+- [`role-governance-guard-eval.md`](role-governance-guard-eval.md) — `role-governance-guard` code evaluation (Round 0: FAIL)
