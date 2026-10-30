@@ -17,11 +17,13 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [model-matrix-and-dynamic-discovery.md](model-matrix-and-dynamic-discovery.md) — `Ready to Publish` —
-  modernize compatibility matrix & launch schemas to gpt-6*, dynamic Antigravity discovery
-  (agy models 24h cache), Codex config.toml detection, and CLI --model/--effort pinning.
+*(No active plans)*
 
 ## Archived plans
+
+- [archive/model-matrix-and-dynamic-discovery.md](archive/model-matrix-and-dynamic-discovery.md) — `Landed` —
+  modernize compatibility matrix & launch schemas to gpt-6*, dynamic Antigravity discovery
+  (agy models 24h cache), Codex config.toml detection, and CLI --model/--effort pinning.
 
 - [archive/precompact-per-session.md](archive/precompact-per-session.md) — `Landed` — M3 slice 2:
   per-session PreCompact write-ahead backstop (`<git-common-dir>/loom/precompact/<session-id>/{marker,log}`),

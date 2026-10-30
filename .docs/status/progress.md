@@ -6,7 +6,15 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M3 slice 2 (`precompact-per-session`) Landed:**
+- **Last action (2026-10-30) — `model-matrix-and-dynamic-discovery` Landed:**
+  Landed compatibility matrix `v0.3.0.json`, updated launch schemas for `gpt-6*`
+  and Antigravity variants, implemented 4-tier model resolution precedence
+  (CLI > repo > ambient > matrix fallback), 24h atomic `agy models` discovery
+  caching, and fail-closed `--model`/`--effort` validation (527 Bats tests passing).
+  Evaluated blind by Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with
+  Verdict: PASS (Round: 1).
+
+- **Prior action (2026-10-30) — M3 slice 2 (`precompact-per-session`) Landed:**
   Landed per-session PreCompact write-ahead backstop under
   `<git-common-dir>/loom/precompact/<session-id>/{marker,log}` with coordinated
   session checkpoint integration (`loom-coord checkpoint-write`), atomic marker
