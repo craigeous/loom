@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: In Progress
+Status: Needs Clarification
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
@@ -89,7 +89,7 @@ same-clone and separate-clone races and Bash 3.2 compatibility through the full 
 
 ## Notes
 
-None.
+Which explicit finalization inputs and transformations define the tracked plan, evaluation, archive, index and living-status changes for arbitrary managed repositories? What is the evidence JSON schema and how must review hashes and review checks be validated and rerun against a rebuilt candidate? The plan names these obligations but does not specify their interfaces or verification rules; implementing them by guess would invent publication authority.
 
 ## Revision Log
 
