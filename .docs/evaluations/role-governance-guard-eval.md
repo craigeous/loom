@@ -29,3 +29,17 @@ Reviewed: 2cd3339..3cc9856
 The landing exception now checks other runners independently, and the tested value-taking Git global options are handled. The original simple quoted-command examples are blocked, but the quoted-path case above leaves finding 3 open.
 
 Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (544 Bats cases; All checks passed).
+
+## Round 2 re-evaluation
+
+Verdict: FAIL
+Round: 2
+Reviewed: 3cc9856..d5337bc
+
+### Must Fix
+
+1. **[MAJOR, Round 1 finding remains] Quoted executable paths with spaces still bypass the guard after an environment assignment.** `FOO=1 "/tmp/my tools/bats" tests` exits 0 for the orchestrator: the new dequoting only recognizes a quote immediately after a command separator, while the guard's command-start expression explicitly permits leading assignments. This is the same quoted executable at command position covered by the existing finding. Preserve it in that supported command position and add a regression test while retaining the quoted-argument negative control.
+
+The revision blocks the reported unprefixed examples and adds quoted-argument and landing-exception controls; it does not fully resolve the existing finding.
+
+Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` reported “All checks passed” (545 Bats cases).
