@@ -23,10 +23,18 @@ commit **diff**. Tag findings and derive the verdict per
 ## Correctness
 
 - **Logic** — trace the changed paths; check edge cases and error handling.
+- **Threat-model & proportionality alignment** — judge edge cases within the target
+  spec and [`00-overview.md`](../../../../../.docs/spec/00-overview.md)
+  `## Non-goals` boundary per [`severity.md`](severity.md) (`### Threat-model &
+  non-goals alignment` and `### Proportionality & simplicity`). Do not raise
+  `[BLOCKER]`/`[MAJOR]` findings for out-of-scope hostile local filesystem racing
+  inside private `0700` directories or post-return monkeypatching of internal `_`
+  helpers, and prescribe minimal fail-closed guards rather than new state machines.
 - **No silent regressions** — existing behavior preserved; for a refactor, the
   prior tests pass unchanged (that is the regression proof).
 - **Tests prove behavior** — new tests actually exercise the new behavior, not just
-  compile. A passing gate is necessary, not sufficient.
+  compile, and register any background processes for teardown before assertions. A
+  passing gate is necessary, not sufficient.
 - **Invariants verified mechanically** — check invariants with a tool, never by
   eye: `rg -U` for text/wrapped-token invariants (a line-based grep cannot see
   `Code\nReview`), `yq`/`jq` for config facts, `ast-grep`/LSP find-references for
@@ -40,18 +48,23 @@ The orchestrator hands you a **review-findings artifact**
 (`.docs/evaluations/<slice-name>-review-findings.md`, produced by running `/code-review`
 and `/security-review` on the slice diff —
 [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md),
-[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md))
-as an additional input. It is **advisory input, not an oracle and not an auto-FAIL.**
-See [`review-findings.md`](review-findings.md) for the artifact's shape and per-command
-status tokens — do not restate them here.
+[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md)
+— or the unattended local three-finder review package under
+[ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)
+`loom-local-review/v1` /
+[ADR 0023](../../../../../.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md) §3
+`loom-repository-bootstrap/v1`) as an additional input. It is **advisory input, not
+an oracle and not an auto-FAIL.** See [`review-findings.md`](review-findings.md) for
+the artifact's shape and per-command status tokens — do not restate them here.
 
-- **Confirm or reject** each reported finding against the diff, plan, and specs.
+- **Confirm or reject** each reported finding against the diff, plan, and specs
+  (including the threat-model and proportionality rules in [`severity.md`](severity.md)).
 - For each **confirmed** finding, map it to severity per [`severity.md`](severity.md);
   the verdict then follows from your own severity-tagged findings, exactly as for any
   other finding.
 - **Discard false positives** with a one-line reason recorded in the eval file
-  (`/code-review` scores confidence and explicitly expects false positives — an unadjudicated
-  finding must not decide a landing).
+  (`/code-review` and local review finders score or surface candidate issues and
+  explicitly expect false positives — an unadjudicated finding must not decide a landing).
 - You **still own the verdict** — [`severity.md`](severity.md) is the single verdict
   authority; the findings add a review dimension, not a verdict path.
 - A `skipped:`/`ran-clean` status is **informational, not itself a finding** — a skip
@@ -61,7 +74,7 @@ status tokens — do not restate them here.
 ## Hygiene
 
 - **Playbook conformance** — commit is author-neutral and single-slice; status set
-  correctly; slice-plan records the evidence.
+  correctly; slice-plan records the evidence in place without append-only bloat.
 - **CLAUDE.md shape (finalize diffs only).** When the diff touches a `CLAUDE.md`,
   flag as findings, per spec 08 § "Shape and Concision Discipline": **restatement**
   (a paragraph that mirrors a named `spec/`/`ADR/`/`references/` file where a
@@ -77,3 +90,7 @@ status tokens — do not restate them here.
 - Confirm each prior `[BLOCKER]`/`[MAJOR]` was resolved; cite the diff since the
   prior reviewed commit. Don't re-litigate resolved points; don't pass with an
   unaddressed blocker.
+- Apply the **Anti-goalpost-moving on re-review (`Round >= 1`)** rule in
+  [`severity.md`](severity.md): only defects introduced by the revision diff or
+  deterministic failures of an explicit spec invariant/gate test may be raised as
+  new `[BLOCKER]`/`[MAJOR]` findings on `Round >= 1`.

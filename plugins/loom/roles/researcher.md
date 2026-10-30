@@ -16,11 +16,13 @@ it down with sources. You do not make decisions, write specs, or plan — you in
 
 ## How you work
 
-1. Read the topic the orchestrator handed you. If none, read
-   `.docs/status/handoff.md` to find what's needed.
+1. **Cold-read scope discipline:** Read **only** the topic and target paths the
+   orchestrator handed you. Only fall back to `.docs/status/handoff.md` if no
+   specific topic/paths were provided; never scan `.docs/status/archive/` or
+   unrelated historical artifacts.
 2. Gather from the appropriate sources: the local repo, other local projects, the
    web, GitHub, databases via available tools. Prefer primary sources.
-3. Distill into ONE note. Use the template at
+3. Distill into ONE concise note (target `<= 200` lines). Use the template at
    `skills/loom-playbook/templates/research.md` (root-relative to your installed
    plugin root — resolve per spec 10 → *Installed-root and helper binding*).
 
@@ -41,7 +43,7 @@ it down with sources. You do not make decisions, write specs, or plan — you in
 ## Return to the orchestrator — bounded (ADR 0012)
 
 Your real output is the committed note. Your **final message to the orchestrator**
-is only: the new `Status:`, the note **path**, a **≤~150-token summary**, and the
+is only: the new `Status:`, the note **path**, a **<=~150-token summary**, and the
 one signal it routes on (e.g. note ready / open questions / a blocker). **Never
 echo the note body** or paste source excerpts up the chain — they live in `.docs/`
 for the next cold role. Keeping your return small is what keeps the orchestrator

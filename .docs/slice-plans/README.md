@@ -12,32 +12,26 @@ When a slice lands, its outcomes are folded into the durable specs and the plan 
 `git mv`'d into [`archive/`](archive/) — **after** code-eval PASS, in the same
 landing step.
 
-Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Landed → Archived` (see
+Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented → (code review) → Ready to Publish → Landed → Archived` (see
 [../spec/03-artifact-lifecycle.md](../spec/03-artifact-lifecycle.md)).
 
 ## Active plans
 
-- [archive/playbook-conformance.md](archive/playbook-conformance.md) — `Plan Review` —
-  remediation-3, the first `docs-governance/v1` §7 slice under ADR 0026's **broadened** class
-  (prose bodies of `plugins/loom/**/*.md`): lands ADR 0026 (Accepted + ADR/README index + the two
-  pre-placed 0026 records + evaluations index), then corrects three audit Theme-B prose drifts —
-  code-eval PASS advances to `Ready to Publish` not `Landed` (+ adds `Ready to Publish`/`Accepted`/
-  `Living` to status-machine.md; spec 03/ADR 0020); the evaluator writes to confined scratch and the
-  recorder/root commits (evaluator never mutates the checkout; spec 03/05); and local `main` is a
-  disposable mirror, not the landing authority (ADR 0020 remote-first). Prose-body-only; **no
-  frontmatter, no executables/tests/schemas** (ADR 0026 §3/§4.0).
-
-- [archive/docs-governance-reconciliation.md](archive/docs-governance-reconciliation.md) — `Plan Review` —
-  first `docs-governance/v1` §7 slice under accepted ADR 0025: eight docs-only
-  reconciliation edits (accept ADR 0025 + index; restore ADR 0006's pre-rewrite body +
-  0025 forward note; correct ADRs 0014–0017 `Approved`→`Accepted` + README lifecycle;
-  harmonize specs 03/04 authority + closed-list/landing statements with the 0024 dogfood
-  slices and the 0025 docs class; consolidated ADR path errata; fold the §7/M2 deferred
-  items into the improvement plan; append the remediation-2 reconciliation errata to
-  progress.md; repoint handoff NEXT ACTION). Path-confined to `.docs/**` + root docs; no
-  product/executable/test change.
+None currently active on `main`.
 
 ## Archived plans
+
+- [archive/playbook-conformance.md](archive/playbook-conformance.md) — `Archived` —
+  remediation-3, the first `docs-governance/v1` §7 slice under ADR 0026's **broadened** class
+  (prose bodies of `plugins/loom/**/*.md`): landed ADR 0026 Accepted and corrected three Theme-B
+  prose drifts — code-eval PASS advances to `Ready to Publish`, evaluators write to confined
+  scratch while the recorder/root commits, and local `main` is not the landing authority.
+  Prose-body-only; no frontmatter, executables, tests, or schemas (settled at `bc801de`).
+
+- [archive/docs-governance-reconciliation.md](archive/docs-governance-reconciliation.md) — `Archived` —
+  first `docs-governance/v1` §7 slice under accepted ADR 0025: eight docs-only reconciliation
+  edits across ADRs, specs 03/04, improvement plan, progress errata, and handoff. Path-confined
+  to `.docs/**` + root docs; no product/executable/test change (settled at `06246d0`).
 
 - [archive/errata-and-settled-record.md](archive/errata-and-settled-record.md) — `Archived` —
   docs-only record-keeping: flipped the two settled archived plans to Archived, reconciled

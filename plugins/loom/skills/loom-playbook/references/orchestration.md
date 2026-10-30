@@ -154,8 +154,12 @@ recommend for conflicts, never clobber).
 Authority: spec [04](../../../../../.docs/spec/04-orchestrator.md) § "Automated
 review before a slice lands" (the run step),
 [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)
-§1, and
-[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md).
+§1,
+[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md),
+[ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)
+(`loom-local-review/v1` unattended three-finder local review package), and
+[ADR 0023](../../../../../.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md) §3
+(`loom-repository-bootstrap/v1` bootstrap fallback).
 
 - **When.** When a slice reaches `Implemented`, and before the slice can land,
   run Claude Code's built-in `/code-review` and `/security-review` on the slice's

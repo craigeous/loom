@@ -7,7 +7,11 @@ slice-plan, specs, and gate evidence.
 
 **Authority:**
 [ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)
-(the governing decision), spec
+(the initial governing decision),
+[ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)
+(`loom-local-review/v1` unattended three-finder local review package, and
+[ADR 0023](../../../../../.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md) §3
+`loom-repository-bootstrap/v1` degraded bootstrap review), spec
 [04](../../../../../.docs/spec/04-orchestrator.md) §"Automated review before a
 slice lands" (the orchestrator's run step — Slice B scope), and spec
 [02](../../../../../.docs/spec/02-roles.md) (Code Evaluator). The orchestrator —

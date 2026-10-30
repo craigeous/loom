@@ -1,6 +1,6 @@
 # playbook-conformance
 
-Status: Ready to Publish
+Status: Archived
 Slice type: docs-governance
 Class: docs-governance/v1
 Target specs: 03-artifact-lifecycle.md, 05-blind-evaluation.md (authority only — not edited)
