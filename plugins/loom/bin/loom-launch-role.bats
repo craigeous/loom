@@ -780,19 +780,77 @@ make_agy_stub() {
     [ "$status" -eq 2 ]
 }
 
-@test "model: emitted codex and antigravity launches validate against the launch schema" {
+# validate_launch <json-file> — real JSON Schema (draft 2020-12) validation via the pinned ajv.
+validate_launch() {
+    node --input-type=module -e '
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+const require = createRequire(process.argv[1] + "/scripts/");
+const Ajv2020 = require("ajv/dist/2020.js");
+const ajv = new Ajv2020({ strict: true, allowUnionTypes: true });
+const schema = JSON.parse(readFileSync(process.argv[1] + "/plugins/loom/schemas/loom-role-launch-v1.schema.json", "utf8"));
+const doc = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const ok = ajv.compile(schema)(doc);
+process.exit(ok ? 0 : 1);
+' "$REPO_ROOT" "$1"
+}
+
+@test "model: emitted codex, antigravity, and cross-family launches validate against the launch schema" {
     make_stub
-    local schema="$REPO_ROOT/plugins/loom/schemas/loom-role-launch-v1.schema.json"
-    run node -e 'require("fs")' # node is part of the repository toolchain
-    [ "$status" -eq 0 ]
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --model gpt-6.1-sol
     [ "$status" -eq 0 ]
     printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/codex.json"
+    validate_launch "$BATS_TEST_TMPDIR/codex.json"
     launch antigravity planner
     [ "$status" -eq 0 ]
     printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/agy.json"
-    jq -e --slurpfile s "$schema" '. as $d | $s[0].oneOf | map(select(.properties.client.const == $d.client))[0] | (.required - ($d | keys)) == []' "$BATS_TEST_TMPDIR/codex.json"
-    jq -e --slurpfile s "$schema" '. as $d | $s[0].oneOf | map(select(.properties.client.const == $d.client))[0] | ((.required - ($d | keys)) == []) and (($d.antigravity | keys) - (.properties.antigravity.properties | keys) == [])' "$BATS_TEST_TMPDIR/agy.json"
+    validate_launch "$BATS_TEST_TMPDIR/agy.json"
+    launch antigravity code-evaluator --author-client claude
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == *'"crossFamilyVerified":true'* ]]
+    printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/agy-cross.json"
+    validate_launch "$BATS_TEST_TMPDIR/agy-cross.json"
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client claude
+    printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/codex-cross.json"
+    validate_launch "$BATS_TEST_TMPDIR/codex-cross.json"
+    launch claude code-evaluator --author-client codex
+    printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/claude-cross.json"
+    validate_launch "$BATS_TEST_TMPDIR/claude-cross.json"
+    # the validator rejects unknown fields (so a pass above is meaningful)
+    jq '. + {bogus: 1}' "$BATS_TEST_TMPDIR/agy-cross.json" >"$BATS_TEST_TMPDIR/bad.json"
+    run validate_launch "$BATS_TEST_TMPDIR/bad.json"
+    [ "$status" -ne 0 ]
+}
+
+@test "model: ambient model_reasoning_effort differing from the profile default is honored" {
+    make_stub
+    write_codex_config 'model_reasoning_effort = "low"'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"effort":"low"'* ]]
+    run cat "$RECORD"
+    [[ "$output" == *'ARG:model_reasoning_effort=low'* ]]
+}
+
+@test "model: invalid ambient model_reasoning_effort fails closed" {
+    make_stub
+    write_codex_config 'model_reasoning_effort = "xhigh"'
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner
+    [ "$status" -eq 2 ]
+}
+
+@test "model: explicit empty --model fails closed" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --model ''
+    [ "$status" -eq 2 ]
+    launch antigravity developer --model ''
+    [ "$status" -eq 2 ]
+}
+
+@test "model: explicit empty --effort fails closed" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner --effort ''
+    [ "$status" -eq 2 ]
 }
 
 @test "model: antigravity maps Deep review to the cached opus high variant" {
@@ -810,7 +868,7 @@ make_agy_stub() {
     [ "$status" -eq 0 ]
     [[ "$output" == *'"model":"custom-model.1"'* ]]
     launch antigravity planner --model ""
-    [ "$status" -eq 0 ] # empty flag is treated as unset (falls through the tiers)
+    [ "$status" -eq 2 ]
     launch antigravity planner --model 'bad"model'
     [ "$status" -eq 2 ]
 }

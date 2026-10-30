@@ -233,6 +233,18 @@ _codex_ambient_model() {
     printf '%s' "$val"
 }
 
+# _codex_ambient_effort — top-level `model_reasoning_effort = "..."` from
+# ~/.codex/config.toml (tier 3); empty when absent; fails closed when invalid.
+_codex_ambient_effort() {
+    local cfg="${HOME:-}/.codex/config.toml" line val
+    [ -n "${HOME:-}" ] && [ -f "$cfg" ] || return 0
+    line=$(awk '/^[[:space:]]*\[/{exit} /^[[:space:]]*model_reasoning_effort[[:space:]]*=/{print; exit}' "$cfg")
+    [ -n "$line" ] || return 0
+    val=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*model_reasoning_effort[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')
+    _valid_effort "$val" || _fail "ambient Codex model_reasoning_effort is invalid in config.toml"
+    printf '%s' "$val"
+}
+
 # _agy_models — available Antigravity model ids, one per line: a fresh (<= 24h)
 # owner-only cache, else `agy models` written back atomically (mode 0600).
 # Returns 1 when neither source is usable (caller falls back to the floor).
@@ -361,7 +373,7 @@ main() {
 
     local author_client="${LOOM_AUTHOR_CLIENT:-}"
     local routing_file="${LOOM_ROUTING_FILE:-}"
-    local flag_model="" flag_effort=""
+    local flag_model="" flag_effort="" flag_model_set=0 flag_effort_set=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --author-client)
@@ -377,11 +389,13 @@ main() {
         --model)
             [ "$#" -ge 2 ] || _usage
             flag_model="$2"
+            flag_model_set=1
             shift 2
             ;;
         --effort)
             [ "$#" -ge 2 ] || _usage
             flag_effort="$2"
+            flag_effort_set=1
             shift 2
             ;;
         *)
@@ -389,7 +403,7 @@ main() {
             ;;
         esac
     done
-    if [ -n "$flag_effort" ]; then
+    if [ "$flag_effort_set" -eq 1 ]; then
         _valid_effort "$flag_effort" || _fail "invalid --effort (expected low, medium, or high): $flag_effort"
     fi
 
@@ -488,12 +502,12 @@ main() {
     [ -n "$profile" ] || _fail "no profile mapped for role: $role"
 
     local model_in="$flag_model" effort_in="$flag_effort"
-    [ -z "$flag_model" ] || _valid_model "$client" "$flag_model" || _fail "invalid --model for $client: $flag_model"
-    if [ -z "$model_in" ]; then
+    [ "$flag_model_set" -eq 0 ] || _valid_model "$client" "$flag_model" || _fail "invalid --model for $client: $flag_model"
+    if [ "$flag_model_set" -eq 0 ]; then
         model_in=$(_repo_field "$client" model) || exit 2
         [ -z "$model_in" ] || _valid_model "$client" "$model_in" || _fail "invalid repository model for $client: $model_in"
     fi
-    if [ -z "$effort_in" ]; then
+    if [ "$flag_effort_set" -eq 0 ]; then
         effort_in=$(_repo_field "$client" effort) || exit 2
         [ -z "$effort_in" ] || _valid_effort "$effort_in" || _fail "invalid repository effort for $client: $effort_in"
     fi
@@ -511,6 +525,7 @@ main() {
         [ -n "$model" ] || model=$(_codex_ambient_model) || exit 2
         [ -n "$model" ] || model=$(_matrix_field "$matrix_json" "$profile" ".codex.model")
         effort="$effort_in"
+        [ -n "$effort" ] || effort=$(_codex_ambient_effort) || exit 2
         [ -n "$effort" ] || effort=$(_matrix_field "$matrix_json" "$profile" ".codex.effort")
         [ -n "$model" ] || _fail "no Codex model mapped for profile: $profile"
         [ -n "$effort" ] || _fail "no Codex effort mapped for profile: $profile"
