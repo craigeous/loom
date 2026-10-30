@@ -17,7 +17,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-*(No active plans)*
+- [role-governance-guard.md](role-governance-guard.md) — `Plan Review` —
+  mechanical pre-tool role governance hook, LOOM_ROLE export, evaluator mutation block,
+  orchestrator test-execution block, and bounded worker return schema.
 
 ## Archived plans
 
