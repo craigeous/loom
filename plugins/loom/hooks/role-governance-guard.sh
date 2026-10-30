@@ -113,7 +113,10 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")
 # Quoted words with no whitespace/separators are de-quoted (so 'bats' and "commit"
 # still count as command words); other quoted segments are deleted (arguments).
-STRIPPED=$(printf '%s' "$DEESC" | sed \
+# A quoted word at command position may contain spaces (a path such as
+# "/tmp/my tools/bats"); its spaces become '_' first so it is de-quoted too.
+STRIPPED=$(printf '%s' "$DEESC" | sed -E \
+    -e ':a' -e "s/(^|[;&|(])([[:space:]]*[\"'][^\"' ]*) /\\1\\2_/; ta" | sed \
     -e "s/'\([^' [:space:];&|()]*\)'/\1/g" -e 's/"\([^" [:space:];&|()]*\)"/\1/g' \
     -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 DQ=$(printf '%s' "$STRIPPED" | tr -cd '"' | wc -c | tr -d ' ')

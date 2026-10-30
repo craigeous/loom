@@ -128,6 +128,12 @@ open when unset so normal user and developer sessions are never disrupted.
 - Added 3 Bats tests with negative controls (`echo 'bats'`, `git log --grep="bats"`); role-governance-guard.bats: 17/17 pass; shfmt/shellcheck clean.
 - `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (after fixes).
 
+### Code-eval Round 1 fix (1 MAJOR)
+
+- Quoted executable words containing spaces at command position (`"/tmp/my tools/bats" tests`, `'/tmp/space dir/scripts/check'`) are now de-quoted and blocked; quoted arguments are still ignored.
+- Added 1 Bats test (4 assertions: blocked bats path, blocked/allowed `scripts/check` path with and without `LOOM_ALLOW_ORCHESTRATOR_GATE=1`, negative control `echo "/tmp/my tools/bats"`); role-governance-guard.bats: 18/18 via the gate.
+- `shfmt -i 4 -d` / `shellcheck -s bash` clean; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (545 Bats cases).
+
 ## Revision Log
 
 | Round | Summary of in-place changes |

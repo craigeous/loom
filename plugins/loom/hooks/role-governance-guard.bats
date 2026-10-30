@@ -168,3 +168,14 @@ EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or che
     run env CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<'{"tool_input":{"command":5}}'
     [ "$status" -eq 2 ]
 }
+
+@test "quoted executable paths containing spaces are blocked at command position" {
+    guard orchestrator '"/tmp/my tools/bats" tests'
+    [ "$status" -eq 2 ]
+    guard orchestrator "'/tmp/space dir/scripts/check'"
+    [ "$status" -eq 2 ]
+    GATE=1 guard orchestrator '"/tmp/space dir/scripts/check"'
+    [ "$status" -eq 0 ]
+    guard orchestrator 'echo "/tmp/my tools/bats"'
+    [ "$status" -eq 0 ]
+}
