@@ -1,6 +1,6 @@
 # Remote-first Integration Candidate
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 04-orchestrator.md; ADR 0020
 Target size: <= 250 LOC for the `loom-land` implementation, excluding the test suite (keep this plan document <= 250 lines)
 
