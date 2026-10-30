@@ -17,11 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [role-governance-guard.md](role-governance-guard.md) — `Ready to Publish` —
-  mechanical pre-tool role governance hook, LOOM_ROLE export, evaluator mutation block,
-  orchestrator test-execution block, and bounded worker return schema.
+_(none yet)_
 
 ## Archived plans
+
+- [archive/role-governance-guard.md](archive/role-governance-guard.md) — `Landed` —
+  mechanical pre-tool role governance hook (`role-governance-guard.sh`), `LOOM_ROLE` export
+  across Codex, Antigravity, and orchestrator sessions, evaluator git-mutation block, and
+  orchestrator test-suite execution block with `LOOM_ALLOW_ORCHESTRATOR_GATE=1` exception.
 
 - [archive/model-matrix-and-dynamic-discovery.md](archive/model-matrix-and-dynamic-discovery.md) — `Landed` —
   modernize compatibility matrix & launch schemas to gpt-6*, dynamic Antigravity discovery

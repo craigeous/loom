@@ -6,7 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — `model-matrix-and-dynamic-discovery` Landed:**
+- **Last action (2026-10-30) — `role-governance-guard` Landed:**
+  Landed mechanical pre-tool role governance hook (`role-governance-guard.sh`),
+  second-hook registration in `hooks.json` under `PreToolUse` for `Bash`,
+  `LOOM_ROLE` export across Codex, Antigravity (`loom-role-launch-v1` schema
+  `environment.LOOM_ROLE`), and orchestrator sessions (`loom-run`), evaluator
+  git-mutation block, and orchestrator test-suite execution block with
+  `LOOM_ALLOW_ORCHESTRATOR_GATE=1` exception (545 Bats tests passing).
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run
+  `run_735a9227ba0e` with Verdict: PASS (Round: 2).
+
+- **Prior action (2026-10-30) — `model-matrix-and-dynamic-discovery` Landed:**
   Landed compatibility matrix `v0.3.0.json`, updated launch schemas for `gpt-6*`
   and Antigravity variants, implemented 4-tier model resolution precedence
   (CLI > repo > ambient > matrix fallback), 24h atomic `agy models` discovery

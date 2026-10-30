@@ -16,6 +16,15 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **`role-governance-guard` LANDED on `main` (2026-10-30):**
+  Pre-tool role governance hook (`role-governance-guard.sh`), `hooks.json` PreToolUse
+  registration, `LOOM_ROLE` export, evaluator git mutation guard, and orchestrator test
+  runner block with `LOOM_ALLOW_ORCHESTRATOR_GATE=1` override (545 Bats tests passing).
+- **`model-matrix-and-dynamic-discovery` LANDED on `main` (2026-10-30):**
+  Compatibility matrix `v0.3.0.json`, launch schemas for `gpt-6*` and Antigravity, 4-tier
+  precedence, 24h `agy models` cache, and `--model`/`--effort` validation (527 Bats tests).
+- **M3 slice 2 `precompact-per-session` LANDED on `main` (2026-10-30):**
+  Per-session write-ahead backstops, coordinated checkpoints, and atomic markers (45 Bats tests).
 - **Remediation Workstreams 1–3 complete on `main` (2026-10-30):**
   1. **Spec/Doc Governance, Agent Tuning & Anti-Wheel-Spinning Guards:** Tuned all
      five `plugins/loom/roles/*.md`, evaluation rubrics/templates, `CLAUDE.md`,
