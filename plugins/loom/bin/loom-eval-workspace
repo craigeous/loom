@@ -1437,9 +1437,44 @@ const val = () => {
 val();' "$1" 2>/dev/null
 }
 
+# bootstrap_eligible <artifact-rel> <supplied-phase>: ADR 0023 repository and state eligibility from
+# authoritative local state. Dies 2 when the supplied phase contradicts the authoritative phase;
+# returns 1 (hold) unless the repository is eligible, the authoritative phase is proven "active",
+# and any slice-plan is in the ADR 0023 section 1 closed list.
+bootstrap_eligible() {
+    local art="$1" supplied="$2" adr="$REPO_TOP/.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md" pf="" f phase="" stem
+    [ -f "$adr" ] && [ ! -L "$adr" ] || return 1
+    for f in "$COMMON/loom/bootstrap-phase" "$COMMON/loom/state/bootstrap-phase"; do
+        if [ -e "$f" ] || [ -L "$f" ]; then
+            [ -f "$f" ] && [ ! -L "$f" ] || return 1
+            pf="$f"
+            break
+        fi
+    done
+    [ -n "$pf" ] || return 1
+    phase="$(head -n 1 "$pf" | tr -d '[:space:]')"
+    if [ -n "$supplied" ] && [ "$supplied" != "$phase" ]; then
+        die 2 "record: --bootstrap-phase '$supplied' contradicts the authoritative bootstrap phase '$phase'"
+    fi
+    [ "$phase" = active ] || return 1
+    case "$art" in
+    .docs/slice-plans/*.md)
+        stem="$(basename -- "$art" .md)"
+        case "$stem" in
+        ci-baseline | client-floor-adapter-smoke | coord-identifier-boundaries | coord-lock-ownership | coord-schema-cas | \
+            remote-first-integration-candidate | coordination-state-separation | identity-guard-contract | precompact-per-session | \
+            local-review-helper | local-review-agents | local-review-orchestration | local-review-defect-battery | \
+            sanitized-evaluation-workspace | evaluation-output-recorder) ;;
+        *) return 1 ;;
+        esac
+        ;;
+    esac
+    return 0
+}
+
 cmd_record() {
     ALLOW_JSON=0
-    local claimed="" bphase="active" args=() m vf="" n art_rel prior_rel="" prior_file="" prior_sha="" exp_round=0 pr pv type verdict
+    local claimed="" bphase="" args=() m vf="" n art_rel prior_rel="" prior_file="" prior_sha="" exp_round=0 pr pv type verdict
     while [ $# -gt 0 ]; do
         case "$1" in
         --claimed-gate)
@@ -1577,8 +1612,8 @@ cmd_record() {
     if [ "$cur" != "$target" ]; then
         if [ -n "$claimed" ] && [ "$verdict" = PASS ]; then
             result=gate-held
-        elif [ "$bphase" != active ]; then
-            result=state-held # ADR 0023: a non-active bootstrap phase (e.g. publication-intent) blocks advancement
+        elif ! bootstrap_eligible "$art_rel" "$bphase"; then
+            result=state-held # ADR 0023: ineligible repository/slice or a non-proven-active bootstrap phase blocks advancement
         elif [ "$verdict" = PASS ] && [ "$target" = Accepted ] && [[ "$art_rel" == .docs/[Aa][Dd][Rr]/0023-* ]]; then
             result=ratification-held # ADR 0023 cannot self-ratify; acceptance needs the owner gate
         else

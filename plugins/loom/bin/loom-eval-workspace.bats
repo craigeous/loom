@@ -1337,8 +1337,13 @@ SHIM
 
 # ---------------------------------------------------------------- record
 
-PLAN_REL=.docs/slice-plans/demo.md
+PLAN_REL=.docs/slice-plans/ci-baseline.md
+ADR23_REL=.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md
 rec_commit() {
+    # an eligible bootstrap repository by default: ADR 0023 present and an authoritative active phase
+    mkdir -p "$REPO/.docs/ADR" "$REPO/.git/loom"
+    [ -e "$REPO/$ADR23_REL" ] || printf '# ADR 23\n\nStatus: Accepted\n' >"$REPO/$ADR23_REL"
+    [ -e "$REPO/.git/loom/bootstrap-phase" ] || printf 'active\n' >"$REPO/.git/loom/bootstrap-phase"
     mkdir -p "$(dirname -- "$REPO/$1")"
     printf '%s\n' "$2" >"$REPO/$1"
     git -C "$REPO" add -A
@@ -1442,7 +1447,7 @@ mk_verdict() {
     [ "$(jq -r .verdict <<<"$output")" = PASS ]
     [ "$(jq -r .artifact_status <<<"$output")" = Approved ]
     [ "$(art_status)" = Approved ]
-    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    local rep="$REPO/.docs/evaluations/ci-baseline-plan-eval.md"
     [ -f "$rep" ]
     grep -qx 'Status: Evaluated' "$rep"
     grep -qx 'Verdict: PASS' "$rep"
@@ -1477,7 +1482,7 @@ mk_verdict() {
     [ "$(jq -r .verdict <<<"$output")" = FAIL ]
     [ "$(jq -r .artifact_status <<<"$output")" = Draft ]
     [ "$(art_status)" = Draft ]
-    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    local rep="$REPO/.docs/evaluations/ci-baseline-plan-eval.md"
     [ -f "$rep" ]
     grep -qx 'Verdict: FAIL' "$rep"
     grep -q '## Required changes' "$rep"
@@ -1492,7 +1497,7 @@ mk_verdict() {
     [ "$(jq -r .verdict <<<"$output")" = PASS ]
     [ "$(jq -r .artifact_status <<<"$output")" = "Ready to Publish" ]
     [ "$(art_status)" = "Ready to Publish" ]
-    local rep="$REPO/.docs/evaluations/demo-eval.md"
+    local rep="$REPO/.docs/evaluations/ci-baseline-eval.md"
     [ -f "$rep" ]
     grep -qx 'Verdict: PASS' "$rep"
     grep -q '## Gate rerun evidence' "$rep"
@@ -1524,7 +1529,7 @@ mk_verdict() {
     mk_verdict 'del(.verdict)'
     ew record "$OUT" --repo "$REPO"
     [ "$status" -eq 2 ]
-    [ ! -e "$REPO/.docs/evaluations/demo-plan-eval.md" ]
+    [ ! -e "$REPO/.docs/evaluations/ci-baseline-plan-eval.md" ]
 }
 
 @test "record: PASS carrying BLOCKER or MAJOR finding fails closed (exit 2)" {
@@ -1543,12 +1548,12 @@ mk_verdict() {
 }
 
 @test "record: bound prior verdict replacement succeeds for successor round" {
-    rec_commit .docs/evaluations/demo-plan-eval.md $'# Prior\n\nStatus: Evaluated\nRound: 0\nVerdict: FAIL\n\n## Findings\n'
+    rec_commit .docs/evaluations/ci-baseline-plan-eval.md $'# Prior\n\nStatus: Evaluated\nRound: 0\nVerdict: FAIL\n\n## Findings\n'
     local prior_sha
     prior_sha="$(rec_head)"
     rec_commit "$PLAN_REL" $'# Demo\n\nStatus: Plan Review\n\n## Revised\n'
     ew prepare --repo "$REPO" --type plan --head "$(rec_head)" --artifact "$PLAN_REL" --authority .docs/spec/s.md \
-        --prior-verdict .docs/evaluations/demo-plan-eval.md --prior-sha "$prior_sha" --out "$OUT"
+        --prior-verdict .docs/evaluations/ci-baseline-plan-eval.md --prior-sha "$prior_sha" --out "$OUT"
     [ "$status" -eq 0 ] || {
         echo "PRIOR PREP FAILED: $output"
         false
@@ -1560,13 +1565,13 @@ mk_verdict() {
         false
     }
     [ "$(jq -r .artifact_status <<<"$output")" = Approved ]
-    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    local rep="$REPO/.docs/evaluations/ci-baseline-plan-eval.md"
     grep -qx 'Round: 1' "$rep"
     grep -qx 'Verdict: PASS' "$rep"
 }
 
 @test "record: differing existing report without bound prior verdict fails closed (exit 2)" {
-    rec_commit .docs/evaluations/demo-plan-eval.md $'# Prior un-bound report\n'
+    rec_commit .docs/evaluations/ci-baseline-plan-eval.md $'# Prior un-bound report\n'
     rec_plan
     mk_verdict
     ew record "$OUT" --repo "$REPO"
@@ -1643,8 +1648,83 @@ mk_verdict() {
 
 @test "record: --bootstrap-phase publication-intent holds the transition" {
     rec_plan
+    printf 'publication-intent\n' >"$REPO/.git/loom/bootstrap-phase"
     mk_verdict
     ew record "$OUT" --repo "$REPO" --bootstrap-phase publication-intent
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: omitted bootstrap phase with a held authoritative phase is state-held" {
+    rec_plan
+    printf 'publication-intent\n' >"$REPO/.git/loom/bootstrap-phase"
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: omitted bootstrap phase with no authoritative phase is state-held" {
+    rec_plan
+    rm "$REPO/.git/loom/bootstrap-phase"
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+    # a supplied active phase does not prove an absent authoritative phase
+    ew record "$OUT" --repo "$REPO" --bootstrap-phase active
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: a supplied phase contradicting the authoritative phase fails closed (exit 2)" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO" --bootstrap-phase publication-intent
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"contradicts the authoritative bootstrap phase 'active'"* ]]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: authoritative active phase advances with and without a matching supplied phase" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO" --bootstrap-phase active
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = recorded ]
+    [ "$(art_status)" = Approved ]
+}
+
+@test "record: ineligible repository (no ADR 0023) is state-held" {
+    rec_plan
+    rm "$REPO/$ADR23_REL"
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: ADR 0023 that is a symlink makes the repository ineligible" {
+    rec_plan
+    rm "$REPO/$ADR23_REL"
+    ln -s "$REPO/.docs/spec/s.md" "$REPO/$ADR23_REL"
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: a slice outside the ADR 0023 closed list is state-held" {
+    PLAN_REL=.docs/slice-plans/not-listed.md
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
     [ "$status" -eq 0 ]
     [ "$(jq -r .status <<<"$output")" = state-held ]
     [ "$(art_status)" = "Plan Review" ]
@@ -1658,6 +1738,82 @@ mk_verdict() {
     [ "$status" -eq 0 ]
     [ "$(jq -r .status <<<"$output")" = ratification-held ]
     [ "$(art_status)" = "Plan Review" ]
+}
+
+# negative regressions: each guard fails closed (exit 2), leaves the artifact status unchanged and writes no report
+neg_plan() { # <label> <expected-error-text> <jq mutation>
+    rec_plan
+    mk_verdict "$3"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"$2"* ]]
+    [ "$(art_status)" = "Plan Review" ]
+    [ ! -e "$REPO/.docs/evaluations/ci-baseline-plan-eval.md" ]
+}
+neg_code() { # <label> <expected-error-text> <jq mutation>
+    rec_code
+    mk_verdict "$3"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"$2"* ]]
+    [ "$(art_status)" = Implemented ]
+    [ ! -e "$REPO/.docs/evaluations/ci-baseline-eval.md" ]
+}
+BIND_ERR="verdict does not match the run, manifest, artifact, revisions or authority bindings"
+RERUN_ERR="verdict gate rerun reference does not match the latest attempt"
+
+@test "record: tampered verdict run_id fails closed" {
+    neg_plan run_id "$BIND_ERR" '.run_id = "run-tampered-0000"'
+}
+
+@test "record: tampered verdict manifest_sha256 fails closed" {
+    neg_plan manifest "$BIND_ERR" '.manifest_sha256 = ("0" * 64)'
+}
+
+@test "record: tampered verdict head_sha fails closed" {
+    neg_plan head "$BIND_ERR" '.head_sha = ("0" * 40)'
+}
+
+@test "record: tampered verdict artifact path fails closed" {
+    neg_plan artifact "$BIND_ERR" '.artifact = ".docs/slice-plans/other.md"'
+}
+
+@test "record: tampered verdict authority fails closed" {
+    neg_plan authority "$BIND_ERR" '.authority = [".docs/spec/other.md"]'
+}
+
+@test "record: tampered rerun_attempt.seq fails closed" {
+    neg_code seq "$RERUN_ERR" '.rerun_attempt.seq = 99'
+}
+
+@test "record: tampered rerun_attempt.evidence_sha256 fails closed" {
+    neg_code evidence "$RERUN_ERR" '.rerun_attempt.evidence_sha256 = ("0" * 64)'
+}
+
+@test "record: tampered rerun_attempt.result fails closed" {
+    neg_code result "$RERUN_ERR" '.rerun_attempt.result = "rerun-failed"'
+}
+
+@test "record: reviewed artifact status mismatch fails closed" {
+    rec_plan Draft
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"reviewed artifact status is not 'Plan Review'"* ]]
+    [ "$(art_status)" = Draft ]
+    [ ! -e "$REPO/.docs/evaluations/ci-baseline-plan-eval.md" ]
+}
+
+@test "record: illegal status transition fails closed" {
+    rec_plan
+    mk_verdict
+    sed -i.bak 's/^Status: Plan Review$/Status: Landed/' "$REPO/$PLAN_REL"
+    rm -f "$REPO/$PLAN_REL.bak"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"illegal transition from 'Landed' to 'Approved'"* ]]
+    [ "$(art_status)" = Landed ]
+    [ ! -e "$REPO/.docs/evaluations/ci-baseline-plan-eval.md" ]
 }
 
 @test "record: usage text lists the subcommand" {

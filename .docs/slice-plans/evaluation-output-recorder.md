@@ -1,6 +1,6 @@
 # Evaluation Output Recorder
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022, ADR 0023
 Target size: <= 350 LOC net change excluding tests and schemas (keep this plan <= 200 lines)
 
@@ -130,6 +130,19 @@ remains the implementation target.
 - `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (exit 0).
 - `node scripts/validate-repository.mjs --root "$PWD" --all`: passed; the root-copy
   guidance retirement grep is clean.
+
+## Round 2 remediation evidence
+
+- Eligibility: `record` now derives eligibility from authoritative state (ADR 0023 file is a
+  regular file; `<git-common-dir>/loom/bootstrap-phase` proves `active`; slice-plans must be in the
+  ADR 0023 section 1 list). Omitted or unproven phase yields `state-held`; a supplied phase that
+  contradicts the authoritative one exits 2. ADR 0023 PASS yields `ratification-held`.
+- Tests: eligible/ineligible repository, held/absent/contradicting phase, unlisted slice, active
+  advance, and ten negative regressions (run_id, manifest_sha256, head_sha, artifact, authority,
+  rerun seq/evidence_sha256/result, reviewed status, illegal transition), each asserting exit 2,
+  error text, unchanged status and no report.
+- `bats plugins/loom/bin/loom-eval-workspace.bats`: 86 tests passed; shfmt and shellcheck clean.
+- Full gate and repository validation: see commit verification below.
 
 ## Notes
 
