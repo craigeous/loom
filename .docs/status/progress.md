@@ -6,7 +6,20 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M2 slice 2 (`coordination-state-separation`) Landed:**
+- **Last action (2026-10-30) — M3 slice 1 (`identity-guard-contract`) Landed (Milestone M3 Complete):**
+  Landed recognized identity-mutation guard and post-command verification: `plugins/loom/hooks/git-identity-guard.sh`
+  scans command text without stripping quoted segments, blocking `git config` identity writes across all scopes
+  (`--local`, `--global`, `--system`, `--file`), bare and quoted `--author` overrides, `-c` user/author/committer overrides,
+  and `GIT_AUTHOR_*`/`GIT_COMMITTER_*` assignments across wrappers (`sh -c`, `bash -c`, `env`) while preserving safe bare reads.
+  Landed portable post-command verifier `plugins/loom/bin/loom-verify-identity <baseline-sha|unborn>` (exits 0 valid/no-op, 1
+  usage/config/corrupt history error, 2 identity violation with remediation on stderr), registered across all allowlists
+  (`loom-resolve-helper`, Claude & Codex installed roots, fixtures, schema `$defs.allowedHelpers.const`, and validator).
+  Wired baseline capture and verification into `plugins/loom/roles/developer.md`, `plugins/loom/skills/loom-developer/SKILL.md`,
+  and `plugins/loom/skills/loom-playbook/references/commit-convention.md`. 641 total repository Bats tests passing. Evaluated
+  blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 2). Milestone M3
+  is now fully landed.
+
+- **Prior action (2026-10-30) — M2 slice 2 (`coordination-state-separation`) Landed:**
   Landed ADR 0020 coordination state separation: removed tracked-main mutation
   from claim/work-start paths in playbook, candidate-time deterministic living
   document finalization (`loom-land --finalize`), untracked candidate manifest in

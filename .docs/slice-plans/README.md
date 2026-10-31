@@ -17,9 +17,16 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [identity-guard-contract.md](identity-guard-contract.md) — `Ready to Publish` — M3 slice 1: recognized identity-mutation guard and post-command verification.
+*(No active slice plans at this time)*
 
 ## Archived plans
+
+- [archive/identity-guard-contract.md](archive/identity-guard-contract.md) — `Landed` —
+  M3 slice 1: recognized identity-mutation guard (`git-identity-guard.sh`) scanning
+  raw command text without stripping quotes, blocking git config writes and author
+  overrides across wrappers (`sh -c`, `bash -c`, `env`), post-command verifier
+  (`loom-verify-identity`), allowlist registration across root metadata, fixtures,
+  and schema, and developer workflow wiring (641 total repo Bats tests passing).
 
 - [archive/coordination-state-separation.md](archive/coordination-state-separation.md) — `Landed` —
   ADR 0020 milestone M2 slice 2: separate coordination state from tracked main,

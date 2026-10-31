@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M3 slice 1 `identity-guard-contract` LANDED on `main` (2026-10-30) — Milestone M3 COMPLETE:**
+  Recognized identity-mutation hook guard (`git-identity-guard.sh`) scanning raw text without stripping
+  quotes, blocking git config writes and author overrides across wrappers (`sh -c`, `bash -c`, `env`),
+  post-command verifier (`loom-verify-identity`), allowlist registration across root metadata, fixtures,
+  and schema, and developer workflow wiring (641 Bats tests passing). Milestone M3 fully landed.
 - **M2 slice 2 `coordination-state-separation` LANDED on `main` (2026-10-30):**
   ADR 0020 coordination state separation: removed tracked-main mutation from claim/work-start,
   candidate-time deterministic living doc finalization (`loom-land --finalize`), untracked
