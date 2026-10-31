@@ -80,4 +80,4 @@ rewritten when a later decision supersedes their subject.
 - [`coordination-state-separation-eval.md`](coordination-state-separation-eval.md) — `coordination-state-separation` code evaluation (Round 1: PASS)
 - [`identity-guard-contract-plan-eval.md`](identity-guard-contract-plan-eval.md) — `identity-guard-contract` slice-plan evaluation (Round 3: PASS)
 - [`identity-guard-contract-eval.md`](identity-guard-contract-eval.md) — `identity-guard-contract` code evaluation (Round 2: PASS)
-- [`local-review-helper-plan-eval.md`](local-review-helper-plan-eval.md) — `local-review-helper` slice-plan evaluation (Round 1: FAIL)
+- [`local-review-helper-plan-eval.md`](local-review-helper-plan-eval.md) — `local-review-helper` slice-plan evaluation (Round 2: PASS)
