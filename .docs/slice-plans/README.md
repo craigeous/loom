@@ -17,7 +17,10 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-*(No active slice plans at this time)*
+- [local-review-helper.md](local-review-helper.md) — `Plan Review` — M4 slice 2:
+  `plugins/loom/bin/loom-review` (`prepare`/`validate`/`assemble`/`status`/`clean`) for
+  `loom-local-review/v1`, manifest and findings JSON Schemas, helper allowlist registration,
+  and Bats coverage (ADR 0021/0022).
 
 ## Archived plans
 
