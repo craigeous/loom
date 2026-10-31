@@ -17,7 +17,8 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-*(None currently in flight)*
+- [sanitized-evaluation-workspace.md](sanitized-evaluation-workspace.md) — `Plan Review` —
+  M5 helper for controlled evaluation exports and deterministic gate reruns.
 
 ## Archived plans
 
