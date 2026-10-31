@@ -78,4 +78,4 @@ rewritten when a later decision supersedes their subject.
 - [`remote-first-integration-candidate-eval.md`](remote-first-integration-candidate-eval.md) — `remote-first-integration-candidate` code evaluation (Round 2: PASS)
 - [`coordination-state-separation-plan-eval.md`](coordination-state-separation-plan-eval.md) — `coordination-state-separation` slice-plan evaluation (Round 2: PASS)
 - [`coordination-state-separation-eval.md`](coordination-state-separation-eval.md) — `coordination-state-separation` code evaluation (Round 1: PASS)
-- [`identity-guard-contract-plan-eval.md`](identity-guard-contract-plan-eval.md) — `identity-guard-contract` slice-plan evaluation (Round 0: FAIL)
+- [`identity-guard-contract-plan-eval.md`](identity-guard-contract-plan-eval.md) — `identity-guard-contract` slice-plan evaluation (Round 1: FAIL)
