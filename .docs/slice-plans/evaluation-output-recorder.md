@@ -1,6 +1,6 @@
 # Evaluation Output Recorder
 
-Status: Implemented
+Status: In Progress
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022, ADR 0023
 Target size: <= 350 LOC net change excluding tests and schemas (keep this plan <= 200 lines)
 
