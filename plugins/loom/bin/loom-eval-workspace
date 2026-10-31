@@ -6,7 +6,8 @@
 # slice evaluation-gate-runner), and cleans runs. gate-rerun probes the pinned tools, runs the
 # manifest argv with an empty pinned environment plus runner-owned redirects, and records
 # schema-validated, hash-bound evidence under reruns/attempt-<seq>/. It never launches an
-# evaluator, records a verdict, advances lifecycle state, or uses the network. It is a
+# evaluator or uses the network. record (slice evaluation-output-recorder) validates the
+# evaluator's output/verdict.json, publishes the Markdown report and applies the legal status transition. It is a
 # bounded runner, not an OS sandbox.
 #
 # Usage:
@@ -19,6 +20,7 @@
 #       [--run-id <id>] [--out <dir>] [--repo <path>]
 #   loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
 #   loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
+#   loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>]
 #   loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
 #   loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 #
@@ -32,6 +34,7 @@ export GIT_OPTIONAL_LOCKS=0
 RESERVED_ENV=" HOME TMPDIR TMP TEMP XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME CARGO_HOME CARGO_TARGET_DIR GOCACHE GOPATH npm_config_cache PIP_CACHE_DIR LOOM_EVAL_DEPS LOOM_EVAL_BUILD LOOM_EVAL_SCRATCH "
 
 WORK=""
+PUBTMP=""
 BUILD=""
 ROOT_CREATED=""
 EXEC=""
@@ -56,9 +59,11 @@ rm_exec() {
 
 cleanup() {
     local rc=$?
+    [ "$$" = "${BASHPID:-$$}" ] || return 0
     trap - EXIT
     if [ -n "$GPID" ]; then kill -KILL -- "-$GPID" 2>/dev/null || true; fi
     rm_exec
+    if [ -n "$PUBTMP" ]; then rm -f -- "$PUBTMP"; fi
     if [ -n "$BUILD" ] && [ -d "$BUILD" ]; then
         chmod -R u+w "$BUILD" 2>/dev/null || true
         rm -rf "$BUILD"
@@ -355,11 +360,12 @@ add_err() { printf '%s\n' "$*" >>"$ERRS"; }
 
 SCHEMA_MANIFEST="$BIN_DIR/../schemas/loom-eval-workspace-manifest-v1.schema.json"
 SCHEMA_RERUN="$BIN_DIR/../schemas/loom-eval-gate-rerun-v1.schema.json"
+SCHEMA_VERDICT="$BIN_DIR/../schemas/loom-eval-verdict-v1.schema.json"
 
 # validate_json_schema <schema> <file>: Draft 2020-12 validation; errors go to $ERRS, labelled by schema.
 validate_json_schema() {
     local schema="$1" m="$2" err nm="${LOOM_NODE_MODULES:-}" label=manifest
-    case "$schema" in *gate-rerun*) label=gate-rerun ;; esac
+    case "$schema" in *gate-rerun*) label=gate-rerun ;; *eval-verdict*) label=verdict ;; esac
     [ -f "$schema" ] || {
         add_err "$label schema missing"
         return 1
@@ -372,8 +378,12 @@ validate_json_schema() {
     if [ -z "$nm" ]; then
         if [ -n "$REPO_TOP" ] && [ -d "$REPO_TOP/scripts/check-tools/node_modules/ajv" ]; then
             nm="$REPO_TOP/scripts/check-tools/node_modules"
+        elif [ -n "$REPO_TOP" ] && [ -d "$REPO_TOP/scripts/node_modules/ajv" ]; then
+            nm="$REPO_TOP/scripts/node_modules"
         elif [ -d "$BIN_DIR/../../../scripts/check-tools/node_modules/ajv" ]; then
             nm="$BIN_DIR/../../../scripts/check-tools/node_modules"
+        elif [ -d "$BIN_DIR/../../../scripts/node_modules/ajv" ]; then
+            nm="$BIN_DIR/../../../scripts/node_modules"
         fi
     fi
     [ -n "$nm" ] && [ -d "$nm/ajv" ] || {
@@ -1090,8 +1100,9 @@ kill_group() {
     if kill -0 -- "-$GPID" 2>/dev/null; then
         kill -TERM -- "-$GPID" 2>/dev/null || true
         (
+            trap - EXIT INT TERM HUP
             sleep 5
-            kill -KILL -- "-$GPID"
+            kill -KILL -- "-$GPID" 2>/dev/null || true
         ) >/dev/null 2>&1 &
         wd=$!
         wait "$GPID" 2>/dev/null || true
@@ -1295,45 +1306,249 @@ cmd_gate_rerun() {
     esac
 }
 
-# rerun_status: after a successful do_verify, judge the latest rerun attempt (exits via emit_status).
-rerun_status() {
+# rj <status> <rc> [detail]: sets the rerun_judge result.
+RJ_STATUS="" RJ_RC=0 RJ_DETAIL="" RJ_AT="" RJ_SEQ=0
+rj() {
+    RJ_STATUS="$1" RJ_RC="$2" RJ_DETAIL="${3:-}"
+}
+
+# rerun_judge: after a successful do_verify, judges the latest rerun attempt into RJ_*; never exits.
+rerun_judge() {
     local n=0 mx=0 name at ev m="$RUN/manifest.json" st
-    [ -d "$RUN/reruns" ] && [ ! -L "$RUN/reruns" ] || emit_status invalid 2 "reruns is not a directory"
+    RJ_AT="" RJ_SEQ=0
+    [ -d "$RUN/reruns" ] && [ ! -L "$RUN/reruns" ] || { rj invalid 2 "reruns is not a directory" && return 0; }
     while IFS= read -r name; do
         [[ "$name" =~ ^attempt-[1-9][0-9]*$ ]] && [ -d "$RUN/reruns/$name" ] && [ ! -L "$RUN/reruns/$name" ] ||
-            emit_status invalid 2 "unexpected reruns entry: $name"
+            { rj invalid 2 "unexpected reruns entry: $name" && return 0; }
         n=$((n + 1))
         [ "${name#attempt-}" -le "$mx" ] || mx="${name#attempt-}"
     done < <(ls -A "$RUN/reruns")
-    [ "$n" -gt 0 ] || emit_status incomplete 3 "no rerun attempt record"
-    [ "$n" = "$mx" ] || emit_status invalid 2 "rerun attempt sequence is not contiguous"
+    [ "$n" -gt 0 ] || { rj incomplete 3 "no rerun attempt record" && return 0; }
+    [ "$n" = "$mx" ] || { rj invalid 2 "rerun attempt sequence is not contiguous" && return 0; }
     at="$RUN/reruns/attempt-$mx"
     ev="$at/gate-rerun.json"
-    [ -e "$ev" ] || [ -L "$ev" ] || emit_status incomplete 3 "attempt $mx has no completed record"
-    { [ -f "$ev" ] && [ ! -L "$ev" ] && jq -e . "$ev" >/dev/null 2>&1; } || emit_status invalid 2 "attempt $mx evidence is corrupt"
+    RJ_AT="$at" RJ_SEQ="$mx"
+    [ -e "$ev" ] || [ -L "$ev" ] || { rj incomplete 3 "attempt $mx has no completed record" && return 0; }
+    { [ -f "$ev" ] && [ ! -L "$ev" ] && jq -e . "$ev" >/dev/null 2>&1; } || { rj invalid 2 "attempt $mx evidence is corrupt" && return 0; }
     for name in stdout.log stderr.log; do
-        [ -f "$at/$name" ] && [ ! -L "$at/$name" ] || emit_status invalid 2 "attempt $mx $name is missing"
+        [ -f "$at/$name" ] && [ ! -L "$at/$name" ] || { rj invalid 2 "attempt $mx $name is missing" && return 0; }
     done
     ERRS="$WORK/errs"
     : >"$ERRS"
-    validate_json_schema "$SCHEMA_RERUN" "$ev" || emit_status invalid 2 "attempt $mx evidence: $(head -n 2 "$ERRS" | tr '\n' ' ')"
+    validate_json_schema "$SCHEMA_RERUN" "$ev" || { rj invalid 2 "attempt $mx evidence: $(head -n 2 "$ERRS" | tr '\n' ' ')" && return 0; }
     jq -e --slurpfile m "$m" --argjson seq "$mx" '
         .run_id == $m[0].run_id and .manifest_sha256 == $m[0].manifest_sha256 and .seq == $seq
         and .command_env_sha256 == $m[0].gate.command_env_sha256
         and (.completion != "completed" or ((.tool_versions | map(.name) | sort) == ($m[0].gate.tools | map(.name) | sort)))' "$ev" >/dev/null ||
-        emit_status invalid 2 "attempt $mx evidence is stale or bound to a different run, manifest or command"
+        { rj invalid 2 "attempt $mx evidence is stale or bound to a different run, manifest or command" && return 0; }
     for name in stdout stderr; do
         [ "$(jq -r ".$name.bytes" "$ev")" = "$(wc -c <"$at/$name.log" | tr -d ' ')" ] &&
             [ "$(jq -r ".$name.sha256" "$ev")" = "$(sha256_file "$at/$name.log")" ] ||
-            emit_status invalid 2 "attempt $mx $name.log does not match its recorded bytes or SHA-256"
+            { rj invalid 2 "attempt $mx $name.log does not match its recorded bytes or SHA-256" && return 0; }
     done
     st="$(jq -r .result "$ev")"
     case "$st" in
-    rerun-passed) emit_status rerun-passed 0 "attempt: $at" ;;
-    rerun-failed) emit_status rerun-failed 2 "attempt: $at" ;;
-    infrastructure-blocked) emit_status infrastructure-blocked 4 "attempt: $at" ;;
-    *) emit_status invalid 2 "attempt $mx recorded an invalid result" ;;
+    rerun-passed) rj rerun-passed 0 "attempt: $at" ;;
+    rerun-failed) rj rerun-failed 2 "attempt: $at" ;;
+    infrastructure-blocked) rj infrastructure-blocked 4 "attempt: $at" ;;
+    *) rj invalid 2 "attempt $mx recorded an invalid result" ;;
     esac
+}
+
+# rerun_status: after a successful do_verify, judge the latest rerun attempt (exits via emit_status).
+rerun_status() {
+    rerun_judge
+    emit_status "$RJ_STATUS" "$RJ_RC" "$RJ_DETAIL"
+}
+
+# ---------------------------------------------------------------- record
+
+# status_line <file>: the first `Status:` line value, empty when absent.
+status_line() { sed -n 's/^Status: //p' "$1" | head -n 1; }
+
+# set_status <file> <old> <new>: rewrites the first Status line in place (atomic, mode kept).
+set_status() {
+    local f="$1" new="$3" mode
+    PUBTMP="$(mktemp "$(dirname -- "$f")/.status.XXXXXX")" || die 4 "record: cannot create temporary file"
+    awk -v s="Status: $new" '!d && /^Status: / {print s; d=1; next} {print}' "$f" >"$PUBTMP"
+    mode="$(mode_of "$f")"
+    chmod "${mode:-644}" "$PUBTMP"
+    mv -f -- "$PUBTMP" "$f"
+    PUBTMP=""
+}
+
+# status_norm <file>: content hash with the first Status line neutralized.
+status_norm() { awk '!d && /^Status: / {print "Status: -"; d=1; next} {print}' "$1" | sha256_stdin; }
+
+# render_report <verdict.json> <evidence-mode-text>: fixed-layout, identity-neutral Markdown.
+render_report() {
+    jq -r --arg ev "$2" '
+        def bullets($a): if ($a | length) == 0 then "None." else ($a | map("- " + .) | join("\n")) end;
+        "# Evaluation: " + .title,
+        "",
+        "Status: Evaluated",
+        "Round: " + (.round | tostring),
+        "Verdict: " + .verdict,
+        "",
+        "## Findings",
+        "",
+        (if (.findings | length) == 0 then "No findings."
+         else (.findings | map("- **" + .severity + "** " + .title + (if .location then " (" + .location + ")" else "" end) + ": " + .detail) | join("\n")) end),
+        "",
+        (if .verdict == "FAIL" then "## Required changes", "", (.required_changes | to_entries | map((.key + 1 | tostring) + ". " + .value) | join("\n")), "" else empty end),
+        (if .evaluation_type == "code" then "## Local review adjudication", "",
+            (if (.local_review | length) == 0 then "No local-review findings." else (.local_review | map("- " + .finding_id + " " + .disposition + ": " + .rationale) | join("\n")) end), "" else empty end),
+        "## Notes",
+        "",
+        bullets(.notes),
+        "",
+        "## Gate rerun evidence",
+        "",
+        "Evidence mode: " + $ev' "$1"
+}
+
+cmd_record() {
+    ALLOW_JSON=0
+    local claimed="" args=() m vf="" n art_rel prior_rel="" prior_file="" prior_sha="" exp_round=0 pr pv type verdict
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --claimed-gate)
+            [ $# -ge 2 ] || die 1 "--claimed-gate requires a value"
+            claimed="$2"
+            shift 2
+            ;;
+        *)
+            args+=("$1")
+            shift
+            ;;
+        esac
+    done
+    parse_run_args ${args[@]+"${args[@]}"}
+    nocntrl "--claimed-gate" "$claimed"
+    if [ -n "$claimed" ] && ! [[ "$claimed" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]; then die 1 "invalid --claimed-gate: $claimed"; fi
+    init_repo "$REPO_ARG"
+    [ "$REPO_OK" = 1 ] && [ -n "$REPO_TOP" ] || die 4 "record: a usable managed checkout is required"
+    resolve_run "$RUN_ARG"
+    do_verify || true
+    verify_rc || exit $?
+    m="$RUN/manifest.json"
+    type="$(jq -r .evaluation_type "$m")"
+
+    # output: exactly one regular verdict.json
+    vf="$RUN/output/verdict.json"
+    n="$(find "$RUN/output" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')"
+    [ "$n" -gt 0 ] || die 3 "record: output/verdict.json is missing"
+    [ "$n" = 1 ] && [ -n "$(find "$RUN/output" -mindepth 1 -maxdepth 1 -name verdict.json -print)" ] || die 2 "record: output must contain exactly verdict.json"
+    [ -f "$vf" ] && [ ! -L "$vf" ] && [ -z "$(find "$vf" -links +1 -print)" ] || die 2 "record: verdict.json must be a regular, non-symlink, single-link file"
+    jq -e . "$vf" >/dev/null 2>&1 || die 2 "record: verdict.json is not valid JSON"
+    ERRS="$WORK/errs"
+    : >"$ERRS"
+    if ! validate_json_schema "$SCHEMA_VERDICT" "$vf"; then
+        while IFS= read -r line; do log "record: $line"; done <"$ERRS"
+        exit 2
+    fi
+
+    # bindings to the verified manifest
+    [ "$(jq '[.files[] | select(.role == "artifact")] | length' "$m")" = 1 ] || die 2 "record: exactly one manifest artifact is required"
+    art_rel="$(jq -r '.files[] | select(.role == "artifact") | .path | sub("^inputs/artifact/"; "")' "$m")"
+    jq -e --slurpfile m "$m" --arg art "$art_rel" '
+        ($m[0]) as $m
+        | .protocol == "loom-eval-verdict/v1" and .run_id == $m.run_id and .manifest_sha256 == $m.manifest_sha256
+        and .evaluation_type == $m.evaluation_type and .head_sha == $m.head_sha and .artifact == $art
+        and ((.base_sha // null) == ($m.base_sha // null))
+        and (.authority | sort) == ([$m.files[] | select(.role == "authority") | .path | sub("^inputs/authority/"; "")] | sort)' "$vf" >/dev/null ||
+        die 2 "record: verdict does not match the run, manifest, artifact, revisions or authority bindings"
+    verdict="$(jq -r .verdict "$vf")"
+
+    # expected round from the manifest-bound prior verdict
+    prior_rel="$(jq -r '[.files[] | select(.role == "prior-verdict") | .path | sub("^inputs/prior-verdict/"; "")] | .[0] // empty' "$m")"
+    if [ -n "$prior_rel" ]; then
+        jq -e 'has("revision")' "$m" >/dev/null || die 2 "record: prior verdict is not bound by a revision"
+        prior_file="$RUN/inputs/prior-verdict/$prior_rel"
+        prior_sha="$(jq -r --arg p "inputs/prior-verdict/$prior_rel" '.files[] | select(.path == $p) | .sha256' "$m")"
+        pr="$(awk '/^Round: [0-9]+$/ {print $2; exit}' "$prior_file")"
+        pv="$(awk '/^Verdict: (PASS|FAIL)$/ {print $2; exit}' "$prior_file")"
+        [ -n "$pr" ] && [ -n "$pv" ] || die 2 "record: bound prior verdict has no parsable Round and Verdict"
+        exp_round="$pr"
+        if [ "$pv" = FAIL ]; then exp_round=$((pr + 1)); fi
+    fi
+    [ "$(jq -r .round "$vf")" = "$exp_round" ] || die 2 "record: verdict round $(jq -r .round "$vf") does not match expected round $exp_round"
+
+    # gate rerun (code only)
+    local evmode="not applicable: no gate rerun for $type evaluations" ev=""
+    if [ "$type" = code ]; then
+        rerun_judge
+        case "$RJ_STATUS" in
+        rerun-passed) ;;
+        rerun-failed) [ "$verdict" = FAIL ] || die 2 "record: a PASS verdict requires a passing gate rerun" ;;
+        *) die "$RJ_RC" "record: gate rerun is $RJ_STATUS${RJ_DETAIL:+ ($RJ_DETAIL)}" ;;
+        esac
+        ev="$RJ_AT/gate-rerun.json"
+        [ "$(jq -r .completion "$ev")" = completed ] || die 2 "record: latest rerun attempt is not completed"
+        jq -e --argjson seq "$RJ_SEQ" --arg r "$RJ_STATUS" --arg h "$(sha256_file "$ev")" \
+            '.rerun_attempt.seq == $seq and .rerun_attempt.result == $r and .rerun_attempt.evidence_sha256 == $h' "$vf" >/dev/null ||
+            die 2 "record: verdict gate rerun reference does not match the latest attempt"
+        evmode="production: recorder-verified gate rerun attempt $RJ_SEQ, result $RJ_STATUS, evidence sha256 $(sha256_file "$ev")"
+    fi
+
+    # destination
+    local stem dest_name dest_rel dest_dir dest art_file target src_status cur
+    case "$art_rel" in *.md) stem="$(basename -- "$art_rel" .md)" ;; *) die 2 "record: artifact is not Markdown: $art_rel" ;; esac
+    [[ "$stem" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die 2 "record: unsafe artifact name: $stem"
+    dest_name="$stem-eval.md"
+    case "$type:$art_rel" in plan:.docs/slice-plans/*) dest_name="$stem-plan-eval.md" ;; esac
+    dest_rel=".docs/evaluations/$dest_name"
+    dest_dir="$REPO_TOP/.docs/evaluations"
+    dest="$dest_dir/$dest_name"
+    [ -d "$REPO_TOP/.docs" ] && [ ! -L "$REPO_TOP/.docs" ] && [ -d "$dest_dir" ] && [ ! -L "$dest_dir" ] ||
+        die 2 "record: .docs/evaluations is missing or a link"
+    art_file="$REPO_TOP/$art_rel"
+    [ -f "$art_file" ] && [ ! -L "$art_file" ] || die 2 "record: checkout artifact is missing or a link: $art_rel"
+
+    # transition plan (validated before any write)
+    case "$type:$verdict" in
+    code:PASS) target="Ready to Publish" ;;
+    code:FAIL) target="In Progress" ;;
+    *:FAIL) target="Draft" ;;
+    *) case "$art_rel" in .docs/ADR/* | .docs/adr/*) target="Accepted" ;; *) target="Approved" ;; esac ;;
+    esac
+    case "$type" in code) src_status="Implemented" ;; research) src_status="Research Review" ;; *) src_status="Plan Review" ;; esac
+    [ "$(status_norm "$art_file")" = "$(git -C "$REPO_TOP" show "$(jq -r .head_sha "$m"):$art_rel" 2>/dev/null >"$WORK/head.art" && status_norm "$WORK/head.art")" ] ||
+        die 2 "record: checkout artifact does not match the reviewed head"
+    [ "$(status_line "$WORK/head.art")" = "$src_status" ] || die 2 "record: reviewed artifact status is not '$src_status'"
+    cur="$(status_line "$art_file")"
+    [ "$cur" = "$src_status" ] || [ "$cur" = "$target" ] || die 2 "record: illegal transition from '$cur' to '$target'"
+
+    # publish the report
+    render_report "$vf" "$evmode" >"$WORK/report.md" || die 2 "record: cannot render the report"
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+        [ -f "$dest" ] && [ ! -L "$dest" ] && [ -z "$(find "$dest" -links +1 -print)" ] || die 2 "record: destination is not a regular single-link file"
+        if ! cmp -s "$WORK/report.md" "$dest"; then
+            [ -n "$prior_rel" ] && [ "$prior_rel" = "$dest_rel" ] && [ "$(sha256_file "$dest")" = "$prior_sha" ] ||
+                die 2 "record: a different report already exists at $dest_rel"
+        fi
+    fi
+    if ! cmp -s "$WORK/report.md" "$dest" 2>/dev/null; then
+        PUBTMP="$(mktemp "$dest_dir/.eval-report.XXXXXX")" || die 4 "record: cannot create temporary file"
+        cp "$WORK/report.md" "$PUBTMP"
+        chmod 644 "$PUBTMP"
+        mv -f -- "$PUBTMP" "$dest"
+        PUBTMP=""
+    fi
+
+    # transition (a claimed gate holds an advancing PASS)
+    local result=recorded
+    if [ "$cur" != "$target" ]; then
+        if [ -n "$claimed" ] && [ "$verdict" = PASS ]; then
+            result=gate-held
+        else
+            set_status "$art_file" "$cur" "$target"
+            cur="$target"
+        fi
+    fi
+    jq -n -c --arg s "$result" --arg r "$(jq -r .run_id "$m")" --arg v "$verdict" --arg p "$dest_rel" --arg h "$(sha256_file "$dest")" \
+        --arg a "$cur" --arg g "$claimed" \
+        '{status: $s, run_id: $r, verdict: $v, report_path: $p, report_sha256: $h, artifact_status: $a} + (if $g != "" then {claimed_gate: $g} else {} end)'
 }
 
 # ---------------------------------------------------------------- clean
@@ -1379,6 +1594,7 @@ usage: loom-eval-workspace prepare --type <plan|research|code> --head <sha> --ar
                                    [--run-id <id>] [--out <dir>] [--repo <path>]
        loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
        loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
+       loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>]
        loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
        loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 EOF
@@ -1392,6 +1608,7 @@ case "$sub" in
 prepare) cmd_prepare "$@" ;;
 verify) cmd_verify "$@" ;;
 gate-rerun) cmd_gate_rerun "$@" ;;
+record) cmd_record "$@" ;;
 status) cmd_status "$@" ;;
 clean) cmd_clean "$@" ;;
 -h | --help | help) usage ;;

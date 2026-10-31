@@ -97,9 +97,10 @@ Requested scope: the workflow argument (if empty, ask).
       involved. **Write-and-forget** — assemble → commit the artifact → drop it; do
       not reason over or branch on the findings (the blind code-evaluator adjudicates
       them from the file — ADR 0012).
-   e. On return, verify the recorder/root's author-neutral commit and the new
-      status (the evaluator itself never commits — the recorder installs the
-      verdict and transitions status). On a code-eval PASS (status now
+   e. On return, invoke `loom-eval-workspace record <run-dir|run-id>` (or with
+      `--claimed-gate <gate>`), inspect its JSON result, verify the author-neutral
+      commit and the new status (the evaluator itself never commits — the recorder
+      installs the verdict and transitions status). On a code-eval PASS (status now
       `Ready to Publish`), launch the developer's **finalize pass** (update
       `status/`, archive the plan); the finalize/land sequence follows ADR 0020
       (publish → verify remote → receipt → `Landed`).

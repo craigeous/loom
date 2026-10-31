@@ -1334,3 +1334,293 @@ SHIM
     ew --help
     [[ "$output" == *"gate-rerun <run-dir|run-id>"* ]]
 }
+
+# ---------------------------------------------------------------- record
+
+PLAN_REL=.docs/slice-plans/demo.md
+rec_commit() {
+    mkdir -p "$(dirname -- "$REPO/$1")"
+    printf '%s\n' "$2" >"$REPO/$1"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m "$1"
+}
+rec_head() { git -C "$REPO" rev-parse HEAD; }
+art_status() { sed -n 's/^Status: //p' "$REPO/${1:-$PLAN_REL}" | head -n 1; }
+
+rec_plan() {
+    local st="${1:-Plan Review}"
+    shift || true
+    rec_commit "$PLAN_REL" $'# Demo\n\nStatus: '"$st"$'\n\n## Content\n'
+    ew prepare --repo "$REPO" --type plan --head "$(rec_head)" --artifact "$PLAN_REL" --authority .docs/spec/s.md --out "$OUT" "$@"
+    [ "$status" -eq 0 ]
+}
+
+rec_code() {
+    rec_commit "$PLAN_REL" $'# Demo\n\nStatus: In Progress\n\n## Content\n'
+    local base
+    base="$(rec_head)"
+    rec_commit "$PLAN_REL" $'# Demo\n\nStatus: Implemented\n\n## Content\n'
+    local gargs=(--gate-arg /usr/bin/true)
+    if [ $# -gt 0 ]; then gargs=("$@"); fi
+    ew prepare --repo "$REPO" --type code --head "$(rec_head)" --base "$base" --artifact "$PLAN_REL" --authority .docs/spec/s.md --docs-only \
+        --gate-evidence "$WORK/evidence.txt" --gate-env "PATH=$PINPATH" "${gargs[@]}" --out "$OUT"
+    [ "$status" -eq 0 ] || {
+        echo "CODE PREP FAILED: $output"
+        false
+    }
+    ew gate-rerun "$OUT" --repo "$REPO" || true
+}
+
+mk_verdict() {
+    local m="$OUT/manifest.json"
+    local t
+    t="$(jq -r .evaluation_type "$m")"
+    local run_id
+    run_id="$(jq -r .run_id "$m")"
+    local m_sha
+    m_sha="$(jq -r .manifest_sha256 "$m")"
+    local h_sha
+    h_sha="$(jq -r .head_sha "$m")"
+    local b_sha
+    b_sha="$(jq -r '.base_sha // empty' "$m")"
+    local art
+    art="$(jq -r '.files[] | select(.role == "artifact") | .path | sub("^inputs/artifact/"; "")' "$m")"
+    local auth
+    auth="$(jq -c '[.files[] | select(.role == "authority") | .path | sub("^inputs/authority/"; "")]' "$m")"
+
+    local code_fields="{}"
+    if [ "$t" = code ]; then
+        local ev_dir ev_seq ev_path ev_sha ev_res
+        ev_dir="$(ls "$OUT/reruns" | sort -V | tail -n 1)"
+        ev_seq="${ev_dir#attempt-}"
+        ev_path="$OUT/reruns/$ev_dir/gate-rerun.json"
+        ev_sha="$(shasum -a 256 <"$ev_path" | cut -d' ' -f1)"
+        ev_res="$(jq -r .result "$ev_path")"
+        code_fields="$(jq -n -c --argjson seq "$ev_seq" --arg res "$ev_res" --arg h "$ev_sha" \
+            '{rerun_attempt: {seq: $seq, result: $res, evidence_sha256: $h}, local_review: [{finding_id: "COR-1", disposition: "resolved", rationale: "verified"}]}')"
+    fi
+
+    jq -n -c \
+        --arg proto "loom-eval-verdict/v1" \
+        --arg rid "$run_id" \
+        --arg msha "$m_sha" \
+        --arg etype "$t" \
+        --arg art "$art" \
+        --arg hsha "$h_sha" \
+        --arg bsha "$b_sha" \
+        --argjson auth "$auth" \
+        --argjson code "$code_fields" \
+        '{
+            protocol: $proto,
+            run_id: $rid,
+            manifest_sha256: $msha,
+            evaluation_type: $etype,
+            artifact: $art,
+            head_sha: $hsha,
+            verdict: "PASS",
+            round: 0,
+            title: "Demo Review",
+            authority: $auth,
+            findings: [],
+            required_changes: [],
+            notes: ["all checks passed"]
+        } + (if $bsha != "" then {base_sha: $bsha} else {} end) + $code' >"$OUT/output/verdict.json"
+
+    if [ $# -gt 0 ]; then
+        local tmp
+        tmp="$(mktemp)"
+        jq "$1" "$OUT/output/verdict.json" >"$tmp" && mv "$tmp" "$OUT/output/verdict.json"
+    fi
+}
+
+@test "record: valid plan evaluation records report and transitions to Approved" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = recorded ]
+    [ "$(jq -r .verdict <<<"$output")" = PASS ]
+    [ "$(jq -r .artifact_status <<<"$output")" = Approved ]
+    [ "$(art_status)" = Approved ]
+    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    [ -f "$rep" ]
+    grep -qx 'Status: Evaluated' "$rep"
+    grep -qx 'Verdict: PASS' "$rep"
+    grep -qx 'Round: 0' "$rep"
+}
+
+@test "record: valid ADR evaluation transitions to Accepted" {
+    local adr=.docs/adr/0099-test.md
+    rec_commit "$adr" $'# ADR 99\n\nStatus: Plan Review\n\n## Content\n'
+    ew prepare --repo "$REPO" --type plan --head "$(rec_head)" --artifact "$adr" --authority .docs/spec/s.md --out "$OUT"
+    [ "$status" -eq 0 ] || {
+        echo "ADR PREP FAILED: $output"
+        false
+    }
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ] || {
+        echo "ADR RECORD FAILED: $output"
+        false
+    }
+    [ "$(jq -r .artifact_status <<<"$output")" = Accepted ]
+    [ "$(art_status "$adr")" = Accepted ]
+    [ -f "$REPO/.docs/evaluations/0099-test-eval.md" ]
+}
+
+@test "record: valid plan FAIL transitions to Draft" {
+    rec_plan
+    mk_verdict '.verdict = "FAIL" | .required_changes = ["fix the design"] | .findings = [{severity: "BLOCKER", title: "b", detail: "d"}]'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = recorded ]
+    [ "$(jq -r .verdict <<<"$output")" = FAIL ]
+    [ "$(jq -r .artifact_status <<<"$output")" = Draft ]
+    [ "$(art_status)" = Draft ]
+    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    [ -f "$rep" ]
+    grep -qx 'Verdict: FAIL' "$rep"
+    grep -q '## Required changes' "$rep"
+}
+
+@test "record: valid code evaluation with passing rerun records report and transitions to Ready to Publish" {
+    rec_code
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = recorded ]
+    [ "$(jq -r .verdict <<<"$output")" = PASS ]
+    [ "$(jq -r .artifact_status <<<"$output")" = "Ready to Publish" ]
+    [ "$(art_status)" = "Ready to Publish" ]
+    local rep="$REPO/.docs/evaluations/demo-eval.md"
+    [ -f "$rep" ]
+    grep -qx 'Verdict: PASS' "$rep"
+    grep -q '## Gate rerun evidence' "$rep"
+    grep -q '## Local review adjudication' "$rep"
+}
+
+@test "record: valid code FAIL with failing rerun transitions to In Progress" {
+    rec_code --gate-arg /usr/bin/false
+    [ "$(ev 1 .result)" = rerun-failed ]
+    mk_verdict '.verdict = "FAIL" | .required_changes = ["fix failure"] | .findings = [{severity: "MAJOR", title: "m", detail: "d"}]'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .verdict <<<"$output")" = FAIL ]
+    [ "$(jq -r .artifact_status <<<"$output")" = "In Progress" ]
+    [ "$(art_status)" = "In Progress" ]
+}
+
+@test "record: code PASS with failed rerun attempt fails closed (exit 2)" {
+    rec_code --gate-arg /usr/bin/false
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"a PASS verdict requires a passing gate rerun"* ]]
+    [ "$(art_status)" = Implemented ]
+}
+
+@test "record: schema error in verdict.json fails closed (exit 2)" {
+    rec_plan
+    mk_verdict 'del(.verdict)'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ ! -e "$REPO/.docs/evaluations/demo-plan-eval.md" ]
+}
+
+@test "record: PASS carrying BLOCKER or MAJOR finding fails closed (exit 2)" {
+    rec_plan
+    mk_verdict '.findings = [{severity: "BLOCKER", title: "bad", detail: "blocker present"}]'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+}
+
+@test "record: verdict round mismatch against expected round fails closed (exit 2)" {
+    rec_plan
+    mk_verdict '.round = 2'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"does not match expected round 0"* ]]
+}
+
+@test "record: bound prior verdict replacement succeeds for successor round" {
+    rec_commit .docs/evaluations/demo-plan-eval.md $'# Prior\n\nStatus: Evaluated\nRound: 0\nVerdict: FAIL\n\n## Findings\n'
+    local prior_sha
+    prior_sha="$(rec_head)"
+    rec_commit "$PLAN_REL" $'# Demo\n\nStatus: Plan Review\n\n## Revised\n'
+    ew prepare --repo "$REPO" --type plan --head "$(rec_head)" --artifact "$PLAN_REL" --authority .docs/spec/s.md \
+        --prior-verdict .docs/evaluations/demo-plan-eval.md --prior-sha "$prior_sha" --out "$OUT"
+    [ "$status" -eq 0 ] || {
+        echo "PRIOR PREP FAILED: $output"
+        false
+    }
+    mk_verdict '.round = 1'
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ] || {
+        echo "PRIOR RECORD FAILED: $output"
+        false
+    }
+    [ "$(jq -r .artifact_status <<<"$output")" = Approved ]
+    local rep="$REPO/.docs/evaluations/demo-plan-eval.md"
+    grep -qx 'Round: 1' "$rep"
+    grep -qx 'Verdict: PASS' "$rep"
+}
+
+@test "record: differing existing report without bound prior verdict fails closed (exit 2)" {
+    rec_commit .docs/evaluations/demo-plan-eval.md $'# Prior un-bound report\n'
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"a different report already exists"* ]]
+}
+
+@test "record: identical existing report succeeds idempotently (exit 0)" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = recorded ]
+}
+
+@test "record: checkout artifact blob mismatch against reviewed head fails closed (exit 2)" {
+    rec_plan
+    mk_verdict
+    # Tamper with the checkout artifact after head
+    printf $'# Demo\n\nStatus: Plan Review\n\n## Tampered\n' >"$REPO/$PLAN_REL"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"checkout artifact does not match the reviewed head"* ]]
+}
+
+@test "record: missing output/verdict.json fails with exit 3" {
+    rec_plan
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"verdict.json is missing"* ]]
+}
+
+@test "record: extra or non-regular files in output/ fails closed (exit 2)" {
+    rec_plan
+    mk_verdict
+    touch "$OUT/output/extra.txt"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"output must contain exactly verdict.json"* ]]
+}
+
+@test "record: --claimed-gate holds status advance and reports gate-held" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO" --claimed-gate review-gate
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = gate-held ]
+    [ "$(jq -r .claimed_gate <<<"$output")" = review-gate ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: usage text lists the subcommand" {
+    ew --help
+    [[ "$output" =~ record[[:space:]]+"<run-dir|run-id>" ]]
+}
