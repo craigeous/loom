@@ -865,6 +865,8 @@ function identificationLines(text, name) {
   return found;
 }
 
+// The one designated top-level problem document an ADR may ground itself on besides research notes.
+const PROBLEM_DOCUMENT = ".docs/repository-improvement-plan.md";
 function checkAuthority(relative, kind, text, artifacts, markdownParser) {
   const hrefs = relativeHrefs(text, markdownParser);
   const targets = hrefs.map((href) => resolveHref(relative, href)).filter(Boolean);
@@ -873,8 +875,8 @@ function checkAuthority(relative, kind, text, artifacts, markdownParser) {
     if (!adrs.length) ruleReport(relative, "authority", "Authority section must link at least one existing ADR");
     else if (!adrs.some((target) => statusOf(target) === "Accepted")) ruleReport(relative, "authority", "Authority section must link at least one accepted ADR");
   } else if (kind === "adr") {
-    // Grounding is an approved research note or an accepted/approved top-level problem document, never an arbitrary doc.
-    const grounding = targets.filter((target) => (/^\.docs\/research\/[^/]+\.md$/.test(target) || /^\.docs\/[^/]+\.md$/.test(target)) && ["Approved", "Accepted"].includes(statusOf(target)) && (target.startsWith(".docs/research/") ? statusOf(target) === "Approved" : true));
+    // Grounding is an approved/accepted research note or problem document under .docs/research/, never an arbitrary doc.
+    const grounding = targets.filter((target) => (/^\.docs\/research\/[^/]+\.md$/.test(target) || target === PROBLEM_DOCUMENT) && ["Approved", "Accepted"].includes(statusOf(target)));
     const prior = targets.filter((target) => target !== relative && ((/^\.docs\/ADR\//.test(target) && statusOf(target) === "Accepted") || (/^\.docs\/spec\//.test(target) && statusOf(target) === "Approved")));
     if (!grounding.length) ruleReport(relative, "authority", "body must link existing approved research or a problem statement");
     if (!prior.length) ruleReport(relative, "authority", "body must link accepted prior authority (an accepted ADR or approved spec)");
@@ -896,7 +898,7 @@ function checkAuthority(relative, kind, text, artifacts, markdownParser) {
 }
 
 // An evaluation names its artifact (field or filename identity) and links applicable, resolvable authority.
-const AUTHORITY_ROOT = /^(?:\.docs\/(?:spec|ADR|research|status)\/|\.docs\/[^/]+\.md$|plugins\/|scripts\/|gates\/|references\/)/;
+const AUTHORITY_ROOT = /^(?:\.docs\/(?:spec|ADR|research|slice-plans)\/[^\s]+\.md$|plugins\/loom\/skills\/loom-playbook\/references\/[^/]*rubric[^/]*\.md$)/;
 function checkEvaluationIdentification(relative, text, identity, markdownParser) {
   const artifactField = identificationLines(text, "Artifact").join(" ");
   const authorityField = identificationLines(text, "Reviewed against").join(" ");
@@ -921,13 +923,22 @@ function checkEvaluationIdentification(relative, text, identity, markdownParser)
   const adrNumbers = [...authorityField.matchAll(/\bADRs?\s+((?:\d{4}(?:\s*[,/\u2013-]\s*|\s+and\s+)?)+)/gi)].flatMap((match) => match[1].match(/\d{4}/g));
   const missing = adrNumbers.filter((number) => !files.some((file) => file.startsWith(`.docs/ADR/${number}-`)));
   if (missing.length) { ruleReport(relative, "authority", `evaluation authority names an ADR that does not exist: ${missing.join(", ")}`); return; }
+  // Bare names count only when they resolve to a real, applicable file.
+  const unresolvedNames = [];
+  for (const match of authorityField.matchAll(/\bspecs?\s+(\d\d)\b/gi)) if (!files.some((file) => file.startsWith(`.docs/spec/${match[1]}-`))) unresolvedNames.push(`spec ${match[1]}`);
+  for (const match of authorityField.matchAll(/(?<![\w/.-])(\d\d-[a-z][a-z0-9-]*\.md)\b/gi)) if (!files.includes(`.docs/spec/${match[1]}`)) unresolvedNames.push(match[1]);
+  for (const match of authorityField.matchAll(/\.docs\/slice-plans\/[\w./-]+\.md/gi)) if (!files.includes(match[0]) && !files.includes(match[0].replace("/slice-plans/", "/slice-plans/archive/"))) unresolvedNames.push(match[0]);
+  if (unresolvedNames.length) { ruleReport(relative, "authority", `evaluation authority names a file that does not exist: ${unresolvedNames.join(", ")}`); return; }
+  const hasFile = (pattern) => files.some((file) => pattern.test(file));
   const named = adrNumbers.length > 0
-    || /\bspecs?\s+\d\d\b|\b\d\d-[a-z0-9-]+\.md\b/i.test(authorityField)
-    || (/\brepository[- ]improvement[- ]plan\b/i.test(authorityField) && files.includes(".docs/repository-improvement-plan.md"))
-    || /\b(?:approved|accepted)\b[^;]*\bresearch\b|\bresearch notes?\b/i.test(authorityField)
-    || /\brubric\b|\bplaybook\b|\bslice[- ]plan\b|\.docs\/slice-plans\/[\w./-]+\.md/i.test(authorityField);
+    || /\bspecs?\s+\d\d\b|(?<![\w/.-])\d\d-[a-z][a-z0-9-]*\.md\b/i.test(authorityField)
+    || (/\brepository[- ]improvement[- ]plan\b/i.test(authorityField) && files.includes(PROBLEM_DOCUMENT))
+    || (/\bresearch notes?\b|\b(?:approved|accepted)\b[^;]*\bresearch\b/i.test(authorityField) && hasFile(/^\.docs\/research\/[^/]+\.md$/))
+    || (/\brubric\b/i.test(authorityField) && hasFile(/^plugins\/loom\/skills\/loom-playbook\/references\/[^/]*rubric[^/]*\.md$/))
+    || (/\bplaybook\b/i.test(authorityField) && files.includes("plugins/loom/skills/loom-playbook/SKILL.md"))
+    || (/\bslice[- ]plans?\b|\.docs\/slice-plans\/[\w./-]+\.md/i.test(authorityField) && hasFile(/^\.docs\/slice-plans\/(?:archive\/)?[^/]+\.md$/));
   const codePaths = [...authorityField.matchAll(/`([^`\s]+)`/g)].map((match) => match[1].replace(/^\.\//, "")).filter((candidate) => files.includes(candidate));
-  const applicable = resolved.concat(codePaths).filter((target) => AUTHORITY_ROOT.test(target) || /^\.docs\/slice-plans\//.test(target));
+  const applicable = resolved.concat(codePaths).filter((target) => AUTHORITY_ROOT.test(target));
   if (!applicable.length && !named) ruleReport(relative, "authority", `evaluation authority must reference applicable specs, ADRs, research, plan or rubric: ${authorityField}`);
 }
 
@@ -1069,8 +1080,8 @@ function priorStatus(relative) {
   }
   return undefined;
 }
-// A FAIL return needs a merits FAIL of the matching phase, reviewing a commit at or after the commit that entered the rejected status.
-function failEvidence(artifact, from, to, entered) {
+// A FAIL return needs a merits FAIL of the matching phase, reviewing a commit within the interval from the commit that entered the rejected status to the commit that returned from it.
+function failEvidence(artifact, from, to, entered, returned) {
   const base = path.posix.basename(artifact.relative, ".md");
   const names = new Set([planIdentity(artifact.relative), base, base.replace(/^\d+-/, "")]);
   const wantPlanEval = artifact.kind === "plan" ? from === "Plan Review" : undefined;
@@ -1080,7 +1091,8 @@ function failEvidence(artifact, from, to, entered) {
   for (const record of candidates) {
     const sha = eventCommit(record);
     if (!sha || !entered || !isAncestor(sha, "HEAD")) { ambiguous = true; continue; }
-    if (isAncestor(entered, sha)) return null;
+    // Bound the reviewed commit to this rejected-status interval; a later cycle's FAIL cannot justify an earlier return.
+    if (isAncestor(entered, sha) && (!returned || isAncestor(sha, returned))) return null;
   }
   return ambiguous ? "fail-ambiguous" : "fail-evidence";
 }
@@ -1095,7 +1107,7 @@ function checkTransitions(before, artifact) {
     if (!step) return "illegal";
     if (to === "Needs Clarification") prior = from;
     if (isFailReturn(artifact.kind, from, to)) {
-      const problem = failEvidence(artifact, from, to, sequence[index - 1].sha);
+      const problem = failEvidence(artifact, from, to, sequence[index - 1].sha, sequence[index].sha);
       if (problem) return problem;
     }
   }

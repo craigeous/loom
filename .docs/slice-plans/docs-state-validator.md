@@ -160,6 +160,24 @@ transitions or landing.
 - Tests: new Bats cases for phase/order FAIL evidence, first-event reset validation, ADR problem-statement
   grounding and applicable evaluation references; two existing cases updated to the stricter rules.
 
+### Round 1 code-eval remediation
+
+- FAIL return evidence is bounded to the rejected-status interval: the merits FAIL's reviewed commit must
+  descend from the commit that entered the rejected status and, when the return is committed, be an ancestor
+  of (or equal to) the commit that returned from it. A FAIL from a later cycle cannot justify an earlier return;
+  unorderable evidence still reports ambiguity.
+- Evaluation authority bare names (`spec NN`, `research notes`, `rubric`, `playbook`, `slice plan`) count only
+  when they resolve to a real applicable file; nonexistent `spec NN` and slice-plan paths are reported.
+  Authority roots are `.docs/spec/`, `.docs/ADR/`, `.docs/research/`, `.docs/slice-plans/` and rubric files
+  under the playbook references; `scripts/`, `.docs/status/` and other broad roots no longer count.
+- ADR problem grounding accepts only approved/accepted research notes or the designated
+  `.docs/repository-improvement-plan.md`, not arbitrary top-level `.docs/*.md`.
+- Two exact-source `rule:` exceptions were added to the allowlist: `docs-state-validator-eval.md`
+  (`eval-sequence`; its rewritten code-eval record shares an identity with the Round 0 plan evaluation) and
+  `scope-identity-guard-to-commit-subcommands-eval.md` (`authority`; names only the shipped hook).
+- Tests: new Bats cases for interval-bounded FAIL returns, unresolved bare authority names, broad authority
+  roots and top-level problem documents.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
@@ -168,3 +186,4 @@ transitions or landing.
 | 1 | Address Round 0 findings: define validation contracts, compatibility, authority and scope. |
 | 2 | Implemented; verification evidence recorded. |
 | 3 | Address code-eval Round 0 findings; remediation evidence recorded. |
+| 4 | Address code-eval Round 1 findings; remediation evidence recorded. |

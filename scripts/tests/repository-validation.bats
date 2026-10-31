@@ -2082,6 +2082,66 @@ DOC
     [ "$status" -eq 0 ]
 }
 
+@test "baseline FAIL return evidence is bounded to the rejected-status interval" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md "Plan Review"
+    fixture_commit "review"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md Draft
+    fixture_commit "return"
+    printf 'later\n' >"$TEST_ROOT/note.txt"
+    fixture_commit "later work"
+    later="$(fixture_git rev-parse HEAD)"
+    # A FAIL that reviewed a commit after the return belongs to a later cycle and cannot justify it.
+    put_eval p-plan-eval.md FAIL 0 "Commit: $later"
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: FAIL return without a recorded FAIL evaluation"* ]]
+    # A FAIL reviewing a commit inside the interval justifies the return.
+    put_eval p-plan-eval.md FAIL 0 "Commit: $base"
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: evaluation bare authority names must resolve to applicable files" {
+    make_docs_root
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: spec 99\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: evaluation authority names a file that does not exist: spec 99"* ]]
+    # Without a rubric file the bare word is not authority.
+    rm -f "$TEST_ROOT"/plugins/loom/skills/loom-playbook/references/*rubric*
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: the rubric\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    fixture_git checkout HEAD -- plugins
+    # Broad roots such as scripts/ and .docs/status/ are not authority.
+    put scripts/x.sh <<'DOC'
+echo x
+DOC
+    put .docs/status/s.md <<'DOC'
+# S
+DOC
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: `scripts/x.sh` and [status](../status/s.md)\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: spec 00 and `scripts/x.sh`\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: ADR problem grounding rejects arbitrary top-level docs" {
+    make_docs_root
+    put .docs/other.md <<'DOC'
+# Other
+Status: Approved
+DOC
+    printf '# ADR\nStatus: Accepted\n\n## Context\nSee [other](../other.md) and [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+}
+
 @test "docs state: Owner-Reset is validated on the first event and requires the owner decision text" {
     make_docs_root
     first="$(fixture_git rev-parse HEAD)"
@@ -2102,7 +2162,7 @@ DOC
     [[ "$output" != *"must record an owner decision"* ]]
 }
 
-@test "docs state: ADR problem statement must be approved research or a top-level problem document" {
+@test "docs state: ADR problem statement must be approved research or the designated problem document" {
     make_docs_root
     mkdir -p "$TEST_ROOT/.docs/status"
     printf '# Notes\nStatus: Approved\n' >"$TEST_ROOT/.docs/status/notes.md"
@@ -2114,7 +2174,13 @@ DOC
     printf '# ADR\nStatus: Accepted\n\n## Context\n[problem](../problem.md) and [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
     docs_all
     [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+    # An arbitrary approved top-level document is still not a problem statement.
     printf '# Problem\nStatus: Approved\n' >"$TEST_ROOT/.docs/problem.md"
+    docs_all
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+    # The designated problem document grounds an ADR.
+    printf '# Plan\nStatus: Approved\n' >"$TEST_ROOT/.docs/repository-improvement-plan.md"
+    printf '# ADR\nStatus: Accepted\n\n## Context\n[plan](../repository-improvement-plan.md) and [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
     docs_all
     [[ "$output" != *"ADR/0001-a.md: body must link existing approved research"* ]]
 }
