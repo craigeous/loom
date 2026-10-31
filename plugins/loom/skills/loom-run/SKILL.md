@@ -81,22 +81,22 @@ Requested scope: the workflow argument (if empty, ask).
       `orchestration.md` → *Multi-session coordination* and `parallelism.md` →
       *Multi-session coordination*.
    d2. **When a slice reaches `Implemented`, before dispatching the code-evaluator,
-      run the automated review** (orchestration.md → "Automated review before a
-      slice lands"). This means a **real tool call**: actually invoke the
-      code-review and security-review workflows and transcribe their output into
-      the `-review-findings.md` artifact — **never** write the findings from your
-      own reading of the diff (that is a hard violation). Skip only for a pure-docs
-      diff (`skipped: docs-only`) or a genuinely unavailable workflow
-      (`skipped: command-unavailable`). This is the one step that runs review
-      output through your window; **write-and-forget** — capture → write the
-      artifact → drop it; do not reason over or branch on the findings (the blind
-      code-evaluator adjudicates them from the file — ADR 0012). **Before recording
-      `ran-clean`**, inspect the workflow result for a finder/sub-agent failure
-      indicator: a limit-crashed run (spend/usage/quota, 429, 5xx,
-      classifier-unavailable) is **INVALID** — a false-clean, never `ran-clean`;
-      treat it as an infra-block escalation (re-run when unblocked, else
-      `skipped: command-unavailable`) — see orchestration.md → *Automated review
-      before a slice lands*.
+      run the local review** (orchestration.md → "Automated review before a slice
+      lands"; `loom-local-review/v1`, ADR 0021). Resolve `loom-review` through the
+      installed helper mechanism; with the explicit full base/head commit IDs and the
+      approved plan and gate-evidence paths run `loom-review prepare`, launch the
+      three required finders (`review-correctness/v1`, `review-tests/v1`,
+      `review-security/v1`) as cold auxiliary workers from the manifest-assigned
+      prompts and `results/` paths, then `validate`, `assemble --out
+      .docs/evaluations/<slice>-review-findings.md`, and `clean`. **Never** write
+      findings from your own reading of the diff (hard violation). A pure-docs
+      diff records `skipped: docs-only` without launching a run. Any missing,
+      failed, or malformed finder output invalidates the **whole** run — never
+      assemble partial findings or call it clean; an infrastructure failure is an
+      infra-block escalation (ADR 0017). No remote state or external command is
+      involved. **Write-and-forget** — assemble → commit the artifact → drop it; do
+      not reason over or branch on the findings (the blind code-evaluator adjudicates
+      them from the file — ADR 0012).
    e. On return, verify the recorder/root's author-neutral commit and the new
       status (the evaluator itself never commits — the recorder installs the
       verdict and transitions status). On a code-eval PASS (status now

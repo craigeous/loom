@@ -45,17 +45,19 @@ commit **diff**. Tag findings and derive the verdict per
 ## Review-findings adjudication
 
 The orchestrator hands you a **review-findings artifact**
-(`.docs/evaluations/<slice-name>-review-findings.md`, produced by running `/code-review`
-and `/security-review` on the slice diff —
-[ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md),
-[ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md)
-— or the unattended local three-finder review package under
-[ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)
-`loom-local-review/v1` /
-[ADR 0023](../../../../../.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md) §3
-`loom-repository-bootstrap/v1`) as an additional input. It is **advisory input, not
-an oracle and not an auto-FAIL.** See [`review-findings.md`](review-findings.md) for
-the artifact's shape and per-command status tokens — do not restate them here.
+(`.docs/evaluations/<slice-name>-review-findings.md`), assembled by `loom-review`
+from a validated `loom-local-review/v1` three-finder run
+([ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)), or
+an explicit `skipped: docs-only` for a pure-docs slice, as an additional input
+alongside the controlled inputs of
+[ADR 0022](../../../../../.docs/ADR/0022-controlled-input-independent-evaluation.md)
+(the gate rerun remains mandatory). A missing or invalid required review is not
+valid evidence and not permission to land. The artifact is **advisory input, not an
+oracle and not an auto-FAIL.** The `loom-repository-bootstrap/v1`
+([ADR 0023](../../../../../.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md) §3)
+fallback is separate and is not an ordinary local-review run. See
+[`review-findings.md`](review-findings.md) for the artifact's shape and status
+tokens — do not restate them here.
 
 - **Confirm or reject** each reported finding against the diff, plan, and specs
   (including the threat-model and proportionality rules in [`severity.md`](severity.md)).
@@ -63,11 +65,11 @@ the artifact's shape and per-command status tokens — do not restate them here.
   the verdict then follows from your own severity-tagged findings, exactly as for any
   other finding.
 - **Discard false positives** with a one-line reason recorded in the eval file
-  (`/code-review` and local review finders score or surface candidate issues and
-  explicitly expect false positives — an unadjudicated finding must not decide a landing).
+  (local review finders surface candidate issues and
+  expect false positives — an unadjudicated finding must not decide a landing).
 - You **still own the verdict** — [`severity.md`](severity.md) is the single verdict
   authority; the findings add a review dimension, not a verdict path.
-- A `skipped:`/`ran-clean` status is **informational, not itself a finding** — a skip
+- A `skipped: docs-only`/`ran-clean` status is **informational, not itself a finding** — a skip
   means the review did not run and must never be read as a clean review. See
   [`review-findings.md`](review-findings.md) for what each status token means.
 

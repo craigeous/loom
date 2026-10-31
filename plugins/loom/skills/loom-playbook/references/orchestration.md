@@ -88,7 +88,7 @@ auto-compact) before recording progress, the restart re-bootstraps from a stale
 `handoff.md`, re-derives the **same** next action, does the same big thing, clears
 again — an infinite **starvation loop**. Four rules prevent it (classic write-ahead
 discipline; roles already commit their own output, so these mainly bite around
-*orchestrator-side* work and the in-window `/code-review` step).
+*orchestrator-side* work and the in-window local-review step).
 
 **Multi-session cold restart:** under multi-session coordination, the write-ahead
 anchor is **off-`main`, per-session** — `loom-coord checkpoint-write --session <id>
@@ -108,7 +108,7 @@ The shared human-facing `handoff.md` stays on `main`, written at land under the 
 - **Write-ahead checkpoint — checkpoint before the act, not after.** Keep
   `status/handoff.md` recording the **next intended action**, committed, **before**
   you undertake anything large or in-window (spawning a heavy role, running
-  `/code-review`). The checkpoint *leads* the work — so any clear resumes from an
+  the local review). The checkpoint *leads* the work — so any clear resumes from an
   accurate, **advancing** anchor. Updating `handoff.md` only on break is too late.
 - **Restart before a big op when near budget.** A single operation can jump you from
   ~55% to context-full in one step. If you're near the margin and about to do
@@ -162,79 +162,53 @@ review before a slice lands" (the run step),
 (`loom-repository-bootstrap/v1` bootstrap fallback).
 
 - **When.** When a slice reaches `Implemented`, and before the slice can land,
-  run Claude Code's built-in `/code-review` and `/security-review` on the slice's
-  commit diff — before (or while) dispatching the code-evaluator.
-- **Who runs it.** Only the orchestrator may spawn, and a sub-agent cannot safely
-  run a command that may spawn; therefore the orchestrator runs these commands —
-  never the code-evaluator
-  ([ADR 0001](../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md)).
-  This is consistent with the "You spawn; roles never spawn" rule above.
-- **Actually invoke the command — never simulate it.** "Run `/code-review`" means
-  issue a **real tool call** that executes the actual command: invoke the
-  `code-review` and `security-review` skills via the **Skill tool** (equivalently,
-  the `/code-review` and `/security-review` slash commands), and transcribe **their
-  emitted output** into the findings artifact. It is a **hard violation** to author
-  the findings yourself by reading the diff and writing what you *think* the command
-  would say — the entire value of this step is the independent reviewer's analysis,
-  which you must not impersonate. Concretely: before you write the findings
-  artifact, your transcript MUST contain a Skill-tool (or slash-command) invocation
-  of `code-review` and one of `security-review`; if it does not, you have not run
-  the step. If you ever find yourself analysing the code to produce findings, stop —
-  that is the failure mode. If the command genuinely cannot be invoked, record
-  `skipped: command-unavailable` (below) — never substitute your own review and
-  never claim `ran-clean`.
-- **Local diff mode only.** Run the commands on the slice's commit diff in local
-  diff mode only — never PR / `--comment` / `--fix` mode (no GitHub round-trip,
-  no PR metadata, no posting, no working-tree mutation), keeping the input
-  identity-neutral and network-silent so the blind contract holds (ADR 0010 §1/§3).
-- **Target the slice's commit range.** At `Implemented` the slice is already
-  committed, so the working tree is empty. The orchestrator targets the slice's
-  commit range or branch when running `/code-review` — e.g. `git diff
-  <base>...<slice-HEAD>` or passing the slice branch/range as the command's target
-  argument — never the empty working tree
-  ([ADR 0011](../../../../../.docs/ADR/0011-correct-automated-review-command-to-code-review.md)
-  §2).
-- **Ensure `origin/HEAD` is set (for `/security-review`).** `/security-review`
-  auto-resolves its base from `origin/HEAD` (it reviews the branch's changes vs the
-  default branch — no PR needed). loom commits **directly on `main`**, and a clone
-  may have `origin/HEAD` unset, so the command can error resolving its base. Run
-  `git remote set-head origin -a` once (or set it locally:
-  `git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`) — then, with
-  the slice's commits **unpushed**, `origin/HEAD..HEAD` is exactly the slice and
-  `/security-review` reviews it. This is a one-time environment fix, not per-slice
-  plumbing.
-- **Capture and hand off.** Capture output into the committed, identity-neutral,
-  per-slice findings artifact per [`review-findings.md`](review-findings.md) — see
-  that file for path, format, and the four status tokens. Commit the artifact
-  author-neutral per [`commit-convention.md`](commit-convention.md) and hand it to
-  the blind code-evaluator as an **additional input** alongside the commit diff,
-  slice-plan, specs, and gate evidence. **Write-and-forget** (ADR 0012): once the
-  artifact is written, drop the review output — do not reason over or branch on the
-  findings; the blind code-evaluator adjudicates them from the file.
-- **Applicability.** Run the review only when the slice's diff touches at least
-  one code (non-docs) file. A pure-docs slice skips with a note, recording the
-  `skipped: docs-only` status in the artifact — never "ran clean" (ADR 0010 §5).
-- **Degradation.** If a command is unavailable in the environment, skip it and
-  record `skipped: command-unavailable` in the artifact — never silently claim a
-  clean review (ADR 0010 §7).
-- **Degraded runs are invalid, never clean.** A `/code-review` / `/security-review`
-  run whose **finder or verify sub-agents failed on an infrastructure limit**
-  (spend/usage/quota, 429, 5xx, safety-classifier-unavailable) is **INVALID** — a
-  "no findings" result from finders that never executed is a **false-clean**, not a
-  clean review. Such a run is **never recorded `ran-clean`** and **never fed to the
-  blind code-evaluator**; it is an instance of the infrastructure-blocked escalation
-  above → same pause + summary. **Re-run** the command once unblocked; if it
-  genuinely cannot be re-run, record the existing **`skipped: command-unavailable`**
-  token (never a fifth token, never `ran-clean`). See ADR 0017 + spec 04 §
-  "Automated review before a slice lands".
-- **False-clean detection — how.** Before trusting any "no findings" (or "no findings
-  survived verification") result as `ran-clean`, **inspect the workflow result for a
-  sub-agent / finder failure indicator**: a non-empty failures list, error signatures
-  matching the infrastructure set (spend/usage/quota, 429, 5xx,
-  classifier-unavailable), or a **finder count of 0 with failures present**. Any
-  such indicator → treat as a degraded run (above), **INVALID**, not `ran-clean`.
-  Only a "no findings" result from finders that **actually executed and completed**
-  is recorded `ran-clean`.
+  run the `loom-local-review/v1` protocol on the slice's exact commits — before (or
+  while) dispatching the code-evaluator.
+- **Who runs it.** Only the orchestrator launches the finders (sub-agents cannot
+  spawn; [ADR 0001](../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md)).
+  Finders are fresh, cold, non-delegating auxiliary workers — not a sixth lifecycle
+  role. They have no git, network, or verdict authority and write only their assigned
+  result file. Never the code-evaluator.
+- **Inputs — explicit, never inferred.** Obtain the full existing base and head
+  commit IDs, the approved tracked plan path, and the gate-evidence path. Never
+  derive a base from a remote, branch, or default-branch ref; the procedure needs no
+  network or remote state.
+- **Procedure.**
+  1. Resolve `loom-review` through the installed helper mechanism
+     (`loom-resolve-helper`).
+  2. `loom-review prepare --slice <name> --base <base> --head <head> --plan <path>
+     --gate-evidence <path>` prints the run directory.
+  3. Read its `manifest.json`: the three required finders
+     (`review-correctness/v1`, `review-tests/v1`, `review-security/v1`), their
+     shipped prompt files under `plugins/loom/finders/`, and the assigned
+     `results/<finder>.json` paths (the manifest's encoded filename is
+     authoritative). Launch one worker per finder with the prompt text and the
+     prepared `inputs/`, `source/`, and `diff.patch` as read-only context:
+     **Claude** — an auxiliary subagent/tool session; **Codex** — an ephemeral
+     worker. Each writes only its assigned result path.
+  4. `loom-review validate <run-dir|run-id>`; only on success
+     `loom-review assemble <run-dir|run-id> --out
+     .docs/evaluations/<slice>-review-findings.md`.
+  5. Commit the artifact author-neutral per
+     [`commit-convention.md`](commit-convention.md) and hand it to the blind
+     code-evaluator as an additional input; then `loom-review clean <run-id>`.
+     Preserve the run for diagnosis before cleanup on failure.
+- **Never simulate.** Findings come only from the finders' validated results via
+  `assemble`. Authoring findings from your own reading of the diff is a hard
+  violation; never claim `ran-clean` without a validated run.
+- **Whole-run invalidation.** A missing, failed, pending, duplicate, malformed,
+  truncated, or inconsistent finder output invalidates the **whole** run. Never
+  assemble partial findings, call an invalid run clean, pass it as evidence, or land
+  the slice. Classify the failure: retry only when safely retryable; pause and
+  checkpoint an infrastructure failure (spend/usage/quota, 429, 5xx,
+  classifier-unavailable) per ADR 0017 → *Infrastructure-blocked escalation*; return
+  other failures for correction. Unavailable review is not an eligible skip for code.
+- **Write-and-forget** (ADR 0012): once the artifact is committed, drop the output —
+  do not reason over or branch on the findings; the code-evaluator adjudicates them.
+- **Applicability.** Run only when the diff touches at least one code (non-docs)
+  file. A pure-docs slice records `skipped: docs-only` without launching a run —
+  never "ran clean". `loom-repository-bootstrap/v1` (ADR 0023 §3) is a separate
+  bootstrap fallback, not an ordinary local-review run.
 - **Not the gate.** This is a new, separate review dimension — **not** part of
   the `format → lint → test` gate, which is unchanged (ADR 0010 §8).
 
@@ -282,7 +256,7 @@ matches any of these, it is an infrastructure block, not a valid result:
 - a **rate-limit / HTTP 429**;
 - a **5xx** / transient upstream error;
 - a **safety-classifier-unavailable** error; or
-- a **partial workflow failure** — a multi-agent workflow (e.g. `/code-review`)
+- a **partial workflow failure** — a multi-agent workflow (e.g. the local review)
   whose **sub-agents crashed on one of the above limits**, even if the workflow
   returns a plausible-looking summary.
 

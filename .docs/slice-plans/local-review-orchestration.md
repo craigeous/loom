@@ -1,6 +1,6 @@
 # Local Review Orchestration
 
-Status: In Progress
+Status: Implemented
 Target specs: 02-roles.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0021, ADR 0022
 Target size: <= 350 LOC net change (keep this plan document <= 250 lines)
 
@@ -104,7 +104,13 @@ not proof that shell egress is sandboxed.
 
 ## Notes
 
-None.
+Verification evidence: the mechanical `rg` search over the five target files leaves
+only one match, `confirmed PR merge` in orchestration.md's landing text (unrelated to
+review; retained). Historical ADR 0010/0011/0017 citations and ADR 0023
+`loom-repository-bootstrap/v1` references are retained. The procedure was checked
+against the helper's `prepare`/`validate`/`assemble --out`/`clean` contract and
+assembled-output format. `scripts/check` and `validate-repository.mjs --all` results
+are recorded in the commit.
 
 ## Revision Log
 

@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [local-review-orchestration.md](local-review-orchestration.md) — `In Progress` — M4 slice 4: replace external review commands with local review orchestration.
+- [local-review-orchestration.md](local-review-orchestration.md) — `Implemented` — M4 slice 4: replace external review commands with local review orchestration.
 
 ## Archived plans
 

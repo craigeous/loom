@@ -1,7 +1,7 @@
 # Review-Findings Artifact Format
 
 The review-findings artifact is the single, committed, identity-neutral record
-that carries `/code-review` and `/security-review` output **from the orchestrator to
+that carries the helper-assembled `loom-local-review/v1` output **from the orchestrator to
 the blind code-evaluator**, as an additional input alongside the commit diff,
 slice-plan, specs, and gate evidence.
 
@@ -16,7 +16,7 @@ slice-plan, specs, and gate evidence.
 slice lands" (the orchestrator's run step — Slice B scope), and spec
 [02](../../../../../.docs/spec/02-roles.md) (Code Evaluator). The orchestrator —
 not the code-evaluator — produces this artifact because **only the orchestrator may
-spawn**, and a sub-agent cannot safely run a command that may spawn; see
+spawn**, and finders are launched by the root; see
 [ADR 0001](../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md).
 
 This file owns the artifact **format** only. It **points to**, not restates:
@@ -52,103 +52,60 @@ It is **committed author-neutral** per [`commit-convention.md`](commit-conventio
 
 ## Identity-neutral content — a hard invariant
 
-**The review-findings artifact is identity-neutral.** This is an invariant, not a
-guideline.
-
-The artifact **records findings only** — it names **no author**, carries **no
-GitHub PR metadata, no PR number/owner, no SHAs used as identity**, and **nothing
-that would leak authorship** into the blind evaluator. The orchestrator scrubs any
-incidental identity before handing it over (ADR 0010 §3).
+**The review-findings artifact is identity-neutral.** It names **no author** and
+carries **no remote or review-platform metadata and nothing that would leak
+authorship** into the blind evaluator. The exact base/head commit IDs are required
+provenance (they bind the artifact to the reviewed diff) and are not author identity.
 
 Authority: [ADR 0004](../../../../../.docs/ADR/0004-blind-evaluation-role-separation.md)
 (the blind contract) and
-[ADR 0010](../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md)
-§3.
+[ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md).
 
 ---
 
-## Findings come from real command output — a hard invariant
+## Findings come from validated finder results — a hard invariant
 
-**Every finding in this artifact is a transcription of the actual `/code-review`
-and `/security-review` output.** The orchestrator produces the artifact by
-*invoking those commands as real tool calls* (Skill tool / slash command) and
-copying what they emit — it does **not** read the diff and write findings of its
-own. An artifact populated from the orchestrator's own code reading instead of the
-command's output is invalid, regardless of how plausible its contents look: it
-defeats the whole point of an independent review and silently misleads the blind
-evaluator downstream.
-
-The only honest outcomes are therefore: the command ran and you transcribed its
-result (`ran-with-findings` / `ran-clean`), or the command did not run
-(`skipped: docs-only` / `skipped: command-unavailable`). There is no legitimate
-state in which findings exist but no command was invoked. See
-[`orchestration.md`](orchestration.md) § "Automated review before a slice lands"
-(the *Actually invoke the command — never simulate it* rule) for the run-side
-obligation.
+**Every finding is a normalized copy of a validated finder result**, produced only by
+`loom-review assemble`. The orchestrator never reads the diff and writes findings of
+its own; an artifact not produced by `assemble` from a validated run is invalid.
 
 ---
 
-## Degraded runs are not clean — an infrastructure block (ADR 0017)
+## Invalid runs are non-assemblable (ADR 0017, ADR 0021)
 
-A run whose **finder or verify sub-agents failed on an infrastructure limit**
-(spend/usage/quota, 429, 5xx, safety-classifier-unavailable) is **INVALID**, not
-clean. A "no findings" result from finders that **never executed** is a
-**false-clean** — never recorded `ran-clean` and **never fed to the blind
-code-evaluator**.
-
-Such a run is an instance of the infrastructure-blocked escalation: see
-[`orchestration.md`](orchestration.md) § "Infrastructure-blocked escalation" and
-§ "Automated review before a slice lands" for the detection rule and the pause +
-summary obligation, and spec [03](../../../../../.docs/spec/03-artifact-lifecycle.md)
-§ "Infrastructure-blocked escalation" + spec
-[04](../../../../../.docs/spec/04-orchestrator.md) § "Automated review before a slice
-lands" for the canonical contract.
-
-**Re-run** the command once unblocked. If it genuinely cannot be re-run, record the
-**existing `skipped: command-unavailable`** token — this **reuses** the four-token
-contract and **adds no fifth token**. It is the honest degraded state: the command
-did not complete, which is truthfully a non-run. (See ADR 0017 §2.)
-
-This extends the *Findings come from real command output — a hard invariant* section
-above: just as the orchestrator must not fabricate findings from its own diff reading,
-it must not fabricate a clean result from a run whose finders never ran.
+A missing, failed, pending, duplicate, malformed, truncated, or inconsistent finder
+output invalidates the **whole** run. `assemble` refuses (exit 2); no artifact is
+written, the run is never called clean, and it is never fed to the code-evaluator.
+Infrastructure failures follow [`orchestration.md`](orchestration.md) §
+"Infrastructure-blocked escalation" (pause + checkpoint); other failures are returned
+for correction. There is no skip token for unavailable review.
 
 ---
 
-## Required status field — per command
+## Required aggregate status
 
-The artifact records an **explicit, machine- and human-distinguishable status for
-each command**. `/code-review` and `/security-review` run independently and may have
-different outcomes.
-
-The status uses a literal `Status:` line per command with exactly these tokens
-(ADR 0010 §2, §5, §7):
+The artifact carries one `Aggregate:` line, set by the helper:
 
 | Token | Meaning |
 |---|---|
-| `ran-with-findings` | Command ran; at least one finding recorded below. |
-| `ran-clean` | Command ran; no findings. |
-| `skipped: docs-only` | Pure-docs slice — review not applicable (ADR 0010 §5). |
-| `skipped: command-unavailable` | Built-in not available in this environment, or the command could not complete (e.g. limit-crashed) (ADR 0010 §7 / ADR 0017). |
+| `ran-clean` | All three required finders valid and report no findings. |
+| `ran-with-findings` | All finders valid; at least one finding recorded below. |
+| `skipped: docs-only` | Pure-docs slice; no run launched (recorded by the orchestrator). |
 
-**Rule: a skip is never confusable with a clean review.** `ran-clean` means the
-command ran and found nothing; the two `skipped:` tokens mean the command did not
-run. The two skip reasons are distinguishable from each other by their distinct
-tokens (`skipped: docs-only` vs `skipped: command-unavailable`).
+A skip is never confusable with a clean review. An invalid run has no status token —
+it produces no artifact.
 
 ---
 
 ## Finding entry fields
 
-Each finding entry is terse and advisory — it is input the evaluator adjudicates,
-not a verdict. A single entry contains:
+Each entry is advisory input the evaluator adjudicates, not a verdict, under a
+`## <ID> — proposed <severity>` heading:
 
-- **source command** — `/code-review` or `/security-review`;
-- **location** — file path and line range, drawn from the slice diff;
-- **description** — a short statement of the issue;
-- **confidence signal** — the command's confidence score or label **if the command
-  emits one** (e.g. `/code-review` scores confidence and explicitly expects false
-  positives — ADR 0010 §4); omit if the command emits none.
+- **Worker** — the finder identity;
+- **Location** — file path and line range from the slice diff;
+- **Confidence** — the finder's numeric confidence;
+- **Claim**, **Evidence**, **Suggested verification**.
 
 ---
 
@@ -170,8 +127,6 @@ the adjudication procedure (confirm/reject/discard steps and severity mapping).
 `loom-local-review/v1` run package ([ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)).
 It resolves like the other helpers (`loom-resolve-helper`) and never launches a finder,
 uses the network, or decides PASS/FAIL; its `assemble` output is advisory evidence only.
-Orchestration still uses the legacy commands above until the `local-review-orchestration`
-slice rewires it.
 
 | Subcommand | Purpose |
 |---|---|
@@ -192,38 +147,37 @@ run), `3` run incomplete (`status` only).
 
 ---
 
-## Illustrative skeleton
-
-The skeleton below is **illustrative** — it shows the required structural elements,
-not a full schema.
+## Assembled format
 
 ```markdown
 # Review findings — <slice-name>
 
-## /code-review
-Status: ran-clean
+- Protocol: loom-local-review/v1
+- Run: <run-id>
+- Aggregate: ran-with-findings
+- Base: <full base sha>
+- Head: <full head sha>
+- Diff sha256: <hash>
+- Manifest sha256: <hash>
+- Findings sha256: <hash>
 
-## /security-review
-Status: ran-with-findings
+## Provenance
 
-### Finding 1
-- source: /security-review
-- location: src/handler.rs:42-58
-- description: User-supplied input passed to shell command without sanitisation.
-- confidence: high
+| Finder | Prompt version | Prompt hash | Adapter | Model profile |
+|---|---|---|---|---|
+| review-correctness/v1 | ... | ... | ... | ... |
+| review-security/v1 | ... | ... | ... | ... |
+| review-tests/v1 | ... | ... | ... | ... |
+
+## <finding-id> — proposed <severity>
+
+- Worker: review-security/v1
+- Location: src/handler.rs:42-58
+- Confidence: 0.9
+- Claim: ...
+- Evidence: ...
+- Suggested verification: ...
 ```
 
-Alternatively, for a pure-docs slice both commands carry the same skip status:
-
-```markdown
-# Review findings — <slice-name>
-
-## /code-review
-Status: skipped: docs-only
-
-## /security-review
-Status: skipped: docs-only
-```
-
-These two skeletons together demonstrate all four distinguishable states (the full
-set of four tokens is specified in the Required status field section above).
+A pure-docs slice records only the explicit `skipped: docs-only` status and launches
+no run.
