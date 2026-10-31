@@ -178,6 +178,18 @@ transitions or landing.
 - Tests: new Bats cases for interval-bounded FAIL returns, unresolved bare authority names, broad authority
   roots and top-level problem documents.
 
+### Round 2 code-eval remediation
+
+- Generic evaluation authority references no longer pass merely because some file of that category exists.
+  `slice plan` must resolve to `.docs/slice-plans/[archive/]<identity>.md` for the reviewed artifact,
+  `rubric` to `plan-eval-rubric.md` (plan evaluations) or `code-eval-rubric.md` (code evaluations), and
+  `research notes` to `.docs/research/<identity>.md`; direct links and explicit paths still count. An
+  unresolved generic reference is reported as an `authority` rule violation naming the generic reference.
+- Tests: new Bats case proving a non-matching plan is rejected, the matching plan passes as phrase and link,
+  and research and rubric references must resolve to the applicable files.
+- Two historical evaluation records gained exact-source `rule:authority` exceptions (wrapped authority lines).
+- Verification: targeted Bats, `node scripts/validate-repository.mjs --root . --all` and `scripts/check` green.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
@@ -187,3 +199,4 @@ transitions or landing.
 | 2 | Implemented; verification evidence recorded. |
 | 3 | Address code-eval Round 0 findings; remediation evidence recorded. |
 | 4 | Address code-eval Round 1 findings; remediation evidence recorded. |
+| 5 | Address code-eval Round 2 findings; generic authority references must resolve. |

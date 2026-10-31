@@ -2130,6 +2130,51 @@ DOC
     [ "$status" -eq 0 ]
 }
 
+@test "docs state: generic evaluation authority must resolve to the artifact's applicable file" {
+    make_docs_root
+    ev() { printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: %s\n\n## Summary\nx\n\n## Findings\nNone.\n' "$2" >"$TEST_ROOT/.docs/evaluations/$1"; }
+    # A slice plan for a different artifact does not satisfy a bare 'slice plan'.
+    ev q-plan-eval.md "slice plan"
+    put .docs/slice-plans/q-other.md <<'DOC'
+# Plan
+Status: Approved
+DOC
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"q-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    [[ "$output" == *"generic slice plan reference does not resolve"* ]]
+    rm "$TEST_ROOT/.docs/slice-plans/q-other.md" "$TEST_ROOT/.docs/evaluations/q-plan-eval.md"
+    # The matching plan satisfies both the bare phrase and a direct link.
+    ev p-plan-eval.md "slice plan"
+    docs_all
+    [[ "$output" != *"p-plan-eval.md: evaluation authority"* ]]
+    ev p-plan-eval.md "[slice plan](../slice-plans/p.md)"
+    docs_all
+    [[ "$output" != *"p-plan-eval.md: evaluation authority"* ]]
+    # Bare research notes need a note for this artifact; r.md is not p's research.
+    ev p-plan-eval.md "research notes"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    put .docs/research/p.md <<'DOC'
+# Research P
+Status: Approved
+DOC
+    docs_all
+    [[ "$output" != *"p-plan-eval.md: evaluation authority"* ]]
+    # A plan evaluation needs the plan rubric; a code evaluation needs the code rubric.
+    ev p-plan-eval.md "the rubric"
+    docs_all
+    [[ "$output" != *"p-plan-eval.md: evaluation authority"* ]]
+    rm -f "$TEST_ROOT"/plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    [[ "$output" == *"generic rubric reference does not resolve"* ]]
+    ev p-eval.md "the rubric"
+    docs_all
+    [[ "$output" != *"p-eval.md: evaluation authority"* ]]
+}
+
 @test "docs state: ADR problem grounding rejects arbitrary top-level docs" {
     make_docs_root
     put .docs/other.md <<'DOC'

@@ -929,17 +929,30 @@ function checkEvaluationIdentification(relative, text, identity, markdownParser)
   for (const match of authorityField.matchAll(/(?<![\w/.-])(\d\d-[a-z][a-z0-9-]*\.md)\b/gi)) if (!files.includes(`.docs/spec/${match[1]}`)) unresolvedNames.push(match[1]);
   for (const match of authorityField.matchAll(/\.docs\/slice-plans\/[\w./-]+\.md/gi)) if (!files.includes(match[0]) && !files.includes(match[0].replace("/slice-plans/", "/slice-plans/archive/"))) unresolvedNames.push(match[0]);
   if (unresolvedNames.length) { ruleReport(relative, "authority", `evaluation authority names a file that does not exist: ${unresolvedNames.join(", ")}`); return; }
-  const hasFile = (pattern) => files.some((file) => pattern.test(file));
+  // Generic references (slice plan, rubric, research notes) must resolve to the file applicable to this artifact.
+  const bare = strip(identity);
+  const planEval = /-plan-eval\.md$/.test(relative);
+  const hasPlan = [identity, bare].some((name) => files.includes(`.docs/slice-plans/${name}.md`) || files.includes(`.docs/slice-plans/archive/${name}.md`));
+  const hasRubric = files.includes(`plugins/loom/skills/loom-playbook/references/${planEval ? "plan" : "code"}-eval-rubric.md`);
+  const hasResearch = [identity, bare].some((name) => files.includes(`.docs/research/${name}.md`));
+  const generic = [];
+  if (/\bslice[- ]plans?\b/i.test(authorityField) && !hasPlan) generic.push("slice plan");
+  if (/\brubric\b/i.test(authorityField) && !hasRubric) generic.push("rubric");
+  if (/\bresearch notes?\b|\b(?:approved|accepted)\b[^;]*\bresearch\b/i.test(authorityField) && !hasResearch) generic.push("research");
   const named = adrNumbers.length > 0
     || /\bspecs?\s+\d\d\b|(?<![\w/.-])\d\d-[a-z][a-z0-9-]*\.md\b/i.test(authorityField)
     || (/\brepository[- ]improvement[- ]plan\b/i.test(authorityField) && files.includes(PROBLEM_DOCUMENT))
-    || (/\bresearch notes?\b|\b(?:approved|accepted)\b[^;]*\bresearch\b/i.test(authorityField) && hasFile(/^\.docs\/research\/[^/]+\.md$/))
-    || (/\brubric\b/i.test(authorityField) && hasFile(/^plugins\/loom\/skills\/loom-playbook\/references\/[^/]*rubric[^/]*\.md$/))
+    || (/\bresearch notes?\b|\b(?:approved|accepted)\b[^;]*\bresearch\b/i.test(authorityField) && hasResearch)
+    || (/\brubric\b/i.test(authorityField) && hasRubric)
     || (/\bplaybook\b/i.test(authorityField) && files.includes("plugins/loom/skills/loom-playbook/SKILL.md"))
-    || (/\bslice[- ]plans?\b|\.docs\/slice-plans\/[\w./-]+\.md/i.test(authorityField) && hasFile(/^\.docs\/slice-plans\/(?:archive\/)?[^/]+\.md$/));
+    || (/\bslice[- ]plans?\b/i.test(authorityField) && hasPlan)
+    || /\.docs\/slice-plans\/[\w./-]+\.md/i.test(authorityField);
   const codePaths = [...authorityField.matchAll(/`([^`\s]+)`/g)].map((match) => match[1].replace(/^\.\//, "")).filter((candidate) => files.includes(candidate));
   const applicable = resolved.concat(codePaths).filter((target) => AUTHORITY_ROOT.test(target));
-  if (!applicable.length && !named) ruleReport(relative, "authority", `evaluation authority must reference applicable specs, ADRs, research, plan or rubric: ${authorityField}`);
+  if (!applicable.length && !named) {
+    const detail = generic.length ? ` (generic ${generic.join(", ")} reference does not resolve to this artifact's applicable file)` : "";
+    ruleReport(relative, "authority", `evaluation authority must reference applicable specs, ADRs, research, plan or rubric: ${authorityField}${detail}`);
+  }
 }
 
 const evaluationRecords = [];
