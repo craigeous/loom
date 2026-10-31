@@ -659,6 +659,19 @@ EOF
     [ "$(jq -r .assembled.output_sha256 "$RUN/state.json")" = "$(shasum -a 256 <"$WORK/a.md" | cut -d' ' -f1)" ]
 }
 
+@test "assemble works for a run directory containing whitespace" {
+    prepared
+    mkres review-correctness/v1 ran-with-findings "[$(finding COR-1 review-correctness/v1 f.txt 4)]"
+    mkres review-tests/v1 ran-clean
+    mkres review-security/v1 ran-clean
+    mkdir "$WORK/spaced dir"
+    mv "$RUN" "$WORK/spaced dir/run 1"
+    RUN="$WORK/spaced dir/run 1"
+    run "$LOOM_TEST_BASH" "$RV" assemble "$RUN" --repo "$REPO" --out "$WORK/spaced.md"
+    [ "$status" -eq 0 ]
+    grep -q '^## COR-1 — proposed MAJOR' "$WORK/spaced.md"
+}
+
 @test "assemble defaults to .docs/evaluations/<slice>-review-findings.md" {
     prepared
     mkclean

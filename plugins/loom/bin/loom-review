@@ -638,6 +638,8 @@ cmd_assemble() {
     outdir="$(CDPATH='' cd -P -- "$outdir" && pwd -P)"
     out="$outdir/$(basename "$out")"
     tmp="$outdir/.$(basename "$out").tmp.$$"
+    resfiles=()
+    while IFS= read -r f; do resfiles+=("$f"); done < <(find "$RUN/results" -mindepth 1 -maxdepth 1 -type f -name '*.json' | LC_ALL=C sort)
     {
         jq -r --arg digest "$(results_digest "$RUN")" --arg agg "$AGG" '
             def one: gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
@@ -655,7 +657,6 @@ cmd_assemble() {
             "|---|---|---|---|---|",
             (.finders | sort_by(.id)[] | "| " + .id + " | " + .prompt.version + " | " + .prompt.sha256 + " | " + .adapter + " | " + .model_profile + " |")
             ' "$RUN/manifest.json"
-        # shellcheck disable=SC2046
         jq -r -s '
             def one: gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
             [.[].findings[]] | sort_by([.file, (.line // 0), .id])[]
@@ -666,7 +667,7 @@ cmd_assemble() {
               "- Claim: " + (.claim | one),
               "- Evidence: " + (.evidence | one),
               "- Suggested verification: " + (.verification | one)
-            ' $(find "$RUN/results" -mindepth 1 -maxdepth 1 -type f -name '*.json' | LC_ALL=C sort)
+            ' "${resfiles[@]}"
     } >"$tmp" 2>/dev/null || {
         rm -f "$tmp"
         die 1 "cannot write output: $out"
