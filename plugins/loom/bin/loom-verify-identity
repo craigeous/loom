@@ -53,6 +53,17 @@ case "$CFG_EMAIL" in
 esac
 
 HEAD_SHA=$(git rev-parse --verify -q 'HEAD^{commit}' 2>/dev/null) || HEAD_SHA=""
+if [ -z "$HEAD_SHA" ]; then
+    # Genuinely unborn = HEAD names a branch whose ref does not exist (neither
+    # loose nor packed). Anything else (detached/corrupt HEAD, unreadable ref)
+    # is a verification error and fails closed.
+    HEAD_REF=$(git symbolic-ref -q HEAD 2>/dev/null) || _die "HEAD is unreadable or corrupt"
+    REF_PATH=$(git rev-parse --git-path "$HEAD_REF" 2>/dev/null) || _die "unable to locate HEAD ref"
+    PACKED_PATH=$(git rev-parse --git-path packed-refs 2>/dev/null) || _die "unable to locate packed refs"
+    if [ -e "$REF_PATH" ] || { [ -e "$PACKED_PATH" ] && grep -qF " $HEAD_REF" "$PACKED_PATH"; }; then
+        _die "HEAD ref '$HEAD_REF' exists but is unreadable or corrupt"
+    fi
+fi
 
 if [ "$BASELINE" = "unborn" ]; then
     [ -n "$HEAD_SHA" ] || exit 0

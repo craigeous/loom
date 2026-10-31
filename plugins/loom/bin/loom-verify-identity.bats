@@ -214,6 +214,20 @@ good_commit() { commit_as "Real Person" "real@example.com" "Real Person" "real@e
     [ "$status" -eq 1 ]
 }
 
+@test "unborn baseline with corrupt HEAD ref fails closed (1)" {
+    good_commit a
+    ref=$(git symbolic-ref HEAD)
+    printf 'garbage\n' >".git/$ref"
+    verify unborn
+    [ "$status" -eq 1 ]
+}
+
+@test "unborn baseline with corrupt HEAD file fails closed (1)" {
+    printf 'garbage\n' >.git/HEAD
+    verify unborn
+    [ "$status" -eq 1 ]
+}
+
 @test "verifier never mutates history on violation" {
     good_commit a
     base=$(git rev-parse HEAD)

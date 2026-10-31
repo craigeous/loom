@@ -159,7 +159,7 @@ fi
 
 # --- Override detection (all on the raw $CMD; quoted bodies are not stripped) ---
 
-if printf '%s' "$CMD" | grep -qE -- '--author([[:space:]]|=|$)'; then
+if printf '%s' "$CMD" | grep -qE -- '--author([[:space:]]|=|$|["'"'"'])'; then
     _loom_hook_block "$CLIENT" "loom identity guard: blocked --author override (ADR 0003 requires the uniform commit identity)."
 fi
 
@@ -190,11 +190,13 @@ _loom_hook_config_write_line() {
     printf '%s' "$line" | grep -qiE "(^|[^[:alnum:]_])${key}(=|[[:space:]]+[^-[:space:];&|)])"
 }
 
+# Classify each statement separately (split on newline and ; & |) so a read in
+# one statement never suppresses a recognized write in another.
 while IFS= read -r LINE || [ -n "$LINE" ]; do
     if _loom_hook_config_write_line "$LINE"; then
         _loom_hook_block "$CLIENT" "loom identity guard: blocked git config write of an identity key (ADR 0003 requires the uniform commit identity)."
     fi
-done <<<"$CMD"
+done < <(printf '%s' "$CMD" | tr ';&|' '\n')
 
 # --- No recognized token detected → allow ---
 _loom_hook_allow

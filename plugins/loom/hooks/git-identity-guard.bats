@@ -238,6 +238,26 @@ guard_codex() {
     [ "$status" -eq 2 ]
 }
 
+@test "BLOCK C06: write after a safe read on the same line" {
+    guard '{"tool_input":{"command":"git config --get user.name; git config user.name Evil"}}'
+    [ "$status" -eq 2 ]
+    guard '{"tool_input":{"command":"git config --get user.name && git config user.name Evil"}}'
+    [ "$status" -eq 2 ]
+    guard_codex '{"tool_input":{"command":"git config --get user.name; git config user.name Evil"}}'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"permissionDecision":"deny"'* ]]
+}
+
+@test "BLOCK B12: quoted bare author flag (Claude and Codex wire)" {
+    guard '{"tool_input":{"command":"git commit \u0027--author\u0027 \u0027Evil <evil@example.com>\u0027 -m z"}}'
+    [ "$status" -eq 2 ]
+    guard '{"tool_input":{"command":"git commit \"--author\" \"Evil <e@e>\" -m z"}}'
+    [ "$status" -eq 2 ]
+    guard_codex '{"tool_input":{"command":"git commit \u0027--author\u0027 \u0027Evil <evil@example.com>\u0027 -m z"}}'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"permissionDecision":"deny"'* ]]
+}
+
 @test "ALLOW R01: bare reads of identity keys" {
     for c in \
         'git config user.name' \
