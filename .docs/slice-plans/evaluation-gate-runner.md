@@ -1,6 +1,6 @@
 # Evaluation Gate Runner
 
-Status: Plan Review
+Status: Approved
 Target specs: 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022
 Target size: <= 500 LOC net change excluding tests/schemas
 
