@@ -6,22 +6,19 @@ Verdict: FAIL
 
 ## Findings
 
-- [MAJOR] The ADR 0023 repository/state eligibility finding remains unresolved. `cmd_record` defaults `--bootstrap-phase` to `active` and trusts the supplied value; it does not establish the repository or transition-state eligibility before advancing. Omitting the option therefore advances even when the actual state is held or ineligible. The special case for an ADR 0023 artifact does not establish eligibility for other transitions, and the new test exercises only an explicitly supplied held phase.
-- [MAJOR] The supplied local review identifies a material gap in negative tests for recorder binding and rerun integrity (TST-1). The revision adds no tests for the cited cross-run/authority bindings or rerun reference mismatches; those guards are essential to the plan's recording boundary and could regress without these tests detecting it.
+- [MAJOR] The ADR 0023 repository eligibility finding remains unresolved. `bootstrap_eligible` accepts the presence of any regular file at the ADR 0023 path as proof of repository eligibility, together with an `active` phase marker and an allowed slice basename. The tests construct an otherwise arbitrary repository with a placeholder ADR containing only a heading and `Status: Accepted`, then expect advancement; this does not establish that the repository is the one eligible for the exception. An ineligible repository can therefore satisfy the predicate and advance.
 
 ## Required changes
 
-1. Establish and enforce the ADR 0023 repository and state eligibility from authoritative state before advancing, including omitted or stale phase input, and test eligible and ineligible cases.
-2. Add negative regression tests for the manifest/verdict bindings and latest rerun reference, asserting rejection and no report or status advance.
+1. Establish the ADR 0023 exception's actual repository eligibility from authoritative evidence before advancing, and add a regression showing that a repository with a placeholder or copied ADR and active marker remains held.
 
 ## Local review adjudication
 
-- COR-1: Accepted as MAJOR; the revised transition guard still does not verify repository/state eligibility.
-- TST-1: Accepted as MAJOR; the identified binding and rerun integrity cases remain untested.
-- COR-2: MINOR; extra report sections preserve judgment and evidence, although the specified order differs.
-- TST-2 and TST-3: MINOR test coverage and assertion gaps; they do not independently determine this verdict.
+- COR-1: Remains MAJOR for repository eligibility. The revision adds checks for held, missing, and contradictory phase markers, but the repository check is insufficient.
+- TST-1: Resolved. Negative tests now mutate run, manifest, head, artifact and authority bindings and the latest rerun sequence, result and evidence hash; they assert the relevant error, unchanged status and absence of a report.
+- COR-2, TST-2 and TST-3: Previously adjudicated MINOR; outside this re-review's scope.
 
 ## Evidence
 
-- Re-reviewed only the Round 2 findings and `git diff 7113890..b1f73a3`. The companion local review is now present; duplicate keys are scanned before schema and binding checks; and sunset ancestry and `full_sunset.sha` guidance has been added.
-- Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (exit 0; 773 Bats tests and all remaining checks).
+- Re-reviewed the two Round 2 findings against `git diff b1f73a3..fbcfe51` and the specified implementation and test files.
+- Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (exit 0; 790 Bats tests and all remaining checks).
