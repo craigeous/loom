@@ -164,6 +164,34 @@ the adjudication procedure (confirm/reject/discard steps and severity mapping).
 
 ---
 
+## Helper contract — `loom-review` (`loom-local-review/v1`)
+
+`plugins/loom/bin/loom-review` is the deterministic helper behind the
+`loom-local-review/v1` run package ([ADR 0021](../../../../../.docs/ADR/0021-loom-owned-local-review-protocol.md)).
+It resolves like the other helpers (`loom-resolve-helper`) and never launches a finder,
+uses the network, or decides PASS/FAIL; its `assemble` output is advisory evidence only.
+Orchestration still uses the legacy commands above until the `local-review-orchestration`
+slice rewires it.
+
+| Subcommand | Purpose |
+|---|---|
+| `prepare` | Fail-closed snapshot: exact `--base`/`--head` commit ids, clean tree at `head`, tracked plan/spec/ADR inputs, gate evidence, per-finder prompt hash and adapter/model profile; writes `manifest.json`, `diff.patch`, `inputs/`, and an object-exported `source/`. |
+| `validate` | Re-derives everything from git objects and checks the three finder results; the aggregate is `ran-with-findings` or `ran-clean` only when all three finders are valid, otherwise `invalid`. |
+| `assemble` | Re-validates, then writes the identity-neutral `*-review-findings.md` (default `.docs/evaluations/<slice>-review-findings.md`); refuses unless the aggregate is `ran-*`. |
+| `status` | Read-only phase report: `prepared`, `collecting`, `validated`, `assembled` (`--json` available). |
+| `clean` | Removes named, `--all`, or `--older-than <days>` runs under the review root only. |
+
+**Exit codes:** `0` ok, `1` usage/environment, `2` target or content rejection (invalid
+run), `3` run incomplete (`status` only).
+
+**Run layout** (untracked, under `<git-common-dir>/loom/review/<run-id>/`): `manifest.json`
+(canonical JSON, hash-bound), `source/` (read-only export of `head`), `inputs/`,
+`diff.patch`, `results/<finder-id with / as __>.json` (written by finders), and
+`state.json` (helper-only verdict). Schemas:
+`plugins/loom/schemas/loom-local-review-{manifest,findings}-v1.schema.json`.
+
+---
+
 ## Illustrative skeleton
 
 The skeleton below is **illustrative** — it shows the required structural elements,

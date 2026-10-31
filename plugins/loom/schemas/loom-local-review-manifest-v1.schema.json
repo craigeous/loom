@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/schemas/loom-local-review-manifest-v1.schema.json",
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["side", "start", "end"],
+      "properties": {
+        "side": { "enum": ["new", "old"] },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "binary", "old_mode", "new_mode", "added", "deleted", "ranges"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "old_path": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["A", "M", "D", "R", "C", "T"] },
+        "binary": { "type": "boolean" },
+        "old_mode": { "type": "string", "pattern": "^[0-7]{6}$" },
+        "new_mode": { "type": "string", "pattern": "^[0-7]{6}$" },
+        "added": { "type": ["integer", "null"], "minimum": 0 },
+        "deleted": { "type": ["integer", "null"], "minimum": 0 },
+        "ranges": { "type": "array", "items": { "$ref": "#/$defs/range" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["R", "C"] } }, "required": ["status"] },
+          "then": { "required": ["old_path"], "properties": { "old_path": { "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "binary": { "const": true } }, "required": ["binary"] },
+          "then": {
+            "properties": {
+              "ranges": { "type": "array", "maxItems": 0 },
+              "added": { "type": "null" },
+              "deleted": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "added": { "type": "integer" },
+              "deleted": { "type": "integer" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "binary": { "const": false }, "status": { "const": "D" } },
+            "required": ["binary", "status"]
+          },
+          "then": { "properties": { "ranges": { "type": "array", "items": { "type": "object", "properties": { "side": { "const": "old" } } } } } }
+        },
+        {
+          "if": {
+            "properties": { "binary": { "const": false }, "status": { "enum": ["A", "M", "R", "C", "T"] } },
+            "required": ["binary", "status"]
+          },
+          "then": { "properties": { "ranges": { "type": "array", "items": { "type": "object", "properties": { "side": { "const": "new" } } } } } }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol", "run_id", "slice", "loom_version", "helper_version", "base_sha", "head_sha",
+    "head_tree", "diff_sha256", "files", "inputs", "finders", "source_export", "created_at",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "protocol": { "const": "loom-local-review/v1" },
+    "run_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+    "slice": { "type": "string", "minLength": 1 },
+    "loom_version": { "type": "string", "minLength": 1 },
+    "helper_version": { "type": "string", "minLength": 1 },
+    "base_sha": { "$ref": "#/$defs/sha" },
+    "head_sha": { "$ref": "#/$defs/sha" },
+    "head_tree": { "$ref": "#/$defs/sha" },
+    "diff_sha256": { "$ref": "#/$defs/sha256" },
+    "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "sha256"],
+        "properties": {
+          "kind": { "enum": ["plan", "spec", "adr", "gate-evidence"] },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "finders": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "prompt", "output", "adapter", "model_profile"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "prompt": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["protocol", "version", "sha256"],
+            "properties": {
+              "protocol": { "type": "string", "minLength": 1 },
+              "version": { "type": "string", "minLength": 1 },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          "output": { "type": "string", "minLength": 1 },
+          "adapter": { "type": "string", "minLength": 1 },
+          "model_profile": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "source_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "file_count"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "file_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "manifest_sha256": { "$ref": "#/$defs/sha256" }
+  }
+}

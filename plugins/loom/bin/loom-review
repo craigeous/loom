@@ -1,0 +1,1079 @@
+#!/usr/bin/env bash
+# loom-review — local-review run helper (ADR 0021 loom-local-review/v1; slice
+# local-review-helper). Prepares a hash-bound review run, validates finder results,
+# assembles the advisory review-findings artifact, reports status, and cleans runs.
+# It never launches a finder and never touches the network.
+#
+# Usage:
+#   loom-review prepare --slice <name> --base <sha> --head <sha> --plan <path>
+#       [--spec <path>]... [--adr <path>]... --gate-evidence <path>
+#       --prompt-hash <finder>=<sha256> --finder-profile <finder>=<adapter>:<profile>
+#       [--run-id <id>] [--run-dir <dir>] [--repo <path>]
+#   loom-review validate <run-dir|run-id> [--repo <path>] [--quiet]
+#   loom-review assemble <run-dir|run-id> [--out <path>] [--repo <path>]
+#   loom-review status   <run-dir|run-id> [--json] [--repo <path>]
+#   loom-review clean    (<run-id>... | --all | --older-than <days>) [--repo <path>]
+#
+# Runs live under <git-common-dir>/loom/review/<run-id>/ (manifest.json, source/,
+# inputs/, diff.patch, results/<finder>.json, state.json).
+# Exit codes: 0 ok, 1 usage/environment, 2 target/content rejection (invalid run),
+#   3 run incomplete (status only).
+# shellcheck disable=SC2016  # jq filters use $vars intentionally
+set -euo pipefail
+
+PROTOCOL="loom-local-review/v1"
+HELPER_VERSION="loom-review/1"
+REQUIRED_FINDERS="review-correctness/v1 review-tests/v1 review-security/v1"
+TAB=$'\t'
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES || true
+export GIT_OPTIONAL_LOCKS=0
+
+WORK=""
+BUILD=""
+ROOT_CREATED=""
+
+log() { printf 'loom-review: %s\n' "$*" >&2; }
+die() {
+    local rc="$1"
+    shift
+    log "$*"
+    exit "$rc"
+}
+
+cleanup() {
+    local rc=$?
+    trap - EXIT
+    if [ -n "$BUILD" ] && [ -d "$BUILD" ]; then
+        chmod -R u+w "$BUILD" 2>/dev/null || true
+        rm -rf "$BUILD"
+    fi
+    if [ -n "$ROOT_CREATED" ]; then
+        rmdir "$ROOT_CREATED" 2>/dev/null || true
+    fi
+    if [ -n "$WORK" ] && [ -d "$WORK" ]; then
+        rm -rf "$WORK"
+    fi
+    exit "$rc"
+}
+trap cleanup EXIT
+
+command -v jq >/dev/null 2>&1 || die 1 "jq is required"
+command -v git >/dev/null 2>&1 || die 1 "git is required"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/loom-review.XXXXXX")" || die 1 "cannot create temp dir"
+mkdir "$WORK/wt"
+
+sha256_stdin() {
+    if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi | cut -d' ' -f1
+}
+sha256_file() { sha256_stdin <"$1"; }
+
+COMMON=""
+REPO_TOP=""
+
+# gg: plain object access; gdiff: diff pinned away from worktree attributes/config so
+# prepare and validate hash identical bytes.
+gg() { git --git-dir="$COMMON" "$@"; }
+gdiff() {
+    git --git-dir="$COMMON" --work-tree="$WORK/wt" -c core.attributesFile=/dev/null \
+        -c core.quotepath=off diff --no-ext-diff --no-textconv --no-color \
+        --src-prefix=a/ --dst-prefix=b/ -M -C "$@"
+}
+
+# resolve_repo <path>: sets REPO_TOP and COMMON (physical paths); returns 1 if not a repo.
+resolve_repo() {
+    local d top common
+    d="$(CDPATH='' cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
+    top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+    REPO_TOP="$(CDPATH='' cd -P -- "$top" && pwd -P)"
+    COMMON="$(CDPATH='' cd -P -- "$common" && pwd -P)"
+}
+
+# resolve_run <arg>: sets RUN (physical run directory) and, when possible, COMMON.
+resolve_run() {
+    local arg="$1" repo_given="$2"
+    RUN=""
+    case "$arg" in
+    */*)
+        [ -d "$arg" ] || die 1 "run directory not found: $arg"
+        [ ! -L "$arg" ] || die 1 "run directory is a symlink: $arg"
+        RUN="$(CDPATH='' cd -P -- "$arg" && pwd -P)"
+        if [ "$repo_given" = 0 ]; then
+            case "$RUN" in
+            */loom/review/*) COMMON="${RUN%/loom/review/*}" ;;
+            esac
+        fi
+        ;;
+    *)
+        [ -n "$COMMON" ] || die 1 "run id needs a git repository (use --repo)"
+        [ -d "$COMMON/loom/review/$arg" ] || die 1 "run not found: $arg"
+        [ ! -L "$COMMON/loom/review/$arg" ] || die 1 "run directory is a symlink: $arg"
+        RUN="$(CDPATH='' cd -P -- "$COMMON/loom/review/$arg" && pwd -P)"
+        ;;
+    esac
+}
+
+# init_repo <repo-arg-or-empty> <required:0|1>
+REPO_GIVEN=0
+REPO_OK=0
+init_repo() {
+    local arg="$1" required="$2"
+    REPO_GIVEN=0
+    [ -z "$arg" ] || REPO_GIVEN=1
+    if resolve_repo "${arg:-.}"; then
+        REPO_OK=1
+    else
+        REPO_OK=0
+        COMMON=""
+        [ "$required" = 0 ] || die 1 "not a git repository: ${arg:-.}"
+    fi
+}
+
+# ---------------------------------------------------------------- inventory
+
+# build_inventory <base> <head>: writes $WORK/inventory.json (canonical files[] array).
+# Returns 1 with INV_ERR set on gitlinks or unsupported path characters.
+INV_ERR=""
+build_inventory() {
+    local base="$1" head="$2" meta p1 p2 a b letter om nm tok adds dels path
+    INV_ERR=""
+    : >"$WORK/raw.tsv"
+    : >"$WORK/num.tsv"
+    gdiff --raw -z "$base" "$head" >"$WORK/raw.bin"
+    while IFS= read -r -d '' meta; do
+        read -r a b _ _ letter <<<"$meta"
+        om="${a#:}"
+        nm="$b"
+        p2=""
+        IFS= read -r -d '' p1
+        case "$letter" in
+        R* | C*)
+            IFS= read -r -d '' p2
+            path="$p2"
+            ;;
+        *) path="$p1" ;;
+        esac
+        if [ "$om" = 160000 ] || [ "$nm" = 160000 ]; then
+            INV_ERR="submodule/gitlink in diff: $path"
+            return 1
+        fi
+        case "$p1$p2" in
+        *"$TAB"* | *$'\n'*)
+            INV_ERR="unsupported path character in diff"
+            return 1
+            ;;
+        esac
+        printf '%s\t%s\t%s\t%s\t%s\n' "${letter:0:1}" "$om" "$nm" "$path" "$p1" >>"$WORK/raw.tsv"
+    done <"$WORK/raw.bin"
+    gdiff --numstat -z "$base" "$head" >"$WORK/num.bin"
+    while IFS= read -r -d '' tok; do
+        adds="${tok%%"$TAB"*}"
+        dels="${tok#*"$TAB"}"
+        path="${dels#*"$TAB"}"
+        dels="${dels%%"$TAB"*}"
+        if [ -z "$path" ]; then
+            IFS= read -r -d '' p1
+            IFS= read -r -d '' path
+        fi
+        printf '%s\t%s\t%s\n' "$adds" "$dels" "$path" >>"$WORK/num.tsv"
+    done <"$WORK/num.bin"
+    gdiff -U0 "$base" "$head" | awk '
+/^diff --git /{inh=1; oldp=""; newp=""; next}
+inh && /^--- /{p=substr($0,5); sub(/\t$/,"",p); if(p=="/dev/null"){oldp=""}else{sub(/^a\//,"",p); oldp=p}; next}
+inh && /^\+\+\+ /{p=substr($0,5); sub(/\t$/,"",p); if(p=="/dev/null"){newp=""}else{sub(/^b\//,"",p); newp=p}; next}
+/^@@ /{
+    inh=0
+    split($2, o, ","); split($3, n, ",")
+    os=substr(o[1],2)+0; oc=(o[2]==""?1:o[2]+0)
+    ns=substr(n[1],2)+0; nc=(n[2]==""?1:n[2]+0)
+    key=(newp!=""?newp:oldp)
+    if(nc>0) printf "new\t%s\t%d\t%d\n", key, ns, ns+nc-1
+    if(oc>0) printf "old\t%s\t%d\t%d\n", key, os, os+oc-1
+}' >"$WORK/hunks.tsv"
+    jq -n -S -c --rawfile raw "$WORK/raw.tsv" --rawfile num "$WORK/num.tsv" \
+        --rawfile hunks "$WORK/hunks.tsv" '
+        def rows($s): $s | split("\n") | map(select(length > 0) | split("\t"));
+        (rows($num) | map({key: .[2], value: {a: .[0], d: .[1]}}) | from_entries) as $n
+        | rows($hunks) as $h
+        | [rows($raw)[] | . as $r | $r[3] as $p
+            | ($n[$p].a == "-") as $bin
+            | (if $r[0] == "D" then "old" else "new" end) as $side
+            | {path: $p, status: $r[0], binary: $bin, old_mode: $r[1], new_mode: $r[2],
+               added: (if $bin then null else (($n[$p].a // "0") | tonumber) end),
+               deleted: (if $bin then null else (($n[$p].d // "0") | tonumber) end),
+               ranges: (if $bin then [] else
+                   [$h[] | select(.[1] == $p and .[0] == $side)
+                    | {side: .[0], start: (.[2] | tonumber), end: (.[3] | tonumber)}] end)}
+              + (if $r[0] == "R" or $r[0] == "C" then {old_path: $r[4]} else {} end)]
+        | sort_by(.path)' >"$WORK/inventory.json"
+}
+
+# ---------------------------------------------------------------- listings
+
+tree_listing() { # <head> -> sorted "path<TAB>mode<TAB>oid"
+    local rec meta path mode oid
+    gg ls-tree -r -z "$1" | while IFS= read -r -d '' rec; do
+        meta="${rec%%"$TAB"*}"
+        path="${rec#*"$TAB"}"
+        read -r mode _ oid <<<"$meta"
+        printf '%s\t%s\t%s\n' "$path" "$mode" "$oid"
+    done | LC_ALL=C sort
+}
+
+fs_listing() { # <dir> -> sorted "path<TAB>mode<TAB>oid"
+    local dir="$1" p t oid
+    (
+        cd "$dir" || exit 1
+        find . -type f -perm -100 | sed 's|^\./||' >"$WORK/fs.x"
+        find . -type f ! -perm -100 | sed 's|^\./||' >"$WORK/fs.n"
+        find . -type l | sed 's|^\./||' >"$WORK/fs.l"
+        find . ! -type f ! -type l ! -type d | sed 's|^\./||' >"$WORK/fs.o"
+        gg hash-object --no-filters --stdin-paths <"$WORK/fs.x" >"$WORK/fs.xo"
+        gg hash-object --no-filters --stdin-paths <"$WORK/fs.n" >"$WORK/fs.no"
+        paste "$WORK/fs.x" "$WORK/fs.xo" | awk -F'\t' '{printf "%s\t100755\t%s\n", $1, $2}'
+        paste "$WORK/fs.n" "$WORK/fs.no" | awk -F'\t' '{printf "%s\t100644\t%s\n", $1, $2}'
+        while IFS= read -r p; do
+            t="$(readlink "$p")"
+            oid="$(printf '%s' "$t" | gg hash-object --stdin)"
+            printf '%s\t120000\t%s\n' "$p" "$oid"
+        done <"$WORK/fs.l"
+        while IFS= read -r p; do
+            printf '%s\t?\t?\n' "$p"
+        done <"$WORK/fs.o"
+    ) | LC_ALL=C sort
+}
+
+listing_hash() { tr '\t' '\0' <"$1" | sha256_stdin; }
+
+# ---------------------------------------------------------------- jq programs
+
+read -r -d '' JQ_COMMON <<'EOF' || true
+def isstr: type == "string";
+def ne: isstr and length > 0;
+def isint: type == "number" and . == floor;
+def sha: isstr and test("^([0-9a-f]{40}|[0-9a-f]{64})$");
+def s256: isstr and test("^[0-9a-f]{64}$");
+def keyset($req; $opt): (((keys - $req - $opt) | map("unexpected key " + .)) + (($req - keys) | map("missing key " + .)))[];
+def chk($c; $m): if $c then empty else $m end;
+def objchk($req; $opt; f): if type == "object" then keyset($req; $opt), f else "not an object" end;
+EOF
+
+read -r -d '' JQ_MANIFEST <<'EOF' || true
+def filechk:
+    objchk(["path","status","binary","old_mode","new_mode","added","deleted","ranges"]; ["old_path"];
+        . as $f
+        | chk(.path | ne; "file path"),
+          chk(.status | IN("A","M","D","R","C","T"); "file status"),
+          chk(.binary | type == "boolean"; "file binary"),
+          chk((.old_mode | isstr and test("^[0-7]{6}$")) and (.new_mode | isstr and test("^[0-7]{6}$")); "file mode"),
+          chk((.status | IN("R","C") | not) or (.old_path | ne); "old_path required for R/C"),
+          (if .binary == true then
+              chk(.added == null and .deleted == null and .ranges == []; "binary file counts/ranges")
+           else
+              chk((.added | isint and . >= 0) and (.deleted | isint and . >= 0); "file counts")
+           end),
+          (if (.ranges | type) != "array" then "file ranges"
+           else .ranges[] | objchk(["side","start","end"]; [];
+               chk(.side == (if $f.status == "D" then "old" else "new" end); "range side")
+               , chk((.start | isint and . >= 0) and (.end | isint) and .end >= .start; "range bounds")) end));
+def finderchk:
+    objchk(["id","prompt","output","adapter","model_profile"]; [];
+        chk(.id | ne; "finder id"),
+        chk((.output | ne) and (.adapter | ne) and (.model_profile | ne); "finder fields"),
+        (.prompt | objchk(["protocol","version","sha256"]; [];
+            chk(.protocol | ne; "prompt protocol"),
+            chk(.version == "v1"; "unknown prompt version"),
+            chk(.sha256 | s256; "prompt sha256"))));
+objchk(["protocol","run_id","slice","loom_version","helper_version","base_sha","head_sha","head_tree","diff_sha256","files","inputs","finders","source_export","created_at","manifest_sha256"]; [];
+    chk(.protocol == "loom-local-review/v1"; "protocol"),
+    chk(.run_id | isstr and test("^[a-z0-9][a-z0-9._-]{0,63}$"); "run_id"),
+    chk((.slice | ne) and (.loom_version | ne) and (.helper_version | ne); "slice/version fields"),
+    chk((.base_sha | sha) and (.head_sha | sha) and (.head_tree | sha); "sha fields"),
+    chk((.diff_sha256 | s256) and (.manifest_sha256 | s256); "sha256 fields"),
+    chk(.created_at | isstr and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"); "created_at"),
+    (if (.files | type) == "array" then .files[] | filechk else "files" end),
+    (if (.inputs | type) == "array" then .inputs[] | objchk(["kind","path","sha256"]; [];
+        chk(.kind | IN("plan","spec","adr","gate-evidence"); "input kind"),
+        chk(.path | ne; "input path"), chk(.sha256 | s256; "input sha256")) else "inputs" end),
+    (if (.finders | type) == "array" then chk(.finders | length >= 3; "finders minItems"), (.finders[] | finderchk) else "finders" end),
+    (.source_export | objchk(["path","sha256","file_count"]; [];
+        chk(.path | ne; "source path"), chk(.sha256 | s256; "source sha256"),
+        chk(.file_count | isint and . >= 0; "source file_count"))))
+EOF
+
+read -r -d '' JQ_RESULT <<'EOF' || true
+def findingchk:
+    objchk(["id","finder","confidence","severity","file","claim","evidence","verification"]; ["line","line_end"];
+        chk(.id | isstr and test("^[A-Z]{2,5}-[0-9]+$"); "finding id"),
+        chk(.finder | ne; "finding finder"),
+        chk(.confidence | type == "number" and . >= 0 and . <= 1; "finding confidence"),
+        chk(.severity | IN("BLOCKER","MAJOR","MINOR","NIT"); "finding severity"),
+        chk((.file | ne) and (.claim | ne) and (.evidence | ne) and (.verification | ne); "finding text fields"),
+        chk((has("line") | not) or (.line | isint and . >= 1); "finding line"),
+        chk((has("line_end") | not) or (has("line") and (.line_end | isint) and .line_end >= .line); "finding line_end"));
+def struct:
+    objchk(["protocol","run_id","manifest_sha256","finder","base_sha","head_sha","diff_sha256","status","findings","provenance"]; [];
+        chk(.protocol == "loom-local-review/v1"; "unknown protocol " + (.protocol | tostring)),
+        chk(.run_id | isstr and test("^[a-z0-9][a-z0-9._-]{0,63}$"); "run_id"),
+        chk((.manifest_sha256 | s256) and (.diff_sha256 | s256); "sha256 fields"),
+        chk((.base_sha | sha) and (.head_sha | sha); "sha fields"),
+        chk(.status | IN("ran-with-findings","ran-clean","failed"); "status"),
+        (.finder | objchk(["id","prompt_version","prompt_sha256"]; [];
+            chk((.id | ne) and (.prompt_version | ne) and (.prompt_sha256 | s256); "finder fields"))),
+        (.provenance | objchk(["adapter","model_profile","started_at","finished_at","truncated","exit_status"]; [];
+            chk((.adapter | ne) and (.model_profile | ne) and (.started_at | ne) and (.finished_at | ne); "provenance fields"),
+            chk(.truncated | type == "boolean"; "provenance truncated"),
+            chk(.exit_status | isint; "provenance exit_status"))),
+        (if (.findings | type) == "array" then .findings[] | findingchk else "findings" end));
+. as $r
+| ($m[0]) as $man
+| ([$r | struct]) as $s
+| if ($s | length) > 0 then {state: "invalid", reasons: $s, ids: []}
+  else
+    ($man.finders | map(select(.id == $fid)) | .[0]) as $fe
+    | ($man.files | map({key: .path, value: .}) | from_entries) as $idx
+    | [ chk($r.run_id == $man.run_id; "run_id mismatch"),
+        chk($r.manifest_sha256 == $man.manifest_sha256; "manifest_sha256 mismatch"),
+        chk($r.base_sha == $man.base_sha; "base_sha mismatch"),
+        chk($r.head_sha == $man.head_sha; "head_sha mismatch"),
+        chk($r.diff_sha256 == $man.diff_sha256; "diff_sha256 mismatch"),
+        chk($r.finder.id == $fid; "finder id mismatch"),
+        chk($r.finder.prompt_version == $fe.prompt.version; "unknown prompt version"),
+        chk($r.finder.prompt_sha256 == $fe.prompt.sha256; "prompt hash mismatch"),
+        chk($r.provenance.adapter == $fe.adapter; "adapter mismatch"),
+        chk($r.provenance.model_profile == $fe.model_profile; "model_profile mismatch"),
+        chk(($r.status == "ran-clean" | not) or ($r.findings | length) == 0; "ran-clean with findings"),
+        chk(($r.status == "ran-with-findings" | not) or ($r.findings | length) > 0; "ran-with-findings without findings"),
+        chk(($r.status == "failed" | not) or ($r.findings | length) == 0; "failed with findings"),
+        ($r.findings[] | . as $f
+            | chk($f.finder == $fid; "finding " + $f.id + " finder mismatch"),
+              ($idx[$f.file] as $fi
+               | if $fi == null then "finding " + $f.id + " file not in diff: " + $f.file
+                 elif $fi.binary then chk(($f | has("line") | not) and ($f | has("line_end") | not); "finding " + $f.id + " binary file with line")
+                 elif ($f | has("line") | not) then "finding " + $f.id + " text file without line"
+                 else ($f.line) as $l | ($f.line_end // $f.line) as $e
+                   | ($fi.ranges | map(select(.start <= $e and .end >= $l)) | length) as $hit
+                   | chk($hit > 0; "finding " + $f.id + " outside changed ranges")
+                 end)),
+        ($r.findings | map(.id) | group_by(.) | map(select(length > 1) | "duplicate finding id " + .[0])[])
+      ] as $inv
+    | ([ chk($r.status != "failed"; "finder status failed"),
+         chk($r.provenance.truncated == false; "output truncated"),
+         chk($r.provenance.exit_status == 0; "nonzero exit_status")
+       ]) as $fail
+    | {state: (if ($inv | length) > 0 then "invalid" elif ($fail | length) > 0 then "failed" else $r.status end),
+       reasons: ($inv + $fail), ids: ($r.findings | map(.id))}
+  end
+EOF
+
+# ---------------------------------------------------------------- validate
+
+ERRS=""
+FL=""
+AGG="invalid"
+add_err() { printf '%s\n' "$*" >>"$ERRS"; }
+
+results_digest() { # <run>
+    local f
+    if [ -d "$1/results" ]; then
+        find "$1/results" -mindepth 1 -maxdepth 1 -type f | while IFS= read -r f; do sha256_file "$f"; done
+    fi | LC_ALL=C sort | sha256_stdin
+}
+
+finder_file() { printf '%s.json' "${1//\//__}"; }
+
+check_binding() { # manifest at $RUN/manifest.json, MOK=1
+    local m="$RUN/manifest.json" base head tree s r ok=1 i n kind path want got
+    base="$(jq -r .base_sha "$m")"
+    head="$(jq -r .head_sha "$m")"
+    if [ -z "$COMMON" ] || ! git --git-dir="$COMMON" rev-parse --git-dir >/dev/null 2>&1; then
+        add_err "unverifiable: repository not available"
+        return 0
+    fi
+    for s in "$base" "$head"; do
+        r="$(gg rev-parse --verify --quiet "${s}^{commit}" 2>/dev/null || true)"
+        if [ "$r" != "$s" ]; then
+            add_err "unverifiable: commit object missing or not a full commit id: $s"
+            ok=0
+        fi
+    done
+    [ "$ok" = 1 ] || return 0
+    tree="$(gg rev-parse --verify --quiet "${head}^{tree}" 2>/dev/null || true)"
+    [ "$tree" = "$(jq -r .head_tree "$m")" ] || add_err "head_tree does not match head commit"
+    [ "$base" != "$head" ] || add_err "base equals head"
+    gg merge-base --is-ancestor "$base" "$head" 2>/dev/null || add_err "base is not an ancestor of head"
+    gdiff --binary --full-index "$base" "$head" >"$WORK/d.patch" 2>/dev/null || add_err "diff cannot be recomputed"
+    [ "$(sha256_file "$WORK/d.patch")" = "$(jq -r .diff_sha256 "$m")" ] || add_err "diff_sha256 does not match git diff"
+    cmp -s "$WORK/d.patch" "$RUN/diff.patch" 2>/dev/null || add_err "diff.patch differs from git diff"
+    if build_inventory "$base" "$head"; then
+        [ "$(jq -S -c .files "$m")" = "$(cat "$WORK/inventory.json")" ] || add_err "files[] does not match git-derived inventory"
+    else
+        add_err "$INV_ERR"
+    fi
+    # inputs
+    n="$(jq '.inputs | length' "$m")"
+    if [ -d "$RUN/inputs" ]; then
+        [ "$(find "$RUN/inputs" -mindepth 1 | wc -l | tr -d ' ')" = "$n" ] || add_err "inputs/ file set differs from manifest"
+    else
+        add_err "inputs/ missing"
+    fi
+    i=0
+    while [ "$i" -lt "$n" ]; do
+        kind="$(jq -r ".inputs[$i].kind" "$m")"
+        path="$(jq -r ".inputs[$i].path" "$m")"
+        want="$(jq -r ".inputs[$i].sha256" "$m")"
+        if [ -f "$RUN/inputs/$kind-$i" ] && [ ! -L "$RUN/inputs/$kind-$i" ]; then
+            [ "$(sha256_file "$RUN/inputs/$kind-$i")" = "$want" ] || add_err "input hash mismatch: $kind-$i"
+        else
+            add_err "input missing: $kind-$i"
+        fi
+        if [ "$kind" != "gate-evidence" ]; then
+            got="$(gg show "$head:$path" 2>/dev/null | sha256_stdin || true)"
+            [ "$got" = "$want" ] || add_err "input $path does not match head blob"
+        fi
+        i=$((i + 1))
+    done
+    # source export
+    if [ -d "$RUN/source" ]; then
+        tree_listing "$head" >"$WORK/tree.list"
+        fs_listing "$RUN/source" >"$WORK/src.list"
+        cmp -s "$WORK/tree.list" "$WORK/src.list" || add_err "source/ differs from head tree"
+        [ "$(listing_hash "$WORK/src.list")" = "$(jq -r .source_export.sha256 "$m")" ] || add_err "source_export.sha256 mismatch"
+        [ "$(wc -l <"$WORK/src.list" | tr -d ' ')" = "$(jq -r .source_export.file_count "$m")" ] || add_err "source_export.file_count mismatch"
+    else
+        add_err "source/ missing"
+    fi
+}
+
+do_validate() { # sets AGG; writes state.json; exit code decided by caller
+    local m="$RUN/manifest.json" mok=1 digest ids id exp f cnt nm line state reasons out dup=" " name expected
+    ERRS="$WORK/errors"
+    FL="$WORK/finders.tsv"
+    : >"$ERRS"
+    : >"$FL"
+    : >"$WORK/allids"
+    digest="$(results_digest "$RUN")"
+    if [ ! -f "$m" ]; then
+        add_err "manifest.json missing"
+        mok=0
+    elif ! jq empty "$m" >/dev/null 2>&1; then
+        add_err "manifest.json is not valid JSON"
+        mok=0
+    elif [ "$(jq -r 'if type == "object" then .protocol // "" else "" end' "$m")" != "$PROTOCOL" ]; then
+        add_err "unknown or missing protocol (expected $PROTOCOL)"
+        mok=0
+    else
+        jq -r "$JQ_COMMON $JQ_MANIFEST" "$m" >"$WORK/mcheck" 2>&1 || add_err "manifest check failed to run"
+        if [ -s "$WORK/mcheck" ]; then
+            while IFS= read -r line; do add_err "manifest: $line"; done <"$WORK/mcheck"
+            mok=0
+        fi
+    fi
+    ids="$REQUIRED_FINDERS"
+    if [ "$mok" = 1 ]; then
+        [ "$(jq -S -c 'del(.manifest_sha256)' "$m" | sha256_stdin)" = "$(jq -r .manifest_sha256 "$m")" ] || add_err "manifest_sha256 mismatch"
+        # shellcheck disable=SC2086
+        [ "$(jq -r '[.finders[].id] | sort | join(" ")' "$m")" = "$(printf '%s\n' $REQUIRED_FINDERS | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')" ] ||
+            add_err "finder set is not exactly: $REQUIRED_FINDERS"
+        ids="$(jq -r '.finders[].id' "$m" | tr '\n' ' ')"
+        for id in $ids; do
+            [ "$(jq -r --arg i "$id" '.finders[] | select(.id == $i) | .output' "$m")" = "results/$(finder_file "$id")" ] ||
+                add_err "finder $id output path is not results/$(finder_file "$id")"
+        done
+        check_binding
+    fi
+    # result files
+    if [ ! -d "$RUN/results" ]; then
+        add_err "results/ missing"
+    else
+        find "$RUN/results" -mindepth 1 -maxdepth 1 | while IFS= read -r f; do basename "$f"; done | LC_ALL=C sort >"$WORK/reslist"
+        while IFS= read -r name; do
+            expected=0
+            for id in $ids; do [ "$name" = "$(finder_file "$id")" ] && expected=1; done
+            if [ "$expected" = 0 ]; then
+                add_err "extra result file: $name"
+                if [ -f "$RUN/results/$name" ] && id="$(jq -r '.finder.id // empty' "$RUN/results/$name" 2>/dev/null)" && [ -n "$id" ]; then
+                    case " $REQUIRED_FINDERS " in
+                    *" $id "*)
+                        dup="$dup$id "
+                        add_err "duplicate result for $id"
+                        ;;
+                    esac
+                fi
+            fi
+        done <"$WORK/reslist"
+    fi
+    for id in $ids; do
+        exp="$RUN/results/$(finder_file "$id")"
+        state="" reasons=""
+        if [ -L "$exp" ] || { [ -e "$exp" ] && [ ! -f "$exp" ]; }; then
+            state=invalid reasons="result is not a regular file"
+        elif [ ! -e "$exp" ]; then
+            state=invalid reasons="missing"
+        elif ! command -v iconv >/dev/null 2>&1 || ! iconv -f UTF-8 -t UTF-8 <"$exp" >/dev/null 2>&1; then
+            state=invalid reasons="not valid UTF-8"
+        elif ! jq empty "$exp" >/dev/null 2>&1; then
+            state=invalid reasons="not valid JSON"
+        elif [ "$mok" = 0 ]; then
+            state=invalid reasons="manifest invalid"
+        else
+            if out="$(jq -c --slurpfile m "$m" --arg fid "$id" "$JQ_COMMON $JQ_RESULT" "$exp" 2>"$WORK/jqerr")"; then
+                state="$(printf '%s' "$out" | jq -r .state)"
+                reasons="$(printf '%s' "$out" | jq -r '.reasons | join("; ")')"
+                printf '%s' "$out" | jq -r '.ids[]' >>"$WORK/allids"
+            else
+                state=invalid reasons="result check failed to run"
+            fi
+        fi
+        case "$dup" in
+        *" $id "*)
+            state=invalid
+            reasons="duplicate result files${reasons:+; $reasons}"
+            ;;
+        esac
+        printf '%s\t%s\t%s\n' "$id" "$state" "$reasons" >>"$FL"
+    done
+    if [ -n "$(LC_ALL=C sort "$WORK/allids" | uniq -d)" ]; then
+        add_err "duplicate finding ids across finders: $(LC_ALL=C sort "$WORK/allids" | uniq -d | tr '\n' ' ')"
+    fi
+    AGG="invalid"
+    if [ ! -s "$ERRS" ] && [ "$mok" = 1 ]; then
+        cnt="$(awk -F'\t' '$2 == "ran-with-findings" || $2 == "ran-clean" {n++} END {print n + 0}' "$FL")"
+        nm="$(wc -l <"$FL" | tr -d ' ')"
+        if [ "$cnt" = "$nm" ] && [ "$nm" -ge 3 ]; then
+            if awk -F'\t' '$2 == "ran-with-findings" {f = 1} END {exit !f}' "$FL"; then AGG="ran-with-findings"; else AGG="ran-clean"; fi
+        fi
+    fi
+    jq -n -S --arg digest "$digest" --arg agg "$AGG" --rawfile fl "$FL" --rawfile er "$ERRS" \
+        --slurpfile old <(cat "$RUN/state.json" 2>/dev/null || echo '{}') '
+        ($old[0] // {}) as $o
+        | {validated: true, results_digest: $digest, aggregate: $agg,
+           finders: ($fl | split("\n") | map(select(length > 0) | split("\t") | {id: .[0], state: .[1], reason: (.[2] // "")})),
+           errors: ($er | split("\n") | map(select(length > 0)))}
+          + (if ($o.assembled.results_digest // "") == $digest and $agg != "invalid" then {assembled: $o.assembled} else {} end)' \
+        >"$RUN/state.json.tmp.$$" 2>/dev/null || {
+        rm -f "$RUN/state.json.tmp.$$"
+        die 1 "cannot write state.json in $RUN"
+    }
+    mv "$RUN/state.json.tmp.$$" "$RUN/state.json"
+}
+
+print_validation() {
+    local id state reason line
+    while IFS="$TAB" read -r id state reason; do
+        if [ -n "$reason" ]; then printf '%s: %s (%s)\n' "$id" "$state" "$reason"; else printf '%s: %s\n' "$id" "$state"; fi
+    done <"$FL"
+    while IFS= read -r line; do printf 'error: %s\n' "$line"; done <"$ERRS"
+    printf 'aggregate: %s\n' "$AGG"
+}
+
+cmd_validate() {
+    local run="" repo="" quiet=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --repo)
+            [ $# -ge 2 ] || die 1 "--repo requires a value"
+            repo="$2"
+            shift 2
+            ;;
+        --quiet)
+            quiet=1
+            shift
+            ;;
+        -*) die 1 "unknown option: $1" ;;
+        *)
+            [ -z "$run" ] || die 1 "unexpected argument: $1"
+            run="$1"
+            shift
+            ;;
+        esac
+    done
+    [ -n "$run" ] || die 1 "validate requires <run-dir|run-id>"
+    init_repo "$repo" 0
+    resolve_run "$run" "$REPO_GIVEN"
+    do_validate
+    [ "$quiet" = 1 ] || print_validation
+    case "$AGG" in
+    ran-clean | ran-with-findings) exit 0 ;;
+    *) exit 2 ;;
+    esac
+}
+
+# ---------------------------------------------------------------- assemble
+
+cmd_assemble() {
+    local run="" repo="" out="" slice outdir tmp outsha
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --repo | --out)
+            [ $# -ge 2 ] || die 1 "$1 requires a value"
+            case "$1" in --repo) repo="$2" ;; --out) out="$2" ;; esac
+            shift 2
+            ;;
+        -*) die 1 "unknown option: $1" ;;
+        *)
+            [ -z "$run" ] || die 1 "unexpected argument: $1"
+            run="$1"
+            shift
+            ;;
+        esac
+    done
+    [ -n "$run" ] || die 1 "assemble requires <run-dir|run-id>"
+    init_repo "$repo" 0
+    resolve_run "$run" "$REPO_GIVEN"
+    do_validate
+    case "$AGG" in
+    ran-clean | ran-with-findings) ;;
+    *)
+        print_validation >&2
+        die 2 "refusing to assemble: aggregate is $AGG"
+        ;;
+    esac
+    slice="$(jq -r .slice "$RUN/manifest.json")"
+    if [ -z "$out" ]; then
+        if [ "$REPO_OK" = 1 ]; then out="$REPO_TOP/.docs/evaluations/$slice-review-findings.md"; else out=".docs/evaluations/$slice-review-findings.md"; fi
+    fi
+    outdir="$(dirname "$out")"
+    mkdir -p "$outdir" 2>/dev/null || die 1 "cannot create output directory: $outdir"
+    outdir="$(CDPATH='' cd -P -- "$outdir" && pwd -P)"
+    out="$outdir/$(basename "$out")"
+    tmp="$outdir/.$(basename "$out").tmp.$$"
+    {
+        jq -r --arg digest "$(results_digest "$RUN")" --arg agg "$AGG" '
+            def one: gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
+            "# Review findings — " + .slice, "",
+            "- Protocol: " + .protocol,
+            "- Run: " + .run_id,
+            "- Aggregate: " + $agg,
+            "- Base: " + .base_sha,
+            "- Head: " + .head_sha,
+            "- Diff sha256: " + .diff_sha256,
+            "- Manifest sha256: " + .manifest_sha256,
+            "- Findings sha256: " + $digest, "",
+            "## Provenance", "",
+            "| Finder | Prompt version | Prompt hash | Adapter | Model profile |",
+            "|---|---|---|---|---|",
+            (.finders | sort_by(.id)[] | "| " + .id + " | " + .prompt.version + " | " + .prompt.sha256 + " | " + .adapter + " | " + .model_profile + " |")
+            ' "$RUN/manifest.json"
+        # shellcheck disable=SC2046
+        jq -r -s '
+            def one: gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
+            [.[].findings[]] | sort_by([.file, (.line // 0), .id])[]
+            | "", "## " + .id + " — proposed " + .severity, "",
+              "- Worker: " + .finder,
+              "- Location: " + .file + (if .line then ":" + (.line | tostring) + (if .line_end then "-" + (.line_end | tostring) else "" end) else "" end),
+              "- Confidence: " + (.confidence | tostring),
+              "- Claim: " + (.claim | one),
+              "- Evidence: " + (.evidence | one),
+              "- Suggested verification: " + (.verification | one)
+            ' $(find "$RUN/results" -mindepth 1 -maxdepth 1 -type f -name '*.json' | LC_ALL=C sort)
+    } >"$tmp" 2>/dev/null || {
+        rm -f "$tmp"
+        die 1 "cannot write output: $out"
+    }
+    mv "$tmp" "$out" || {
+        rm -f "$tmp"
+        die 1 "cannot write output: $out"
+    }
+    outsha="$(sha256_file "$out")"
+    jq -S --arg out "$out" --arg sha "$outsha" --arg digest "$(results_digest "$RUN")" \
+        '. + {assembled: {out: $out, output_sha256: $sha, results_digest: $digest}}' "$RUN/state.json" >"$RUN/state.json.tmp.$$" || die 1 "cannot update state.json"
+    mv "$RUN/state.json.tmp.$$" "$RUN/state.json"
+    printf '%s\n' "$out"
+}
+
+# ---------------------------------------------------------------- status
+
+cmd_status() {
+    local run="" repo="" json=0 digest phase="" agg="" nres id state rid st_digest sfile
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --repo)
+            [ $# -ge 2 ] || die 1 "--repo requires a value"
+            repo="$2"
+            shift 2
+            ;;
+        --json)
+            json=1
+            shift
+            ;;
+        -*) die 1 "unknown option: $1" ;;
+        *)
+            [ -z "$run" ] || die 1 "unexpected argument: $1"
+            run="$1"
+            shift
+            ;;
+        esac
+    done
+    [ -n "$run" ] || die 1 "status requires <run-dir|run-id>"
+    init_repo "$repo" 0
+    resolve_run "$run" "$REPO_GIVEN"
+    [ -f "$RUN/manifest.json" ] || die 1 "not a review run (no manifest.json): $RUN"
+    digest="$(results_digest "$RUN")"
+    nres="$(find "$RUN/results" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')"
+    sfile="$RUN/state.json"
+    rid="$(jq -r '.run_id // empty' "$RUN/manifest.json" 2>/dev/null || true)"
+    : >"$WORK/status.tsv"
+    st_digest=""
+    [ -f "$sfile" ] && st_digest="$(jq -r '.results_digest // empty' "$sfile" 2>/dev/null || true)"
+    if [ -n "$st_digest" ] && [ "$st_digest" = "$digest" ]; then
+        agg="$(jq -r '.aggregate // "invalid"' "$sfile")"
+        phase="validated"
+        jq -r '.finders[] | .id + "\t" + .state' "$sfile" >"$WORK/status.tsv"
+        if [ "$agg" != "invalid" ]; then
+            local aout asha
+            aout="$(jq -r '.assembled.out // empty' "$sfile")"
+            asha="$(jq -r '.assembled.output_sha256 // empty' "$sfile")"
+            if [ "$(jq -r '.assembled.results_digest // empty' "$sfile")" = "$digest" ] && [ -n "$aout" ] && [ -f "$aout" ] &&
+                [ "$(sha256_file "$aout")" = "$asha" ]; then
+                phase="assembled"
+            fi
+        fi
+    else
+        agg=""
+        if [ "$nres" -ge 1 ]; then phase="collecting"; else phase="prepared"; fi
+        for id in $REQUIRED_FINDERS; do
+            if [ -f "$RUN/results/$(finder_file "$id")" ]; then state="collected"; else state="pending"; fi
+            printf '%s\t%s\n' "$id" "$state" >>"$WORK/status.tsv"
+        done
+    fi
+    if [ "$json" = 1 ]; then
+        jq -n -S --arg run "$rid" --arg phase "$phase" --arg agg "$agg" --arg digest "$digest" --rawfile f "$WORK/status.tsv" '
+            {run_id: $run, phase: $phase, aggregate: (if $agg == "" then null else $agg end), results_digest: $digest,
+             finders: ($f | split("\n") | map(select(length > 0) | split("\t") | {id: .[0], state: .[1]}))}'
+    else
+        printf 'phase: %s\n' "$phase"
+        while IFS="$TAB" read -r id state; do printf '%s: %s\n' "$id" "$state"; done <"$WORK/status.tsv"
+        [ -z "$agg" ] || printf 'aggregate: %s\n' "$agg"
+    fi
+    case "$agg" in
+    ran-clean | ran-with-findings) exit 0 ;;
+    invalid) exit 2 ;;
+    *) exit 3 ;;
+    esac
+}
+
+# ---------------------------------------------------------------- clean
+
+cmd_clean() {
+    local repo="" all=0 days="" ids="" root id d removed="" cand
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --repo)
+            [ $# -ge 2 ] || die 1 "--repo requires a value"
+            repo="$2"
+            shift 2
+            ;;
+        --all)
+            all=1
+            shift
+            ;;
+        --older-than)
+            [ $# -ge 2 ] || die 1 "--older-than requires a value"
+            days="$2"
+            shift 2
+            ;;
+        -*) die 1 "unknown option: $1" ;;
+        *)
+            ids="$ids $1"
+            shift
+            ;;
+        esac
+    done
+    if [ -z "$ids" ] && [ "$all" = 0 ] && [ -z "$days" ]; then die 1 "clean requires <run-id>..., --all, or --older-than <days>"; fi
+    case "$days" in *[!0-9]*) die 1 "--older-than needs a non-negative integer" ;; esac
+    init_repo "$repo" 1
+    root="$COMMON/loom/review"
+    [ -d "$root" ] || exit 0
+    root="$(CDPATH='' cd -P -- "$root" && pwd -P)"
+    # is_run_dir <dir>: real directory directly under root with a matching manifest
+    is_run_dir() {
+        [ -d "$1" ] && [ ! -L "$1" ] || return 1
+        [ "$(CDPATH='' cd -P -- "$1" && pwd -P)" = "$root/$(basename "$1")" ] || return 1
+        [ -f "$1/manifest.json" ] && [ ! -L "$1/manifest.json" ] || return 1
+        [ "$(jq -r 'if type == "object" then .protocol // "" else "" end' "$1/manifest.json" 2>/dev/null)" = "$PROTOCOL" ]
+    }
+    for id in $ids; do
+        [[ "$id" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die 2 "refusing: not a run id under the review root: $id"
+        is_run_dir "$root/$id" || die 2 "refusing: not a loom review run: $id"
+    done
+    cand=""
+    for id in $ids; do cand="$cand $id"; done
+    if [ "$all" = 1 ]; then
+        for d in "$root"/*; do
+            [ -e "$d" ] || [ -L "$d" ] || continue
+            is_run_dir "$d" && cand="$cand $(basename "$d")"
+        done
+    fi
+    if [ -n "$days" ]; then
+        while IFS= read -r d; do
+            is_run_dir "$d" && cand="$cand $(basename "$d")"
+        done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -mmin "+$((days * 1440))")
+    fi
+    for id in $cand; do
+        case " $removed " in *" $id "*) continue ;; esac
+        chmod -R u+w "$root/$id" 2>/dev/null || true
+        rm -rf "${root:?}/$id"
+        removed="$removed $id"
+        printf '%s\n' "$id"
+    done
+}
+
+# ---------------------------------------------------------------- prepare
+
+# kv_get <list> <key>: value of "key=value" line
+kv_get() {
+    local l
+    while IFS= read -r l; do
+        if [ "${l%%=*}" = "$2" ]; then
+            printf '%s' "${l#*=}"
+            return 0
+        fi
+    done <<<"$1"
+    return 0
+}
+
+# phys_path <path>: physical absolute path of an existing file (symlinked dirs resolved)
+phys_path() {
+    local d
+    d="$(CDPATH='' cd -P -- "$(dirname -- "$1")" 2>/dev/null && pwd -P)" || return 1
+    printf '%s/%s' "$d" "$(basename -- "$1")"
+}
+
+cmd_prepare() {
+    local slice="" base="" head="" plan="" gate="" run_id="" run_dir="" repo=""
+    local specs=() adrs=() PH="" FP=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --slice | --base | --head | --plan | --spec | --adr | --gate-evidence | --prompt-hash | --finder-profile | --run-id | --run-dir | --repo)
+            [ $# -ge 2 ] || die 1 "$1 requires a value"
+            case "$1" in
+            --slice) slice="$2" ;;
+            --base) base="$2" ;;
+            --head) head="$2" ;;
+            --plan) plan="$2" ;;
+            --spec) specs[${#specs[@]}]="$2" ;;
+            --adr) adrs[${#adrs[@]}]="$2" ;;
+            --gate-evidence) gate="$2" ;;
+            --prompt-hash) PH="$PH$2"$'\n' ;;
+            --finder-profile) FP="$FP$2"$'\n' ;;
+            --run-id) run_id="$2" ;;
+            --run-dir) run_dir="$2" ;;
+            --repo) repo="$2" ;;
+            esac
+            shift 2
+            ;;
+        *) die 1 "unknown argument: $1" ;;
+        esac
+    done
+    [ -n "$slice" ] && [ -n "$base" ] && [ -n "$head" ] && [ -n "$plan" ] && [ -n "$gate" ] ||
+        die 1 "prepare requires --slice --base --head --plan --gate-evidence"
+    [[ "$slice" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die 2 "invalid slice name: $slice"
+    init_repo "$repo" 1
+
+    # a. exact commit ids
+    local s r
+    for s in "$base" "$head"; do
+        [[ "$s" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || die 2 "not a full lowercase commit id: $s"
+        r="$(gg rev-parse --verify --quiet "${s}^{commit}" 2>/dev/null || true)"
+        [ "$r" = "$s" ] || die 2 "commit not found or ambiguous: $s"
+    done
+    [ "$base" != "$head" ] || die 2 "base equals head"
+    gg merge-base --is-ancestor "$base" "$head" 2>/dev/null || die 2 "base is not an ancestor of head"
+
+    # finder inputs
+    local id v prof
+    for id in $REQUIRED_FINDERS; do
+        v="$(kv_get "$PH" "$id")"
+        [[ "$v" =~ ^[0-9a-f]{64}$ ]] || die 2 "missing or invalid --prompt-hash for $id"
+        prof="$(kv_get "$FP" "$id")"
+        [[ "$prof" =~ ^[^:]+:.+$ ]] || die 2 "missing or invalid --finder-profile for $id (want <adapter>:<model-profile>)"
+    done
+
+    # gate evidence
+    [ -f "$gate" ] && [ ! -L "$gate" ] || die 2 "gate evidence must be an existing regular non-symlink file"
+    local evphys evrel=""
+    evphys="$(phys_path "$gate")" || die 2 "cannot resolve gate evidence"
+    case "$evphys" in "$REPO_TOP"/*) evrel="${evphys#"$REPO_TOP"/}" ;; esac
+
+    # b. clean tree, HEAD == head
+    local dirty
+    if [ -n "$evrel" ]; then
+        dirty="$(git -C "$REPO_TOP" status --porcelain --untracked-files=all --ignore-submodules=none -- . ":(exclude,literal)$evrel")"
+    else
+        dirty="$(git -C "$REPO_TOP" status --porcelain --untracked-files=all --ignore-submodules=none -- .)"
+    fi
+    [ -z "$dirty" ] || die 2 "working tree is dirty"
+    [ "$(git -C "$REPO_TOP" rev-parse HEAD)" = "$head" ] || die 2 "HEAD is not head_sha"
+
+    # c. tracked inputs
+    local kinds=() paths=() i=0 k p ph rel
+    kinds[0]=plan
+    paths[0]="$plan"
+    for p in ${specs[@]+"${specs[@]}"}; do
+        kinds[${#kinds[@]}]=spec
+        paths[${#paths[@]}]="$p"
+    done
+    for p in ${adrs[@]+"${adrs[@]}"}; do
+        kinds[${#kinds[@]}]=adr
+        paths[${#paths[@]}]="$p"
+    done
+    local relpaths=()
+    while [ "$i" -lt "${#kinds[@]}" ]; do
+        k="${kinds[$i]}"
+        p="${paths[$i]}"
+        [ -e "$p" ] || die 2 "$k not found: $p"
+        [ ! -L "$p" ] || die 2 "$k is a symlink: $p"
+        [ -f "$p" ] || die 2 "$k is not a regular file: $p"
+        ph="$(phys_path "$p")" || die 2 "cannot resolve $k: $p"
+        case "$ph" in "$REPO_TOP"/*) rel="${ph#"$REPO_TOP"/}" ;; *) die 2 "$k is outside the repository: $p" ;; esac
+        git -C "$REPO_TOP" cat-file -e "$head:$rel" 2>/dev/null || die 2 "$k is not tracked at head: $rel"
+        git -C "$REPO_TOP" diff --quiet "$head" -- "$rel" || die 2 "$k is modified: $rel"
+        relpaths[i]="$rel"
+        i=$((i + 1))
+    done
+
+    # d. diff inventory (gitlinks rejected)
+    build_inventory "$base" "$head" || die 2 "$INV_ERR"
+
+    # loom version
+    local loom_version
+    loom_version="$(gg show "$head:plugins/loom/.claude-plugin/plugin.json" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
+    [ -n "$loom_version" ] || die 2 "plugins/loom/.claude-plugin/plugin.json version missing at head"
+
+    # run location
+    local root final
+    if [ -n "$run_id" ]; then
+        [[ "$run_id" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die 2 "invalid run id: $run_id"
+    else
+        run_id="$(printf '%s-%s' "$slice" "${head:0:12}" | tr '[:upper:]' '[:lower:]' | cut -c1-64)"
+        [[ "$run_id" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die 2 "cannot derive run id from slice: $slice"
+    fi
+    if [ -n "$run_dir" ]; then
+        case "$run_dir" in /*) ;; *) die 1 "--run-dir must be absolute" ;; esac
+        [ -d "$(dirname "$run_dir")" ] || die 1 "--run-dir parent does not exist"
+        final="$run_dir"
+        root="$(dirname "$run_dir")"
+    else
+        root="$COMMON/loom/review"
+        final="$root/$run_id"
+        if [ ! -d "$root" ]; then
+            mkdir -p "$root"
+            chmod 700 "$root" 2>/dev/null || true
+            ROOT_CREATED="$root"
+        fi
+    fi
+    [ ! -e "$final" ] && [ ! -L "$final" ] || die 2 "run already exists: $final"
+    BUILD="$root/.tmp-$run_id.$$"
+    mkdir "$BUILD"
+    chmod 700 "$BUILD"
+    mkdir "$BUILD/source" "$BUILD/inputs" "$BUILD/results"
+
+    # diff.patch + hash
+    gdiff --binary --full-index "$base" "$head" >"$BUILD/diff.patch"
+    local diff_sha head_tree
+    diff_sha="$(sha256_file "$BUILD/diff.patch")"
+    head_tree="$(gg rev-parse --verify "${head}^{tree}")"
+
+    # inputs
+    : >"$WORK/inputs.jsonl"
+    i=0
+    while [ "$i" -lt "${#kinds[@]}" ]; do
+        k="${kinds[$i]}"
+        gg show "$head:${relpaths[$i]}" >"$BUILD/inputs/$k-$i"
+        jq -n -c --arg kind "$k" --arg path "${relpaths[$i]}" --arg sha "$(sha256_file "$BUILD/inputs/$k-$i")" \
+            '{kind: $kind, path: $path, sha256: $sha}' >>"$WORK/inputs.jsonl"
+        i=$((i + 1))
+    done
+    cp "$gate" "$BUILD/inputs/gate-evidence-$i"
+    jq -n -c --arg sha "$(sha256_file "$BUILD/inputs/gate-evidence-$i")" \
+        '{kind: "gate-evidence", path: "gate-evidence", sha256: $sha}' >>"$WORK/inputs.jsonl"
+
+    # source export from objects
+    local rec meta mode oid path nfiles=0
+    gg ls-tree -r -z "$head" >"$WORK/tree.bin"
+    while IFS= read -r -d '' rec; do
+        meta="${rec%%"$TAB"*}"
+        path="${rec#*"$TAB"}"
+        read -r mode _ oid <<<"$meta"
+        case "$path" in
+        *"$TAB"* | *$'\n'* | /* | ../* | */../* | */.. | .. | .git | .git/* | */.git | */.git/*) die 2 "unsupported path in tree: $path" ;;
+        esac
+        [ "$mode" != 160000 ] || die 2 "submodule/gitlink in tree: $path"
+        mkdir -p "$BUILD/source/$(dirname "$path")"
+        case "$mode" in
+        100644)
+            gg cat-file blob "$oid" >"$BUILD/source/$path"
+            chmod 644 "$BUILD/source/$path"
+            ;;
+        100755)
+            gg cat-file blob "$oid" >"$BUILD/source/$path"
+            chmod 755 "$BUILD/source/$path"
+            ;;
+        120000) ln -s "$(gg cat-file blob "$oid")" "$BUILD/source/$path" ;;
+        *) die 2 "unsupported tree entry mode $mode: $path" ;;
+        esac
+        nfiles=$((nfiles + 1))
+    done <"$WORK/tree.bin"
+    tree_listing "$head" >"$WORK/tree.list"
+    fs_listing "$BUILD/source" >"$WORK/src.list"
+    cmp -s "$WORK/tree.list" "$WORK/src.list" || die 2 "source export does not match head tree"
+    [ "$(wc -l <"$WORK/src.list" | tr -d ' ')" = "$nfiles" ] || die 2 "source export file count mismatch"
+    local export_sha
+    export_sha="$(listing_hash "$WORK/src.list")"
+    chmod -R a-w "$BUILD/source"
+
+    # manifest
+    : >"$WORK/finders.jsonl"
+    for id in $REQUIRED_FINDERS; do
+        prof="$(kv_get "$FP" "$id")"
+        jq -n -c --arg id "$id" --arg ver "${id##*/}" --arg sha "$(kv_get "$PH" "$id")" \
+            --arg out "results/$(finder_file "$id")" --arg adapter "${prof%%:*}" --arg mp "${prof#*:}" \
+            '{id: $id, prompt: {protocol: "loom-review-prompt/v1", version: $ver, sha256: $sha}, output: $out, adapter: $adapter, model_profile: $mp}' \
+            >>"$WORK/finders.jsonl"
+    done
+    jq -n -S -c --arg run_id "$run_id" --arg slice "$slice" --arg lv "$loom_version" --arg hv "$HELPER_VERSION" \
+        --arg base "$base" --arg head "$head" --arg tree "$head_tree" --arg diff "$diff_sha" \
+        --slurpfile files "$WORK/inventory.json" --slurpfile inputs "$WORK/inputs.jsonl" --slurpfile finders "$WORK/finders.jsonl" \
+        --arg esha "$export_sha" --argjson ecount "$nfiles" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+        {protocol: "loom-local-review/v1", run_id: $run_id, slice: $slice, loom_version: $lv, helper_version: $hv,
+         base_sha: $base, head_sha: $head, head_tree: $tree, diff_sha256: $diff, files: $files[0],
+         inputs: $inputs, finders: $finders,
+         source_export: {path: "source", sha256: $esha, file_count: $ecount}, created_at: $now}' >"$WORK/manifest.nohash"
+    local msha
+    msha="$(sha256_stdin <"$WORK/manifest.nohash")"
+    jq -S -c --arg h "$msha" '. + {manifest_sha256: $h}' "$WORK/manifest.nohash" >"$BUILD/manifest.json"
+    mv "$BUILD" "$final"
+    BUILD=""
+    ROOT_CREATED=""
+    printf '%s\n' "$final"
+}
+
+# ---------------------------------------------------------------- main
+
+usage() {
+    cat >&2 <<'EOF'
+usage: loom-review prepare --slice <name> --base <sha> --head <sha> --plan <path> [--spec <path>]...
+                           [--adr <path>]... --gate-evidence <path> --prompt-hash <finder>=<sha256>...
+                           --finder-profile <finder>=<adapter>:<profile>... [--run-id <id>]
+                           [--run-dir <dir>] [--repo <path>]
+       loom-review validate <run-dir|run-id> [--repo <path>] [--quiet]
+       loom-review assemble <run-dir|run-id> [--out <path>] [--repo <path>]
+       loom-review status   <run-dir|run-id> [--json] [--repo <path>]
+       loom-review clean    (<run-id>... | --all | --older-than <days>) [--repo <path>]
+EOF
+    exit 1
+}
+
+[ $# -ge 1 ] || usage
+sub="$1"
+shift
+case "$sub" in
+prepare) cmd_prepare "$@" ;;
+validate) cmd_validate "$@" ;;
+assemble) cmd_assemble "$@" ;;
+status) cmd_status "$@" ;;
+clean) cmd_clean "$@" ;;
+-h | --help | help) usage ;;
+*) die 1 "unknown subcommand: $sub" ;;
+esac
