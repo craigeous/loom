@@ -1,21 +1,23 @@
 # Evaluation: identity-guard-contract
 
 Verdict: FAIL
-Round: 0
-Reviewed against: identity-guard-contract slice plan and commit c6d3040..f698d67; code-eval rubric and severity rules.
+Round: 1
+Reviewed against: identity-guard-contract slice plan and revision diff f698d67..9d207c8; code-eval rubric and severity rules.
 
 ## Findings
 
-- [BLOCKER] The config scanner treats any read option on a line as proof that the whole line is a read. `git config --get user.name; git config user.name Evil` exits the Claude hook with status 0, allowing the second command to mutate the configured identity. The plan requires recognized writes and ambiguous forms to be blocked. The tests cover a read followed by a write only on separate lines.
-- [BLOCKER] The author flag matcher requires whitespace, `=`, or end of text immediately after `--author`, so `git commit '--author' 'Evil <evil@example.com>'` is allowed despite passing the recognized flag to Git. This violates the requirement to scan quoted tokens without discarding them.
-- [BLOCKER] The verifier maps every failed `git rev-parse --verify -q 'HEAD^{commit}'` to an empty HEAD and accepts it with baseline `unborn`. An existing but unreadable or corrupt HEAD is therefore treated as an unborn no-op, contrary to the required fail-closed behavior for unreadable history.
+- [BLOCKER] Unreadable HEAD handling remains incomplete. In the new unborn check, `[ -e "$REF_PATH" ]` follows symlinks and returns false for a dangling symlink. In a freshly initialized repository with configured identity, creating `.git/refs/heads/<HEAD branch>` as a symlink to a nonexistent path causes `loom-verify-identity unborn` to exit 0 even though the HEAD ref exists and is corrupt. The plan requires unreadable or corrupt history to fail closed. This is a deterministic failure of that explicit invariant and an unresolved Round 0 finding.
 
 ## Required changes
 
-1. Classify config reads without allowing a read elsewhere in the command text to suppress a recognized write; add a same-line read/write regression test.
-2. Recognize quote delimiters after a bare author flag and test the quoted flag in both relevant wire paths.
-3. Distinguish a genuinely unborn HEAD from an existing unreadable HEAD and fail closed on the latter; add a regression test.
+1. Treat a dangling symbolic link at the HEAD ref path as an existing corrupt ref, and add an isolated-repository regression test asserting exit 1 for an unborn baseline.
 
 ## Notes
 
-The explicit repository validator passed. The helper registration, schema and metadata mirrors, and workflow wiring are included in the diff. The reviewed commit message has no attribution or co-authored-by trailer. The mandatory gate `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (636 Bats tests), and `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all` passed.
+The revision splits config statements on `;`, `&`, and `|`, resolving the reported same-line read/write examples, and accepts quote delimiters after `--author`, resolving the reported quoted flag in both client wire paths. The verifier now rejects the tested corrupt ref contents and corrupt HEAD file, but its existence test leaves the dangling-ref case above unresolved. The mandatory gate `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (640 Bats tests), and `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all` passed.
+
+## Prior Rounds Summary
+
+| Round | Phase | Verdict | Key Findings & Resolution |
+|---|---|---|---|
+| 0 | code | FAIL | Same-line config read/write and quoted author flag resolved in f698d67..9d207c8; unreadable HEAD handling remains incomplete as described above. |
