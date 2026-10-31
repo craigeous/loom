@@ -947,3 +947,365 @@ excluded_commit() { # <path>: commit a change to an excluded path on top of DOCS
     [ "$status" -eq 1 ]
     [[ "$output" == *"usage: loom-eval-workspace"* ]]
 }
+
+# ---------------------------------------------------------------- gate-rerun
+
+prep_run() { # code run over the docs-only range; extra args appended
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only "$@"
+    [ "$status" -eq 0 ]
+}
+gr() { ew gate-rerun "$OUT" --repo "$REPO"; }
+att() { printf '%s/reruns/attempt-%s' "$OUT" "$1"; }
+ev() { jq -r "$2" "$(att "$1")/gate-rerun.json"; }
+no_exec() { [ -z "$(ls -A "$OUT/scratch")" ]; }
+mk_tool() { # <name> <version-line>: a fixture tool on $WORK/tools
+    mkdir -p "$WORK/tools"
+    printf '#!/bin/sh\necho "%s"\n' "$2" >"$WORK/tools/$1"
+    chmod +x "$WORK/tools/$1"
+}
+wait_for() { # <file>: wait up to 20s for a marker file
+    local i=0
+    while [ ! -e "$1" ] && [ "$i" -lt 200 ]; do
+        sleep 0.1
+        i=$((i + 1))
+    done
+    [ -e "$1" ]
+}
+
+@test "gate-rerun: a passing gate records schema-valid evidence, leaves source and checkout untouched and cleans up" {
+    prep_run --gate-env "MARKER=$WORK/marker"
+    git -C "$REPO" status --porcelain >"$WORK/git.before"
+    gr
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"status: rerun-passed"* ]]
+    [ -e "$WORK/marker" ]
+    [ "$(ev 1 .result)" = rerun-passed ] && [ "$(ev 1 .completion)" = completed ] && [ "$(ev 1 .exit_status)" = 0 ]
+    [ "$(ev 1 .seq)" = 1 ] && [ "$(ev 1 .source_verification.source)" = unchanged ] && [ "$(ev 1 .source_verification.checkout)" = unchanged ]
+    [ "$(ev 1 .manifest_sha256)" = "$(jq -r .manifest_sha256 "$OUT/manifest.json")" ]
+    [ "$(ev 1 .command_env_sha256)" = "$(jq -r .gate.command_env_sha256 "$OUT/manifest.json")" ]
+    [ "$(ev 1 .stdout.sha256)" = "$(shasum -a 256 <"$(att 1)/stdout.log" | cut -d' ' -f1)" ]
+    [ "$(ev 1 .stdout.bytes)" = "$(wc -c <"$(att 1)/stdout.log" | tr -d ' ')" ]
+    [ "$(cat "$(att 1)/stdout.log")" = "gate stdout" ] && [ "$(cat "$(att 1)/stderr.log")" = "gate stderr" ]
+    # writes beside source and into home/config/cache/temp/build land in the copy or private scratch only
+    [ "$(ev 1 '.changes | map(select(.kind == "added") | .path) | index("written-beside-source.txt") != null')" = true ]
+    [ ! -e "$REPO/written-beside-source.txt" ] && [ -z "$(ls -A "$HOME")" ]
+    [ "$(git -C "$REPO" status --porcelain)" = "$(cat "$WORK/git.before")" ]
+    no_exec
+    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$(att 1)/gate-rerun.json"
+    verify
+    [ "$status" -eq 0 ]
+    status_ --json
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = rerun-passed ]
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ ! -e "$OUT" ]
+}
+
+@test "gate-rerun: exact argv with spaces and metacharacters runs in an empty pinned environment with reserved redirects" {
+    export AMBIENT_CANARY=leak-me
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    CODE_ARGS=("${CODE_ARGS[@]/scripts\/gate//bin/sh}")
+    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-arg -c --gate-arg 'printf "<%s>" "$@"; echo; env | LC_ALL=C sort' \
+        --gate-arg _ --gate-arg 'a b' --gate-arg '$HOME;*|"q"' --gate-env KEEP=pinned
+    [ "$status" -eq 0 ]
+    gr
+    [ "$status" -eq 0 ]
+    local out="$(att 1)/stdout.log" k
+    [ "$(head -n 1 "$out")" = '<a b><$HOME;*|"q">' ]
+    ! grep -q 'AMBIENT_CANARY\|leak-me' "$out"
+    grep -qx 'KEEP=pinned' "$out"
+    grep -qx "PATH=$PINPATH" "$out"
+    # every reserved name is redirected below the private execution tree; deps are read-only inputs
+    for k in HOME TMPDIR TMP TEMP XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME CARGO_HOME CARGO_TARGET_DIR GOCACHE GOPATH npm_config_cache PIP_CACHE_DIR LOOM_EVAL_BUILD LOOM_EVAL_SCRATCH; do
+        grep -q "^$k=$OUT/scratch/exec\." "$out"
+    done
+    grep -qx "LOOM_EVAL_DEPS=$OUT/inputs/deps" "$out"
+    grep -q '^HOME=.*/scratch/home$' "$out"
+    grep -q '^XDG_CACHE_HOME=.*/scratch/xdg/cache$' "$out"
+    no_exec
+}
+
+@test "gate-rerun: a nonzero gate is rerun-failed (2) and status agrees" {
+    prep_run --gate-env GATE_EXIT=3
+    gr
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"status: rerun-failed"* ]]
+    [ "$(ev 1 .result)" = rerun-failed ] && [ "$(ev 1 .exit_status)" = 3 ]
+    no_exec
+    status_
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"status: rerun-failed"* ]]
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "gate-rerun: usage errors exit 1; overrides, non-code runs and bad runs are rejected without evidence" {
+    prep_run
+    ew gate-rerun
+    [ "$status" -eq 1 ]
+    ew gate-rerun "$OUT" --repo "$REPO" extra
+    [ "$status" -eq 1 ]
+    ew gate-rerun "$OUT" --repo "$REPO" --gate-arg true
+    [ "$status" -eq 1 ]
+    ew gate-rerun "$OUT" --repo "$REPO" --gate-env A=b
+    [ "$status" -eq 1 ]
+    ew gate-rerun "$OUT" --repo "$REPO" --json
+    [ "$status" -eq 1 ]
+    ew gate-rerun nosuchrun --repo "$REPO"
+    [ "$status" -eq 1 ]
+    [ ! -e "$OUT/reruns" ]
+    # a changed run: no evidence is written and nothing runs
+    rmrun "$OUT"
+    prep_run --gate-env "MARKER=$WORK/marker"
+    chmod u+w "$OUT/source" "$OUT/source/f.txt"
+    echo tamper >>"$OUT/source/f.txt"
+    gr
+    [ "$status" -eq 2 ]
+    [ ! -e "$OUT/reruns" ] && [ ! -e "$WORK/marker" ]
+    rmrun "$OUT"
+    prep_run
+    edit_manifest '.head_tree = .head_sha'
+    gr
+    [ "$status" -eq 2 ]
+    [ ! -e "$OUT/reruns" ]
+    rmrun "$OUT"
+    prep_plan
+    [ "$status" -eq 0 ]
+    gr
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"code run"* ]]
+    [ ! -e "$OUT/reruns" ]
+}
+
+@test "gate-rerun: pinned tools are probed on the pinned PATH and recorded" {
+    mk_tool mytool "mytool 1.2.3 (build 9)"
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    CODE_ARGS=("${CODE_ARGS[@]/PATH=$PINPATH/PATH=$WORK/tools:$PINPATH}")
+    ew prepare "${CODE_ARGS[@]}" --docs-only --tool-version mytool=1.2.3
+    [ "$status" -eq 0 ]
+    gr
+    [ "$status" -eq 0 ]
+    [ "$(ev 1 '.tool_versions | length')" = 1 ] && [ "$(ev 1 '.tool_versions[0].name')" = mytool ]
+    [ "$(ev 1 '.tool_versions[0].version')" = "mytool 1.2.3 (build 9)" ]
+}
+
+@test "gate-rerun: missing, mismatched, failing or off-PATH tools are infrastructure-blocked (4) with blocked evidence" {
+    local variant
+    mk_tool mytool "mytool 1.2.30"
+    mk_tool badtool "x"
+    printf '#!/bin/sh\nexit 1\n' >"$WORK/tools/badtool"
+    mk_tool othertool "othertool 1"
+    for variant in "mytool=1.2.3" "nosuchtool=1" "badtool=1" "othertool=1"; do
+        rm -f "$WORK/marker"
+        rmrun "$OUT" 2>/dev/null || true
+        code_args "$DOCS_SHA" "$HEAD_SHA"
+        # othertool is on the ambient PATH only, never on the pinned PATH
+        if [ "$variant" != othertool=1 ]; then CODE_ARGS=("${CODE_ARGS[@]/PATH=$PINPATH/PATH=$WORK/tools:$PINPATH}"); fi
+        ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "MARKER=$WORK/marker" --tool-version "$variant"
+        [ "$status" -eq 0 ]
+        PATH="$WORK/tools:$PATH" gr
+        [ "$status" -eq 4 ]
+        [ ! -e "$WORK/marker" ]
+        [ "$(ev 1 .completion)" = blocked ] && [ "$(ev 1 .result)" = infrastructure-blocked ] && [ "$(ev 1 .exit_status)" = null ]
+        [ "$(ev 1 .stdout.bytes)" = 0 ] && [ "$(ev 1 .stderr.bytes)" = 0 ]
+        [ "$(ev 1 .start_inventory.sha256)" = "$(ev 1 .end_inventory.sha256)" ]
+        no_exec
+        status_
+        [ "$status" -eq 4 ]
+        [[ "$output" == *"infrastructure-blocked"* ]]
+    done
+}
+
+@test "gate-rerun: pinned dependencies are provided read-only through LOOM_EVAL_DEPS" {
+    prep_run --dependency "$WORK/dep.txt" --gate-env DEP_CHECK=1
+    gr
+    [ "$status" -eq 0 ]
+    [ "$(cat "$(att 1)/stdout.log")" = "$(printf 'gate stdout\ndependency payload')" ]
+    verify
+    [ "$status" -eq 0 ]
+    # a dependency removed from the run fails verification before anything runs
+    chmod u+w "$OUT/inputs/deps"
+    rm -f "$OUT/inputs/deps/dep.txt"
+    gr
+    [ "$status" -eq 2 ]
+    [ ! -e "$(att 2)" ]
+}
+
+@test "gate-rerun: a gate that alters the immutable source is invalid (2) and the run stays invalid" {
+    prep_run --gate-env "TOUCH_SOURCE=$OUT/source/f.txt"
+    gr
+    [ "$status" -eq 2 ]
+    [ "$(ev 1 .result)" = invalid ] && [ "$(ev 1 .source_verification.source)" = changed ]
+    no_exec
+    status_
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"invalid"* ]]
+    gr
+    [ "$status" -eq 2 ]
+    [ ! -e "$(att 2)" ]
+}
+
+@test "gate-rerun: a gate that alters the checkout is invalid; ignored files and .git internals are not changes" {
+    printf 'ignored.log\n' >"$REPO/.gitignore"
+    prep_run --gate-env "TOUCH_REPO=$REPO/ignored.log"
+    gr
+    [ "$status" -eq 0 ]
+    [ "$(ev 1 .source_verification.checkout)" = unchanged ]
+    rmrun "$OUT"
+    prep_run --gate-env "TOUCH_REPO=$REPO/.git/tamper"
+    gr
+    [ "$status" -eq 0 ]
+    rmrun "$OUT"
+    prep_run --gate-env "TOUCH_REPO=$REPO/tampered.txt"
+    gr
+    [ "$status" -eq 2 ]
+    [ "$(ev 1 .result)" = invalid ] && [ "$(ev 1 .source_verification.checkout)" = changed ] && [ "$(ev 1 .completion)" = completed ]
+    status_
+    [ "$status" -eq 2 ]
+    # a later attempt starts from the new checkout state and never overwrites attempt 1
+    gr
+    [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
+    [ "$(ev 1 .result)" = invalid ]
+    [ "$(ev 2 .seq)" = 2 ]
+}
+
+@test "gate-rerun: a corrupted execution copy is invalid (2) and the gate never runs" {
+    mkdir "$WORK/shim"
+    cat >"$WORK/shim/cp" <<'SHIM'
+#!/bin/sh
+/bin/cp "$@"
+rc=$?
+for last; do :; done
+chmod u+w "$last/f.txt"
+echo corrupt >>"$last/f.txt"
+exit $rc
+SHIM
+    chmod +x "$WORK/shim/cp"
+    prep_run --gate-env "MARKER=$WORK/marker"
+    PATH="$WORK/shim:$PATH" gr
+    [ "$status" -eq 2 ]
+    [ ! -e "$WORK/marker" ]
+    [ "$(ev 1 .completion)" = invalid ] && [ "$(ev 1 .result)" = invalid ] && [ "$(ev 1 .exit_status)" = null ]
+    no_exec
+}
+
+@test "gate-rerun: repeat attempts never overwrite and the latest attempt decides status" {
+    prep_run
+    gr
+    [ "$status" -eq 0 ]
+    cp "$(att 1)/gate-rerun.json" "$WORK/attempt1.json"
+    gr
+    [ "$status" -eq 0 ]
+    [ "$(ev 2 .seq)" = 2 ]
+    cmp -s "$WORK/attempt1.json" "$(att 1)/gate-rerun.json"
+    [ -f "$(att 1)/stdout.log" ] && [ -f "$(att 2)/stdout.log" ]
+    status_
+    [ "$status" -eq 0 ]
+    # a killed or in-progress latest attempt is incomplete and never falls back to the earlier pass
+    mkdir -m 700 "$(att 3)"
+    status_
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"status: incomplete"* ]]
+    verify
+    [ "$status" -eq 0 ]
+    gr
+    [ "$status" -eq 0 ]
+    [ "$(ev 4 .seq)" = 4 ]
+    status_
+    [ "$status" -eq 0 ]
+    # sequence gaps are invalid
+    mv "$(att 4)" "$(att 7)"
+    status_
+    [ "$status" -eq 2 ]
+}
+
+@test "gate-rerun: status rejects corrupt, stale, cross-run and tampered evidence" {
+    prep_run
+    gr
+    [ "$status" -eq 0 ]
+    local e filter
+    e="$(att 1)/gate-rerun.json"
+    cp "$e" "$WORK/good.json"
+    for filter in '.result = "rerun-failed"' '.manifest_sha256 = ("0" * 64)' '.run_id = "other-run"' '.command_env_sha256 = ("1" * 64)' \
+        '.seq = 2' '. + {extra: 1}' '.stdout.bytes = 99' '.source_verification.checkout = "changed"'; do
+        jq -c "$filter" "$WORK/good.json" >"$e"
+        status_
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"status: invalid"* ]]
+    done
+    printf 'not json' >"$e"
+    status_
+    [ "$status" -eq 2 ]
+    cp "$WORK/good.json" "$e"
+    status_
+    [ "$status" -eq 0 ]
+    echo extra >>"$(att 1)/stdout.log"
+    status_
+    [ "$status" -eq 2 ]
+    printf 'gate stdout\n' >"$(att 1)/stdout.log"
+    status_
+    [ "$status" -eq 0 ]
+    printf 'xxxxxxx\n' >"$(att 1)/stderr.log"
+    status_
+    [ "$status" -eq 2 ]
+    printf 'gate stderr\n' >"$(att 1)/stderr.log"
+    # evidence copied from another run cannot vouch for this one
+    local first="$OUT"
+    OUT="$WORK/out/run2"
+    prep_run
+    mkdir -m 700 "$OUT/reruns" "$OUT/reruns/attempt-1"
+    cp "$first/reruns/attempt-1/"* "$OUT/reruns/attempt-1/"
+    status_
+    [ "$status" -eq 2 ]
+    # a changed run is never masked by an earlier pass
+    OUT="$first"
+    status_
+    [ "$status" -eq 0 ]
+    chmod u+w "$OUT/source" "$OUT/source/f.txt"
+    echo tamper >>"$OUT/source/f.txt"
+    status_
+    [ "$status" -eq 2 ]
+}
+
+@test "gate-rerun: catchable interruption terminates the gate group, records interrupted evidence and exits 4" {
+    prep_run --gate-env "MARKER=$WORK/started" --gate-env SLEEP=47
+    "$LOOM_TEST_BASH" "$EW" gate-rerun "$OUT" --repo "$REPO" >"$WORK/gr.out" 2>&1 &
+    local pid=$! rc=0
+    wait_for "$WORK/started"
+    kill -TERM "$pid"
+    wait "$pid" || rc=$?
+    [ "$rc" -eq 4 ]
+    ! pgrep -f 'sleep 47' >/dev/null
+    [ "$(ev 1 .completion)" = interrupted ] && [ "$(ev 1 .result)" = infrastructure-blocked ] && [ "$(ev 1 .exit_status)" = null ]
+    no_exec
+    status_
+    [ "$status" -eq 4 ]
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "gate-rerun: a hard kill leaves an incomplete attempt that can never pass" {
+    prep_run --gate-env "MARKER=$WORK/started" --gate-env SLEEP=53
+    "$LOOM_TEST_BASH" "$EW" gate-rerun "$OUT" --repo "$REPO" >"$WORK/gr.out" 2>&1 &
+    local pid=$! gpid pg
+    wait_for "$WORK/started"
+    gpid="$(pgrep -f 'sleep 53' | head -n 1)"
+    pg="$(ps -o pgid= -p "$gpid" | tr -d ' ')"
+    kill -KILL "$pid"
+    wait "$pid" || true
+    kill -KILL -- "-$pg" 2>/dev/null || true
+    [ ! -e "$(att 1)/gate-rerun.json" ]
+    status_
+    [ "$status" -eq 3 ]
+    # the stale execution tree is runner-owned scratch; clean still removes the run
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ ! -e "$OUT" ]
+}
+
+@test "gate-rerun: usage text lists the subcommand" {
+    ew --help
+    [[ "$output" == *"gate-rerun <run-dir|run-id>"* ]]
+}

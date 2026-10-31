@@ -2,8 +2,10 @@
 # loom-eval-workspace — sanitized evaluation workspace exporter (loom-eval-workspace/v1; ADR 0022, spec 05 § Controlled-input independent
 # evaluation, spec 04 § Evaluation orchestration; slice sanitized-evaluation-workspace).
 # It exports a hash-bound, read-only evaluation run from exact Git objects, verifies it,
-# reports its status, and cleans runs. The gate runner is deferred to the follow-on
-# evaluation-gate-runner slice. It never launches an
+# reports its status, reruns a code run's pinned gate in a disposable copy (gate-rerun;
+# slice evaluation-gate-runner), and cleans runs. gate-rerun probes the pinned tools, runs the
+# manifest argv with an empty pinned environment plus runner-owned redirects, and records
+# schema-validated, hash-bound evidence under reruns/attempt-<seq>/. It never launches an
 # evaluator, records a verdict, advances lifecycle state, or uses the network. It is a
 # bounded runner, not an OS sandbox.
 #
@@ -16,10 +18,11 @@
 #        [--dependency <path>]...]
 #       [--run-id <id>] [--out <dir>] [--repo <path>]
 #   loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
+#   loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
 #   loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
 #   loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 #
-# Exit codes: 0 ok/prepared/valid, 1 usage, 2 invalid input/rejected run, 3 incomplete run (status), 4 infrastructure-blocked.
+# Exit codes: 0 ok/prepared/valid/rerun-passed, 1 usage, 2 invalid input/rejected run/rerun-failed, 3 incomplete run (status), 4 infrastructure-blocked.
 # shellcheck disable=SC2016  # jq filters use $vars intentionally
 set -euo pipefail
 
@@ -31,6 +34,9 @@ RESERVED_ENV=" HOME TMPDIR TMP TEMP XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
 WORK=""
 BUILD=""
 ROOT_CREATED=""
+EXEC=""
+GPID=""
+INTERRUPTED=0
 
 log() { printf 'loom-eval-workspace: %s\n' "$*" >&2; }
 die() {
@@ -40,9 +46,19 @@ die() {
     exit "$rc"
 }
 
+# rm_exec: remove the disposable execution tree, only when it is a runner-created child of scratch/.
+rm_exec() {
+    [ -n "$EXEC" ] && [ -d "$EXEC" ] && [ ! -L "$EXEC" ] || return 0
+    case "$EXEC" in "$RUN"/scratch/exec.*) ;; *) return 0 ;; esac
+    chmod -R u+rwx "$EXEC" 2>/dev/null || true
+    rm -rf "$EXEC"
+}
+
 cleanup() {
     local rc=$?
     trap - EXIT
+    if [ -n "$GPID" ]; then kill -KILL -- "-$GPID" 2>/dev/null || true; fi
+    rm_exec
     if [ -n "$BUILD" ] && [ -d "$BUILD" ]; then
         chmod -R u+w "$BUILD" 2>/dev/null || true
         rm -rf "$BUILD"
@@ -333,10 +349,15 @@ ERRS=""
 INFRA=0
 add_err() { printf '%s\n' "$*" >>"$ERRS"; }
 
-validate_manifest_schema() {
-    local m="$1" schema="$BIN_DIR/../schemas/loom-eval-workspace-manifest-v1.schema.json" err nm="${LOOM_NODE_MODULES:-}"
+SCHEMA_MANIFEST="$BIN_DIR/../schemas/loom-eval-workspace-manifest-v1.schema.json"
+SCHEMA_RERUN="$BIN_DIR/../schemas/loom-eval-gate-rerun-v1.schema.json"
+
+# validate_json_schema <schema> <file>: Draft 2020-12 validation; errors go to $ERRS, labelled by schema.
+validate_json_schema() {
+    local schema="$1" m="$2" err nm="${LOOM_NODE_MODULES:-}" label=manifest
+    case "$schema" in *gate-rerun*) label=gate-rerun ;; esac
     [ -f "$schema" ] || {
-        add_err "manifest schema missing"
+        add_err "$label schema missing"
         return 1
     }
     local node_bin="${LOOM_NODE:-$(command -v node 2>/dev/null || true)}"
@@ -357,7 +378,7 @@ validate_manifest_schema() {
     }
     if ! err="$("$node_bin" -e 'const fs=require("fs"),Ajv=require(process.argv[1]+"/ajv/dist/2020.js"),af=require(process.argv[1]+"/ajv-formats"),ajv=new Ajv({allErrors:true,strict:true,allowUnionTypes:true});af(ajv);const v=ajv.compile(JSON.parse(fs.readFileSync(process.argv[2],"utf8")));if(!v(JSON.parse(fs.readFileSync(process.argv[3],"utf8")))){for(const e of v.errors)console.error((e.instancePath||"/")+": "+(e.message||"violation"));process.exit(1);}' "$nm" "$schema" "$m" 2>&1)"; then
         while IFS= read -r line; do
-            [ -n "$line" ] && add_err "manifest: $line"
+            [ -n "$line" ] && add_err "$label: $line"
         done <<<"$err"
         return 1
     fi
@@ -380,7 +401,7 @@ do_verify() {
         return 1
     }
     [ "$(jq -S -c . "$m")" = "$(cat "$m")" ] || add_err "manifest.json is not canonical JSON"
-    validate_manifest_schema "$m" || true
+    validate_json_schema "$SCHEMA_MANIFEST" "$m" || true
     jq -r "$JQ_MANIFEST" "$m" >"$WORK/mchk" 2>/dev/null || add_err "manifest validation failed"
     if [ -s "$WORK/mchk" ]; then
         while IFS= read -r e; do add_err "manifest: $e"; done <"$WORK/mchk"
@@ -403,7 +424,7 @@ do_verify() {
     for p in source inputs; do [ -d "$RUN/$p" ] && [ ! -L "$RUN/$p" ] || add_err "$p/ missing"; done
     while IFS= read -r p; do
         case "$p" in
-        manifest.json | source | inputs | output | scratch | diff.patch | revision.patch) ;;
+        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
         *) add_err "unexpected top-level entry: $p" ;;
         esac
     done < <(ls -A "$RUN")
@@ -1019,7 +1040,286 @@ cmd_status() {
     verify_rc 2>"$WORK/verify.err" || rc=$?
     if [ "$rc" = 4 ]; then emit_status infrastructure-blocked 4 "$(head -n 3 "$WORK/verify.err")"; fi
     if [ "$rc" != 0 ]; then emit_status invalid 2 "$(head -n 3 "$WORK/verify.err")"; fi
+    if [ -e "$RUN/reruns" ] || [ -L "$RUN/reruns" ]; then rerun_status; fi
     emit_status prepared 0
+}
+
+# ---------------------------------------------------------------- gate-rerun
+
+# checkout_inventory <out>: index entries plus actual type/mode/hash of tracked and untracked
+# non-ignored paths below the checkout (ignored files and .git internals are excluded).
+checkout_inventory() {
+    local p
+    git -C "$REPO_TOP" -c core.quotepath=off ls-files -s -z | tr '\0' '\n' | LC_ALL=C sort | awk '{print "I\t" $0}' >"$WORK/ci.idx" || return 1
+    git -C "$REPO_TOP" ls-files -z -c -o --exclude-standard | tr '\0' '\n' | LC_ALL=C sort -u >"$WORK/ci.paths" || return 1
+    : >"$WORK/ci.reg"
+    : >"$WORK/ci.fmeta"
+    : >"$WORK/ci.other"
+    while IFS= read -r p; do
+        if [ -L "$REPO_TOP/$p" ]; then
+            printf 'W\t%s\tlink\t-\t%s\n' "$p" "$(readlink "$REPO_TOP/$p" | sha256_stdin)" >>"$WORK/ci.other"
+        elif [ -f "$REPO_TOP/$p" ]; then
+            printf '%s\n' "$p" >>"$WORK/ci.reg"
+            if [ -x "$REPO_TOP/$p" ]; then printf 'W\t%s\tfile\t100755\n' "$p" >>"$WORK/ci.fmeta"; else printf 'W\t%s\tfile\t100644\n' "$p" >>"$WORK/ci.fmeta"; fi
+        elif [ -d "$REPO_TOP/$p" ]; then
+            printf 'W\t%s\tdir\t-\t-\n' "$p" >>"$WORK/ci.other"
+        elif [ -e "$REPO_TOP/$p" ]; then
+            printf 'W\t%s\tspecial\t-\t-\n' "$p" >>"$WORK/ci.other"
+        else
+            printf 'W\t%s\tmissing\t-\t-\n' "$p" >>"$WORK/ci.other"
+        fi
+    done <"$WORK/ci.paths"
+    git -C "$REPO_TOP" hash-object --no-filters --stdin-paths <"$WORK/ci.reg" >"$WORK/ci.oids" || return 1
+    {
+        cat "$WORK/ci.idx" "$WORK/ci.other"
+        paste "$WORK/ci.fmeta" "$WORK/ci.oids"
+    } | LC_ALL=C sort >"$1"
+}
+
+# kill_group: SIGTERM the gate process group, wait, then SIGKILL what remains and wait.
+kill_group() {
+    [ -n "$GPID" ] || return 0
+    local wd i=0
+    if kill -0 -- "-$GPID" 2>/dev/null; then
+        kill -TERM -- "-$GPID" 2>/dev/null || true
+        (
+            sleep 5
+            kill -KILL -- "-$GPID"
+        ) >/dev/null 2>&1 &
+        wd=$!
+        wait "$GPID" 2>/dev/null || true
+        kill "$wd" 2>/dev/null || true
+        { wait "$wd"; } 2>/dev/null || true
+        kill -KILL -- "-$GPID" 2>/dev/null || true
+        while kill -0 -- "-$GPID" 2>/dev/null && [ "$i" -lt 50 ]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+    fi
+    wait "$GPID" 2>/dev/null || true
+    GPID=""
+}
+
+on_signal() {
+    INTERRUPTED=1
+    kill_group
+}
+
+# probe_tools <manifest>: resolve each declared tool on the pinned PATH only, run
+# `tool --version 2>&1` under the pinned environment and require the pinned version as a whole token.
+probe_tools() {
+    local m="$1" name ver d found out line tok dirs
+    TOOLV='[]'
+    while IFS="$TAB" read -r name ver; do
+        [ -n "$name" ] || continue
+        found=""
+        IFS=: read -r -a dirs <<<"$(jq -r .gate.env.PATH "$m")"
+        for d in "${dirs[@]}"; do
+            [ -n "$d" ] || d=.
+            if [ -f "$d/$name" ] && [ -x "$d/$name" ]; then
+                found="$d/$name"
+                break
+            fi
+        done
+        [ -n "$found" ] || {
+            log "tool not found on the pinned PATH: $name"
+            return 1
+        }
+        out="$(cd "$EXEC/copy" && env -i "${ENVALL[@]}" "$found" --version 2>&1 </dev/null)" || {
+            log "tool version probe failed: $name"
+            return 1
+        }
+        line="$(printf '%s\n' "$out" | awk 'NF {print; exit}')"
+        [ -n "$line" ] || {
+            log "tool version probe produced no output: $name"
+            return 1
+        }
+        TOOLV="$(jq -c --arg n "$name" --arg v "$line" '. + [{name: $n, version: $v}]' <<<"$TOOLV")"
+        tok=" $(printf '%s' "$line" | tr -c 'A-Za-z0-9._+-' ' ') "
+        case "$tok" in *" $ver "*) ;; *)
+            log "tool version mismatch: $name wants $ver, observed: $line"
+            return 1
+            ;;
+        esac
+    done < <(jq -r '.gate.tools[] | .name + "\t" + .version' "$m")
+}
+
+# write_rerun_evidence: build, schema-validate and atomically publish $AT/gate-rerun.json.
+write_rerun_evidence() {
+    local tmp="$AT/.gate-rerun.json.tmp"
+    jq -n -S -c --arg run_id "$(jq -r .run_id "$RUN/manifest.json")" --arg msha "$(jq -r .manifest_sha256 "$RUN/manifest.json")" \
+        --argjson seq "$SEQ" --arg cmd "$(jq -r .gate.command_env_sha256 "$RUN/manifest.json")" --argjson tools "$TOOLV" \
+        --arg s "$STARTED" --arg e "$ENDED" --arg comp "$COMPLETION" --argjson es "$EXIT_JSON" \
+        --argjson ob "$(wc -c <"$AT/stdout.log" | tr -d ' ')" --arg osha "$(sha256_file "$AT/stdout.log")" \
+        --argjson eb "$(wc -c <"$AT/stderr.log" | tr -d ' ')" --arg esha "$(sha256_file "$AT/stderr.log")" \
+        --argjson sc "$START_COUNT" --arg ssha "$START_SHA" --argjson ec "$END_COUNT" --arg essha "$END_SHA" \
+        --arg src "$SRC_STATE" --arg chk "$CHK_STATE" --arg res "$RESULT" --rawfile ch "$WORK/changes.tsv" '
+        {protocol: "loom-eval-gate-rerun/v1", run_id: $run_id, manifest_sha256: $msha, seq: $seq, command_env_sha256: $cmd,
+         tool_versions: $tools, started_at: $s, ended_at: $e, completion: $comp, exit_status: $es,
+         stdout: {sha256: $osha, bytes: $ob}, stderr: {sha256: $esha, bytes: $eb},
+         start_inventory: {file_count: $sc, sha256: $ssha}, end_inventory: {file_count: $ec, sha256: $essha},
+         changes: [$ch | split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}],
+         source_verification: {source: $src, checkout: $chk}, result: $res}' >"$tmp" || return 1
+    : >"$ERRS"
+    if ! validate_json_schema "$SCHEMA_RERUN" "$tmp"; then
+        while IFS= read -r line; do log "evidence: $line"; done <"$ERRS"
+        rm -f "$tmp"
+        return 1
+    fi
+    mv "$tmp" "$AT/gate-rerun.json"
+}
+
+cmd_gate_rerun() {
+    ALLOW_JSON=0
+    parse_run_args "$@"
+    init_repo "$REPO_ARG"
+    resolve_run "$RUN_ARG"
+    local m="$RUN/manifest.json" d i name line
+    do_verify || true
+    verify_rc || exit $?
+    [ "$(jq -r .evaluation_type "$m")" = code ] || die 2 "gate-rerun requires a code run"
+    if overlaps "$RUN" "$REPO_TOP" || overlaps "$RUN" "$COMMON"; then die 2 "run overlaps the managed repository"; fi
+    umask 077
+    checkout_inventory "$WORK/ci.start" || die 4 "cannot inventory the checkout"
+    cp "$WORK/ci.start" "$WORK/ci.start.keep"
+
+    # attempt allocation: unique monotonic sequence, earlier evidence retained
+    [ -d "$RUN/reruns" ] || mkdir -m 700 "$RUN/reruns" || die 4 "cannot create reruns/"
+    SEQ=0
+    while IFS= read -r name; do
+        case "$name" in attempt-[1-9]*) [ "${name#attempt-}" -le "$SEQ" ] || SEQ="${name#attempt-}" ;; esac
+    done < <(ls -A "$RUN/reruns")
+    while :; do
+        SEQ=$((SEQ + 1))
+        AT="$RUN/reruns/attempt-$SEQ"
+        mkdir -m 700 "$AT" 2>/dev/null && break
+    done
+    : >"$AT/stdout.log"
+    : >"$AT/stderr.log"
+    STARTED="$(utc_now)"
+    trap on_signal INT TERM HUP
+
+    EXEC="$(mktemp -d "$RUN/scratch/exec.XXXXXX")" || die 4 "cannot create the execution tree"
+    local S="$EXEC/scratch"
+    mkdir "$EXEC/copy"
+    for d in home xdg/config xdg/cache xdg/data xdg/state tmp cargo build/cargo cache/go go cache/npm cache/pip; do mkdir -p "$S/$d"; done
+    ARGV=()
+    while IFS= read -r line; do ARGV+=("$line"); done < <(jq -r '.gate.argv[]' "$m")
+    ENVALL=()
+    while IFS= read -r line; do ENVALL+=("$line"); done < <(jq -r '.gate.env | to_entries[] | .key + "=" + .value' "$m")
+    ENVALL+=("HOME=$S/home" "XDG_CONFIG_HOME=$S/xdg/config" "XDG_CACHE_HOME=$S/xdg/cache" "XDG_DATA_HOME=$S/xdg/data"
+        "XDG_STATE_HOME=$S/xdg/state" "TMPDIR=$S/tmp" "TMP=$S/tmp" "TEMP=$S/tmp" "CARGO_HOME=$S/cargo"
+        "CARGO_TARGET_DIR=$S/build/cargo" "GOCACHE=$S/cache/go" "GOPATH=$S/go" "npm_config_cache=$S/cache/npm"
+        "PIP_CACHE_DIR=$S/cache/pip" "LOOM_EVAL_DEPS=$RUN/inputs/deps" "LOOM_EVAL_BUILD=$S/build" "LOOM_EVAL_SCRATCH=$S")
+
+    cp -R "$RUN/source/." "$EXEC/copy/" || die 4 "cannot copy the verified source"
+    chmod -R u+w "$EXEC/copy"
+    src_listing "$EXEC/copy" >"$WORK/copy.start"
+    START_COUNT="$(wc -l <"$WORK/copy.start" | tr -d ' ')"
+    START_SHA="$(listing_hash "$WORK/copy.start")"
+    src_listing "$RUN/source" >"$WORK/src.ref"
+
+    COMPLETION=completed EXIT_JSON=null RESULT="" TOOLV='[]'
+    if [ -n "$(find "$EXEC/copy" ! -type f ! -type d -print -quit)" ] || ! cmp -s "$WORK/copy.start" "$WORK/src.ref"; then
+        log "execution copy does not match the immutable source"
+        COMPLETION=invalid RESULT=invalid
+    elif ! probe_tools "$m"; then
+        COMPLETION=blocked RESULT=infrastructure-blocked
+    else
+        while IFS= read -r line; do
+            [ -f "$RUN/$line" ] || {
+                log "dependency unavailable: $line"
+                COMPLETION=blocked RESULT=infrastructure-blocked
+            }
+        done < <(jq -r '.gate.dependencies[].path' "$m")
+    fi
+    if [ -z "$RESULT" ] && [ "$INTERRUPTED" = 1 ]; then COMPLETION=interrupted RESULT=infrastructure-blocked; fi
+    if [ -z "$RESULT" ]; then
+        local grc=0
+        set -m
+        (
+            cd "$EXEC/copy" || exit 126
+            exec env -i "${ENVALL[@]}" "${ARGV[@]}"
+        ) </dev/null >"$AT/stdout.log" 2>"$AT/stderr.log" &
+        GPID=$!
+        set +m
+        wait "$GPID" || grc=$?
+        kill_group
+        if [ "$INTERRUPTED" = 1 ]; then
+            COMPLETION=interrupted RESULT=infrastructure-blocked
+        else
+            EXIT_JSON="$grc"
+        fi
+    fi
+    trap - INT TERM HUP
+    ENDED="$(utc_now)"
+
+    src_listing "$EXEC/copy" >"$WORK/copy.end"
+    END_COUNT="$(wc -l <"$WORK/copy.end" | tr -d ' ')"
+    END_SHA="$(listing_hash "$WORK/copy.end")"
+    awk -F'\t' 'FNR == NR {s[$1] = $2 "\t" $3; next} {e[$1] = 1; if (!($1 in s)) print $1 "\tadded"; else if (s[$1] != $2 "\t" $3) print $1 "\tmodified"}
+        END {for (p in s) if (!(p in e)) print p "\tdeleted"}' "$WORK/copy.start" "$WORK/copy.end" | LC_ALL=C sort >"$WORK/changes.tsv"
+    # reverify the immutable run and the checkout after every attempt
+    if do_verify; then SRC_STATE=unchanged; else SRC_STATE=changed; fi
+    if checkout_inventory "$WORK/ci.end" && cmp -s "$WORK/ci.start.keep" "$WORK/ci.end"; then CHK_STATE=unchanged; else CHK_STATE=changed; fi
+    if [ "$SRC_STATE" = changed ] || [ "$CHK_STATE" = changed ]; then
+        log "inputs changed during the attempt (source: $SRC_STATE, checkout: $CHK_STATE)"
+        if [ "$COMPLETION" != completed ]; then COMPLETION=invalid; fi
+        RESULT=invalid
+    elif [ -z "$RESULT" ]; then
+        if [ "$EXIT_JSON" = 0 ]; then RESULT=rerun-passed; else RESULT=rerun-failed; fi
+    fi
+    i=0
+    write_rerun_evidence || i=1
+    rm_exec
+    [ "$i" = 0 ] || die 4 "evidence could not be written or validated; the attempt is incomplete"
+    printf 'status: %s\nattempt: %s\n' "$RESULT" "$AT"
+    case "$RESULT" in
+    rerun-passed) exit 0 ;;
+    infrastructure-blocked) exit 4 ;;
+    *) exit 2 ;;
+    esac
+}
+
+# rerun_status: after a successful do_verify, judge the latest rerun attempt (exits via emit_status).
+rerun_status() {
+    local n=0 mx=0 name at ev m="$RUN/manifest.json" st
+    [ -d "$RUN/reruns" ] && [ ! -L "$RUN/reruns" ] || emit_status invalid 2 "reruns is not a directory"
+    while IFS= read -r name; do
+        [[ "$name" =~ ^attempt-[1-9][0-9]*$ ]] && [ -d "$RUN/reruns/$name" ] && [ ! -L "$RUN/reruns/$name" ] ||
+            emit_status invalid 2 "unexpected reruns entry: $name"
+        n=$((n + 1))
+        [ "${name#attempt-}" -le "$mx" ] || mx="${name#attempt-}"
+    done < <(ls -A "$RUN/reruns")
+    [ "$n" -gt 0 ] || emit_status incomplete 3 "no rerun attempt record"
+    [ "$n" = "$mx" ] || emit_status invalid 2 "rerun attempt sequence is not contiguous"
+    at="$RUN/reruns/attempt-$mx"
+    ev="$at/gate-rerun.json"
+    [ -e "$ev" ] || [ -L "$ev" ] || emit_status incomplete 3 "attempt $mx has no completed record"
+    { [ -f "$ev" ] && [ ! -L "$ev" ] && jq -e . "$ev" >/dev/null 2>&1; } || emit_status invalid 2 "attempt $mx evidence is corrupt"
+    for name in stdout.log stderr.log; do
+        [ -f "$at/$name" ] && [ ! -L "$at/$name" ] || emit_status invalid 2 "attempt $mx $name is missing"
+    done
+    ERRS="$WORK/errs"
+    : >"$ERRS"
+    validate_json_schema "$SCHEMA_RERUN" "$ev" || emit_status invalid 2 "attempt $mx evidence: $(head -n 2 "$ERRS" | tr '\n' ' ')"
+    jq -e --slurpfile m "$m" --argjson seq "$mx" '
+        .run_id == $m[0].run_id and .manifest_sha256 == $m[0].manifest_sha256 and .seq == $seq
+        and .command_env_sha256 == $m[0].gate.command_env_sha256
+        and (.completion != "completed" or ((.tool_versions | map(.name) | sort) == ($m[0].gate.tools | map(.name) | sort)))' "$ev" >/dev/null ||
+        emit_status invalid 2 "attempt $mx evidence is stale or bound to a different run, manifest or command"
+    for name in stdout stderr; do
+        [ "$(jq -r ".$name.bytes" "$ev")" = "$(wc -c <"$at/$name.log" | tr -d ' ')" ] &&
+            [ "$(jq -r ".$name.sha256" "$ev")" = "$(sha256_file "$at/$name.log")" ] ||
+            emit_status invalid 2 "attempt $mx $name.log does not match its recorded bytes or SHA-256"
+    done
+    st="$(jq -r .result "$ev")"
+    case "$st" in
+    rerun-passed) emit_status rerun-passed 0 "attempt: $at" ;;
+    rerun-failed) emit_status rerun-failed 2 "attempt: $at" ;;
+    infrastructure-blocked) emit_status infrastructure-blocked 4 "attempt: $at" ;;
+    *) emit_status invalid 2 "attempt $mx recorded an invalid result" ;;
+    esac
 }
 
 # ---------------------------------------------------------------- clean
@@ -1041,7 +1341,7 @@ cmd_clean() {
     [ "$(jq -r .run_id "$m")" = "$(basename -- "$RUN")" ] || die 2 "not a recognized run: run_id does not match the directory"
     while IFS= read -r p; do
         case "$p" in
-        manifest.json | source | inputs | output | scratch | diff.patch | revision.patch) ;;
+        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
         *) die 2 "not a recognized run: unexpected entry $p" ;;
         esac
     done < <(ls -A "$RUN")
@@ -1064,6 +1364,7 @@ usage: loom-eval-workspace prepare --type <plan|research|code> --head <sha> --ar
                                     [--dependency <path>]...]
                                    [--run-id <id>] [--out <dir>] [--repo <path>]
        loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
+       loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
        loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
        loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 EOF
@@ -1076,6 +1377,7 @@ shift
 case "$sub" in
 prepare) cmd_prepare "$@" ;;
 verify) cmd_verify "$@" ;;
+gate-rerun) cmd_gate_rerun "$@" ;;
 status) cmd_status "$@" ;;
 clean) cmd_clean "$@" ;;
 -h | --help | help) usage ;;

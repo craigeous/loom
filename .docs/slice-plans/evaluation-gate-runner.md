@@ -1,6 +1,6 @@
 # Evaluation Gate Runner
 
-Status: Approved
+Status: Implemented
 Target specs: 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022
 Target size: <= 500 LOC net change excluding tests/schemas
 
@@ -118,7 +118,11 @@ Run existing exporter tests unchanged as regression coverage.
 
 ## Notes
 
-None.
+Verification evidence: `TMPDIR=/private/tmp scripts/check` exited 0 (750 Bats tests, 0 failures, including
+15 new `gate-rerun` tests in `loom-eval-workspace.bats`; existing exporter tests unchanged);
+`node scripts/validate-repository.mjs --root "$PWD" --all` passed; `shfmt -i 4 -d` and
+`shellcheck -s bash` clean on the helper. An earlier full run hit one unrelated flaky dogfood test
+(`INT during a mutation yields exit 130`), which passed on isolated reruns and on the next full run.
 
 ## Revision Log
 
