@@ -1,7 +1,7 @@
 # Local Review Orchestration
 
 Status: Plan Review
-Target specs: 02-roles.md, 04-orchestrator.md, 05-evaluation.md; ADR 0021, ADR 0022
+Target specs: 02-roles.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0021, ADR 0022
 Target size: <= 350 LOC net change (keep this plan document <= 250 lines)
 
 ## Context
@@ -31,15 +31,23 @@ not proof that shell egress is sandboxed.
    head commit IDs, approved tracked plan and gate-evidence paths; do not infer a
    base from a remote, branch, PR, or `origin/HEAD`. Prepare with
    `loom-review prepare --slice <name> --base <base> --head <head> --plan <path> --gate-evidence <path>`.
-   Use the returned run ID and manifest; launch three separate cold, non-delegating
-   Loom-owned finders `review-correctness/v1`, `review-tests/v1`, and
-   `review-security/v1`, each with its manifest-pinned prompt path and its distinct
-   manifest-assigned `results/<finder>.json` output path (actual encoded filename is
-   authoritative in the manifest). Supply only prepared inputs, read-only, and the
-   assigned writable output; no network, provider, PR, or remote-branch tools. Finders
-   have no lifecycle or verdict authority. Validate with `loom-review validate
-   <run-dir|run-id>` and only on success assemble with `loom-review assemble
-   <run-dir|run-id> --output .docs/evaluations/<slice>-review-findings.md`.
+   Prepare outputs the run directory path (for example,
+   `<git-common-dir>/loom/review/<run-id>`). Read its `manifest.json`, which defines
+   the three required finders `review-correctness/v1`, `review-tests/v1`, and
+   `review-security/v1`, their shipped prompt file paths in `plugins/loom/finders/`,
+   and their assigned `results/<finder>.json` output paths (the actual encoded
+   filename in the manifest is authoritative). Launch each as a fresh, cold,
+   non-delegating auxiliary worker, not a sixth lifecycle role:
+   - For Claude, spawn an auxiliary worker (such as an Agent subagent or tool
+     session) with the assigned prompt file's text, the prepared run's `inputs/`,
+     `source/`, and `diff.patch` as read-only context, and the assigned result path.
+   - For Codex, launch an ephemeral worker with the assigned prompt text and output
+     path, and the same read-only prepared context.
+   Finders have no git, network, or verdict authority and write only their assigned
+   result file. Validate with `loom-review validate <run-dir|run-id>` and only on
+   success assemble with `loom-review assemble <run-dir|run-id> --out
+   .docs/evaluations/<slice>-review-findings.md`. Validate, assemble, and status
+   accept the returned run directory directly or its run ID.
    Commit the identity-neutral companion as directed by the existing workflow, then
    clean with `loom-review clean <run-id>` when no longer needed. Preserve evidence
    needed for diagnosis before cleanup on failure.
@@ -53,8 +61,9 @@ not proof that shell egress is sandboxed.
    an eligible skip for code. No review step requires GitHub, PR metadata, remote
    branch state, an external slash command, or network access.
 3. In `plugins/loom/skills/loom-playbook/references/review-findings.md`, replace
-   obsolete command-transcription requirements, per-command status table, and
-   examples with the helper-assembled `loom-local-review/v1` aggregate and
+   the per-command status table with the helper aggregate status, and replace
+   legacy slash-command transcription examples, including the Illustrative skeleton,
+   with the helper-assembled `loom-local-review/v1` format and
    provenance: exact base/head and diff hash, run/manifest and prompt hashes,
    required finder identities and results, and normalized finding fields including
    location, evidence, confidence, severity advice, and reproduction. The valid
@@ -62,7 +71,8 @@ not proof that shell egress is sandboxed.
    `ran-with-findings` when any valid finder reports findings. Document docs-only
    skip separately and invalid runs as non-assemblable, never as a completed review.
    Preserve identity neutrality without excluding the exact commit IDs required for
-   provenance. Replace stale helper/procedure transition language and examples.
+   provenance. Remove the stale sentence “Orchestration still uses the legacy
+   commands above until the `local-review-orchestration` slice rewires it”.
 4. In `plugins/loom/skills/loom-playbook/references/code-eval-rubric.md`, replace
    external-command references with the valid assembled local-review artifact and
    docs-only skip; require independent confirmation or rejection of every finding,
@@ -71,19 +81,23 @@ not proof that shell egress is sandboxed.
    required review is not valid evidence or permission to land. In
    `plugins/loom/skills/loom-playbook/SKILL.md`, update operational pointers and
    descriptions to the same protocol, removing obsolete command dependencies.
-   Retain any separately authorized bootstrap procedure without treating it as an
-   ordinary valid local-review run.
+   Retain the ADR 0023 `loom-repository-bootstrap/v1` references in this rubric and
+   `orchestration.md` without treating bootstrap as an ordinary local-review run.
 
 ## Verification
 
 - Run `scripts/check` and `node scripts/validate-repository.mjs --root "$PWD" --all`.
-- Mechanically search the five changed operational files, including wrapped text,
-  for `/code-review`, `/security-review`, `command-unavailable`, `origin/HEAD`, PR
-  and GitHub dependencies; inspect each match in context and remove obsolete
-  operational requirements. Historical or explicit prohibitions must not imply a
-  dependency.
-- Inspect the documented command signatures and manifest-assigned output paths
-  against the helper contract. Verify the procedure covers three required finders,
+- Run the following mechanical search, then inspect each match in context:
+  ```sh
+  rg -U -n -i '/code-review|/security-review|command-unavailable|origin/HEAD|\bPR\b|GitHub' plugins/loom/skills/loom-run/SKILL.md plugins/loom/skills/loom-playbook/references/orchestration.md plugins/loom/skills/loom-playbook/references/review-findings.md plugins/loom/skills/loom-playbook/references/code-eval-rubric.md plugins/loom/skills/loom-playbook/SKILL.md
+  ```
+  Remove operational commands and dependencies. Retain historical citations to
+  ADR 0010, 0011, and 0017 in notes/references and ADR 0023
+  `loom-repository-bootstrap/v1` references in `code-eval-rubric.md` and
+  `orchestration.md` intentionally; explicit prohibitions must not imply a dependency.
+- Verify `assemble <run-dir|run-id> --out <path>` and the returned prepare run
+  directory and manifest-assigned output paths against the helper contract. Verify
+  the procedure covers three required finders,
   exact SHAs, no-remote operation, invalid and docs-only cases, assembly, cleanup,
   provenance, and independent adjudication. Existing helper tests run unchanged as
   part of the gate; this documentation-only slice adds no mirrored tests.
@@ -97,3 +111,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Correct helper syntax and run path; specify client finder launches, historical and bootstrap references, mechanical verification, and review-findings updates. |
