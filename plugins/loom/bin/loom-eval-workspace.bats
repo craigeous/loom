@@ -1342,7 +1342,9 @@ ADR23_REL=.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md
 rec_commit() {
     # an eligible bootstrap repository by default: ADR 0023 present and an authoritative active phase
     mkdir -p "$REPO/.docs/ADR" "$REPO/.git/loom"
-    [ -e "$REPO/$ADR23_REL" ] || printf '# ADR 23\n\nStatus: Accepted\n' >"$REPO/$ADR23_REL"
+    # a blob's id is its content hash, so the cited authority snapshot cannot be forged; borrow the real Loom object database
+    printf '%s\n' "$(git -C "$BATS_TEST_DIRNAME" rev-parse --path-format=absolute --git-common-dir)/objects" >"$REPO/.git/objects/info/alternates"
+    [ -e "$REPO/$ADR23_REL" ] || printf '# ADR 23\n\nStatus: Accepted\n\nAuthority snapshot: 316ae4bc964fb422134151478b6369e1f9b4cfa5\nEvidence mode: loom-repository-bootstrap/v1\n' >"$REPO/$ADR23_REL"
     [ -e "$REPO/.git/loom/bootstrap-phase" ] || printf 'active\n' >"$REPO/.git/loom/bootstrap-phase"
     mkdir -p "$(dirname -- "$REPO/$1")"
     printf '%s\n' "$2" >"$REPO/$1"
@@ -1702,6 +1704,17 @@ mk_verdict() {
 @test "record: ineligible repository (no ADR 0023) is state-held" {
     rec_plan
     rm "$REPO/$ADR23_REL"
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: repository with placeholder ADR 0023 and active marker remains state-held" {
+    mkdir -p "$REPO/.docs/ADR"
+    printf '# ADR 23\n\nStatus: Accepted\n' >"$REPO/$ADR23_REL"
+    rec_plan
     mk_verdict
     ew record "$OUT" --repo "$REPO"
     [ "$status" -eq 0 ]

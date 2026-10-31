@@ -1444,6 +1444,13 @@ val();' "$1" 2>/dev/null
 bootstrap_eligible() {
     local art="$1" supplied="$2" adr="$REPO_TOP/.docs/ADR/0023-repository-self-hosting-bootstrap-transition.md" pf="" f phase="" stem
     [ -f "$adr" ] && [ ! -L "$adr" ] || return 1
+    # authoritative Loom identity: the ADR 0023 authority snapshot blob or the Loom initial commit must be in the repository
+    if ! git -C "$REPO_TOP" cat-file -e 316ae4bc964fb422134151478b6369e1f9b4cfa5 2>/dev/null &&
+        ! git -C "$REPO_TOP" rev-list --max-parents=0 HEAD 2>/dev/null | grep -qx "523cc0138fa671c194104d03523fed613ec6fe5b"; then
+        return 1
+    fi
+    # authentic ADR 0023 content, not a placeholder
+    grep -qF 316ae4bc964fb422134151478b6369e1f9b4cfa5 "$adr" && grep -qF loom-repository-bootstrap/v1 "$adr" || return 1
     for f in "$COMMON/loom/bootstrap-phase" "$COMMON/loom/state/bootstrap-phase"; do
         if [ -e "$f" ] || [ -L "$f" ]; then
             [ -f "$f" ] && [ ! -L "$f" ] || return 1
