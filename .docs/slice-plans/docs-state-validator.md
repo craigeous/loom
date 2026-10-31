@@ -128,6 +128,22 @@ transitions or landing.
   These exceptions are pending owner authorization. Ancestry ordering uses the header `Commit:` or the
   first-adding commit; evaluation files record cumulative rounds, so only cross-file order is checked.
 
+### Round 0 code-eval remediation
+
+- Baseline transitions are direct spec 03 steps checked over the commit history from the baseline;
+  Needs Clarification restores only its prior status (ambiguity reported when history lacks one);
+  Ready to Publish cannot enter the archive (Landed/Abandoned only); FAIL returns need a FAIL evaluation.
+- Evaluations: first event is Round 0, exact progression (merits FAIL +1, PASS retains), `Run-Status:
+  invalid|infrastructure-blocked` marks non-merits runs, `Owner-Reset:` must name the artifact, a new
+  direction and reset to 0; ordering uses only the recorded `Commit:` (no file-addition fallback).
+- Authority: ADRs need approved research/problem plus accepted prior authority; plan targets must be
+  Approved specs / Accepted ADRs; evaluations must identify a resolvable artifact and authority.
+- Under `--all` every unused allowlist record is stale; only active plans count toward plan identity.
+- Historical inventory: 113 new exact-source `authority` / `eval-sequence` rule exceptions added for
+  immutable records (pending owner authorization); 3 now-unneeded exceptions removed.
+- Verification: `node scripts/validate-repository.mjs --root . --all` passed;
+  `bats scripts/tests/repository-validation.bats` and `scripts/check` results recorded in the commit message below.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
@@ -135,3 +151,4 @@ transitions or landing.
 | 0 | Initial draft |
 | 1 | Address Round 0 findings: define validation contracts, compatibility, authority and scope. |
 | 2 | Implemented; verification evidence recorded. |
+| 3 | Address code-eval Round 0 findings; remediation evidence recorded. |

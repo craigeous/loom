@@ -5,154 +5,265 @@
 .docs/ADR/0004-blind-evaluation-role-separation.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/ADR/0005-specs-frozen-after-approval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/ADR/0006-distribution-self-marketplace.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0007-namespaced-command-surface.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0008-parallel-docs-coordination-worktree-per-slice.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0009-unaligned-migrate-sub-mode.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0011-correct-automated-review-command-to-code-review.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0013-starvation-loop-guards-cold-restart.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0014-multi-session-worktree-coordination.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0015-lease-renewal-heartbeat-liveness.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0017-infrastructure-blocked-escalation.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0019-supported-runtime-and-release-contract.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0026-docs-governance-plugin-prompt-doc-scope.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/ADR/0027-client-model-matrix-modernization-and-ambient-inheritance.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/0010-orchestrator-run-automated-review-in-code-eval-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0011-correct-automated-review-command-to-code-review-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0014-multi-session-worktree-coordination-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0014-multi-session-worktree-coordination-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0015-lease-renewal-heartbeat-liveness-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0015-lease-renewal-heartbeat-liveness-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0016-git-native-ref-cas-lock-mechanism-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0017-infrastructure-blocked-escalation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0018-shared-core-and-client-adapters-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0019-supported-runtime-and-release-contract-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0020-remote-publication-is-the-landing-authority-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0021-loom-owned-local-review-protocol-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0021-loom-owned-local-review-protocol-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0022-controlled-input-independent-evaluation-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0022-controlled-input-independent-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0025-reconciliation-authority-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/0025-reconciliation-authority-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0026-docs-governance-plugin-prompt-doc-scope-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-06-10-review-security-review-in-code-eval-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/2026-06-10-review-security-review-in-code-eval-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/2026-06-10-review-security-review-in-code-eval-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-07-03-claude-md-digest-discipline-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/2026-07-03-claude-md-digest-discipline-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/2026-07-03-claude-md-digest-discipline-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0008-parallel-docs-coordination-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/adr-0008-parallel-docs-coordination-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/adr-0008-parallel-docs-coordination-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0009-unaligned-migrate-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0009-unaligned-migrate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0010-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0010-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0011-playbook-conformance-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/adr-0011-playbook-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0011-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0011-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0014-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0014-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0015-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0015-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0016-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0016-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0017-spec-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0017-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr0008-spec-fold-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/adr0008-spec-fold-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/adr0008-spec-fold-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/author-identity-enforcement-guard-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/author-identity-enforcement-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/ci-baseline-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/ci-baseline-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-autopropagation-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/claude-md-autopropagation-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/claude-md-autopropagation-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-shape-discipline-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/claude-md-shape-discipline-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-slim-down-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/claude-md-slim-down-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/code-eval-adjudication-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/code-eval-adjudication-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/coord-identifier-boundaries-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/coord-identifier-boundaries-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/coord-identifier-boundaries-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/coord-identifier-boundaries-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coord-identifier-boundaries-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/coord-identifier-boundaries-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/coordination-state-separation-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/coordination-state-separation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coordination-state-separation-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/coordination-state-separation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/docs-governance-reconciliation-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/docs-governance-reconciliation-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/docs-governance-reconciliation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/docs-governance-reconciliation-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/docs-governance-reconciliation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/errata-and-settled-record-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/errata-and-settled-record-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/errata-and-settled-record-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/errata-and-settled-record-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/evaluation-gate-runner-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/evaluation-gate-runner-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/evaluation-gate-runner-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/evaluation-gate-runner-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/evaluation-output-recorder-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/evaluation-output-recorder-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/evaluation-output-recorder-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/gate-learning-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/gate-learning-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/governance-baseline-reconciliation-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/governance-baseline-reconciliation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/governance-baseline-reconciliation-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/governance-baseline-reconciliation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/greenfield-init-behavior-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/greenfield-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/identity-guard-contract-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/identity-guard-contract-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/identity-guard-contract-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/identity-guard-contract-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/identity-verification-hardening-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/infra-blocked-escalation-wiring-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/init-detection-spine-signal-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/init-mode-detection-code-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/init-mode-detection-code-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
+.docs/evaluations/init-mode-detection-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/init-mode-detection-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/initialized-init-behavior-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/initialized-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-agents-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/local-review-agents-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-agents-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/local-review-agents-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/local-review-helper-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/local-review-helper-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-helper-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/local-review-helper-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-orchestration-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/local-review-orchestration-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/local-review-orchestration-plan-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/local-review-orchestration-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/local-review-orchestration-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/loom-doctor-foundation-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/loom-doctor-foundation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/loom-doctor-foundation-plan-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/loom-doctor-foundation-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/loom-doctor-foundation-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/macos-dogfood-program-amendment-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/macos-dogfood-program-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/macos-dual-client-dogfood-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
-.docs/evaluations/macos-dual-client-dogfood-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/macos-dual-client-dogfood-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/macos-dual-client-dogfood-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/macos-dual-client-dogfood-plan-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/macos-dual-client-dogfood-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/migration-recipe-reference-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
-.docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/multi-session-lock-helper-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/multi-session-playbook-wiring-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/orchestration-review-step-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/parallelism-behavior-body-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/parallelism-behavior-body-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/playbook-conformance-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/playbook-conformance-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/playbook-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/playbook-conformance-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/playbook-conformance-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/precompact-per-session-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/precompact-per-session-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/precompact-per-session-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/precompact-per-session-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/precompact-per-session-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/precompact-write-ahead-backstop-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/recommended-tooling-and-mechanical-checks-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/recommended-tooling-and-mechanical-checks-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/remote-first-integration-candidate-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/remote-first-integration-candidate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/remote-first-integration-candidate-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/remote-first-integration-candidate-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/retire-code-review-status-token-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/retire-code-review-status-token-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/review-findings-format-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/role-governance-guard-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/role-governance-guard-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
 .docs/evaluations/role-governance-guard-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/role-governance-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guard-plan-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/role-governance-guard-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/role-governance-guard-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guardrails-plan-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/role-governance-guardrails-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/round-limit-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-plan-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/sanitized-evaluation-workspace-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
 .docs/evaluations/sanitized-evaluation-workspace-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/scope-identity-guard-to-commit-subcommands-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/scope-identity-guard-to-commit-subcommands-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/shell-gate-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/shell-gate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-00-overview-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/spec-00-overview-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-01-concepts-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-01-concepts-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-01-concepts-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-02-roles-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/spec-02-roles-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-03-artifact-lifecycle-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-03-artifact-lifecycle-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-03-artifact-lifecycle-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-03-round-limit-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-03-round-limit-amendment-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-03-round-limit-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-04-orchestrator-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-04-orchestrator-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-04-orchestrator-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-05-blind-evaluation-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-05-blind-evaluation-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-05-blind-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-init-modes-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/spec-06-init-modes-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-status-seed-clarification-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-06-status-seed-clarification-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-06-status-seed-clarification-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-unaligned-migrate-amendment-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/spec-06-unaligned-migrate-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-07-command-surface-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/spec-07-command-surface-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-08-playbook-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-08-playbook-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-08-playbook-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-10-packaging-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
+.docs/evaluations/spec-10-packaging-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/spec-10-packaging-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/unaligned-bare-migrate-split-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/unaligned-bare-migrate-split-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/unaligned-init-behavior-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/unaligned-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	../ADR/0011-correct-automated-review-command-to-code-review.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
 .docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
@@ -337,7 +448,6 @@
 .docs/slice-plans/ci-baseline.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
 .docs/slice-plans/ci-baseline.md	rule:heading-steps	Historical artifact predates the required template heading; record is not rewritten.
 .docs/slice-plans/ci-baseline.md	rule:heading-verification	Historical artifact predates the required template heading; record is not rewritten.
-.docs/slice-plans/ci-baseline.md	rule:plan-identity	Non-active location pointer retained for immutable authority links.
 .docs/slice-plans/ci-baseline.md	rule:status-field	Non-active location pointer retained for immutable authority links.
 .docs/spec/09-open-questions.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/spec/09-open-questions.md	rule:heading-authority	Historical artifact predates the required template heading; record is not rewritten.

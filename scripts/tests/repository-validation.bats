@@ -1642,13 +1642,14 @@ make_docs_root() {
     fixture_git config core.hooksPath /dev/null
     put .docs/research/r.md <<'DOC'
 # Research
+Status: Approved
 DOC
     put .docs/ADR/0001-a.md <<'DOC'
 # ADR 0001: A
 Status: Accepted
 
 ## Context
-Grounded in [research](../research/r.md).
+Grounded in [research](../research/r.md); prior authority [spec](../spec/00-a.md).
 
 ## Decision
 Decide.
@@ -1731,8 +1732,8 @@ set_status() {
     docs_all
     [ "$status" -eq 1 ]
     [[ "$output" == *"archive/q.md: archived plan must be Landed or Archived, found 'Approved'"* ]]
-    [[ "$output" == *"slice-plans/p.md: slice 'p' has more than one plan"* ]]
-    [[ "$output" == *"slice-plans/p-plan.md: slice 'p' has more than one plan"* ]]
+    [[ "$output" == *"slice-plans/p.md: slice 'p' has more than one active plan"* ]]
+    [[ "$output" == *"slice-plans/p-plan.md: slice 'p' has more than one active plan"* ]]
 }
 
 @test "docs state: evaluation names accept every legal form and reject others" {
@@ -1749,7 +1750,7 @@ DOC
     # The fixture README's inventoried link to this evidence file now resolves.
     grep -v 'dogfood-evidence.json' "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt" >"$TEST_ROOT/allowlist.next" || true
     mv "$TEST_ROOT/allowlist.next" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
-    sed 's/^Round: 0/Round: 1/' "$TEST_ROOT/.docs/evaluations/p-plan-eval.md" >"$TEST_ROOT/.docs/evaluations/2026-01-02-q-eval.md"
+    put_eval 2026-01-02-q-eval.md PASS 0 "Artifact: [p](../slice-plans/p.md)"
     docs_all
     [ "$status" -eq 0 ]
     put .docs/evaluations/notes.md <<'DOC'
@@ -1772,19 +1773,74 @@ DOC
     [[ "$output" == *"p-plan-eval.md: evaluation must not carry a 'Status:' field"* ]]
 }
 
+# put_eval <name> <verdict> <round> [extra header lines...]
+put_eval() {
+    local name="$1" verdict="$2" round="$3"
+    shift 3
+    {
+        printf '# Evaluation: P\nVerdict: %s\nRound: %s\nReviewed against: [spec](../spec/00-a.md)\n' "$verdict" "$round"
+        for line in "$@"; do printf '%s\n' "$line"; done
+        printf '\n## Summary\nx\n\n## Findings\nNone.\n'
+    } >"$TEST_ROOT/.docs/evaluations/$name"
+}
+
 @test "docs state: round sequence follows commit ancestry and rejects unrecorded resets" {
     make_docs_root
-    edit_file .docs/evaluations/p-plan-eval.md 's/^Verdict: PASS/Verdict: FAIL/'
+    first="$(fixture_git rev-parse HEAD)"
+    put_eval p-plan-eval.md FAIL 0 "Commit: $first"
     fixture_commit "plan fail"
-    cp "$TEST_ROOT/.docs/evaluations/p-plan-eval.md" "$TEST_ROOT/.docs/evaluations/p-eval.md"
-    edit_file .docs/evaluations/p-eval.md 's/^Verdict: FAIL/Verdict: PASS/'
-    fixture_commit "code eval"
+    second="$(fixture_git rev-parse HEAD)"
+    put_eval p-eval.md PASS 0 "Commit: $second"
     docs_all
     [ "$status" -eq 1 ]
-    [[ "$output" == *"p-eval.md: round 0 follows"*"expected at least 1"* ]]
-    edit_file .docs/evaluations/p-eval.md 's/^Round: 0/Round: 1/'
+    [[ "$output" == *"p-eval.md: round 0 follows"*"expected exactly 1"* ]]
+    put_eval p-eval.md PASS 3 "Commit: $second"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-eval.md: round 3 follows"*"expected exactly 1"* ]]
+    put_eval p-eval.md PASS 1 "Commit: $second"
     docs_all
     [ "$status" -eq 0 ]
+    put_eval p-eval.md FAIL 2 "Commit: $second"
+    docs_all
+    [ "$status" -eq 1 ]
+}
+
+@test "docs state: first evaluation must be round 0 and ordering needs a recorded commit" {
+    make_docs_root
+    put_eval p-plan-eval.md PASS 2
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: first evaluation of 'p' must be Round: 0, found 2"* ]]
+    put_eval p-plan-eval.md FAIL 0
+    put_eval p-eval.md PASS 1
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-eval.md: cannot order evaluations: the recorded reviewed 'Commit:' is missing"* ]]
+    [[ "$output" == *"p-plan-eval.md: cannot order evaluations"* ]]
+}
+
+@test "docs state: non-merits FAIL does not advance and Owner-Reset must be a recorded decision" {
+    make_docs_root
+    first="$(fixture_git rev-parse HEAD)"
+    put_eval p-plan-eval.md FAIL 0 "Commit: $first" "Run-Status: infrastructure-blocked"
+    fixture_commit "blocked"
+    second="$(fixture_git rev-parse HEAD)"
+    put_eval p-eval.md PASS 0 "Commit: $second"
+    docs_all
+    [ "$status" -eq 0 ]
+    put_eval p-plan-eval.md FAIL 0 "Commit: $first" "Run-Status: flaky"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: Run-Status must be one of invalid, infrastructure-blocked"* ]]
+    put_eval p-plan-eval.md FAIL 4 "Commit: $first"
+    put_eval p-eval.md FAIL 0 "Commit: $second" "Owner-Reset: yes"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-eval.md: Owner-Reset must record an owner decision naming 'p'"* ]]
+    put_eval p-eval.md FAIL 0 "Commit: $second" "Owner-Reset: owner decision for p: materially new direction, reset to 0"
+    docs_all
+    [[ "$output" != *"p-eval.md:"* ]]
 }
 
 @test "docs state: required headings and authority references are enforced" {
@@ -1797,7 +1853,7 @@ DOC
     [ "$status" -eq 1 ]
     [[ "$output" == *"spec/00-a.md: Authority section must link at least one existing ADR"* ]]
     [[ "$output" == *"ADR/0001-a.md: missing required heading 'Decision'"* ]]
-    [[ "$output" == *"ADR/0001-a.md: body must link existing research"* ]]
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research"* ]]
     [[ "$output" == *"slice-plans/p.md: missing required heading 'Steps'"* ]]
     [[ "$output" == *"slice-plans/p.md: plan must identify target specs"* ]]
     [[ "$output" == *"p-plan-eval.md: missing required heading 'Findings'"* ]]
@@ -1871,8 +1927,8 @@ DOC
 
 @test "baseline archive rename" {
     make_docs_root
-    set_status .docs/slice-plans/p.md "Ready to Publish"
-    fixture_commit "ready"
+    set_status .docs/slice-plans/p.md "Landed"
+    fixture_commit "landed"
     base="$(fixture_git rev-parse HEAD)"
     mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
     fixture_git mv .docs/slice-plans/p.md .docs/slice-plans/archive/p.md
@@ -1933,4 +1989,130 @@ DOC
     run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all --baseline HEAD --baseline HEAD
     [ "$status" -eq 2 ]
     [[ "$output" == *"usage: validate-repository.mjs [--root PATH] (--metadata|--links|--all) [--baseline REF]"* ]]
+}
+
+@test "baseline transitive jump without intermediate evidence is rejected" {
+    make_docs_root
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md Implemented
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: illegal status transition (.docs/slice-plans/p.md 'Approved' -> .docs/slice-plans/p.md 'Implemented')"* ]]
+}
+
+@test "baseline Ready to Publish cannot move directly into the archive" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md "Ready to Publish"
+    fixture_commit "ready"
+    base="$(fixture_git rev-parse HEAD)"
+    mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
+    fixture_git mv .docs/slice-plans/p.md .docs/slice-plans/archive/p.md
+    set_status .docs/slice-plans/archive/p.md Archived
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"archive/p.md: baseline: archive rename before landing"* ]]
+}
+
+@test "baseline Needs Clarification restores only the prior status" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md "In Progress"
+    fixture_commit "progress"
+    set_status .docs/slice-plans/p.md "Needs Clarification"
+    fixture_commit "paused"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md "In Progress"
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+    set_status .docs/slice-plans/p.md "Plan Review"
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: illegal status transition"* ]]
+    # A clarification with no earlier status in history is ambiguous, not assumed.
+    set_status .docs/slice-plans/p.md "Needs Clarification"
+    fixture_git checkout -q --orphan fresh
+    fixture_git rm -rqf --cached . >/dev/null
+    fixture_git add -A
+    fixture_git commit -q -m "squashed"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md "In Progress"
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: ambiguous clarification restoration"* ]]
+}
+
+@test "baseline FAIL returns need a recorded FAIL evaluation" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md "Plan Review"
+    fixture_commit "review"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md Draft
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: FAIL return without a recorded FAIL evaluation"* ]]
+    put_eval p-plan-eval.md FAIL 0
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: ADR authority needs approved research or problem and accepted prior authority" {
+    make_docs_root
+    printf '# ADR\nStatus: Accepted\n\n## Context\nOnly [research](../research/r.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ADR/0001-a.md: body must link accepted prior authority"* ]]
+    [[ "$output" != *"approved research or a problem statement"* ]]
+    set_status .docs/research/r.md Draft
+    printf '# ADR\nStatus: Accepted\n\n## Context\nOnly [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+}
+
+@test "docs state: plan targets must be approved specs and accepted ADRs" {
+    make_docs_root
+    set_status .docs/spec/00-a.md Draft
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"slice-plans/p.md: plan target .docs/spec/00-a.md must be Approved, found 'Draft'"* ]]
+    set_status .docs/spec/00-a.md Approved
+    set_status .docs/ADR/0001-a.md Draft
+    edit_file .docs/slice-plans/p.md 's/^Target specs: .*/Target specs: 00-a.md ADR 0001/'
+    docs_all
+    [[ "$output" == *"slice-plans/p.md: plan target .docs/ADR/0001-a.md must be Accepted, found 'Draft'"* ]]
+}
+
+@test "docs state: evaluation artifact and authority identification must resolve" {
+    make_docs_root
+    put_eval unknown-thing-eval.md PASS 0
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"unknown-thing-eval.md: evaluation does not identify a resolvable reviewed artifact: unknown-thing"* ]]
+    put_eval unknown-thing-eval.md PASS 0 "Artifact: [thing](../slice-plans/p.md)"
+    docs_all
+    [ "$status" -eq 0 ]
+    put_eval unknown-thing-eval.md PASS 0 "Artifact: [thing](../slice-plans/nope.md)"
+    docs_all
+    [[ "$output" == *"unknown-thing-eval.md: evaluation does not identify a resolvable reviewed artifact"* ]]
+    printf '# E\nVerdict: PASS\nRound: 0\n\n## Summary\n**Reviewed against:** [spec](../spec/missing.md)\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority links must resolve to local files"* ]]
+}
+
+@test "docs state: an archived historical plan does not block the one active plan" {
+    make_docs_root
+    mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
+    cp "$TEST_ROOT/.docs/slice-plans/p.md" "$TEST_ROOT/.docs/slice-plans/archive/p.md"
+    set_status .docs/slice-plans/archive/p.md Landed
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: unused historical allowlist records fail under all even when the source is gone" {
+    make_docs_root
+    printf '%s\t%s\t%s\n' .docs/evaluations/deleted-eval.md gone.md "deleted historical source" >>"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"stale allowlist record: .docs/evaluations/deleted-eval.md"$'\t'"gone.md"* ]]
+    links
+    [ "$status" -eq 0 ]
 }
