@@ -16,6 +16,12 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 slice 4 `local-review-orchestration` LANDED on `main` (2026-10-31) — Milestone M4 COMPLETE:**
+  ADR 0021 / ADR 0022 Loom-owned local review orchestration workflow across `loom-run`, `orchestration.md`,
+  `review-findings.md`, `code-eval-rubric.md`, and `SKILL.md`. Replaced legacy external slash commands (`/code-review`,
+  `/security-review`) with `loom-review` (`prepare`, launch 3 required finders with manifest-pinned prompts, `validate`,
+  `assemble --out`, `clean`). Eliminated all dependencies on GitHub, PR numbers, `origin/HEAD`, and external review plugins
+  (702 repository Bats tests passing). Milestone M4 fully landed.
 - **M4 slice 3 `local-review-agents` LANDED on `main` (2026-10-30):**
   ADR 0021 immutable finder prompts under `plugins/loom/finders/` (`review-correctness/v1`,
   `review-tests/v1`, `review-security/v1`), helper defaulting and strict override validation in

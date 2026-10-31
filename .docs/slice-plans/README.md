@@ -17,9 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [local-review-orchestration.md](local-review-orchestration.md) — `Ready to Publish` — M4 slice 4: replace external review commands with local review orchestration.
+*(None currently in flight)*
 
 ## Archived plans
+
+- [archive/local-review-orchestration.md](archive/local-review-orchestration.md) — `Landed` —
+  M4 slice 4: replace legacy external review slash commands (`/code-review`, `/security-review`)
+  with the Loom-owned `loom-local-review/v1` orchestration workflow across `loom-run`,
+  `orchestration.md`, `review-findings.md`, `code-eval-rubric.md`, and `SKILL.md`, eliminating
+  dependencies on GitHub, PR numbers, `origin/HEAD`, and external slash plugins (702 repository Bats tests passing).
 
 - [archive/local-review-agents.md](archive/local-review-agents.md) — `Landed` —
   M4 slice 3: versioned immutable Loom-owned finder prompts (`review-correctness/v1`,
@@ -298,5 +304,3 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 - [archive/scope-identity-guard-to-commit-subcommands.md](archive/scope-identity-guard-to-commit-subcommands.md) — `Abandoned` —
   reverted — shell-string carve-out leaked overrides; read-filter false-positive
   accepted as documented limitation (commit-convention.md).
-
-- [Local Review Orchestration](local-review-orchestration.md) — Plan Review

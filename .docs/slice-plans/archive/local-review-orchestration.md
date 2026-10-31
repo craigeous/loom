@@ -1,6 +1,6 @@
 # Local Review Orchestration
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 02-roles.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0021, ADR 0022
 Target size: <= 350 LOC net change (keep this plan document <= 250 lines)
 

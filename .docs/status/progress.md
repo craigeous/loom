@@ -6,7 +6,18 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M4 slice 3 (`local-review-agents`) Landed:**
+- **Last action (2026-10-31) — M4 slice 4 (`local-review-orchestration`) Landed (Milestone M4 Complete):**
+  Landed ADR 0021 / ADR 0022 Loom-owned local review orchestration workflow across `plugins/loom/skills/loom-run/SKILL.md`,
+  `plugins/loom/skills/loom-playbook/references/orchestration.md`, `plugins/loom/skills/loom-playbook/references/review-findings.md`,
+  `plugins/loom/skills/loom-playbook/references/code-eval-rubric.md`, and `plugins/loom/skills/loom-playbook/SKILL.md`.
+  Replaced legacy external slash commands (`/code-review`, `/security-review`) with `loom-review` (`prepare`, launch 3 required
+  finders with manifest-pinned prompts, `validate`, `assemble --out`, `clean`). Eliminated all operational dependencies on
+  GitHub, PR numbers, `origin/HEAD`, remote branch state, and external slash command plugins. Enforced whole-run invalidation
+  and preserved explicit `skipped: docs-only` skip for pure documentation diffs. 702 total repository Bats tests passing.
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 0).
+  Milestone M4 is now fully landed.
+
+- **Prior action (2026-10-30) — M4 slice 3 (`local-review-agents`) Landed:**
   Landed ADR 0021 versioned immutable Loom-owned finder prompts under `plugins/loom/finders/`
   (`review-correctness-v1.md`, `review-tests-v1.md`, `review-security-v1.md`) with explicit
   boundary enforcement (procedural boundaries, read-only inputs/source, assigned single output
