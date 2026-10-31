@@ -86,3 +86,4 @@ rewritten when a later decision supersedes their subject.
 - [`local-review-agents-eval.md`](local-review-agents-eval.md) — `local-review-agents` code evaluation (Round 0: PASS)
 - [`local-review-orchestration-plan-eval.md`](local-review-orchestration-plan-eval.md) — `local-review-orchestration` slice-plan evaluation (Round 0: PASS)
 - [`local-review-orchestration-eval.md`](local-review-orchestration-eval.md) — `local-review-orchestration` code evaluation (Round 0: PASS)
+- [`sanitized-evaluation-workspace-plan-eval.md`](sanitized-evaluation-workspace-plan-eval.md) — `sanitized-evaluation-workspace` slice-plan evaluation (Round 1: PASS)

@@ -1,6 +1,6 @@
 # Sanitized Evaluation Workspace
 
-Status: Plan Review
+Status: Approved
 Target specs: 04-orchestrator.md § Evaluation orchestration; 05-blind-evaluation.md § Controlled-input independent evaluation
 Target size: <= 600 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
 
