@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [identity-guard-contract.md](identity-guard-contract.md) — `Plan Review` (plan-eval Round 1 FAIL) — M3 slice 1: recognized identity-mutation guard and post-command verification.
+- [identity-guard-contract.md](identity-guard-contract.md) — `Plan Review` (Round 2 re-evaluation pending; Round 1 FAIL revised) — M3 slice 1: recognized identity-mutation guard and post-command verification.
 
 ## Archived plans
 

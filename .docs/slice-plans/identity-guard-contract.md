@@ -41,7 +41,14 @@ OS-level containment are in scope.
    absolute resolved path as `loom-verify-identity <baseline-sha|unborn>`.
    Register it in `plugins/loom/bin/loom-resolve-helper` as
    `ALLOWED_HELPERS=(loom-coord loom-verify-identity)` and update
-   `plugins/loom/bin/loom-resolve-helper.bats` for installed resolution. Exit 0
+   `plugins/loom/bin/loom-resolve-helper.bats` for installed resolution. Add the
+   same helper to `allowedHelpers` in each mirrored metadata file:
+   `plugins/loom/adapters/roots/claude-plugin-root-v1.json`,
+   `plugins/loom/adapters/roots/codex-skill-source-v1.json`,
+   `plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json`, and
+   `plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json`; update
+   `expectedRoots` `allowedHelpers` in `scripts/validate-repository.mjs` to match.
+   Verify both installed client roots resolve the helper and metadata stays consistent. Exit 0
    for valid/no-op, 1 for usage/config or verification errors, and 2 for identity
    violations; report offending SHA and remediation on stderr for violations.
    Capture HEAD before the command (or `unborn`) and invoke immediately afterward,
@@ -96,3 +103,4 @@ None.
 |---|---|
 | 0 | Initial draft |
 | 1 | Defined verifier CLI, resolution, workflow files and tests; clarified mutation rules, budget, documentation audit and remediation. |
+| 2 | Registered the verifier consistently in both root manifests, both fixture manifests, and validator expectations; added resolution and consistency verification. |
