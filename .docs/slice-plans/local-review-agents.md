@@ -1,7 +1,7 @@
 # Local Review Agents
 
 Status: Plan Review
-Target specs: ADR 0021 §§2–5, ADR 0022 §2
+Target specs: specs 08 and 10; ADR 0021 §§2–5, ADR 0022 §2 (none amended)
 Target size: <= 1200 LOC net change (keep this plan document <= 250 lines)
 
 ## Context
@@ -55,18 +55,24 @@ hostile local inode swapping and internal helper monkeypatching are outside scop
    Do not fabricate provenance, evidence, or successful completion.
 4. Update `plugins/loom/bin/loom-review` and its packaged finder metadata to map each
    required v1 finder to the exact asset bytes and a stable default adapter/model profile.
-   Compute lowercase SHA-256 over the raw prompt file bytes using portable existing
-   helper conventions. `prepare` defaults omitted `--prompt-hash` and
-   `--finder-profile` entries for these standard finders, records resolved values in
-   the manifest, and preserves explicit supported overrides. Reject missing assets,
-   unknown versions, malformed/partial overrides, or a mismatch with pinned prompt
-   bytes rather than silently substituting a different prompt. `validate` must recognize
+   Resolve `plugins/loom/finders/` from the runtime script-relative physical plugin
+   root, including the asset path supplied to a client. Compute lowercase SHA-256 over
+   raw prompt bytes using portable existing helper conventions. For a standard finder,
+   `prepare` defaults an omitted `--prompt-hash` to the pinned SHA-256 of its shipped
+   asset; an explicit value is accepted only if equal to that hash, otherwise exit 2.
+   An omitted `--finder-profile` defaults to the stable profile; it may be overridden
+   freely subject to the existing `<adapter>:<profile>` format. Record resolved values
+   in the manifest. Reject missing assets, unknown versions, malformed/partial overrides,
+   or a mismatch with pinned prompt bytes rather than silently substituting a prompt.
+   `validate` must recognize
    the same pinned versions/hashes and continue checking result provenance against the
    manifest. Keep Bash 3.2+, Git 2.34+, and jq 1.6+ compatibility. Document the default
    profile values and how a client passes the assigned prompt and output path without
    introducing a new lifecycle role or launching workers from the helper.
-5. Add focused tests and synthetic defect fixtures alongside the existing local-review
-   helper tests. Exercise each prompt against a deliberate in-scope defect with a
+5. Add focused tests and synthetic defect fixtures to
+   `plugins/loom/bin/loom-review.bats`. Migrate existing arbitrary test hashes to pinned
+   or defaulted values, and add a negative test for a mismatched explicit hash. Exercise
+   each prompt against a deliberate in-scope defect with a
    controlled fixture runner, checking that its structured result identifies the
    intended changed location and evidence; keep probabilistic live model detection
    measurements separate from deterministic CI. Cover clean output, malformed or
@@ -74,12 +80,17 @@ hostile local inode swapping and internal helper monkeypatching are outside scop
    drift, default and explicit metadata, and source/other-result mutation detection.
    Feed complete fixture results through `loom-review validate` and `assemble` and
    verify aggregate state and normalized findings. Failed or partial runs must not
-   assemble or become clean. Ensure installation/packaging includes all prompt assets.
+   assemble or become clean. Add `rg`-based Bats assertions for each prompt checking its
+   own finder ID and every Step 2 boundary clause: permitted inputs and output path,
+   read-only inputs/source, no edits or other results, no lifecycle change or verdict,
+   no external services or delegation, untrusted data handling, and evaluator authority.
+   Verify all assets are packaged using `scripts/validate-repository.mjs` and Bats
+   assertions against the installed script-relative physical plugin root.
 
 ## Verification
 
 - Run the focused local-review Bats suite, including the new fixture cases, with
-  `bats tests/loom-review.bats` (adjust only if the existing suite path differs).
+  `bats plugins/loom/bin/loom-review.bats`.
 - Verify independently computed prompt SHA-256 values equal prepared manifest entries;
   validate and assemble a mixed-finding run and an all-clean run. Confirm altered prompt,
   result, input, and source cases fail closed and do not produce a completed artifact.
@@ -95,3 +106,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Clarified pinned hash and profile overrides, migrated test expectations, specified physical asset lookup and packaging checks, added prompt-clause assertions, corrected suite path, and cited governing specs. |
