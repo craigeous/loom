@@ -89,7 +89,9 @@ check_host_and_os() {
 }
 
 check_required_tools() {
-    local missing="" v
+    local missing="" v bash_ver
+    bash_ver="${LOOM_DOCTOR_BASH_VERSION:-${BASH_VERSION:-}}"
+    _ver_ge "$bash_ver" 3 2 || missing="$missing bash>=3.2"
     v=$(git --version 2>/dev/null) || v=""
     _ver_ge "$v" 2 34 || missing="$missing git>=2.34"
     v=$(jq --version 2>/dev/null) || v=""
@@ -107,13 +109,19 @@ check_required_tools() {
 }
 
 check_git_identity() {
-    local name email
-    name="${GIT_AUTHOR_NAME:-$(git config --get user.name 2>/dev/null || true)}"
-    email="${GIT_AUTHOR_EMAIL:-$(git config --get user.email 2>/dev/null || true)}"
-    if [ -n "$name" ] && [ -n "$email" ]; then
-        _add git_identity pass "effective Git name and email are set"
+    local ident name email top
+    top="${REPO_ROOT:-.}"
+    if ! ident=$(git -C "$top" var GIT_AUTHOR_IDENT 2>/dev/null); then
+        _add git_identity error "effective Git author identity unavailable (git var failed)"
+        return
+    fi
+    name=${ident%% <*}
+    email=${ident#*<}
+    email=${email%%>*}
+    if [ -z "$name" ] || [ -z "$email" ] || [ "$email" = "loom@localhost" ]; then
+        _add git_identity error "effective Git identity incomplete or placeholder (name or email empty or loom@localhost)"
     else
-        _add git_identity error "effective Git identity incomplete (name or email empty)"
+        _add git_identity pass "effective Git name and email are set"
     fi
 }
 
@@ -195,7 +203,7 @@ check_init_mode() {
 }
 
 check_coordination() {
-    local ttl sha ver refs line ref blob ts now age stale=0 total=0 bad=""
+    local ttl sha ver refs line ref blob claimant ts now age stale=0 total=0 bad=""
     if [ -z "$REPO_ROOT" ]; then
         _add coordination error "not inside a Git work tree; coordination refs unreadable"
         return
@@ -230,7 +238,18 @@ check_coordination() {
         ref=${line% *}
         total=$((total + 1))
         blob=$(git -C "$REPO_ROOT" cat-file blob "${line##* }" 2>/dev/null) || blob=""
+        claimant=$(printf '%s' "$blob" | head -n 1 | awk -F'\t' '{print $1}')
         ts=$(printf '%s' "$blob" | head -n 1 | awk -F'\t' '{print $2}')
+        case "$claimant" in
+        '' | [!A-Za-z0-9]* | *[!A-Za-z0-9._-]*)
+            bad="$bad ${ref#refs/loom/claims/}"
+            continue
+            ;;
+        esac
+        [ "${#claimant}" -le 128 ] || {
+            bad="$bad ${ref#refs/loom/claims/}"
+            continue
+        }
         case "$ts" in
         '' | *[!0-9]*)
             bad="$bad ${ref#refs/loom/claims/}"
@@ -244,7 +263,7 @@ check_coordination() {
 $refs
 EOF_REFS
     if [ -n "$bad" ]; then
-        _add coordination error "unreadable claim lease timestamp:$bad"
+        _add coordination error "malformed coordination state (claimant or lease timestamp unreadable):$bad"
     elif [ "$stale" -gt 0 ]; then
         _add coordination warning "schema 2; $stale of $total claim(s) stale (lease >= ${ttl}s old)"
     else

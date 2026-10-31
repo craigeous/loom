@@ -192,6 +192,13 @@ EOF
     [[ "$(check_field host_and_os evidence)" == *"3.1.17"* ]]
 }
 
+@test "bash below 3.2 also errors required_tools" {
+    LOOM_DOCTOR_BASH_VERSION=3.1 run doctor --json
+    [ "$status" -eq 1 ]
+    [ "$(check_field required_tools status)" = "error" ]
+    [[ "$(check_field required_tools evidence)" == *"bash>=3.2"* ]]
+}
+
 @test "old tool versions are errors naming the tool" {
     stub jq 'echo jq-1.5'
     run doctor --json
@@ -229,11 +236,25 @@ EOF
 }
 
 @test "incomplete Git identity is an error" {
-    : >"$GIT_CONFIG_GLOBAL"
+    printf '[user]\n\tuseConfigOnly = true\n' >"$GIT_CONFIG_GLOBAL"
     run doctor
     [ "$status" -eq 1 ]
     [[ "$output" == *"[FAIL] git_identity:"* ]]
-    printf '[user]\n\tname = Only Name\n' >"$GIT_CONFIG_GLOBAL"
+    printf '[user]\n\tuseConfigOnly = true\n\tname = Only Name\n' >"$GIT_CONFIG_GLOBAL"
+    run doctor --json
+    [ "$(check_field git_identity status)" = "error" ]
+}
+
+@test "git identity follows the effective author identity and supported overrides" {
+    printf '[user]\n\tuseConfigOnly = true\n' >"$GIT_CONFIG_GLOBAL"
+    GIT_AUTHOR_NAME=Env GIT_AUTHOR_EMAIL=env@example.com run doctor --json
+    [ "$(check_field git_identity status)" = "pass" ]
+    GIT_AUTHOR_NAME=Env run doctor --json
+    [ "$(check_field git_identity status)" = "error" ]
+    printf '[author]\n\tname = Au\n\temail = au@example.com\n[user]\n\tuseConfigOnly = true\n' >"$GIT_CONFIG_GLOBAL"
+    run doctor --json
+    [ "$(check_field git_identity status)" = "pass" ]
+    printf '[user]\n\tname = Loom\n\temail = loom@localhost\n' >"$GIT_CONFIG_GLOBAL"
     run doctor --json
     [ "$(check_field git_identity status)" = "error" ]
 }
@@ -335,6 +356,25 @@ EOF
     set_claim bad "sid\n"
     run doctor --json
     [ "$(check_field coordination status)" = "error" ]
+}
+
+@test "coordination: malformed claim records with numeric timestamps are errors" {
+    set_schema 2
+    local now
+    now=$(date +%s)
+    set_claim empty "\t$now\n"
+    run doctor --json
+    [ "$status" -eq 1 ]
+    [ "$(check_field coordination status)" = "error" ]
+    [[ "$(check_field coordination evidence)" == *"malformed"* ]]
+    git -C "$REPO" update-ref -d refs/loom/claims/empty
+    set_claim badid "-bad id\t$now\n"
+    run doctor --json
+    [ "$(check_field coordination status)" = "error" ]
+    git -C "$REPO" update-ref -d refs/loom/claims/badid
+    set_claim ok "sid.1_a-b\t$now\n"
+    run doctor --json
+    [ "$(check_field coordination status)" = "pass" ]
 }
 
 @test "coordination: incompatible schema version is an error" {
