@@ -1,8 +1,8 @@
 # Docs State Validator
 
 Status: Plan Review
-Target specs: 00-overview.md, 03-artifact-lifecycle.md, 05-blind-evaluation.md, 06-init-modes.md, 08-playbook.md
-Target size: <= 250 LOC net change (keep this plan document <= 250 lines)
+Target specs: 00-overview.md, 03-artifact-lifecycle.md, 05-blind-evaluation.md, 08-playbook.md
+Target size: <= 450 LOC net change (keep this plan document <= 250 lines)
 
 ## Context
 
@@ -30,64 +30,93 @@ or mutate accepted ADR decisions to make checks pass.
    artifact files separately from README indexes and review-finding companions; report
    stable path and actionable rule for every violation, aggregate failures, and exit
    nonzero. Reuse existing safe path and Markdown parsing mechanisms.
-2. Validate exact spec 03 status tokens and type-specific statuses for specs, ADRs,
-   plans, and evaluation artifacts where a `Status:` field is present; reject missing,
-   duplicate, or unknown required fields. `Accepted` is ADR-only. Enforce one active
-   plan per slice by normalized artifact identity, including the historical `-plan`
-   suffix, and require every archived plan to be `Landed` or `Archived`. Identify
-   baseline exceptions before implementation; resolve conflicts through authorized
-   record correction, never blanket exemptions or silently recategorizing history.
-3. Check legal transitions against a defined, explicit comparison baseline, not a
-   guess from the current file: add a documented optional baseline ref argument for
-   `--all`, compare baseline and working-tree statuses including renames, and enforce
-   spec 03's type-specific arrows, FAIL returns, clarification restoration and landing
-   archive transition. Without a baseline, perform snapshot checks and report that
-   transitions were not verified; do not claim historical proof. Reject unavailable
-   or ambiguous explicit baselines. Test adds, removals, renames, invalid jumps and
-   legal transitions; preserve existing callers when the option is absent.
-4. Check evaluation names against `.docs/evaluations/<artifact-name>-eval.md` and
-   their identified target, distinguishing review-finding companions. Validate recorded
-   round sequences per artifact across plan and code phases: start at 0, merits FAIL
-   increments, resolving PASS retains the round, and invalid/infrastructure-blocked
-   events, retries and clarifications do not increment. Use explicit recorded evidence;
-   flag ambiguous or missing evidence rather than inventing sequence or resets. Cover
-   owner-authorized resets as recorded decisions, and do not reinterpret historical
-   evaluation formats without a documented, narrowly scoped compatibility rule.
-5. Check applicable required headings and nonempty authority references for specs,
-   ADRs and plans against their respective templates and spec 05's type-specific
-   authority, resolving links to existing targets. Apply checks by artifact type and
-   account explicitly for historical templates; do not impose a new `Authority`
-   heading on ADRs or plans merely because specs have one. Extend relative link
-   checking to the scoped documentation artifacts, including evaluations and archived
-   plans, using Markdown parsing, fragment resolution, safe paths, and the existing
-   allowlist only for documented intentional exceptions. Diagnose missing files and
-   fragments; ignore external URLs and literal code. Inventory and resolve baseline
-   failures with explicit evidence rather than broad exclusions.
-6. Correct the link in `.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md` to
-   `../slice-plans/archive/multi-session-lock-helper-plan.md`; this is a link repair,
-   not a change to its accepted decision. Add comprehensive fixture-based Bats cases
-   in `scripts/tests/repository-validation.bats` for each positive and negative rule,
-   scope exclusions, historical compatibility, invalid input, and existing CLI modes.
-   Keep fixtures isolated and ensure diagnostics identify the offending artifact.
+2. Require exactly one `Status:` field on each spec, ADR and slice plan and
+   validate the following type-specific tokens. Evaluation verdicts are protocol
+   fields, not statuses: reject a `Status:` field on an evaluation itself (a quoted
+   target status in `Artifact:` is not a field). `Needs Clarification` pauses and
+   restores the prior status; `Abandoned` records deliberate cessation.
+
+   | Type | Legal statuses |
+   |---|---|
+   | Spec | Draft, Plan Review, Approved, Needs Clarification, Abandoned |
+   | ADR | Draft, Plan Review, Accepted, Needs Clarification, Abandoned |
+   | Slice plan | Draft, Plan Review, Approved, In Progress, Implemented, Ready to Publish, Landed, Archived, Needs Clarification, Abandoned |
+   | Evaluation | No Status field |
+
+   Enforce one active plan per slice by normalized identity, including the historical
+   `-plan` suffix; archived plans must be `Landed` or `Archived`. Record any baseline
+   exceptions and their evidence in the implementation's evaluation record; only the
+   owner may authorize record corrections. Never silently recategorize history.
+3. Default `--all` to snapshot checks; report that transitions were not verified.
+   Add optional `--baseline <ref>` for `--all` to compare baseline and working-tree
+   statuses including renames and enforce spec 03 arrows, FAIL returns, clarification
+   restoration and landing archive transition. Update `usage()` and reject missing,
+   unavailable or ambiguous refs and invalid flag/mode combinations with exit 2.
+   Preserve existing callers without the flag; do not claim historical proof.
+4. Validate names and evidence under `.docs/evaluations/` using only these forms:
+
+   | Form | Treatment |
+   |---|---|
+   | `<artifact>-eval.md`, `<artifact>-plan-eval.md` | Canonical evaluation; resolve artifact identity and phase. |
+   | `<artifact>-review-findings.md`, `<artifact>-acceptance.md` | Companion evidence, not an evaluation or round event. |
+   | `README.md`, `macos-dual-client-dogfood-evidence.json` | Static index/evidence; not evaluations. |
+   | `YYYY-MM-DD-<artifact>-eval.md`, `YYYY-MM-DD-<artifact>-plan-eval.md` | Historical compatibility: strip the date prefix for identity; retain file as evidence. |
+
+   Reject other forms. For each canonical or dated evaluation read exactly one
+   top-level `Round: <N>` field, with N a nonnegative decimal integer, and its
+   top-level `Verdict: PASS` or `Verdict: FAIL`; section headings and prose are not
+   independent events. Order events by recorded reviewed commit ancestry, not file
+   names; if ancestry, phase, verdict, or ordering is missing or ambiguous, report it
+   rather than inventing a sequence. A first event is round 0; a merits FAIL advances
+   the next event by one, PASS retains the round, and invalid or infrastructure-blocked
+   runs, retries and clarifications do not increment. Plan and code share the counter.
+   A reset requires a recorded owner decision identifying the artifact, materially new
+   direction and reset to 0; otherwise reject a reset. Historical multi-section files
+   use their single header as one event, including bootstrap corrections in prose.
+5. Require the following headings and nonempty authority references, resolving each
+   reference to an existing target. A reference is a Markdown link to the applicable
+   artifact; a bare title or empty heading is insufficient. Apply these rules to the
+   current artifact, not a quoted target inside an evaluation.
+
+   | Type | Required headings | Authority |
+   |---|---|---|
+   | Spec | `Authority` | At least one accepted ADR it derives from. |
+   | ADR | `Context`, `Decision`, `Consequences` | Link approved research or problem statement and relevant accepted prior authority in the body; no `Authority` heading required. |
+   | Slice plan | `Context`, `Out of Scope & Threat-Model Boundary`, `Steps`, `Verification`, `Revision Log` | Link or identify target approved specs and relevant accepted ADRs in metadata or body; resolve each identified target. |
+   | Evaluation | `Summary`, `Findings` | Identify reviewed artifact and authority used in header or body; resolve linked local authority. |
+
+   Record narrowly identified historical template exceptions and reasons in the
+   implementation evaluation record, subject to owner authorization; never waive an
+   entire type. Extend relative link checking under `--all` to evaluations and archived
+   plans using existing safe Markdown and fragment resolution. Historical evaluations
+   and archived plans are never rewritten: inventory each known broken link in
+   `scripts/validation/relative-link-allowlist.txt` as source, target and reason; do not
+   allowlist live broken links or broad patterns. The acceptance bound is exactly the
+   inventoried historical failures, with no unused entries; report the count in the
+   implementation evaluation record. Ignore external URLs and literal code.
+6. Under [ADR 0025 reconciliation authority](../ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md)
+   and the explicit request at [improvement plan line 737](../repository-improvement-plan.md#slice-docs-state-validator),
+   repair only the single link in `.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md`
+   to `../slice-plans/archive/multi-session-lock-helper-plan.md`. Verify `git diff`
+   for that ADR changes only that line; do not alter its accepted decision. Add
+   proportionate isolated fixture-based Bats cases for positive and negative rules,
+   historical compatibility, invalid input and existing CLI modes.
 
 ## Verification
 
 Run `bats scripts/tests/repository-validation.bats` for focused iteration, then
 `node scripts/validate-repository.mjs --root . --all` and `scripts/check` for the
-repository gate. Exercise an explicit baseline in a temporary Git fixture with legal
-and illegal transitions, including archive renames; assert nonzero exits and useful
+repository gate. Run named Bats cases `baseline legal transition`, `baseline illegal transition`,
+`baseline archive rename`, `baseline invalid ref`, and `baseline usage errors` using
+`--root <fixture> --all --baseline <ref>` in a temporary Git fixture; assert nonzero exits and useful
 paths for malformed statuses, rounds, names, headings, authority and links. Confirm
 existing metadata and link tests pass and the real repository passes without masking
 unresolved baseline violations. A snapshot-only run does not certify historical
 transitions or landing.
-
-## Notes
-
-Plan evaluation must resolve any ambiguity in historical artifact formats and baseline
-remediation before development; accepted authority remains controlling.
 
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Address Round 0 findings: define validation contracts, compatibility, authority and scope. |
