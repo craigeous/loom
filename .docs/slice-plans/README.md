@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_None currently in flight._
+- [evaluation-output-recorder.md](evaluation-output-recorder.md) — `Plan Review` — deterministic evaluation verdict recording and bootstrap sunset.
 
 ## Archived plans
 
