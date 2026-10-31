@@ -2,22 +2,24 @@
 
 Artifact: [Docs State Validator](../slice-plans/docs-state-validator.md)
 Reviewed against: [slice plan](../slice-plans/docs-state-validator.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
-Commit: b0ffbae
+Commit: 7e06b79
 Round: 0
 Verdict: FAIL
 
 ## Summary
 
-The implementation adds documentation-state validation, but does not enforce several required lifecycle, round, and authority invariants. The ADR 0016 change is limited to the authorized link.
+The revision fixes the stale historical allowlist check and active-plan identity count, and adds direct transition and sequence checks. The lifecycle, evaluation sequencing, and authority findings remain partially unresolved.
 
 ## Findings
 
-- [BLOCKER] `reachable()` (scripts/validate-repository.mjs:781) traverses any number of arrows, so a baseline Draft can jump directly to Approved or Implemented without evidence of intermediate transitions; it also lets Needs Clarification restore any nonterminal status instead of its prior status. `validateBaseline()` does not inspect FAIL evidence and accepts Ready to Publish directly into the archive. Enforce the prescribed transitions and restoration with sufficient history, and report ambiguity when it cannot be established.
-- [BLOCKER] Evaluation sequencing (scripts/validate-repository.mjs:904-922) skips singleton groups entirely, never requires the first round to be 0, accepts arbitrary increases because it only rejects rounds below the expected value, and accepts any `Owner-Reset:` value as a reset. It also treats every FAIL as a merits failure and falls back to file-addition history when reviewed commit evidence is absent or invalid. Enforce exact round progression, classify supported non-merits events and validate reset evidence; report missing or ambiguous ordering rather than inventing it.
-- [BLOCKER] Authority checks (scripts/validate-repository.mjs:849-899) accept any existing `.docs/` link for an ADR, do not require both applicable research/problem and accepted prior authority, and accept merely existing rather than approved/accepted plan targets. Evaluations need only an `Artifact:` or `Reviewed against:` field, even if empty or unrelated, and body identification is not supported. Validate the required applicable references and their statuses, including evaluation artifact and authority identification.
-- [BLOCKER] Historical link allowlist stale checking (scripts/validate-repository.mjs:610) skips records whose source is no longer scanned, so deleted or renamed sources leave unused entries undetected under `--all`. Report every unused historical record in `--all`, while retaining `--links` behavior.
-- [BLOCKER] Plan identity validation (scripts/validate-repository.mjs:832-839) rejects one active plan whenever an archived plan shares its normalized identity, although the plan requires only one active plan per slice. Count active plans only, preserving archived historical evidence.
+- [BLOCKER] FAIL return evidence is not tied to the transition being checked: `checkTransitions()` accepts any current merits FAIL with a matching identity (scripts/validate-repository.mjs:1052-1055), regardless of phase, reviewed commit, or whether it predates the transition. An old code FAIL can therefore justify a later plan-review return without evidence of that review's failure. Require relevant, ordered evidence or report ambiguity.
+- [BLOCKER] Reset validation remains incomplete (scripts/validate-repository.mjs:951-975). A first event in a multi-event group bypasses the required round 0 whenever any `Owner-Reset:` text is present, without validating that text. A later reset only checks for the identity substring, the word `direction`, and `reset` with `0`, so it accepts text that does not record an owner decision or a materially new direction. Validate reset evidence for every event and require the stated decision.
+- [BLOCKER] Authority validation still accepts unrelated or unresolvable identification (scripts/validate-repository.mjs:875-877, 897-907). Any existing file under another `.docs/` directory counts as an ADR problem statement; any nonempty bare `Artifact:` or `Reviewed against:` value passes evaluation identification, and linked artifacts need only resolve to any file. Require applicable, resolvable artifact and authority references and appropriate grounding as specified by the plan.
+
+## Re-review of Round 0
+
+The revised direct-step traversal, clarification restoration, and archive check address the reported transitive-jump and premature-archive cases; FAIL evidence remains insufficient as described above. Singleton first-round checking, exact progression, non-merits classification, and recorded-commit ordering address those portions of sequencing; reset evidence remains insufficient. Approved/accepted target checks and body identification improve authority checks but do not resolve the finding above. The `--all` stale-record check now includes deleted sources, and archived plans no longer count as active plans; both findings are resolved.
 
 ## Gate
 
-`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 perl -e '$SIG{INT}="DEFAULT"; exec @ARGV' scripts/check` passed, including all 848 Bats cases. This matches the recorded gate evidence; the gate does not cover the defects above.
+`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 perl -e '$SIG{INT}="DEFAULT"; exec @ARGV' scripts/check` passed (exit 0), including all 859 Bats cases, relative links, strict plugin validation, and diff whitespace. The passing gate does not cover the defects above.
