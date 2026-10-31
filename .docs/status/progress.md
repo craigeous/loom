@@ -6,7 +6,16 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-31) — M5 slice 1 (`sanitized-evaluation-workspace`) Landed:**
+- **Last action (2026-10-31) — M5 slice 2 (`evaluation-gate-runner`) Landed:**
+  Landed ADR 0022 / spec 04 / spec 05 evaluation gate runner `plugins/loom/bin/loom-eval-workspace gate-rerun`.
+  Provides bounded, deterministic gate reruns in an isolated execution copy (`0700` scratch workspace), environment
+  scrubbing, timeout enforcement, process group termination on signals, pre/post attempt immutable run and checkout
+  verification, failure detection for input tampering, no-checkout and bare-repository support, and comprehensive evidence
+  emission adhering to `loom-eval-workspace-rerun-evidence-v1.schema.json`. 17 new comprehensive Bats tests (752 total
+  repository Bats tests passing). Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_80b776529117`
+  with Verdict: PASS (Round: 1).
+
+- **Prior action (2026-10-31) — M5 slice 1 (`sanitized-evaluation-workspace`) Landed:**
   Landed ADR 0022 sanitized evaluation workspace exporter helper `plugins/loom/bin/loom-eval-workspace`
   with four subcommands (`prepare`, `verify`, `status`, `clean`), JSON Schema
   `loom-eval-workspace-manifest-v1.schema.json`, and Ajv Draft 2020-12 schema validation with `ajv-formats`.

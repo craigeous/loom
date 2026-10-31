@@ -17,9 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [evaluation-gate-runner.md](evaluation-gate-runner.md) — `Implemented` — bounded, verified gate reruns for controlled code evaluation.
+_None currently in flight._
 
 ## Archived plans
+
+- [archive/evaluation-gate-runner.md](archive/evaluation-gate-runner.md) — `Landed` —
+  M5 slice 2: bounded, verified gate reruns for controlled code evaluation in `plugins/loom/bin/loom-eval-workspace gate-rerun`,
+  execution copy isolation, clean environment scrubbing, timeout enforcement, process group cleanup,
+  pre/post rerun verification, support for no-checkout/bare repositories, and 17 comprehensive Bats tests (752 total repository Bats tests passing).
 
 - [archive/sanitized-evaluation-workspace.md](archive/sanitized-evaluation-workspace.md) — `Landed` —
   M5 helper `plugins/loom/bin/loom-eval-workspace` (`prepare`, `verify`, `status`, `clean`),
