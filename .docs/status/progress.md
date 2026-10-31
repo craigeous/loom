@@ -6,7 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-31) — M5 slice 2 (`evaluation-gate-runner`) Landed:**
+- **Last action (2026-10-31) — M5 slice 3 (`evaluation-output-recorder`) Landed (Milestone M5 Complete):**
+  Landed ADR 0022 / spec 03 / spec 04 / spec 05 evaluation output recorder `plugins/loom/bin/loom-eval-workspace record`.
+  Separates analysis from repository mutation by recording schema-valid verdicts from the sanitized workspace into the
+  repository's `.docs/evaluations/` directory, updating the target artifact's lifecycle status (`Approved`, `Accepted`,
+  `Ready to Publish`, `In Progress`, `Draft`), validating evidence integrity against the workspace manifest and gate rerun
+  record, binding repository eligibility to Loom immutable root commit ancestry (`523cc013`) and canonical ADR 0023 blob
+  (`ae4bdb4a`), and settling bootstrap retirement. Added JSON Schema `loom-evaluation-output-v1.schema.json` and 40 new
+  comprehensive Bats tests (792 total repository Bats tests passing). Evaluated blind cross-family by Codex (`gpt-6.1-terra`)
+  on Orca run `run_2e75df916e11` with Verdict: PASS (Round: 3). Milestone M5 is now fully landed.
+
+- **Prior action (2026-10-31) — M5 slice 2 (`evaluation-gate-runner`) Landed:**
   Landed ADR 0022 / spec 04 / spec 05 evaluation gate runner `plugins/loom/bin/loom-eval-workspace gate-rerun`.
   Provides bounded, deterministic gate reruns in an isolated execution copy (`0700` scratch workspace), environment
   scrubbing, timeout enforcement, process group termination on signals, pre/post attempt immutable run and checkout

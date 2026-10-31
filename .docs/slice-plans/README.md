@@ -17,9 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [evaluation-output-recorder.md](evaluation-output-recorder.md) — `Implemented` — deterministic evaluation verdict recording and bootstrap sunset.
+*None currently active.*
 
 ## Archived plans
+
+- [archive/evaluation-output-recorder.md](archive/evaluation-output-recorder.md) — `Landed` —
+  M5 slice 3: deterministic evaluation verdict recording, schema-valid output validation (`loom-evaluation-output-v1.schema.json`),
+  sanitized-to-checkout recording in `plugins/loom/bin/loom-eval-workspace record`, repository eligibility binding to Loom
+  commit ancestry and canonical ADR 0023 blob, lifecycle transitions, and settlement of bootstrap retirement (792 total repository Bats tests passing).
 
 - [archive/evaluation-gate-runner.md](archive/evaluation-gate-runner.md) — `Landed` —
   M5 slice 2: bounded, verified gate reruns for controlled code evaluation in `plugins/loom/bin/loom-eval-workspace gate-rerun`,

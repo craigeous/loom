@@ -27,10 +27,10 @@ Milestone order for building loom. "What's next and why"; detailed status in
   `local-review-agents` (versioned immutable finder prompts under `plugins/loom/finders/`), and
   `local-review-orchestration` (operationalized `loom-review` in `loom-run`, `orchestration.md`,
   `review-findings.md`, `code-eval-rubric.md`, and `SKILL.md`, removing GitHub/PR/remote dependencies).
-- [ ] **M5 — Make the evaluation trust model accurate** (in progress):
+- [x] **M5 — Make the evaluation trust model accurate** (complete):
   `[x] evaluation-trust-model` (ADR 0022 accepted claim "independent cold-agent evaluation with controlled inputs");
-  `[x] sanitized-evaluation-workspace`; `[x] evaluation-gate-runner`; next `evaluation-output-recorder`.
-- [ ] **M6 — Turn prose invariants into executable checks**:
+  `[x] sanitized-evaluation-workspace`; `[x] evaluation-gate-runner`; `[x] evaluation-output-recorder`.
+- [ ] **M6 — Turn prose invariants into executable checks** (in progress):
   `loom-doctor-foundation`, `docs-state-validator`, `living-doc-shape`.
 - [ ] **M7 — Reconcile packaging and publish a release**:
   `packaging-conformance`, `readme-refresh`.
