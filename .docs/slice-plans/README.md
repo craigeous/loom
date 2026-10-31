@@ -298,3 +298,5 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 - [archive/scope-identity-guard-to-commit-subcommands.md](archive/scope-identity-guard-to-commit-subcommands.md) — `Abandoned` —
   reverted — shell-string carve-out leaked overrides; read-filter false-positive
   accepted as documented limitation (commit-convention.md).
+
+- [Local Review Orchestration](local-review-orchestration.md) — Plan Review
