@@ -7,19 +7,39 @@ Milestone order for building loom. "What's next and why"; detailed status in
 
 ## Repository improvement program (2026)
 
-- [x] M0 `ci-baseline` — settled publication of the reproducible local gate,
-  four-cell hosted CI, and static Claude Code/Codex compatibility contracts.
-- [x] `macos-dogfood-program-amendment` — synchronize the accepted macOS-first
-  authority into the improvement plan, frozen specs, indexes, and instruction digest.
-- [x] `macos-dual-client-dogfood` — proved real clean install/reinstall, discovery,
-  workflows, roles, hooks/trust, helper-root behavior, and uninstall on Apple silicon
-  for Claude Code 2.1.218 and Codex CLI 0.144.6 (Codex's cold role-launch leg is
-  `infrastructure-blocked` by a by-design credential-less isolated `CODEX_HOME`, not
-  a product defect).
-- [ ] **M1 — Fix coordinator safety** (in progress): `[x] coord-identifier-boundaries`
-  (centralized `loom-coord` identifier validation — session ids, decoded-blob sids,
-  PIDs, slice names; settled on `main` at `00582aa` (ADR-0023 receipt)); next
-  `coord-lock-ownership`, then `coord-schema-cas`.
+- [x] **M0 — Establish a trustworthy baseline** (complete):
+  `ci-baseline`, `client-floor-adapter-smoke`, `macos-dogfood-program-amendment`, and
+  `macos-dual-client-dogfood` (settled publication of reproducible local gate, four-cell
+  hosted CI, static Claude Code/Codex compatibility contracts, Apple silicon dogfooding).
+- [x] **M1 — Fix coordinator safety** (complete):
+  `coord-identifier-boundaries` (centralized identifier validation — session IDs, decoded-blob
+  sids, PIDs, slice names; settled at `00582aa`), `coord-lock-ownership` (centralized ownership,
+  re-adoption, forced-race recovery), and `coord-schema-cas` (fail-closed null-SHA CAS schema init).
+- [x] **M2 — Make remote publication the landing boundary** (complete):
+  `landing-authority-and-modes` (ADR 0020), `remote-first-integration-candidate` (`plugins/loom/bin/loom-land`,
+  push-destination verification, receipt binding), and `coordination-state-separation` (clean tracked main,
+  untracked session manifest, candidate finalization).
+- [x] **M3 — Repair hook enforcement and write-ahead semantics** (complete):
+  `identity-guard-contract` (`git-identity-guard.sh` raw-command scanning, `loom-verify-identity` post-command
+  verifier), and `precompact-per-session` (per-session write-ahead markers, checkpoint digests, atomic logging).
+- [x] **M4 — Replace external review commands** (complete):
+  `local-review-protocol` (ADR 0021 / ADR 0022), `local-review-helper` (`plugins/loom/bin/loom-review`),
+  `local-review-agents` (versioned immutable finder prompts under `plugins/loom/finders/`), and
+  `local-review-orchestration` (operationalized `loom-review` in `loom-run`, `orchestration.md`,
+  `review-findings.md`, `code-eval-rubric.md`, and `SKILL.md`, removing GitHub/PR/remote dependencies).
+- [ ] **M5 — Make the evaluation trust model accurate** (in progress):
+  `[x] evaluation-trust-model` (ADR 0022 accepted claim "independent cold-agent evaluation with controlled inputs");
+  next `sanitized-evaluation-workspace`, then `evaluation-output-recorder`.
+- [ ] **M6 — Turn prose invariants into executable checks**:
+  `loom-doctor-foundation`, `docs-state-validator`, `living-doc-shape`.
+- [ ] **M7 — Reconcile packaging and publish a release**:
+  `packaging-conformance`, `readme-refresh`.
+- [ ] **M8 — Control process cost and repository noise**:
+  `workflow-benchmark`, `workflow-profiles`, `landing-history-policy`.
+- [ ] **M9 — Client compatibility: Herdr and native app integration**:
+  `herdr-client-adapter`, `herdr-native-app-hooks`, and `herdr-verification` (add support
+  for Herdr and its new native application: client adapter contracts, root bindings, role launch
+  mappings, event hooks, and integration verification).
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition

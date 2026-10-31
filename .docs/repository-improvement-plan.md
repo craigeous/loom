@@ -861,6 +861,32 @@ evidence in `.docs`.
 
 ---
 
+## M9 — Client compatibility: Herdr and native app integration
+
+Support Herdr and its new native application alongside Claude Code, Codex, and Antigravity:
+
+### Slice: `herdr-client-adapter`
+
+- Establish client adapter contracts, marketplace/plugin metadata, and installed-root bindings for Herdr.
+- Map compatibility matrix profiles and role launch parameters to Herdr's execution model and tool sandbox.
+
+### Slice: `herdr-native-app-hooks`
+
+- Implement lifecycle and event hooks compatible with Herdr's native app execution environment.
+- Enforce uniform identity, role governance, and controlled-input boundaries.
+
+### Slice: `herdr-verification`
+
+- Add reproducible smoke tests, behavioral fixtures, and gate integration for Herdr and its native application.
+
+#### Acceptance criteria
+
+- Herdr and its native application can install and discover Loom components.
+- Standard roles and workflows execute under Herdr with uniform identity and role governance.
+- Automated gate tests verify compatibility without external network dependencies.
+
+---
+
 ## Milestone gates
 
 - **After M1:** coordinator is safe enough for continued development.
@@ -872,6 +898,7 @@ evidence in `.docs`.
 - **After M6:** repository state is mechanically diagnosable.
 - **After M7:** publish `v0.2.0`.
 - **After M8:** use benchmark evidence to decide whether loom is ready for beta.
+- **After M9:** Herdr and its native application verified for Loom workflows and roles.
 
 ## Definition of done for the program
 
