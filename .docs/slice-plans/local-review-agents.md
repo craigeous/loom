@@ -1,6 +1,6 @@
 # Local Review Agents
 
-Status: In Progress
+Status: Implemented
 Target specs: specs 08 and 10; ADR 0021 §§2–5, ADR 0022 §2 (none amended)
 Target size: <= 1200 LOC net change (keep this plan document <= 250 lines)
 
@@ -99,7 +99,19 @@ hostile local inode swapping and internal helper monkeypatching are outside scop
 
 ## Notes
 
-None.
+Implementation evidence:
+
+- Added `plugins/loom/finders/review-{correctness,tests,security}-v1.md`; `loom-review`
+  pins their SHA-256 values, defaults omitted `--prompt-hash` to the pin (explicit mismatch,
+  missing asset, or byte drift exits 2), defaults `--finder-profile` to `claude:sonnet`,
+  and `validate` rejects manifests whose prompt hash is not the pinned hash.
+- `scripts/validate-repository.mjs` checks the three assets are non-empty regular files.
+- `bats plugins/loom/bin/loom-review.bats`: 56 tests pass (Bash 3.2), including new
+  default/mismatch/drift/pinned-manifest tests, `rg`-based prompt clause assertions, and
+  synthetic COR/TST/SEC defect fixtures run through `validate` and `assemble`.
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (699 Bats tests, links,
+  strict Claude plugin validation, diff whitespace); `node scripts/validate-repository.mjs
+  --root "$PWD" --all` passed.
 
 ## Revision Log
 

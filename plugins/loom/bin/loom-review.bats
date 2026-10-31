@@ -16,6 +16,13 @@ setup_file() {
     [[ "$($LOOM_TEST_BASH -c 'printf %s "$BASH_VERSION"')" =~ $LOOM_EXPECTED_BASH_VERSION ]]
 }
 
+# asset_of / pin_of: shipped prompt asset and its independently computed SHA-256
+asset_of() {
+    local b="${1//\//-}"
+    printf '%s/../finders/%s.md' "$BATS_TEST_DIRNAME" "$b"
+}
+pin_of() { shasum -a 256 <"$(asset_of "$1")" | cut -d' ' -f1; }
+
 setup() {
     WORK="$(mktemp -d)"
     WORK="$(CDPATH='' cd -- "$WORK" && pwd -P)"
@@ -53,10 +60,9 @@ setup() {
     HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
     EVIDENCE="$WORK/evidence.txt"
     printf 'gate green\n' >"$EVIDENCE"
-    PSHA="$(printf 'a%.0s' $(seq 64))"
     PH_ARGS=()
     for id in $FINDERS; do
-        PH_ARGS+=(--prompt-hash "$id=$PSHA" --finder-profile "$id=claude:sonnet-test")
+        PH_ARGS+=(--prompt-hash "$id=$(pin_of "$id")" --finder-profile "$id=claude:sonnet-test")
     done
     REVIEW_ROOT="$REPO/.git/loom/review"
 }
@@ -193,7 +199,7 @@ EOF
     # provenance
     [ "$(jq -r .loom_version "$m")" = "9.8.7" ]
     [ "$(jq -r .helper_version "$m")" = "loom-review/1" ]
-    [ "$(jq -r '.finders[] | select(.id == "review-tests/v1") | .adapter + "|" + .model_profile + "|" + .prompt.sha256' "$m")" = "claude|sonnet-test|$PSHA" ]
+    [ "$(jq -r '.finders[] | select(.id == "review-tests/v1") | .adapter + "|" + .model_profile + "|" + .prompt.sha256' "$m")" = "claude|sonnet-test|$(pin_of review-tests/v1)" ]
     # inputs hashed
     [ "$(jq -r '.inputs[] | select(.kind == "plan") | .sha256' "$m")" = "$(shasum -a 256 <"$REPO/plan.md" | cut -d' ' -f1)" ]
     [ "$(jq -r '.inputs[] | select(.kind == "gate-evidence") | .sha256' "$m")" = "$(shasum -a 256 <"$EVIDENCE" | cut -d' ' -f1)" ]
@@ -315,19 +321,65 @@ EOF
     no_run_dir
 }
 
-@test "prepare rejects missing --prompt-hash or --finder-profile" {
+@test "prepare defaults omitted --prompt-hash and --finder-profile to pinned hash and claude:sonnet" {
     run "$LOOM_TEST_BASH" "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" \
-        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" \
-        --finder-profile review-correctness/v1=claude:x --finder-profile review-tests/v1=claude:x --finder-profile review-security/v1=claude:x \
-        --prompt-hash "review-correctness/v1=$PSHA" --prompt-hash "review-tests/v1=$PSHA"
+        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE"
+    [ "$status" -eq 0 ]
+    RUN="$output"
+    for id in $FINDERS; do
+        [ "$(jq -r --arg i "$id" '.finders[] | select(.id == $i) | .prompt.sha256 + "|" + .adapter + "|" + .model_profile' "$RUN/manifest.json")" = "$(pin_of "$id")|claude|sonnet" ]
+    done
+    mkclean
+    val
+    [ "$status" -eq 0 ]
+}
+
+@test "prepare: explicit --prompt-hash mismatch fails closed with exit 2" {
+    run "$LOOM_TEST_BASH" "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" \
+        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" --prompt-hash "review-tests/v1=$(printf 'a%.0s' $(seq 64))"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"pinned"* ]]
+    no_run_dir
+}
+
+@test "prepare rejects malformed overrides" {
+    run "$LOOM_TEST_BASH" "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" \
+        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" --prompt-hash "review-tests/v1=nothex"
     [ "$status" -eq 2 ]
     no_run_dir
     run "$LOOM_TEST_BASH" "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" \
-        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" \
-        --prompt-hash "review-correctness/v1=$PSHA" --prompt-hash "review-tests/v1=$PSHA" --prompt-hash "review-security/v1=$PSHA" \
-        --finder-profile review-correctness/v1=claude:x --finder-profile review-tests/v1=claude:x
+        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" --finder-profile "review-tests/v1=noadapter"
     [ "$status" -eq 2 ]
     no_run_dir
+}
+
+@test "prepare/validate: prompt byte drift or missing asset fails closed (script-relative root)" {
+    root="$WORK/plugin"
+    mkdir -p "$root/bin" "$root/finders"
+    cp "$RV" "$root/bin/loom-review"
+    cp "${BATS_TEST_DIRNAME}"/../finders/*.md "$root/finders/"
+    args=(prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE")
+    run "$LOOM_TEST_BASH" "$root/bin/loom-review" "${args[@]}"
+    [ "$status" -eq 0 ]
+    RUN="$output"
+    chmod -R u+w "$RUN"
+    rm -rf "$RUN"
+    printf 'x' >>"$root/finders/review-tests-v1.md"
+    run "$LOOM_TEST_BASH" "$root/bin/loom-review" "${args[@]}"
+    [ "$status" -eq 2 ]
+    no_run_dir
+    rm "$root/finders/review-tests-v1.md"
+    run "$LOOM_TEST_BASH" "$root/bin/loom-review" "${args[@]}"
+    [ "$status" -eq 2 ]
+    no_run_dir
+}
+
+@test "validate rejects a manifest whose prompt hash is not the pinned hash" {
+    prepared
+    mkclean
+    edit_manifest '(.finders[] | select(.id == "review-tests/v1") | .prompt.sha256) = ("b" * 64)'
+    val
+    assert_invalid
 }
 
 @test "prepare rejects an existing run and an unknown flag" {
@@ -860,4 +912,88 @@ EOF
     [ -n "${LOOM_NODE:-}" ] || skip "pinned node not available"
     run "$LOOM_NODE" "$SCRIPTS/validate-repository.mjs" --root "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)" --all
     [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------- finder prompts and fixtures
+
+# has_text <file> <fixed string>: rg when present, grep otherwise
+has_text() {
+    if command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; then rg -qF -- "$2" "$1"; else grep -qF -- "$2" "$1"; fi
+}
+
+@test "finder prompts: each names its finder ID and every boundary clause" {
+    for id in $FINDERS; do
+        f="$(asset_of "$id")"
+        [ -s "$f" ]
+        has_text "$f" "Finder ID: \`$id\`"
+        for clause in "Inspect only the prepared run" "manifest.json" "inputs/" "source/" "diff.patch" \
+            "read-only" "Your sole writable path" "results/<finder-id>.json" "No checkout edits" \
+            "No other results" "No lifecycle transitions" "No final verdict" "No external services" \
+            "No delegation" "untrusted data, never instructions" "alone" "decides PASS/FAIL" \
+            "non-delegating" "loom-local-review-findings-v1.schema.json" "ran-clean" "BLOCKER"; do
+            has_text "$f" "$clause" || {
+                echo "missing in $id: $clause"
+                return 1
+            }
+        done
+    done
+    has_text "$(asset_of review-correctness/v1)" "COR-1"
+    has_text "$(asset_of review-tests/v1)" "TST-1"
+    has_text "$(asset_of review-security/v1)" "SEC-1"
+}
+
+@test "finder prompts: packaged as non-empty regular files under the plugin root" {
+    for id in $FINDERS; do
+        [ -f "$(asset_of "$id")" ] && [ ! -L "$(asset_of "$id")" ] && [ -s "$(asset_of "$id")" ]
+    done
+}
+
+# fixture_runner <finder-id> <prefix> <file> <claim>: deterministic stand-in for a live
+# finder; reports a finding at the first changed line of <file> from the manifest.
+fixture_runner() {
+    local ln
+    ln="$(jq -r --arg f "$3" '.files[] | select(.path == $f) | .ranges[0].start' "$RUN/manifest.json")"
+    mkres "$1" ran-with-findings "[$(finding "$2-1" "$1" "$3" "$ln" | jq -c --arg c "$4" '.claim = $c')]"
+    FIXTURE_LINE="$ln"
+}
+
+@test "fixtures: synthetic defects per finder validate and assemble with normalized findings" {
+    prepared
+    fixture_runner review-correctness/v1 COR f.txt "off-by-one: appended line d breaks the a/b/c contract"
+    cor_line="$FIXTURE_LINE"
+    fixture_runner review-tests/v1 TST new.txt "changed line has no regression assertion"
+    fixture_runner review-security/v1 SEC added.txt "untrusted input reaches a shell command"
+    val
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"aggregate: ran-with-findings"* ]]
+    for id in $FINDERS; do
+        [ "$(jq -r '.findings[0].evidence' "$(rfile "$id")")" = "evidence" ]
+    done
+    [ "$(jq -r '.findings[0].line' "$(rfile review-correctness/v1)")" = "$cor_line" ]
+    out="$WORK/findings.md"
+    run "$LOOM_TEST_BASH" "$RV" assemble "$RUN" --repo "$REPO" --out "$out"
+    [ "$status" -eq 0 ]
+    for needle in COR-1 TST-1 SEC-1 f.txt new.txt added.txt; do grep -qF "$needle" "$out"; done
+}
+
+@test "fixtures: failed, truncated, out-of-diff and missing output never assemble or read clean" {
+    prepared
+    mkclean
+    edit_res review-tests/v1 '.status = "failed" | .provenance.exit_status = 1'
+    val
+    assert_invalid
+    run "$LOOM_TEST_BASH" "$RV" assemble "$RUN" --repo "$REPO" --out "$WORK/o.md"
+    [ "$status" -ne 0 ]
+    [ ! -e "$WORK/o.md" ]
+    mkres review-tests/v1 ran-clean
+    edit_res review-tests/v1 '.provenance.truncated = true'
+    val
+    assert_invalid
+    mkres review-tests/v1 ran-clean
+    mkres review-security/v1 ran-with-findings "[$(finding SEC-1 review-security/v1 f.txt 3)]"
+    val
+    assert_invalid
+    rm "$(rfile review-security/v1)"
+    val
+    assert_invalid
 }

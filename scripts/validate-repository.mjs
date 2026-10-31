@@ -541,6 +541,13 @@ function semanticMetadata() {
   if (!deepEqual(hookManifests, ["plugins/loom/hooks/hooks.json"])) {
     report("plugins/loom/hooks/hooks.json", `expected exactly one shared hook manifest, found: ${hookManifests.join(", ") || "none"}`);
   }
+
+  // Local-review finder prompt assets (ADR 0021): packaged, non-empty regular files.
+  for (const finder of ["review-correctness-v1", "review-tests-v1", "review-security-v1"]) {
+    const relative = `plugins/loom/finders/${finder}.md`;
+    const node = safeNode(relative, { regularFile: true });
+    if (node && node.stat.size === 0) report(relative, "finder prompt asset is empty");
+  }
 }
 function validateCatalogSource(catalogPath, source) {
   if (typeof source !== "string") return;

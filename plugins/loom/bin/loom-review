@@ -7,7 +7,11 @@
 # Usage:
 #   loom-review prepare --slice <name> --base <sha> --head <sha> --plan <path>
 #       [--spec <path>]... [--adr <path>]... --gate-evidence <path>
-#       --prompt-hash <finder>=<sha256> --finder-profile <finder>=<adapter>:<profile>
+#       [--prompt-hash <finder>=<sha256>] [--finder-profile <finder>=<adapter>:<profile>]
+#   Omitted --prompt-hash defaults to the SHA-256 of the shipped plugins/loom/finders/
+#   asset; an explicit value must equal it (exit 2 otherwise). Omitted --finder-profile
+#   defaults to claude:sonnet. A client passes the assigned prompt asset and the manifest
+#   finder entry's output path to its worker; the helper never launches workers.
 #       [--run-id <id>] [--run-dir <dir>] [--repo <path>]
 #   loom-review validate <run-dir|run-id> [--repo <path>] [--quiet]
 #   loom-review assemble <run-dir|run-id> [--out <path>] [--repo <path>]
@@ -24,6 +28,7 @@ set -euo pipefail
 PROTOCOL="loom-local-review/v1"
 HELPER_VERSION="loom-review/1"
 REQUIRED_FINDERS="review-correctness/v1 review-tests/v1 review-security/v1"
+DEFAULT_PROFILE="claude:sonnet"
 TAB=$'\t'
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES || true
 export GIT_OPTIONAL_LOCKS=0
@@ -69,6 +74,26 @@ sha256_file() { sha256_stdin <"$1"; }
 
 COMMON=""
 REPO_TOP=""
+
+# Shipped finder prompt assets (immutable per version; a changed byte needs a new version
+# file and a new pin). Resolved from the physical plugin root of this script.
+BIN_DIR="$(CDPATH='' cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PLUGIN_ROOT="$(CDPATH='' cd -P -- "$BIN_DIR/.." && pwd -P)"
+
+# pinned_sha <finder-id>: pinned SHA-256 of the shipped asset; empty for unknown finders.
+pinned_sha() {
+    case "$1" in
+    review-correctness/v1) printf '%s' 524d7b3463fd69e4d3a961900efbc50d89244b160acba32058acf3e53ddde1b2 ;;
+    review-tests/v1) printf '%s' 7441d3158be344c3e3c9b40f00aaf27d0d74b8cdbd18e9458d0a74cafec80d1f ;;
+    review-security/v1) printf '%s' 54a35936e12ca17a790929b5057abac97c7c0ca4463baf4ce8ff9703f7ee1809 ;;
+    esac
+}
+
+# prompt_asset <finder-id>: absolute path of the shipped prompt asset (id review-x/vN -> review-x-vN.md)
+prompt_asset() {
+    local id="$1"
+    printf '%s/finders/%s-%s.md' "$PLUGIN_ROOT" "${id%%/*}" "${id##*/}"
+}
 
 # gg: plain object access; gdiff: diff pinned away from worktree attributes/config so
 # prepare and validate hash identical bytes.
@@ -479,6 +504,8 @@ do_validate() { # sets AGG; writes state.json; exit code decided by caller
         for id in $ids; do
             [ "$(jq -r --arg i "$id" '.finders[] | select(.id == $i) | .output' "$m")" = "results/$(finder_file "$id")" ] ||
                 add_err "finder $id output path is not results/$(finder_file "$id")"
+            [ "$(jq -r --arg i "$id" '.finders[] | select(.id == $i) | .prompt.sha256' "$m")" = "$(pinned_sha "$id")" ] ||
+                add_err "finder $id prompt hash is not the pinned hash"
         done
         check_binding
     fi
@@ -884,11 +911,24 @@ cmd_prepare() {
 
     # finder inputs
     local id v prof
+    local pin asset
+    PH_RES="" FP_RES=""
     for id in $REQUIRED_FINDERS; do
+        pin="$(pinned_sha "$id")"
+        [ -n "$pin" ] || die 2 "unknown finder or prompt version: $id"
+        asset="$(prompt_asset "$id")"
+        [ -f "$asset" ] && [ ! -L "$asset" ] && [ -s "$asset" ] || die 2 "missing prompt asset for $id: $asset"
+        [ "$(sha256_file "$asset")" = "$pin" ] || die 2 "prompt asset bytes do not match pinned hash for $id"
         v="$(kv_get "$PH" "$id")"
-        [[ "$v" =~ ^[0-9a-f]{64}$ ]] || die 2 "missing or invalid --prompt-hash for $id"
+        if [ -n "$v" ]; then
+            [[ "$v" =~ ^[0-9a-f]{64}$ ]] || die 2 "invalid --prompt-hash for $id"
+            [ "$v" = "$pin" ] || die 2 "--prompt-hash for $id does not match the pinned prompt hash"
+        fi
+        PH_RES="$PH_RES$id=$pin"$'\n'
         prof="$(kv_get "$FP" "$id")"
-        [[ "$prof" =~ ^[^:]+:.+$ ]] || die 2 "missing or invalid --finder-profile for $id (want <adapter>:<model-profile>)"
+        [ -n "$prof" ] || prof="$DEFAULT_PROFILE"
+        [[ "$prof" =~ ^[^:]+:.+$ ]] || die 2 "invalid --finder-profile for $id (want <adapter>:<model-profile>)"
+        FP_RES="$FP_RES$id=$prof"$'\n'
     done
 
     # gate evidence
@@ -1027,8 +1067,8 @@ cmd_prepare() {
     # manifest
     : >"$WORK/finders.jsonl"
     for id in $REQUIRED_FINDERS; do
-        prof="$(kv_get "$FP" "$id")"
-        jq -n -c --arg id "$id" --arg ver "${id##*/}" --arg sha "$(kv_get "$PH" "$id")" \
+        prof="$(kv_get "$FP_RES" "$id")"
+        jq -n -c --arg id "$id" --arg ver "${id##*/}" --arg sha "$(kv_get "$PH_RES" "$id")" \
             --arg out "results/$(finder_file "$id")" --arg adapter "${prof%%:*}" --arg mp "${prof#*:}" \
             '{id: $id, prompt: {protocol: "loom-review-prompt/v1", version: $ver, sha256: $sha}, output: $out, adapter: $adapter, model_profile: $mp}' \
             >>"$WORK/finders.jsonl"
@@ -1055,8 +1095,8 @@ cmd_prepare() {
 usage() {
     cat >&2 <<'EOF'
 usage: loom-review prepare --slice <name> --base <sha> --head <sha> --plan <path> [--spec <path>]...
-                           [--adr <path>]... --gate-evidence <path> --prompt-hash <finder>=<sha256>...
-                           --finder-profile <finder>=<adapter>:<profile>... [--run-id <id>]
+                           [--adr <path>]... --gate-evidence <path> [--prompt-hash <finder>=<sha256>]...
+                           [--finder-profile <finder>=<adapter>:<profile>]... [--run-id <id>]
                            [--run-dir <dir>] [--repo <path>]
        loom-review validate <run-dir|run-id> [--repo <path>] [--quiet]
        loom-review assemble <run-dir|run-id> [--out <path>] [--repo <path>]
