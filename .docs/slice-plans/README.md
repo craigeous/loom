@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-_None currently in flight._
+- [evaluation-gate-runner.md](evaluation-gate-runner.md) — `Plan Review` — bounded, verified gate reruns for controlled code evaluation.
 
 ## Archived plans
 
