@@ -60,7 +60,7 @@ if [ -z "$HEAD_SHA" ]; then
     HEAD_REF=$(git symbolic-ref -q HEAD 2>/dev/null) || _die "HEAD is unreadable or corrupt"
     REF_PATH=$(git rev-parse --git-path "$HEAD_REF" 2>/dev/null) || _die "unable to locate HEAD ref"
     PACKED_PATH=$(git rev-parse --git-path packed-refs 2>/dev/null) || _die "unable to locate packed refs"
-    if [ -e "$REF_PATH" ] || { [ -e "$PACKED_PATH" ] && grep -qF " $HEAD_REF" "$PACKED_PATH"; }; then
+    if [ -e "$REF_PATH" ] || [ -L "$REF_PATH" ] || { [ -e "$PACKED_PATH" ] && grep -qF " $HEAD_REF" "$PACKED_PATH"; }; then
         _die "HEAD ref '$HEAD_REF' exists but is unreadable or corrupt"
     fi
 fi

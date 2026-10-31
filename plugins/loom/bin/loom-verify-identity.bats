@@ -228,6 +228,14 @@ good_commit() { commit_as "Real Person" "real@example.com" "Real Person" "real@e
     [ "$status" -eq 1 ]
 }
 
+@test "unborn baseline with dangling symlink HEAD ref fails closed (1)" {
+    branch=$(git symbolic-ref --short HEAD)
+    mkdir -p .git/refs/heads
+    ln -s "$REPO/nonexistent-target" ".git/refs/heads/$branch"
+    verify unborn
+    [ "$status" -eq 1 ]
+}
+
 @test "verifier never mutates history on violation" {
     good_commit a
     base=$(git rev-parse HEAD)
