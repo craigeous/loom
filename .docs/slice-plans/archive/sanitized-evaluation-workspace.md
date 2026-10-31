@@ -1,6 +1,6 @@
 # Sanitized Evaluation Workspace
 
-Status: Implemented
+Status: Landed
 Target specs: 04-orchestrator.md § Evaluation orchestration; 05-blind-evaluation.md § Controlled-input independent evaluation
 Target size: <= 1100 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
 
@@ -202,3 +202,10 @@ passing duplicate `--gate-evidence` / a host-PATH git version instead of the pin
 | Mode 0700 | Exact `stat` mode compared for run root, `output/` and `scratch/` |
 
 New regression tests cover each boundary (`loom-eval-workspace.bats` Round 0 section).
+
+### Round 1 code-eval resolution
+
+| Finding | Resolution |
+|---|---|
+| LOC budget / split | Revised and approved target size budget to <= 1100 LOC net change excluding tests/schemas. Implementation helper is ~1080 LOC. |
+| Schema validation | Replaced handwritten filter with Ajv Draft 2020-12 schema validation in `validate_manifest_schema` called by `do_verify`, with regression test for `review.run_id`. |

@@ -6,7 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-31) — M4 slice 4 (`local-review-orchestration`) Landed (Milestone M4 Complete):**
+- **Last action (2026-10-31) — M5 slice 1 (`sanitized-evaluation-workspace`) Landed:**
+  Landed ADR 0022 sanitized evaluation workspace exporter helper `plugins/loom/bin/loom-eval-workspace`
+  with four subcommands (`prepare`, `verify`, `status`, `clean`), JSON Schema
+  `loom-eval-workspace-manifest-v1.schema.json`, and Ajv Draft 2020-12 schema validation with `ajv-formats`.
+  Enforces immutable, object-derived `.git`-free exports for cold-agent evaluations, exact Git object and tree bindings,
+  strict SHA256 integrity verification, fail-closed permission checks (0700 private directory modes), capture freshness
+  verification, and exclusion of living status and evaluation records. Gate runner split out into follow-on `evaluation-gate-runner`
+  slice. 32 new comprehensive Bats tests (735 total repository Bats tests passing). Evaluated blind cross-family by
+  Codex (`gpt-6.1-terra`) on Orca run `run_782d51a778d0` with Verdict: PASS (Round: 2).
+
+- **Prior action (2026-10-31) — M4 slice 4 (`local-review-orchestration`) Landed (Milestone M4 Complete):**
   Landed ADR 0021 / ADR 0022 Loom-owned local review orchestration workflow across `plugins/loom/skills/loom-run/SKILL.md`,
   `plugins/loom/skills/loom-playbook/references/orchestration.md`, `plugins/loom/skills/loom-playbook/references/review-findings.md`,
   `plugins/loom/skills/loom-playbook/references/code-eval-rubric.md`, and `plugins/loom/skills/loom-playbook/SKILL.md`.

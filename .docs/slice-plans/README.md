@@ -17,10 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [sanitized-evaluation-workspace.md](sanitized-evaluation-workspace.md) — `Implemented` —
-  M5 helper for controlled evaluation exports and deterministic gate reruns.
+_None currently in flight._
 
 ## Archived plans
+
+- [archive/sanitized-evaluation-workspace.md](archive/sanitized-evaluation-workspace.md) — `Landed` —
+  M5 helper `plugins/loom/bin/loom-eval-workspace` (`prepare`, `verify`, `status`, `clean`),
+  JSON Schema `loom-eval-workspace-manifest-v1.schema.json`, Ajv Draft 2020-12 schema validation,
+  and 32 comprehensive Bats tests (735 total repository Bats tests passing).
 
 - [archive/local-review-orchestration.md](archive/local-review-orchestration.md) — `Landed` —
   M4 slice 4: replace legacy external review slash commands (`/code-review`, `/security-review`)
