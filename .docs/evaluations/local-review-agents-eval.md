@@ -1,22 +1,30 @@
 # Evaluation: local-review-agents (code)
 
-Verdict: FAIL
+Verdict: PASS
 Round: 0
-Reviewed against: commit 9c1a0b3e07270d410f2d95c8e75fa4b1d8cbe818, diff 1035ee3..9c1a0b3, local-review-agents slice plan and plan evaluation, ADRs 0021 and 0022, findings schema, code evaluation rubric and severity rules.
+Reviewed against: commit b0033b9310d29a7dc6451d3a88afdc24211e2235, revision diff 9c1a0b3..b0033b9, local-review-agents slice plan, prior Round 0 evaluation, ADRs 0021 and 0022, findings schema, code evaluation rubric and severity rules.
 
 ## Findings
 
-- [BLOCKER] Explicit invalid overrides are silently ignored or replaced by defaults (`plugins/loom/bin/loom-review:852`, `:922`, `:928`). The parser stores arbitrary entries, but only looks up the three known IDs; unknown versions, unknown IDs and entries without a matching key are ignored. An explicit `review-tests/v1=` also resolves to empty and is treated as omitted, so both an empty hash and empty profile silently default. This violates Step 4's requirement to reject unknown versions and malformed/partial overrides and to accept an explicit hash only when it equals the pin.
-- [BLOCKER] The required per-finder defect fixture exercise is absent (`plugins/loom/bin/loom-review.bats:951`). The fixture runner reads no prompt and inspects no defect; it selects the first changed line and writes a caller-supplied claim with the literal evidence `evidence`. The setup's `added.txt` contains only `added`, yet the test asserts a shell-injection claim. Thus the test proves result plumbing, not that each prompt is exercised against a deliberate defect and identifies its location and evidence, as Step 5 requires.
+No unresolved blockers or majors. No new defects were found in the revision diff.
 
-## Required changes
+## Required changes (for FAIL)
 
-1. Validate every supplied override entry, including known IDs, nonempty values and duplicates, before applying defaults; add negative tests for unknown versions, malformed and empty explicit values.
-2. Add controlled fixture exercises that actually consume each prompt and deliberate, relevant changed defect, and assert concrete evidence and the intended location without relying on probabilistic live detection.
+None.
+
+## Notes
+
+The revision validates all explicit override entries before defaults, rejecting unknown IDs and versions, malformed or empty values, mismatched hashes and duplicate keys; added tests exercise these cases without creating a run. The fixture runner now reads the assigned prompt, finds each deliberate defect in prepared source, verifies its changed range, and checks concrete evidence and location through validation and assembly. This is a deterministic controlled fixture, not a live-model detection claim. No advisory findings artifact was supplied within the authorized inputs.
+
+## Prior Rounds Summary
+
+| Round | Phase | Verdict | Key Findings & Resolution |
+|---|---|---|---|
+| 0 | code | FAIL | Two blockers: invalid overrides were silently defaulted or ignored, and defect fixtures did not exercise prompts or defects. Revision diff 9c1a0b3..b0033b9 adds explicit override validation and negative tests, plus defect-specific prompt-consuming fixtures with concrete locations and evidence. Both are resolved. |
 
 ## Gate rerun evidence
 
-Command: `scripts/check` (exit 0; 699 Bats tests passed; selected Bash 5.3.9). Exact combined output:
+Command: `scripts/check` (exit 0; 702 Bats tests passed; selected Bash 5.3.9). Exact combined output:
 ```text
 
 ==> toolchain contract and pinned digests
@@ -33,9 +41,9 @@ Repository metadata validation passed
 ==> Bash syntax
 
 ==> Bats tests
-Discovered 699 Bats tests
+Discovered 702 Bats tests
 Selected Bash: /opt/homebrew/Cellar/bash/5.3.9/bin/bash (5.3.9(1)-release)
-1..699
+1..702
 bats-process BASH_VERSION=5.3.9(1)-release
 executable-child BASH_VERSION=5.3.9(1)-release
 ok 1 Bats and an env-bash executable child use the selected Bash
@@ -353,390 +361,393 @@ ok 312 prepare rejects a gitlink in the diff
 ok 313 prepare defaults omitted --prompt-hash and --finder-profile to pinned hash and claude:sonnet
 ok 314 prepare: explicit --prompt-hash mismatch fails closed with exit 2
 ok 315 prepare rejects malformed overrides
-ok 316 prepare/validate: prompt byte drift or missing asset fails closed (script-relative root)
-ok 317 validate rejects a manifest whose prompt hash is not the pinned hash
-ok 318 prepare rejects an existing run and an unknown flag
-ok 319 network-silent: no network command is invoked across all subcommands
-ok 320 validate accepts mixed results with the right aggregate and schema-valid results
-ok 321 validate: all-clean results yield ran-clean
-ok 322 validate accepts old-side finding on a deleted file and file-level binary finding
-ok 323 validate rejects a missing finder and never reports ran-clean
-ok 324 validate rejects duplicate and extra result files
-ok 325 validate rejects invalid JSON, invalid UTF-8 and schema violations
-ok 326 validate rejects unknown protocol, prompt version/hash, manifest hash and run id mismatch
-ok 327 validate rejects a manifest with an unknown protocol major
-ok 328 validate rejects failed, truncated and nonzero-exit results
-ok 329 validate rejects status/finding inconsistency in both directions
-ok 330 validate rejects provenance and binding mismatches in results
-ok 331 validate rejects a modified source export (edited, added, removed, chmod'd, attribute-omitted)
-ok 332 validate rejects modified diff and input files
-ok 333 validate rejects swapped head_tree/SHAs/files[] even when the manifest is re-hashed
-ok 334 validate fails closed when the repository or objects are unavailable
-ok 335 validate rejects invalid ranges (wrong side, missing side)
-ok 336 validate rejects findings at invalid locations
-ok 337 validate rejects duplicate finding ids
-ok 338 assemble refuses invalid and pending runs without writing
-ok 339 assemble output is identity-neutral, deterministic and sorted
-ok 340 assemble works for a run directory containing whitespace
-ok 341 assemble defaults to .docs/evaluations/<slice>-review-findings.md
-ok 342 assemble is atomic: a read-only target directory leaves nothing behind
-ok 343 status: prepared -> collecting -> validated -> assembled with exit codes
-ok 344 status: invalid exits 2, missing run exits 1, --json parses
-ok 345 status never writes
-ok 346 status: validate with zero results reports invalid (not prepared), exit 2
-ok 347 status: a result changed after a valid verdict is stale -> collecting, exit 3
-ok 348 clean removes only the named run, including read-only source
-ok 349 clean --all and --older-than
-ok 350 clean refuses paths outside the root, symlinked runs, and dirs without a manifest
-ok 351 clean never touches committed review-findings files
-ok 352 usage errors exit 1
-ok 353 registration: loom-review is last in every helper allowlist copy
-ok 354 registration: validate-repository --all passes
-ok 355 finder prompts: each names its finder ID and every boundary clause
-ok 356 finder prompts: packaged as non-empty regular files under the plugin root
-ok 357 fixtures: synthetic defects per finder validate and assemble with normalized findings
-ok 358 fixtures: failed, truncated, out-of-diff and missing output never assemble or read clean
-ok 359 usage: no argument exits 1
-ok 360 usage: two arguments exit 1
-ok 361 baseline: malformed baseline exits 1
-ok 362 baseline: well-formed but unknown SHA exits 1
-ok 363 not a repository exits 1
-ok 364 unborn baseline with still-unborn HEAD is a no-op (0)
-ok 365 unborn baseline with valid first commit exits 0
-ok 366 unchanged HEAD is a no-op (0) even when HEAD identity is bad
-ok 367 valid new commit after baseline exits 0
-ok 368 valid amended HEAD exits 0
-ok 369 wrong author exits 2 with SHA and remediation
-ok 370 wrong committer exits 2
-ok 371 same name but wrong email exits 2
-ok 372 loom@localhost fallback exits 2
-ok 373 configured localhost email is a config error (1)
-ok 374 multiple new commits: a bad middle commit is found
-ok 375 multiple bad commits are all reported
-ok 376 unborn baseline checks every commit including a bad root commit
-ok 377 missing configured user.name fails closed (1)
-ok 378 missing configured user.email fails closed (1)
-ok 379 baseline given but HEAD unborn fails closed (1)
-ok 380 unborn baseline with corrupt HEAD ref fails closed (1)
-ok 381 unborn baseline with corrupt HEAD file fails closed (1)
-ok 382 unborn baseline with dangling symlink HEAD ref fails closed (1)
-ok 383 verifier never mutates history on violation
-ok 384 bypassed bad commit stops the workflow; remediation then reverifies clean
-ok 385 BLOCK B01: commit --author= with quoted value
-ok 386 BLOCK B02: -c user.email= override
-ok 387 BLOCK B03: -c user.name= override
-ok 388 BLOCK B04: inline GIT_AUTHOR_NAME env
-ok 389 BLOCK B05: exported GIT_COMMITTER_EMAIL env
-ok 390 BLOCK B06: --author with space form
-ok 391 BLOCK B07: -c GIT_AUTHOR_NAME= override
-ok 392 BLOCK B08: --author= with quoted value and quoted message
-ok 393 BLOCK B09: --author= beside escaped inner quote
-ok 394 BLOCK B10: read over-block — -c user.email= on log (accepted fail-closed limitation, ADR 0003)
-ok 395 BLOCK B11: read over-block — git log --author= (accepted fail-closed limitation)
-ok 396 BLOCK: stderr is a single control-character-free line ending in one LF
-ok 397 ALLOW A01: plain commit, no override
-ok 398 ALLOW A02: -c core.* is non-identity config
-ok 399 ALLOW A03: not a git command
-ok 400 ALLOW A04: git only as substring of another word
-ok 401 BLOCK F05: author flag text inside message body (accepted false positive)
-ok 402 BLOCK F07: GIT_AUTHOR_NAME= inside message body (accepted false positive)
-ok 403 BLOCK F08: -c user.email= inside message body (accepted false positive)
-ok 404 BLOCK F09: --grep value naming the author flag (accepted false positive)
-ok 405 BLOCK F10: escaped-inner-quote message with author flag text
-ok 406 BLOCK W01: author flag inside bash -c quoted body
-ok 407 BLOCK W02: author flag inside sh -c single-quoted body
-ok 408 BLOCK W03: env wrapper with GIT_COMMITTER_NAME assignment
-ok 409 BLOCK W04: GIT_AUTHOR_DATE assignment
-ok 410 BLOCK W05: unbalanced quoting does not discard a recognized token
-ok 411 BLOCK W06: -c author.name and -c committer.email overrides
-ok 412 BLOCK W07: -c with quoted user key inside bash -c
-ok 413 BLOCK W08: -c GIT_COMMITTER_EMAIL override
-ok 414 BLOCK C01: git config user.name value (the two known reproductions)
-ok 415 BLOCK C02: git config in each scope and file form
-ok 416 BLOCK C03: unset, replace-all, add and edit forms
-ok 417 BLOCK C04: quoted value and wrapped git config write
-ok 418 BLOCK C05: write after a safe read on a later line
-ok 419 BLOCK C06: write after a safe read on the same line
-ok 420 BLOCK B12: quoted bare author flag (Claude and Codex wire)
-ok 421 ALLOW R01: bare reads of identity keys
-ok 422 ALLOW R02: non-identity git config writes are untouched
-ok 423 ALLOW R03: ordinary commit with message mentioning config in prose
-ok 424 codex BLOCK: wrapped author bypass and config write use the Codex envelope
-ok 425 ALLOW A13: unbalanced quoting with no recognized token still allows
-ok 426 ALLOW A14: plain git push, no override token
-ok 427 ALLOW A15: missing tool_input.command (no target) allows, matching ADR 0003
-ok 428 codex ALLOW: exit 0, empty stdout/stderr
-ok 429 codex BLOCK: exit 0, empty stderr, exact hookSpecificOutput JSON on stdout
-ok 430 malformed: invalid JSON fails closed (claude)
-ok 431 malformed: invalid JSON fails closed (codex)
-ok 432 malformed: tool_input.command wrong type (number) fails closed
-ok 433 malformed: tool_input.command wrong type (array) fails closed
-ok 434 malformed: tool_input not an object fails closed
-ok 435 root: neither PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT set fails closed
-ok 436 root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT validate (ambiguous) fails closed
-ok 437 root: CLAUDE_PLUGIN_ROOT pointing at a non-plugin directory fails closed
-ok 438 root: relative CLAUDE_PLUGIN_ROOT fails closed
-ok 439 jq absent: fails closed (no grep/sed fallback exists for root/JSON validation)
-ok 440 RED-GREEN: a well-typed command still allows while a wrong-typed one is rejected
-ok 441 fixture claude/pre-tool-use/allow
-ok 442 fixture claude/pre-tool-use/block
-ok 443 fixture claude/pre-tool-use/malformed
-ok 444 fixture codex/pre-tool-use/allow
-ok 445 fixture codex/pre-tool-use/block
-ok 446 fixture codex/pre-tool-use/malformed
-ok 447 T1a progress-advanced manual -> status 0, marker updated
-ok 448 T1b progress-advanced auto -> status 0, marker updated
-ok 449 T2 no-progress manual -> status 2, exact single-line reason, marker unchanged
-ok 450 T2codex no-progress manual -> exit 0, exact continue/stopReason JSON
-ok 451 T3 no-progress auto -> status 0, log line appended, marker unchanged
-ok 452 T4 first-run no marker -> status 0, marker created with current SHA
-ok 453 T5 round-trip: first-run allow, then no-progress block, then advance allow
-ok 454 T6a missing trigger field fails closed (malformed)
-ok 455 T6b unknown trigger value fails closed (malformed)
-ok 456 T6c the obsolete compaction_trigger field is not recognized -> missing trigger -> malformed
-ok 457 T6d trigger wrong JSON type fails closed (malformed)
-ok 458 T6e invalid JSON fails closed (malformed)
-ok 459 T6f malformed on codex wire uses the JSON continue/stopReason envelope
-ok 460 T7a missing session_id fails closed (malformed)
-ok 461 T7b session_id with a path separator fails closed (path-traversal attempt)
-ok 462 T7c session_id with embedded whitespace/control-shaped content fails closed
-ok 463 T7d session_id over the length bound fails closed
-ok 464 T7e session_id at the exact length bound (128) is accepted
-ok 465 T8a not a git repo -> status 0 (fail-open)
-ok 466 T8b empty stdin -> status 0 (fail-open)
-ok 467 T9 jq absent -> fails closed (root validation cannot succeed without jq)
-ok 468 T10 cwd-independence: running from unrelated dir uses cwd from JSON
-ok 469 T11 one session's checkpoint never authorizes another session's manual compaction
-ok 470 T12 the no-progress-auto log is capped at LOOM_PRECOMPACT_LOG_CAP lines
-ok 471 T13 an interrupted marker write leaves the prior marker intact (atomic rename)
-ok 472 T7f session_id with single dots is accepted
-ok 473 T7g session_id containing .. fails closed
-ok 474 T7h session_id with a leading non-alphanumeric fails closed
-ok 475 T7i non-string JSON session_id fails closed
-ok 476 T12b auto no-progress log is <timestamp>TAB<session>TAB<anchor>
-ok 477 T12b log helper strips control characters
-ok 478 T12b invalid or leading-zero LOOM_PRECOMPACT_LOG_CAP falls back to 200
-ok 479 T14 coordinated session: first-run allow, block with remediation, advance unblocks
-ok 480 T15 one coordinated session's advance never unblocks another
-ok 481 T16 coordinated session dir without checkpoint file records checkpoint:none
-ok 482 T17 concurrent compactions across sessions keep markers intact, no temp files
-ok 483 T18 linked worktree resolves the common git dir
-ok 484 RED-GREEN: a recognized trigger still proceeds while an unrecognized one is rejected
-ok 485 fixture claude/pre-compact/allow
-ok 486 fixture claude/pre-compact/block
-ok 487 fixture claude/pre-compact/malformed
-ok 488 fixture codex/pre-compact/allow
-ok 489 fixture codex/pre-compact/block
-ok 490 fixture codex/pre-compact/malformed
-ok 491 root: Codex prefers its valid PLUGIN_ROOT when both compatibility roots validate
-ok 492 unset LOOM_ROLE fails open for test runners and git mutation
-ok 493 orchestrator blocks scripts/check
-ok 494 orchestrator blocks bats, cargo test, npm test, pytest
-ok 495 orchestrator may run scripts/check with LOOM_ALLOW_ORCHESTRATOR_GATE=1
-ok 496 orchestrator gate allowance does not unlock bats
-ok 497 orchestrator allows non-test commands
-ok 498 evaluators block git mutation
-ok 499 code-evaluator allows read-only inspection
-ok 500 arguments that mention test runners or mutations are allowed
-ok 501 landing exception does not unlock other runners in compound commands
-ok 502 evaluators block git mutation behind value-taking global options
-ok 503 quoted command words are de-quoted; quoted arguments are ignored
-ok 504 missing or empty command allows
-ok 505 Claude wire: stderr reason, empty stdout, exit 2
-ok 506 Codex wire: deny JSON on stdout, exit 0
-ok 507 Codex wire: allow is silent exit 0
-ok 508 invalid root, invalid JSON, and wrong-typed command fail closed
-ok 509 quoted executable paths containing spaces are blocked at command position
-ok 510 quoted executable paths with spaces are blocked after env assignments
-ok 511 prepare creates a marker-owned run below the canonical temp root with schema-valid state
-ok 512 RED>GREEN: prepare rejects a symlinked TMPDIR, succeeds against the real dir
-ok 513 RED>GREEN: prepare rejects a nonexistent TMPDIR, succeeds against a real one
-ok 514 RED>GREEN: prepare rejects run-root/owner-home overlap, succeeds when disjoint
-ok 515 RED>GREEN: phase entry rejects a marker mismatch, succeeds once restored
-ok 516 RED>GREEN: phase entry rejects candidate drift, succeeds once restored
-ok 517 prepare rejects an unresolved --exercise before --prepare (missing run root)
-ok 518 one native mutation journals the exact record sequence and preserves worker PID across exec
-ok 519 hash chain is contiguous: each record's prevHash equals the previous record's hash
-ok 520 full exercise -> uninstall -> clean succeeds end to end and leaves zero residue
-ok 521 exercise captures list/discovery, helper-root, and role/hook probes for both clients
-ok 522 RED>GREEN: claude uninstall postcondition reads installed_plugins.json, not raw cache presence
-ok 523 RED>GREEN: handshake deadline is computed after the pre-inventory walk, not before it
-ok 524 residue after uninstall is refused (exit 6)
-ok 525 RED>GREEN: a bare empty ancestor directory left under codex-home/plugins is not residue
-ok 526 an unmet postcondition with a clean exit is a product failure (exit 5), not a false success
-ok 527 a mutation that writes outside its allowed roots is quarantined (exit 3)
-ok 528 an infrastructure-block marker in native output classifies exit 4, not a product failure
-ok 529 INT during a mutation yields exit 130
-ok 530 TERM during a mutation yields exit 143
-ok 531 injection before:intent: nothing is journaled, clean retry succeeds
-ok 532 injection after:intent (supervisor never spawned): aborts, no cache mutation, clean retry succeeds
-ok 533 injection after:supervisor-hello (supervisor dies before release): no mutation, atomic release recovery on retry
-ok 534 injection after:native-hello (worker dies before native-release): no mutation, clean retry succeeds
-ok 535 injection before:exec (worker dies with native-release durable, before exec): resume never relaunches, terminal records the kill
-ok 536 injection supervisor-die-while-worker-continues: durable worker identity prevents a hidden orphan; reconciles to recovered-after-apply
-ok 537 exhausting resume attempts under a persistent fault quarantines rather than looping forever
-ok 538 an escaped, token-tagged descendant is detected and blocks --clean until it dies
-ok 539 a descendant that stays inside the process group but retains the token still blocks --clean
-ok 540 RED>GREEN: --clean refuses an unresolved run, succeeds once resolved
-ok 541 --clean refuses a symlinked run-root argument
-ok 542 --clean refuses a path outside the temp prefix
-ok 543 a quarantined run is cleanable only after a fresh complete inventory proves ownership
-ok 544 RED>GREEN: a quarantined run with an owned root swapped for an escaping symlink refuses --clean, succeeds once restored
-ok 545 RED>GREEN: --clean fails closed on a tampered non-charset runId instead of building a stray receipt path
-ok 546 injection before:native-hello (worker dies before its own hello): supervisor's worker-hello-timeout abort and the gate-2 writer-settle path fire together; no early mutation, clean retry succeeds
-ok 547 injection before:supervisor-hello (supervisor dies before writing its own hello): no early mutation, exactly one clean reconciliation on retry
-ok 548 injection before:native-release (supervisor dies before granting release): the orchestrator resumes and grants the missed release exactly once; the worker -- blocked until then -- proceeds only after, and a clean retry completes
-ok 549 injection before:terminal (supervisor dies after full worker exit, before writing terminal): reconciles to recovered-after-apply
-ok 550 injection after:terminal (supervisor dies immediately after writing terminal): applies from the durable terminal record
-ok 551 injection after:supervisor-hello is operation-agnostic across marketplace-add, uninstall, marketplace-remove, and a codex opKey
-ok 552 default root resolution is stable from a nested working directory
-ok 553 all mode passes for the valid repository
-ok 554 all mode reports a failing metadata root
-ok 555 missing validation mode exits 2 with deterministic usage
-ok 556 repeated validation mode exits 2 with deterministic usage
-ok 557 mixed validation modes exit 2 with deterministic usage
-ok 558 negative seeds are inert and cannot match production scans
-ok 559 valid dual-client metadata, compatibility, bindings, and fixtures pass
-ok 560 explicit non-Git root nested in a parent worktree uses the safe filesystem walk
-ok 561 tracked discovery failure in a real Git root fails closed without reading an untracked canary
-ok 562 README states both exact client floors and the static Codex limitation
-ok 563 thin adapters pass for the real repository tree
-ok 564 a command adapter missing its shared-skill pointer fails closed
-ok 565 a command adapter that copies the shared workflow body fails closed on line count
-ok 566 an agent adapter missing its shared-role pointer fails closed
-ok 567 an agent adapter that copies the shared role body fails closed on line count
-ok 568 each README client floor fails metadata validation directly when drifted
-ok 569 every client-visible claim surface rejects prohibited unqualified wording
-ok 570 a narrow evaluation term passes only with the immediate required qualification
-ok 571 malformed JSON names the materialized file
-ok 572 malformed JSON Schema names the materialized file
-ok 573 missing, unterminated, and invalid YAML frontmatter fail with filenames
-ok 574 unknown command frontmatter key fails closed
-ok 575 unknown agent frontmatter key fails closed independently
-ok 576 unknown skill frontmatter key fails closed independently
-ok 577 command missing description fails independently
-ok 578 agent missing name fails independently
-ok 579 Claude manifest rejects a top-level unknown field
-ok 580 Claude manifest rejects an unknown nested author field
-ok 581 Claude catalog rejects unknown top-level owner and plugin fields independently
-ok 582 Codex manifest rejects top-level and nested author unknown fields independently
-ok 583 Codex catalog rejects unknown top-level owner and plugin fields independently
-ok 584 compatibility matrix closes every nested object boundary
-ok 585 Claude root binding rejects an unknown field
-ok 586 Codex root binding rejects an unknown field
-ok 587 each Claude installed-root requirement fails independently when omitted
-ok 588 each Codex installed-root requirement fails independently when omitted
-ok 589 installed-root constants reject false or substituted declarations independently
-ok 590 catalog-shaped tracked JSON is rejected outside exact live and release-fixture paths
-ok 591 null false zero and empty string receive schema diagnostics as metadata values
-ok 592 null false zero and empty string receive deterministic referenced-schema diagnostics
-ok 593 catalog source escape fails
-ok 594 catalog symlink and different physical root fail
-ok 595 catalog source resolving to a different physical plugin root fails
-ok 596 duplicate catalog names fail independently
-ok 597 duplicate component names fail independently
-ok 598 manifest product name drift fails independently
-ok 599 manifest exact SemVer drift fails independently
-ok 600 manifest shared identity drift fails independently
-ok 601 catalog product name drift fails independently
-ok 602 catalog source identity drift fails independently
-ok 603 catalog release provenance drift fails independently
-ok 604 client floor drift fails independently
-ok 605 profile mapping drift fails independently
-ok 606 matrix schema version drift fails independently
-ok 607 duplicate root binding ID fails exact pair enforcement
-ok 608 swapped root binding ID and path fails exact pair enforcement
-ok 609 alternate same-schema root binding path fails exact pair enforcement
-ok 610 root binding identity drift fails independently
-ok 611 a command adapter pointing at a deleted shared workflow skill fails closed
-ok 612 an agent adapter pointing at a deleted shared role contract fails closed
-ok 613 a second client-specific hook manifest fails closed
-ok 614 missing client manifest reference fails independently
-ok 615 missing matrix root reference fails independently
-ok 616 missing referenced schema fails independently
-ok 617 release fixture drift fails independently
-ok 618 release fixture equality ignores object member order
-ok 619 release fixture equality preserves array order
-ok 620 schema-valid manifest homepage drift fails shared identity
-ok 621 schema-invalid metadata path stops before outside semantic reads
-ok 622 outside-root sentinels use unique cleanup-owned directories
-ok 623 JSON symlink is rejected before parsing outside content
-ok 624 frontmatter symlink is rejected before reading outside content
-ok 625 schema symlink is rejected before reading outside content
-ok 626 release fixture symlink is rejected before reading outside content
-ok 627 real tree metadata passes while inert seeds remain tracked
-ok 628 forced real-tree validator failure leaves the checkout intact
-ok 629 valid relative targets and local and cross-file fragments pass
-ok 630 rendered inline heading text and duplicate GitHub suffixes pass
-ok 631 encoded spaces Unicode paths and Unicode fragments pass
-ok 632 malformed percent encoding fails with source and exact target
-ok 633 encoded traversal cannot escape the repository
-ok 634 Markdown source symlink is rejected before reading outside content
-ok 635 Markdown target symlink is rejected before reading outside content
-ok 636 allowlist symlink is rejected before reading outside content
-ok 637 missing targets and fragments name source and target
-ok 638 only exact historical trees are excluded
-ok 639 malformed duplicate and stale allowlist records fail
-ok 640 live allowlist entry with empty reason is rejected and does not suppress the link
-ok 641 one exact live broken link is allowlisted but code-block pseudo-link is stale
-ok 642 one exact live allowlist entry passes and suppresses its broken-link diagnostic
-ok 643 exact workflow and toolchain contract passes
-ok 644 loom-coord exact Bash shebang is mechanically required
-ok 645 git identity guard exact Bash shebang is mechanically required
-ok 646 precompact backstop exact Bash shebang is mechanically required
-ok 647 workflow runner row deletion fails
-ok 648 workflow inline-comment spoof fails exact verified contract
-ok 649 workflow commented-out security setting fails exact verified contract
-ok 650 workflow duplicate key fails exact verified contract
-ok 651 workflow relocated exact-head string fails exact verified contract
-ok 652 workflow runner label mutation fails
-ok 653 workflow host mutation fails
-ok 654 workflow architecture mutation fails
-ok 655 workflow release mutation fails
-ok 656 workflow selected shell mutation fails
-ok 657 workflow Bash regex mutation fails
-ok 658 workflow checkout action pin mutation fails
-ok 659 workflow exact-head checkout ref mutation fails
-ok 660 workflow exact-head environment mutation fails
-ok 661 workflow exact-head assertion mutation fails
-ok 662 workflow exact-head log deletion fails
-ok 663 workflow selected-shell physical resolver deletion fails
-ok 664 toolchain runner deletion fails closed
-ok 665 exact tool version mutation fails closed
-ok 666 runtime floor mutation fails closed
-ok 667 checkout contract pin mutation fails closed
-ok 668 package-lock contract digest mutation fails closed
-ok 669 unexpected toolchain top-level field fails closed
-ok 670 required download deletion fails closed
-ok 671 download platform mutation fails closed
-ok 672 download URL mutation fails closed
-ok 673 download digest mutation fails closed on an unselected platform
-ok 674 required vendored asset deletion fails closed
-ok 675 vendored asset path mutation fails closed
-ok 676 vendored provenance omission fails closed
-ok 677 vendored provenance kind mutation fails closed
-ok 678 vendored digest mutation fails closed
-ok 679 gate independently rejects a selected Bash below 3.2
-ok 680 Git immediately below 2.34 is rejected with an actionable diagnostic
-ok 681 Git exact floor 2.34 is accepted
-ok 682 jq immediately below 1.6 is rejected with an actionable diagnostic
-ok 683 jq exact floor 1.6 is accepted
-ok 684 unknown host OS is rejected before provisioning
-ok 685 supported host OS with unsupported architecture is rejected before provisioning
-ok 686 first-stage failure preserves status and emits one exact diagnostic before later stages
-ok 687 advanced-stage failure preserves status and stops before every later stage
-ok 688 gate resolves terminal and relative multihop selected-Bash symlinks
-ok 689 gate HUP cleanup is deterministic and exits 129 without success
-ok 690 gate INT cleanup is deterministic and exits 130 without success
-ok 691 gate TERM cleanup is deterministic and exits 143 without success
-ok 692 fresh provisioning ignores a poisoned persistent extracted-tool tree
-ok 693 Bats version probing cannot execute a poisoned ambient bash
-ok 694 cache-root symlink is rejected without touching its owned target
-ok 695 cached-download symlink is rejected without overwriting its target
-ok 696 owner-controlled cache directories are repaired before use
-ok 697 hard-linked cached download is rejected without mutating its outside sentinel
-ok 698 unexpected cache ownership is rejected
-ok 699 cache rewrite race never executes unauthenticated bytes
+ok 316 prepare rejects unknown finder IDs and versions in --prompt-hash and --finder-profile
+ok 317 prepare rejects empty explicit override values and entries without a key or '='
+ok 318 prepare rejects duplicate overrides for the same finder
+ok 319 prepare/validate: prompt byte drift or missing asset fails closed (script-relative root)
+ok 320 validate rejects a manifest whose prompt hash is not the pinned hash
+ok 321 prepare rejects an existing run and an unknown flag
+ok 322 network-silent: no network command is invoked across all subcommands
+ok 323 validate accepts mixed results with the right aggregate and schema-valid results
+ok 324 validate: all-clean results yield ran-clean
+ok 325 validate accepts old-side finding on a deleted file and file-level binary finding
+ok 326 validate rejects a missing finder and never reports ran-clean
+ok 327 validate rejects duplicate and extra result files
+ok 328 validate rejects invalid JSON, invalid UTF-8 and schema violations
+ok 329 validate rejects unknown protocol, prompt version/hash, manifest hash and run id mismatch
+ok 330 validate rejects a manifest with an unknown protocol major
+ok 331 validate rejects failed, truncated and nonzero-exit results
+ok 332 validate rejects status/finding inconsistency in both directions
+ok 333 validate rejects provenance and binding mismatches in results
+ok 334 validate rejects a modified source export (edited, added, removed, chmod'd, attribute-omitted)
+ok 335 validate rejects modified diff and input files
+ok 336 validate rejects swapped head_tree/SHAs/files[] even when the manifest is re-hashed
+ok 337 validate fails closed when the repository or objects are unavailable
+ok 338 validate rejects invalid ranges (wrong side, missing side)
+ok 339 validate rejects findings at invalid locations
+ok 340 validate rejects duplicate finding ids
+ok 341 assemble refuses invalid and pending runs without writing
+ok 342 assemble output is identity-neutral, deterministic and sorted
+ok 343 assemble works for a run directory containing whitespace
+ok 344 assemble defaults to .docs/evaluations/<slice>-review-findings.md
+ok 345 assemble is atomic: a read-only target directory leaves nothing behind
+ok 346 status: prepared -> collecting -> validated -> assembled with exit codes
+ok 347 status: invalid exits 2, missing run exits 1, --json parses
+ok 348 status never writes
+ok 349 status: validate with zero results reports invalid (not prepared), exit 2
+ok 350 status: a result changed after a valid verdict is stale -> collecting, exit 3
+ok 351 clean removes only the named run, including read-only source
+ok 352 clean --all and --older-than
+ok 353 clean refuses paths outside the root, symlinked runs, and dirs without a manifest
+ok 354 clean never touches committed review-findings files
+ok 355 usage errors exit 1
+ok 356 registration: loom-review is last in every helper allowlist copy
+ok 357 registration: validate-repository --all passes
+ok 358 finder prompts: each names its finder ID and every boundary clause
+ok 359 finder prompts: packaged as non-empty regular files under the plugin root
+ok 360 fixtures: per-finder synthetic defects validate and assemble with normalized findings
+ok 361 fixtures: failed, truncated, out-of-diff and missing output never assemble or read clean
+ok 362 usage: no argument exits 1
+ok 363 usage: two arguments exit 1
+ok 364 baseline: malformed baseline exits 1
+ok 365 baseline: well-formed but unknown SHA exits 1
+ok 366 not a repository exits 1
+ok 367 unborn baseline with still-unborn HEAD is a no-op (0)
+ok 368 unborn baseline with valid first commit exits 0
+ok 369 unchanged HEAD is a no-op (0) even when HEAD identity is bad
+ok 370 valid new commit after baseline exits 0
+ok 371 valid amended HEAD exits 0
+ok 372 wrong author exits 2 with SHA and remediation
+ok 373 wrong committer exits 2
+ok 374 same name but wrong email exits 2
+ok 375 loom@localhost fallback exits 2
+ok 376 configured localhost email is a config error (1)
+ok 377 multiple new commits: a bad middle commit is found
+ok 378 multiple bad commits are all reported
+ok 379 unborn baseline checks every commit including a bad root commit
+ok 380 missing configured user.name fails closed (1)
+ok 381 missing configured user.email fails closed (1)
+ok 382 baseline given but HEAD unborn fails closed (1)
+ok 383 unborn baseline with corrupt HEAD ref fails closed (1)
+ok 384 unborn baseline with corrupt HEAD file fails closed (1)
+ok 385 unborn baseline with dangling symlink HEAD ref fails closed (1)
+ok 386 verifier never mutates history on violation
+ok 387 bypassed bad commit stops the workflow; remediation then reverifies clean
+ok 388 BLOCK B01: commit --author= with quoted value
+ok 389 BLOCK B02: -c user.email= override
+ok 390 BLOCK B03: -c user.name= override
+ok 391 BLOCK B04: inline GIT_AUTHOR_NAME env
+ok 392 BLOCK B05: exported GIT_COMMITTER_EMAIL env
+ok 393 BLOCK B06: --author with space form
+ok 394 BLOCK B07: -c GIT_AUTHOR_NAME= override
+ok 395 BLOCK B08: --author= with quoted value and quoted message
+ok 396 BLOCK B09: --author= beside escaped inner quote
+ok 397 BLOCK B10: read over-block — -c user.email= on log (accepted fail-closed limitation, ADR 0003)
+ok 398 BLOCK B11: read over-block — git log --author= (accepted fail-closed limitation)
+ok 399 BLOCK: stderr is a single control-character-free line ending in one LF
+ok 400 ALLOW A01: plain commit, no override
+ok 401 ALLOW A02: -c core.* is non-identity config
+ok 402 ALLOW A03: not a git command
+ok 403 ALLOW A04: git only as substring of another word
+ok 404 BLOCK F05: author flag text inside message body (accepted false positive)
+ok 405 BLOCK F07: GIT_AUTHOR_NAME= inside message body (accepted false positive)
+ok 406 BLOCK F08: -c user.email= inside message body (accepted false positive)
+ok 407 BLOCK F09: --grep value naming the author flag (accepted false positive)
+ok 408 BLOCK F10: escaped-inner-quote message with author flag text
+ok 409 BLOCK W01: author flag inside bash -c quoted body
+ok 410 BLOCK W02: author flag inside sh -c single-quoted body
+ok 411 BLOCK W03: env wrapper with GIT_COMMITTER_NAME assignment
+ok 412 BLOCK W04: GIT_AUTHOR_DATE assignment
+ok 413 BLOCK W05: unbalanced quoting does not discard a recognized token
+ok 414 BLOCK W06: -c author.name and -c committer.email overrides
+ok 415 BLOCK W07: -c with quoted user key inside bash -c
+ok 416 BLOCK W08: -c GIT_COMMITTER_EMAIL override
+ok 417 BLOCK C01: git config user.name value (the two known reproductions)
+ok 418 BLOCK C02: git config in each scope and file form
+ok 419 BLOCK C03: unset, replace-all, add and edit forms
+ok 420 BLOCK C04: quoted value and wrapped git config write
+ok 421 BLOCK C05: write after a safe read on a later line
+ok 422 BLOCK C06: write after a safe read on the same line
+ok 423 BLOCK B12: quoted bare author flag (Claude and Codex wire)
+ok 424 ALLOW R01: bare reads of identity keys
+ok 425 ALLOW R02: non-identity git config writes are untouched
+ok 426 ALLOW R03: ordinary commit with message mentioning config in prose
+ok 427 codex BLOCK: wrapped author bypass and config write use the Codex envelope
+ok 428 ALLOW A13: unbalanced quoting with no recognized token still allows
+ok 429 ALLOW A14: plain git push, no override token
+ok 430 ALLOW A15: missing tool_input.command (no target) allows, matching ADR 0003
+ok 431 codex ALLOW: exit 0, empty stdout/stderr
+ok 432 codex BLOCK: exit 0, empty stderr, exact hookSpecificOutput JSON on stdout
+ok 433 malformed: invalid JSON fails closed (claude)
+ok 434 malformed: invalid JSON fails closed (codex)
+ok 435 malformed: tool_input.command wrong type (number) fails closed
+ok 436 malformed: tool_input.command wrong type (array) fails closed
+ok 437 malformed: tool_input not an object fails closed
+ok 438 root: neither PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT set fails closed
+ok 439 root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT validate (ambiguous) fails closed
+ok 440 root: CLAUDE_PLUGIN_ROOT pointing at a non-plugin directory fails closed
+ok 441 root: relative CLAUDE_PLUGIN_ROOT fails closed
+ok 442 jq absent: fails closed (no grep/sed fallback exists for root/JSON validation)
+ok 443 RED-GREEN: a well-typed command still allows while a wrong-typed one is rejected
+ok 444 fixture claude/pre-tool-use/allow
+ok 445 fixture claude/pre-tool-use/block
+ok 446 fixture claude/pre-tool-use/malformed
+ok 447 fixture codex/pre-tool-use/allow
+ok 448 fixture codex/pre-tool-use/block
+ok 449 fixture codex/pre-tool-use/malformed
+ok 450 T1a progress-advanced manual -> status 0, marker updated
+ok 451 T1b progress-advanced auto -> status 0, marker updated
+ok 452 T2 no-progress manual -> status 2, exact single-line reason, marker unchanged
+ok 453 T2codex no-progress manual -> exit 0, exact continue/stopReason JSON
+ok 454 T3 no-progress auto -> status 0, log line appended, marker unchanged
+ok 455 T4 first-run no marker -> status 0, marker created with current SHA
+ok 456 T5 round-trip: first-run allow, then no-progress block, then advance allow
+ok 457 T6a missing trigger field fails closed (malformed)
+ok 458 T6b unknown trigger value fails closed (malformed)
+ok 459 T6c the obsolete compaction_trigger field is not recognized -> missing trigger -> malformed
+ok 460 T6d trigger wrong JSON type fails closed (malformed)
+ok 461 T6e invalid JSON fails closed (malformed)
+ok 462 T6f malformed on codex wire uses the JSON continue/stopReason envelope
+ok 463 T7a missing session_id fails closed (malformed)
+ok 464 T7b session_id with a path separator fails closed (path-traversal attempt)
+ok 465 T7c session_id with embedded whitespace/control-shaped content fails closed
+ok 466 T7d session_id over the length bound fails closed
+ok 467 T7e session_id at the exact length bound (128) is accepted
+ok 468 T8a not a git repo -> status 0 (fail-open)
+ok 469 T8b empty stdin -> status 0 (fail-open)
+ok 470 T9 jq absent -> fails closed (root validation cannot succeed without jq)
+ok 471 T10 cwd-independence: running from unrelated dir uses cwd from JSON
+ok 472 T11 one session's checkpoint never authorizes another session's manual compaction
+ok 473 T12 the no-progress-auto log is capped at LOOM_PRECOMPACT_LOG_CAP lines
+ok 474 T13 an interrupted marker write leaves the prior marker intact (atomic rename)
+ok 475 T7f session_id with single dots is accepted
+ok 476 T7g session_id containing .. fails closed
+ok 477 T7h session_id with a leading non-alphanumeric fails closed
+ok 478 T7i non-string JSON session_id fails closed
+ok 479 T12b auto no-progress log is <timestamp>TAB<session>TAB<anchor>
+ok 480 T12b log helper strips control characters
+ok 481 T12b invalid or leading-zero LOOM_PRECOMPACT_LOG_CAP falls back to 200
+ok 482 T14 coordinated session: first-run allow, block with remediation, advance unblocks
+ok 483 T15 one coordinated session's advance never unblocks another
+ok 484 T16 coordinated session dir without checkpoint file records checkpoint:none
+ok 485 T17 concurrent compactions across sessions keep markers intact, no temp files
+ok 486 T18 linked worktree resolves the common git dir
+ok 487 RED-GREEN: a recognized trigger still proceeds while an unrecognized one is rejected
+ok 488 fixture claude/pre-compact/allow
+ok 489 fixture claude/pre-compact/block
+ok 490 fixture claude/pre-compact/malformed
+ok 491 fixture codex/pre-compact/allow
+ok 492 fixture codex/pre-compact/block
+ok 493 fixture codex/pre-compact/malformed
+ok 494 root: Codex prefers its valid PLUGIN_ROOT when both compatibility roots validate
+ok 495 unset LOOM_ROLE fails open for test runners and git mutation
+ok 496 orchestrator blocks scripts/check
+ok 497 orchestrator blocks bats, cargo test, npm test, pytest
+ok 498 orchestrator may run scripts/check with LOOM_ALLOW_ORCHESTRATOR_GATE=1
+ok 499 orchestrator gate allowance does not unlock bats
+ok 500 orchestrator allows non-test commands
+ok 501 evaluators block git mutation
+ok 502 code-evaluator allows read-only inspection
+ok 503 arguments that mention test runners or mutations are allowed
+ok 504 landing exception does not unlock other runners in compound commands
+ok 505 evaluators block git mutation behind value-taking global options
+ok 506 quoted command words are de-quoted; quoted arguments are ignored
+ok 507 missing or empty command allows
+ok 508 Claude wire: stderr reason, empty stdout, exit 2
+ok 509 Codex wire: deny JSON on stdout, exit 0
+ok 510 Codex wire: allow is silent exit 0
+ok 511 invalid root, invalid JSON, and wrong-typed command fail closed
+ok 512 quoted executable paths containing spaces are blocked at command position
+ok 513 quoted executable paths with spaces are blocked after env assignments
+ok 514 prepare creates a marker-owned run below the canonical temp root with schema-valid state
+ok 515 RED>GREEN: prepare rejects a symlinked TMPDIR, succeeds against the real dir
+ok 516 RED>GREEN: prepare rejects a nonexistent TMPDIR, succeeds against a real one
+ok 517 RED>GREEN: prepare rejects run-root/owner-home overlap, succeeds when disjoint
+ok 518 RED>GREEN: phase entry rejects a marker mismatch, succeeds once restored
+ok 519 RED>GREEN: phase entry rejects candidate drift, succeeds once restored
+ok 520 prepare rejects an unresolved --exercise before --prepare (missing run root)
+ok 521 one native mutation journals the exact record sequence and preserves worker PID across exec
+ok 522 hash chain is contiguous: each record's prevHash equals the previous record's hash
+ok 523 full exercise -> uninstall -> clean succeeds end to end and leaves zero residue
+ok 524 exercise captures list/discovery, helper-root, and role/hook probes for both clients
+ok 525 RED>GREEN: claude uninstall postcondition reads installed_plugins.json, not raw cache presence
+ok 526 RED>GREEN: handshake deadline is computed after the pre-inventory walk, not before it
+ok 527 residue after uninstall is refused (exit 6)
+ok 528 RED>GREEN: a bare empty ancestor directory left under codex-home/plugins is not residue
+ok 529 an unmet postcondition with a clean exit is a product failure (exit 5), not a false success
+ok 530 a mutation that writes outside its allowed roots is quarantined (exit 3)
+ok 531 an infrastructure-block marker in native output classifies exit 4, not a product failure
+ok 532 INT during a mutation yields exit 130
+ok 533 TERM during a mutation yields exit 143
+ok 534 injection before:intent: nothing is journaled, clean retry succeeds
+ok 535 injection after:intent (supervisor never spawned): aborts, no cache mutation, clean retry succeeds
+ok 536 injection after:supervisor-hello (supervisor dies before release): no mutation, atomic release recovery on retry
+ok 537 injection after:native-hello (worker dies before native-release): no mutation, clean retry succeeds
+ok 538 injection before:exec (worker dies with native-release durable, before exec): resume never relaunches, terminal records the kill
+ok 539 injection supervisor-die-while-worker-continues: durable worker identity prevents a hidden orphan; reconciles to recovered-after-apply
+ok 540 exhausting resume attempts under a persistent fault quarantines rather than looping forever
+ok 541 an escaped, token-tagged descendant is detected and blocks --clean until it dies
+ok 542 a descendant that stays inside the process group but retains the token still blocks --clean
+ok 543 RED>GREEN: --clean refuses an unresolved run, succeeds once resolved
+ok 544 --clean refuses a symlinked run-root argument
+ok 545 --clean refuses a path outside the temp prefix
+ok 546 a quarantined run is cleanable only after a fresh complete inventory proves ownership
+ok 547 RED>GREEN: a quarantined run with an owned root swapped for an escaping symlink refuses --clean, succeeds once restored
+ok 548 RED>GREEN: --clean fails closed on a tampered non-charset runId instead of building a stray receipt path
+ok 549 injection before:native-hello (worker dies before its own hello): supervisor's worker-hello-timeout abort and the gate-2 writer-settle path fire together; no early mutation, clean retry succeeds
+ok 550 injection before:supervisor-hello (supervisor dies before writing its own hello): no early mutation, exactly one clean reconciliation on retry
+ok 551 injection before:native-release (supervisor dies before granting release): the orchestrator resumes and grants the missed release exactly once; the worker -- blocked until then -- proceeds only after, and a clean retry completes
+ok 552 injection before:terminal (supervisor dies after full worker exit, before writing terminal): reconciles to recovered-after-apply
+ok 553 injection after:terminal (supervisor dies immediately after writing terminal): applies from the durable terminal record
+ok 554 injection after:supervisor-hello is operation-agnostic across marketplace-add, uninstall, marketplace-remove, and a codex opKey
+ok 555 default root resolution is stable from a nested working directory
+ok 556 all mode passes for the valid repository
+ok 557 all mode reports a failing metadata root
+ok 558 missing validation mode exits 2 with deterministic usage
+ok 559 repeated validation mode exits 2 with deterministic usage
+ok 560 mixed validation modes exit 2 with deterministic usage
+ok 561 negative seeds are inert and cannot match production scans
+ok 562 valid dual-client metadata, compatibility, bindings, and fixtures pass
+ok 563 explicit non-Git root nested in a parent worktree uses the safe filesystem walk
+ok 564 tracked discovery failure in a real Git root fails closed without reading an untracked canary
+ok 565 README states both exact client floors and the static Codex limitation
+ok 566 thin adapters pass for the real repository tree
+ok 567 a command adapter missing its shared-skill pointer fails closed
+ok 568 a command adapter that copies the shared workflow body fails closed on line count
+ok 569 an agent adapter missing its shared-role pointer fails closed
+ok 570 an agent adapter that copies the shared role body fails closed on line count
+ok 571 each README client floor fails metadata validation directly when drifted
+ok 572 every client-visible claim surface rejects prohibited unqualified wording
+ok 573 a narrow evaluation term passes only with the immediate required qualification
+ok 574 malformed JSON names the materialized file
+ok 575 malformed JSON Schema names the materialized file
+ok 576 missing, unterminated, and invalid YAML frontmatter fail with filenames
+ok 577 unknown command frontmatter key fails closed
+ok 578 unknown agent frontmatter key fails closed independently
+ok 579 unknown skill frontmatter key fails closed independently
+ok 580 command missing description fails independently
+ok 581 agent missing name fails independently
+ok 582 Claude manifest rejects a top-level unknown field
+ok 583 Claude manifest rejects an unknown nested author field
+ok 584 Claude catalog rejects unknown top-level owner and plugin fields independently
+ok 585 Codex manifest rejects top-level and nested author unknown fields independently
+ok 586 Codex catalog rejects unknown top-level owner and plugin fields independently
+ok 587 compatibility matrix closes every nested object boundary
+ok 588 Claude root binding rejects an unknown field
+ok 589 Codex root binding rejects an unknown field
+ok 590 each Claude installed-root requirement fails independently when omitted
+ok 591 each Codex installed-root requirement fails independently when omitted
+ok 592 installed-root constants reject false or substituted declarations independently
+ok 593 catalog-shaped tracked JSON is rejected outside exact live and release-fixture paths
+ok 594 null false zero and empty string receive schema diagnostics as metadata values
+ok 595 null false zero and empty string receive deterministic referenced-schema diagnostics
+ok 596 catalog source escape fails
+ok 597 catalog symlink and different physical root fail
+ok 598 catalog source resolving to a different physical plugin root fails
+ok 599 duplicate catalog names fail independently
+ok 600 duplicate component names fail independently
+ok 601 manifest product name drift fails independently
+ok 602 manifest exact SemVer drift fails independently
+ok 603 manifest shared identity drift fails independently
+ok 604 catalog product name drift fails independently
+ok 605 catalog source identity drift fails independently
+ok 606 catalog release provenance drift fails independently
+ok 607 client floor drift fails independently
+ok 608 profile mapping drift fails independently
+ok 609 matrix schema version drift fails independently
+ok 610 duplicate root binding ID fails exact pair enforcement
+ok 611 swapped root binding ID and path fails exact pair enforcement
+ok 612 alternate same-schema root binding path fails exact pair enforcement
+ok 613 root binding identity drift fails independently
+ok 614 a command adapter pointing at a deleted shared workflow skill fails closed
+ok 615 an agent adapter pointing at a deleted shared role contract fails closed
+ok 616 a second client-specific hook manifest fails closed
+ok 617 missing client manifest reference fails independently
+ok 618 missing matrix root reference fails independently
+ok 619 missing referenced schema fails independently
+ok 620 release fixture drift fails independently
+ok 621 release fixture equality ignores object member order
+ok 622 release fixture equality preserves array order
+ok 623 schema-valid manifest homepage drift fails shared identity
+ok 624 schema-invalid metadata path stops before outside semantic reads
+ok 625 outside-root sentinels use unique cleanup-owned directories
+ok 626 JSON symlink is rejected before parsing outside content
+ok 627 frontmatter symlink is rejected before reading outside content
+ok 628 schema symlink is rejected before reading outside content
+ok 629 release fixture symlink is rejected before reading outside content
+ok 630 real tree metadata passes while inert seeds remain tracked
+ok 631 forced real-tree validator failure leaves the checkout intact
+ok 632 valid relative targets and local and cross-file fragments pass
+ok 633 rendered inline heading text and duplicate GitHub suffixes pass
+ok 634 encoded spaces Unicode paths and Unicode fragments pass
+ok 635 malformed percent encoding fails with source and exact target
+ok 636 encoded traversal cannot escape the repository
+ok 637 Markdown source symlink is rejected before reading outside content
+ok 638 Markdown target symlink is rejected before reading outside content
+ok 639 allowlist symlink is rejected before reading outside content
+ok 640 missing targets and fragments name source and target
+ok 641 only exact historical trees are excluded
+ok 642 malformed duplicate and stale allowlist records fail
+ok 643 live allowlist entry with empty reason is rejected and does not suppress the link
+ok 644 one exact live broken link is allowlisted but code-block pseudo-link is stale
+ok 645 one exact live allowlist entry passes and suppresses its broken-link diagnostic
+ok 646 exact workflow and toolchain contract passes
+ok 647 loom-coord exact Bash shebang is mechanically required
+ok 648 git identity guard exact Bash shebang is mechanically required
+ok 649 precompact backstop exact Bash shebang is mechanically required
+ok 650 workflow runner row deletion fails
+ok 651 workflow inline-comment spoof fails exact verified contract
+ok 652 workflow commented-out security setting fails exact verified contract
+ok 653 workflow duplicate key fails exact verified contract
+ok 654 workflow relocated exact-head string fails exact verified contract
+ok 655 workflow runner label mutation fails
+ok 656 workflow host mutation fails
+ok 657 workflow architecture mutation fails
+ok 658 workflow release mutation fails
+ok 659 workflow selected shell mutation fails
+ok 660 workflow Bash regex mutation fails
+ok 661 workflow checkout action pin mutation fails
+ok 662 workflow exact-head checkout ref mutation fails
+ok 663 workflow exact-head environment mutation fails
+ok 664 workflow exact-head assertion mutation fails
+ok 665 workflow exact-head log deletion fails
+ok 666 workflow selected-shell physical resolver deletion fails
+ok 667 toolchain runner deletion fails closed
+ok 668 exact tool version mutation fails closed
+ok 669 runtime floor mutation fails closed
+ok 670 checkout contract pin mutation fails closed
+ok 671 package-lock contract digest mutation fails closed
+ok 672 unexpected toolchain top-level field fails closed
+ok 673 required download deletion fails closed
+ok 674 download platform mutation fails closed
+ok 675 download URL mutation fails closed
+ok 676 download digest mutation fails closed on an unselected platform
+ok 677 required vendored asset deletion fails closed
+ok 678 vendored asset path mutation fails closed
+ok 679 vendored provenance omission fails closed
+ok 680 vendored provenance kind mutation fails closed
+ok 681 vendored digest mutation fails closed
+ok 682 gate independently rejects a selected Bash below 3.2
+ok 683 Git immediately below 2.34 is rejected with an actionable diagnostic
+ok 684 Git exact floor 2.34 is accepted
+ok 685 jq immediately below 1.6 is rejected with an actionable diagnostic
+ok 686 jq exact floor 1.6 is accepted
+ok 687 unknown host OS is rejected before provisioning
+ok 688 supported host OS with unsupported architecture is rejected before provisioning
+ok 689 first-stage failure preserves status and emits one exact diagnostic before later stages
+ok 690 advanced-stage failure preserves status and stops before every later stage
+ok 691 gate resolves terminal and relative multihop selected-Bash symlinks
+ok 692 gate HUP cleanup is deterministic and exits 129 without success
+ok 693 gate INT cleanup is deterministic and exits 130 without success
+ok 694 gate TERM cleanup is deterministic and exits 143 without success
+ok 695 fresh provisioning ignores a poisoned persistent extracted-tool tree
+ok 696 Bats version probing cannot execute a poisoned ambient bash
+ok 697 cache-root symlink is rejected without touching its owned target
+ok 698 cached-download symlink is rejected without overwriting its target
+ok 699 owner-controlled cache directories are repaired before use
+ok 700 hard-linked cached download is rejected without mutating its outside sentinel
+ok 701 unexpected cache ownership is rejected
+ok 702 cache rewrite race never executes unauthenticated bytes
 
 ==> relative links
 Repository links validation passed
@@ -751,11 +762,7 @@ Validating plugin manifest: /Users/craig/git/loom/plugins/loom/.claude-plugin/pl
 All checks passed
 ```
 
-Command: `node scripts/validate-repository.mjs --root "$PWD" --all` (exit 0; no test count). Exact output:
+Command: `node scripts/validate-repository.mjs --root "$PWD" --all` (exit 0; no test count). Exact combined output:
 ```text
 Repository all validation passed
 ```
-
-## Notes
-
-The implementation handoff records 699 Bats tests on Bash 3.2; this rerun selected Bash 5.3.9 and also passed 699 tests. No local-review findings artifact was supplied within the authorized review inputs; no advisory findings were adjudicated.

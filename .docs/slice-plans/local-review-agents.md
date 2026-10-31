@@ -1,6 +1,6 @@
 # Local Review Agents
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: specs 08 and 10; ADR 0021 §§2–5, ADR 0022 §2 (none amended)
 Target size: <= 1200 LOC net change (keep this plan document <= 250 lines)
 

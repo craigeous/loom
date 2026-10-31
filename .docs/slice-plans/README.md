@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [local-review-agents.md](local-review-agents.md) — `Implemented` — M4 slice 3: versioned Loom-owned local review finder prompts and helper defaults.
+- [local-review-agents.md](local-review-agents.md) — `Ready to Publish` — M4 slice 3: versioned Loom-owned local review finder prompts and helper defaults.
 
 ## Archived plans
 
