@@ -24,37 +24,65 @@ without an adapter are outside scope; diagnostics do not replace owner judgment.
 
 ## Steps
 
-1. Add executable Bash `plugins/loom/bin/loom-doctor`, using `set -u` and Bash 3.2
-   compatible syntax. Accept no argument or `--json`; reject other arguments.
-   Read state only. Collect host OS/architecture and shell, required `git`, `bash`,
-   `jq`, `node`, and `shasum` availability, Bash/Git/jq minimum versions from
-   spec 06, Git identity and tracked/untracked cleanliness, initialization mode
-   and evidence per spec 06, coordination schema and stale claims, review-protocol
-   finder availability, and evaluation-protocol helper availability. Missing or
-   invalid required capabilities and unsupported host/runtime are errors; dirty
-   trees and stale claims are warnings; inability to determine a required check is
-   an error. Report each check with a stable identifier, status, and evidence;
-   report explicitly unchecked spec 08 capabilities. Human and JSON output must
-   derive from the same results. Exit 0 for pass or warnings, 1 for any error,
-   and 2 for invalid invocation. Do not treat an unverified client as supported.
+1. Add executable Bash `plugins/loom/bin/loom-doctor`, using `set -u` and Bash
+   3.2 compatible syntax. Accept no argument or `--json`; reject other arguments.
+   Read state only. Emit ordered records with the following fixed identifiers,
+   status and evidence; an indeterminate required probe is an error.
+
+   | Check ID | Probe and status mapping |
+   |---|---|
+   | `host_and_os` | OS, architecture and shell: pass for spec 10 supported host/runtime; otherwise error. |
+   | `required_tools` | Bash >= 3.2, Git >= 2.34, jq >= 1.6, Node.js >= 18 and either `shasum -a 256` or `sha256sum`: pass when usable, otherwise error. Node and SHA-256 are foundation protocol dependencies, not additional spec 06 runtime floors. |
+   | `git_identity` | Effective Git name and email: pass when both nonempty, otherwise error. |
+   | `repo_cleanliness` | Git tracked and untracked status: pass if clean, warning if dirty, error if unavailable. |
+   | `init_mode` | Apply `skills/loom-playbook/references/init-detection.md` classifier and report mode and evidence: pass if determinable, otherwise error. |
+   | `coordination` | Read `refs/loom/schema` and claim blobs directly without invoking mutating `loom-coord`; absent schema with no claims passes, schema `2` and fresh claims pass, incompatible/malformed state errors. A claim is stale when its numeric lease timestamp is at least `LOOM_LEASE_TTL` seconds old (default 3600; normalize as `loom-coord` does); stale claims warn, unreadable timestamps error, never declare them stale. |
+   | `review_protocol` | Check executable `plugins/loom/bin/loom-review` and readable `plugins/loom/finders/review-{correctness,tests,security}-v1.md`: pass if present, otherwise error. |
+   | `eval_protocol` | Check executable `plugins/loom/bin/loom-eval-workspace`: pass if present, otherwise error. |
+   | `client_adapter` | Client version, manifest/catalog loading, instruction parity and profile mapping are unchecked; report no client support conclusion. |
+   | `hook_trust` | Hook trust is unchecked. |
+   | `egress_sandbox` | Egress sandbox and remote landing configuration are unchecked. |
+
+   Human and JSON output derive from the same records and explicitly label each
+   unchecked item. Exit 0 for pass or warnings, 1 for any error, and 2 for invalid
+   invocation; unchecked is never a pass or a client-support claim.
 2. Add `plugins/loom/schemas/loom-doctor-report-v1.schema.json`, a JSON Schema
-   Draft 2020-12 contract for `--json`: versioned report, ordered check records,
-   status (`pass`, `warning`, `error`, `unchecked`), evidence, and overall result.
-   Specify required fields and reject unexpected properties; keep output stable.
-3. Update `plugins/loom/bin/loom-resolve-helper` to register `loom-doctor` in
-   `ALLOWED_HELPERS`, preserving installed-root resolution and existing behavior.
-4. Add `plugins/loom/commands/doctor.md` as a thin `/loom:doctor` adapter that
-   invokes the shared helper and presents its diagnostics without claiming support
-   for unchecked capabilities.
-5. Add `plugins/loom/skills/loom-doctor/SKILL.md` as the thin Codex skill adapter,
-   resolving the same helper through the installed skill-source binding and
-   preserving human and `--json` semantics.
-6. Add `plugins/loom/bin/loom-doctor.bats` with isolated fixtures covering every
-   check, supported and unsupported host/runtime, missing tools and minimum versions,
-   identity, clean and dirty repositories, each init mode, valid/invalid coordination
-   schema and stale claims, missing finders/helper, human and schema-valid JSON,
-   warnings versus errors, exit codes, and invalid arguments. Stub dependencies and
-   avoid mutating the developer's repository or client configuration.
+   Draft 2020-12 contract for `--json`: versioned report, ordered check records
+   using the IDs above, status (`pass`, `warning`, `error`, `unchecked`), evidence,
+   and overall result. Specify required fields and reject unexpected properties.
+3. Register `loom-doctor` consistently, preserving installed-root behavior:
+   - `plugins/loom/bin/loom-resolve-helper`: add to `ALLOWED_HELPERS`.
+   - `plugins/loom/schemas/loom-installed-root-binding-v1.schema.json`: extend the `allowedHelpers` const array.
+   - `plugins/loom/adapters/roots/claude-plugin-root-v1.json`: extend `allowedHelpers`.
+   - `plugins/loom/adapters/roots/codex-skill-source-v1.json`: extend `allowedHelpers`.
+   - `plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json`: extend `allowedHelpers`.
+   - `plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json`: extend `allowedHelpers`.
+   - `scripts/validate-repository.mjs`: extend both `expectedRoots` `allowedHelpers` arrays.
+   - `plugins/loom/bin/loom-resolve-helper.bats`: test resolving `loom-doctor`.
+   - `scripts/tests/repository-validation.bats`: update fixture allowlist check.
+
+   Explicitly update the release-owned v0.2.0 root fixtures with the binding change;
+   the validator pins them to the live root metadata. This is a fixture change, not
+   a claim of a new release or alteration of other historical fixture fields.
+4. Add `plugins/loom/commands/doctor.md` with description frontmatter, a thin
+   adapter of at most 20 lines routing to `skills/loom-doctor/SKILL.md`. Add
+   `.agents/skills/loom-doctor/SKILL.md` with name and description frontmatter,
+   a thin Antigravity adapter of at most 20 lines routing to the same shared skill.
+   Add `doctor` to `workflows` in `plugins/loom/adapters/compatibility/v0.3.0.json`.
+   The validator's thin-adapter routes and frontmatter schemas apply; existing
+   plugin manifests and catalogs identify the distribution and need no entry or
+   count update for this discovered command and skill.
+5. Add `plugins/loom/skills/loom-doctor/SKILL.md` with `name: loom-doctor` and
+   description frontmatter. Route to `plugins/loom/bin/loom-doctor` via
+   `loom-resolve-helper` using the installed client binding, preserving human and
+   `--json` semantics without claiming support for unchecked capabilities.
+6. Add `plugins/loom/bin/loom-doctor.bats` with isolated fixtures and a proportional
+   matrix: at least one pass, warning, error, and unchecked case; cover supported
+   and unsupported runtime, missing tools and versions, identity, cleanliness,
+   each init mode, coordination state, missing protocol assets, both output forms,
+   schema-valid JSON, exit codes, and invalid arguments. Assert human output
+   explicitly contains the `unchecked` label for deferred capabilities. Stub
+   dependencies and avoid mutation of the developer's repository or configuration.
 7. Add `plugins/loom/bin/loom` as an executable Bash CLI entry point dispatching
    `loom doctor` and `loom doctor --json` to the adjacent shared helper, forwarding
    exit status and rejecting unsupported commands. Test both entry points in Bats.
@@ -65,8 +93,10 @@ without an adapter are outside scope; diagnostics do not replace owner judgment.
 
 - `TMPDIR=/private/tmp bats plugins/loom/bin/loom-doctor.bats` exercises all new
   diagnostics, classifications, output forms, dispatch, and exit codes.
+- `shfmt -i 4 -d plugins/loom/bin/loom-doctor plugins/loom/bin/loom` and
+  `shellcheck -s bash plugins/loom/bin/loom-doctor plugins/loom/bin/loom` provide fast shell checks.
 - `scripts/check` is the required repository gate and regression proof.
-- `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all`
+- `node scripts/validate-repository.mjs --root . --all`
   validates repository structure and applicable schemas.
 
 ## Notes
@@ -78,3 +108,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Defined diagnostic probes and statuses, complete helper registration and adapters, proportional tests, and portable verification. |
