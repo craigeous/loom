@@ -1,17 +1,27 @@
 # Loom Doctor Foundation — Code Evaluation
 
-Commit: 812f677
+Commit: 7424619
 Round: 0
-Verdict: FAIL
+Verdict: PASS
 
 ## Findings
 
-- [BLOCKER] `check_required_tools` never checks the Bash version, yet emits `required_tools: pass` with evidence that Bash is usable even when `LOOM_DOCTOR_BASH_VERSION=3.1` makes `host_and_os` error. The plan explicitly requires this record to error unless Bash >= 3.2; include the Bash probe in this record and test its status for an unsupported version.
-- [BLOCKER] `check_coordination` accepts any blob whose first line has a numeric second tab-separated field, without validating the claim's other required state. For example, a blob with an empty claimant followed by a current timestamp is reported as a fresh passing claim, despite the plan requiring malformed coordination state to error. Validate the claim record before accepting its timestamp, and cover malformed records with numeric timestamps.
-- [BLOCKER] `check_git_identity` reads `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` or `user.name`/`user.email`, rather than Git's effective identity. Git also honors author-specific configuration and other identity inputs, so a usable effective identity can be reported as an error, or an incomplete effective identity reported as passing. Probe Git's effective author identity and test the supported overrides.
+None within the re-review scope. The revision diff `812f677..7424619` resolves the three Round 0 blockers:
 
-## Gate and review evidence
+- `required_tools` now checks Bash >= 3.2 and a targeted test verifies the error for 3.1.
+- Coordination checks validate the claimant before accepting the lease timestamp; tests cover empty and invalid claimants with numeric timestamps and a valid claimant.
+- Git identity uses `git var GIT_AUTHOR_IDENT`, with tests for author environment overrides, `author.*` configuration, incomplete identity, and the placeholder email.
 
-Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 perl -e '$SIG{INT}="DEFAULT"; exec @ARGV' scripts/check` passed (exit 0; 830 Bats tests, metadata, format, lint, syntax, links, plugin validation, and whitespace checks).
+The re-review applies the Round >= 1 non-expansion rule to the revision, while retaining Round 0 for this PASS resolving the Round 0 FAIL.
 
-The required review-findings artifact was not included in the explicitly permitted inputs, so its findings could not be adjudicated. This is not evidence of a clean local review.
+## Local review adjudication
+
+- C1 confirmed resolved: the Bash floor is checked in `required_tools` and tested.
+- C2 confirmed resolved: malformed claimant examples are rejected and tested.
+- C3 confirmed resolved: effective Git author identity is probed and the stated overrides are tested.
+
+The review-findings artifact explicitly identifies itself as a developer local review, not a sealed `loom-local-review/v1` package, with isolation not established. Its claims are advisory and do not constitute evidence of a valid independent three-finder review; this evaluation does not establish that separate landing prerequisite.
+
+## Gate evidence
+
+`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 perl -e '$SIG{INT}="DEFAULT"; exec @ARGV' scripts/check` passed (exit 0): 833 Bats tests, metadata validation, formatting, lint, Bash syntax, links, strict plugin validation, and whitespace checks. The recorded passing gate evidence is consistent with this rerun.

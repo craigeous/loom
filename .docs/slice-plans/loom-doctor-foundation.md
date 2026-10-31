@@ -110,6 +110,12 @@ None.
   green under Bash 3.2 and current Bash (schema tests run with the pinned Node/Ajv).
 - `node scripts/validate-repository.mjs --root . --all`: passed.
 - `scripts/check`: see the implementation commit.
+- Round 0 code-eval fixes (Bash probe in `required_tools`, claim validation, effective
+  Git author identity probe; findings in
+  `.docs/evaluations/loom-doctor-foundation-review-findings.md`): shfmt/shellcheck clean;
+  `bats plugins/loom/bin/loom-doctor.bats` 39/39 green;
+  `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0 ("All checks passed");
+  `node scripts/validate-repository.mjs --root . --all` passed.
 - Test seam: `LOOM_DOCTOR_BASH_VERSION` overrides the probed Bash version (tests only).
 
 ## Revision Log
