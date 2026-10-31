@@ -1,6 +1,6 @@
 # Evaluation Output Recorder
 
-Status: Plan Review
+Status: Approved
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022, ADR 0023
 Target size: <= 350 LOC net change excluding tests and schemas (keep this plan <= 200 lines)
 
@@ -90,11 +90,11 @@ production failure or stale checkpoint revives retired bootstrap components.
    - Retire root-copy once its component is retired, without retroactively claiming
      production conformance for degraded bootstrap evidence.
    - During settlement of this slice, after fresh verification of its published result,
-   freshly read the configured target and prove each recorded result SHA for
-   `local-review-orchestration`, `sanitized-evaluation-workspace`, and this slice is an
-   ancestor. Record the first such target as `full_sunset.sha`; the terminal successor
-   retires all components and full sunset and empties `allowed_slices`. Unavailable or
-   unverifiable target blocks settlement; never force-push or reopen bootstrap.
+     freshly read the configured target and prove each recorded result SHA for
+     `local-review-orchestration`, `sanitized-evaluation-workspace`, and this slice is an
+     ancestor. Record the first such target as `full_sunset.sha`; the terminal successor
+     retires all components and full sunset and empties `allowed_slices`. Unavailable or
+     unverifiable target blocks settlement; never force-push or reopen bootstrap.
 7. **`plugins/loom/bin/loom-eval-workspace.bats`**: exercise plan/research/code valid
    records, FAIL and PASS, schema errors, missing/duplicate/cross-run and hash mismatch,
    changed inputs, completed/failed/incomplete/blocked reruns and latest-attempt
@@ -109,12 +109,15 @@ production failure or stale checkpoint revives retired bootstrap components.
 Run `TMPDIR=/private/tmp bats plugins/loom/bin/loom-eval-workspace.bats` for targeted
 iteration and `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` as the required
 full gate. Run `node scripts/validate-repository.mjs --root "$PWD" --all` for
-repository validation and `! rg -q 'copies the one valid verdict'
-plugins/loom/skills/loom-run/SKILL.md` to verify root-copy guidance retirement.
-The new Bats cases prove recording, binding, confinement, rerun and retry behavior;
-existing workspace tests must pass unchanged as regression proof. Review settlement
-guidance against ADR 0023 and specs 03/04/05, including fresh target ancestry and
-terminal-state requirements. The 350 net LOC budget remains the implementation target.
+repository validation and `! rg -q 'copies the one valid verdict|root-copy'
+plugins/loom/skills/loom-run/SKILL.md plugins/loom/skills/loom-playbook/references/orchestration.md`
+to verify root-copy guidance retirement. The new Bats cases prove recording, binding,
+confinement, rerun and retry behavior; existing workspace tests must pass unchanged
+as regression proof. Review settlement guidance against ADR 0023 and specs 03/04/05,
+including fresh target ancestry and terminal-state requirements. The 350 net LOC budget
+remains the implementation target.
+
+## Notes
 
 ## Revision Log
 

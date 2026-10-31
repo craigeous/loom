@@ -90,3 +90,4 @@ rewritten when a later decision supersedes their subject.
 - [`sanitized-evaluation-workspace-eval.md`](sanitized-evaluation-workspace-eval.md) — `sanitized-evaluation-workspace` code evaluation (Round 2: PASS)
 - [`evaluation-gate-runner-plan-eval.md`](evaluation-gate-runner-plan-eval.md) — `evaluation-gate-runner` slice-plan evaluation (Round 1: PASS)
 - [`evaluation-gate-runner-eval.md`](evaluation-gate-runner-eval.md) — `evaluation-gate-runner` code evaluation (Round 1: PASS)
+- [`evaluation-output-recorder-plan-eval.md`](evaluation-output-recorder-plan-eval.md) — `evaluation-output-recorder` slice-plan evaluation (Round 1: PASS)
