@@ -48,6 +48,10 @@ OS-level containment are in scope.
    `plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json`, and
    `plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json`; update
    `expectedRoots` `allowedHelpers` in `scripts/validate-repository.mjs` to match.
+   Update `$defs.allowedHelpers.const` in `plugins/loom/schemas/loom-installed-root-binding-v1.schema.json`
+   to `["loom-coord", "loom-verify-identity"]`. Review and update the
+   `allowedHelpers` mutation cases around lines 433–456 in
+   `scripts/tests/repository-validation.bats` for the revised allowlist.
    Verify both installed client roots resolve the helper and metadata stays consistent. Exit 0
    for valid/no-op, 1 for usage/config or verification errors, and 2 for identity
    violations; report offending SHA and remediation on stderr for violations.
@@ -88,6 +92,8 @@ OS-level containment are in scope.
 - Check all three workflow files contain the invocation:
   `for f in plugins/loom/roles/developer.md plugins/loom/skills/loom-developer/SKILL.md plugins/loom/skills/loom-playbook/references/commit-convention.md; do rg -n 'loom-verify-identity' "$f" || exit 1; done`.
 - Audit stale and overbroad claims with `rg -n -U 'Stage [ABC]|fail.open|all identity|every identity' plugins/loom/hooks/git-identity-guard.sh plugins/loom/hooks/hooks.json plugins/loom/skills/loom-playbook/references/commit-convention.md`; inspect every hit and remove or correct stale or broader-than-actual enforcement wording.
+- Run `bats scripts/tests/repository-validation.bats` and verify the revised
+  allowlist passes while invalid `allowedHelpers` mutations remain rejected.
 - Exercise the listed negative and positive cases, verify client wire fixtures
   byte-for-byte, and show a bypassed bad commit stops the workflow with remediation.
 - Run `scripts/check` as the full repository gate and
@@ -104,3 +110,4 @@ None.
 | 0 | Initial draft |
 | 1 | Defined verifier CLI, resolution, workflow files and tests; clarified mutation rules, budget, documentation audit and remediation. |
 | 2 | Registered the verifier consistently in both root manifests, both fixture manifests, and validator expectations; added resolution and consistency verification. |
+| 3 | Added the schema allowlist and repository-validation mutation tests to Step 2 and verification. |
