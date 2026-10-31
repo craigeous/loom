@@ -1,6 +1,6 @@
 # Docs State Validator
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 05-blind-evaluation.md, 08-playbook.md
 Target size: <= 450 LOC net change (keep this plan document <= 250 lines)
 
@@ -114,9 +114,24 @@ existing metadata and link tests pass and the real repository passes without mas
 unresolved baseline violations. A snapshot-only run does not certify historical
 transitions or landing.
 
+## Verification Evidence
+
+- `scripts/check` (`TMPDIR=/private/tmp LOOM_BATS_JOBS=4`): All checks passed; 848 Bats cases ok.
+- `node scripts/validate-repository.mjs --root . --all`: passed (snapshot mode; transitions unverified).
+- Named cases `baseline legal transition`, `baseline illegal transition`, `baseline archive rename`,
+  `baseline invalid ref`, `baseline usage errors` plus nine `docs state:` cases pass.
+- ADR 0016 diff changes only the one link to `../slice-plans/archive/multi-session-lock-helper-plan.md`.
+- Historical inventory in `scripts/validation/relative-link-allowlist.txt`: 104 immutable broken-link
+  records and 239 exact-source `rule:<id>` exceptions (109 missing Summary, 35+35 plan template headings,
+  26 authority, 10 cumulative-round sequence, 6 `Status:` on evaluations, plus spec 09 `Living`, the
+  `ci-baseline` location pointer and one Abandoned archived plan). No type is waived; unused entries fail.
+  These exceptions are pending owner authorization. Ancestry ordering uses the header `Commit:` or the
+  first-adding commit; evaluation files record cumulative rounds, so only cross-file order is checked.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
 | 1 | Address Round 0 findings: define validation contracts, compatibility, authority and scope. |
+| 2 | Implemented; verification evidence recorded. |

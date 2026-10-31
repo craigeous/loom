@@ -1602,3 +1602,335 @@ run_signal_case() {
     [ "$race_status" -eq 0 ] || [[ "$output" == *"digest mismatch"* ]]
     [ ! -e "$marker" ]
 }
+
+# ---- documentation-state validation (--all) ----
+
+fixture_git() {
+    git -C "$TEST_ROOT" "$@"
+}
+
+fixture_commit() {
+    fixture_git add -A
+    fixture_git commit -q -m "$1"
+}
+
+put() {
+    mkdir -p "$TEST_ROOT/$(dirname "$1")"
+    cat >"$TEST_ROOT/$1"
+}
+
+# The copied plugin docs link into the real .docs tree, which a fixture lacks;
+# inventory those links so the fixture isolates the documentation-state rules.
+inventory_plugin_links() {
+    local line pattern='^([^:]+): (missing or unsafe relative-link target|missing Markdown fragment): (.*)$'
+    : >"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --links
+    while IFS= read -r line; do
+        if [[ "$line" =~ $pattern ]]; then
+            printf '%s\t%s\tfixture\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}"
+        fi
+    done <<<"$output" | sort -u >"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+}
+
+make_docs_root() {
+    make_metadata_root
+    inventory_plugin_links
+    fixture_git init -q
+    fixture_git config user.name Fixture
+    fixture_git config user.email fixture@example.invalid
+    fixture_git config commit.gpgsign false
+    fixture_git config core.hooksPath /dev/null
+    put .docs/research/r.md <<'DOC'
+# Research
+DOC
+    put .docs/ADR/0001-a.md <<'DOC'
+# ADR 0001: A
+Status: Accepted
+
+## Context
+Grounded in [research](../research/r.md).
+
+## Decision
+Decide.
+
+## Consequences
+Consequences.
+DOC
+    put .docs/spec/00-a.md <<'DOC'
+# Spec A
+Status: Approved
+
+## Authority
+Derived from [ADR 0001](../ADR/0001-a.md).
+DOC
+    put .docs/slice-plans/p.md <<'DOC'
+# Plan P
+Status: Approved
+Target specs: 00-a.md
+
+## Context
+## Out of Scope & Threat-Model Boundary
+## Steps
+## Verification
+## Revision Log
+DOC
+    put .docs/evaluations/p-plan-eval.md <<'DOC'
+# Evaluation: P
+Verdict: PASS
+Round: 0
+Reviewed against: [spec](../spec/00-a.md)
+
+## Summary
+Fine.
+
+## Findings
+None.
+DOC
+    fixture_commit "initial"
+}
+
+docs_all() {
+    fixture_git add -A
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all "$@"
+}
+
+edit_file() {
+    sed -i.bak "$2" "$TEST_ROOT/$1" && rm "$TEST_ROOT/$1.bak"
+}
+
+set_status() {
+    edit_file "$1" "s/^Status: .*/Status: $2/"
+}
+
+@test "docs state: valid fixture passes and reports transitions unverified" {
+    make_docs_root
+    docs_all
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Repository all validation passed"* ]]
+    [[ "$output" == *"status transitions were not verified"* ]]
+}
+
+@test "docs state: illegal and duplicate status fields name the file" {
+    make_docs_root
+    set_status .docs/spec/00-a.md Done
+    edit_file .docs/ADR/0001-a.md 's/^Status: Accepted$/Status: Accepted\nStatus: Draft/'
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/spec/00-a.md: illegal spec status 'Done'"* ]]
+    [[ "$output" == *".docs/ADR/0001-a.md: expected exactly one 'Status:' field, found 2"* ]]
+    set_status .docs/slice-plans/p.md Accepted
+    docs_all
+    [[ "$output" == *".docs/slice-plans/p.md: illegal plan status 'Accepted'"* ]]
+}
+
+@test "docs state: archived plans must be Landed or Archived and plan identity is unique" {
+    make_docs_root
+    mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
+    cp "$TEST_ROOT/.docs/slice-plans/p.md" "$TEST_ROOT/.docs/slice-plans/archive/q.md"
+    cp "$TEST_ROOT/.docs/slice-plans/p.md" "$TEST_ROOT/.docs/slice-plans/p-plan.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"archive/q.md: archived plan must be Landed or Archived, found 'Approved'"* ]]
+    [[ "$output" == *"slice-plans/p.md: slice 'p' has more than one plan"* ]]
+    [[ "$output" == *"slice-plans/p-plan.md: slice 'p' has more than one plan"* ]]
+}
+
+@test "docs state: evaluation names accept every legal form and reject others" {
+    make_docs_root
+    put .docs/evaluations/p-review-findings.md <<'DOC'
+findings
+DOC
+    put .docs/evaluations/p-acceptance.md <<'DOC'
+acceptance
+DOC
+    put .docs/evaluations/macos-dual-client-dogfood-evidence.json <<'DOC'
+{}
+DOC
+    # The fixture README's inventoried link to this evidence file now resolves.
+    grep -v 'dogfood-evidence.json' "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt" >"$TEST_ROOT/allowlist.next" || true
+    mv "$TEST_ROOT/allowlist.next" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    sed 's/^Round: 0/Round: 1/' "$TEST_ROOT/.docs/evaluations/p-plan-eval.md" >"$TEST_ROOT/.docs/evaluations/2026-01-02-q-eval.md"
+    docs_all
+    [ "$status" -eq 0 ]
+    put .docs/evaluations/notes.md <<'DOC'
+notes
+DOC
+    cp "$TEST_ROOT/.docs/evaluations/p-plan-eval.md" "$TEST_ROOT/.docs/evaluations/2026-13-40-r-eval.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/notes.md: name is not"* ]]
+    [[ "$output" == *"2026-13-40-r-eval.md: invalid date prefix"* ]]
+}
+
+@test "docs state: round, verdict and status fields on evaluations are validated" {
+    make_docs_root
+    edit_file .docs/evaluations/p-plan-eval.md 's/^Round: 0/Status: Evaluated\nRound: -1/; s/^Verdict: PASS/Verdict: MAYBE/'
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: Round must be a nonnegative decimal integer"* ]]
+    [[ "$output" == *"p-plan-eval.md: Verdict must be PASS or FAIL"* ]]
+    [[ "$output" == *"p-plan-eval.md: evaluation must not carry a 'Status:' field"* ]]
+}
+
+@test "docs state: round sequence follows commit ancestry and rejects unrecorded resets" {
+    make_docs_root
+    edit_file .docs/evaluations/p-plan-eval.md 's/^Verdict: PASS/Verdict: FAIL/'
+    fixture_commit "plan fail"
+    cp "$TEST_ROOT/.docs/evaluations/p-plan-eval.md" "$TEST_ROOT/.docs/evaluations/p-eval.md"
+    edit_file .docs/evaluations/p-eval.md 's/^Verdict: FAIL/Verdict: PASS/'
+    fixture_commit "code eval"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-eval.md: round 0 follows"*"expected at least 1"* ]]
+    edit_file .docs/evaluations/p-eval.md 's/^Round: 0/Round: 1/'
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: required headings and authority references are enforced" {
+    make_docs_root
+    printf '# Spec\nStatus: Approved\n\n## Authority\nSee ADR 0001 by name only.\n' >"$TEST_ROOT/.docs/spec/00-a.md"
+    printf '# ADR\nStatus: Accepted\n\n## Context\nNo links.\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    printf '# Plan\nStatus: Approved\n\n## Context\nNothing.\n' >"$TEST_ROOT/.docs/slice-plans/p.md"
+    printf '# Eval\nVerdict: PASS\nRound: 0\n\n## Summary\nx\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"spec/00-a.md: Authority section must link at least one existing ADR"* ]]
+    [[ "$output" == *"ADR/0001-a.md: missing required heading 'Decision'"* ]]
+    [[ "$output" == *"ADR/0001-a.md: body must link existing research"* ]]
+    [[ "$output" == *"slice-plans/p.md: missing required heading 'Steps'"* ]]
+    [[ "$output" == *"slice-plans/p.md: plan must identify target specs"* ]]
+    [[ "$output" == *"p-plan-eval.md: missing required heading 'Findings'"* ]]
+    [[ "$output" == *"p-plan-eval.md: evaluation header must identify"* ]]
+}
+
+@test "docs state: historical links are checked under all but not links mode" {
+    make_docs_root
+    printf '[gone](missing.md)\n' >>"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    fixture_git add -A
+    links
+    [ "$status" -eq 0 ]
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/p-plan-eval.md: missing or unsafe relative-link target: missing.md"* ]]
+    printf '%s\t%s\t%s\n' .docs/evaluations/p-plan-eval.md missing.md "historical pointer" >>"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: rule exceptions are exact and stale ones fail" {
+    make_docs_root
+    put .docs/evaluations/old-eval.md <<'DOC'
+# Old
+Verdict: PASS
+Round: 0
+Reviewed against: x
+
+## Findings
+none
+DOC
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"old-eval.md: missing required heading 'Summary' [heading-summary]"* ]]
+    printf '%s\t%s\t%s\n' .docs/evaluations/old-eval.md rule:heading-summary "pre-template" \
+        .docs/evaluations/p-plan-eval.md rule:heading-summary "not needed" >>"$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"old-eval.md: missing required heading"* ]]
+    [[ "$output" == *"stale rule exception: .docs/evaluations/p-plan-eval.md"$'\t'"rule:heading-summary"* ]]
+}
+
+@test "baseline legal transition" {
+    make_docs_root
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md "In Progress"
+    fixture_commit "progress"
+    set_status .docs/slice-plans/p.md "Implemented"
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"were not verified"* ]]
+    set_status .docs/slice-plans/p.md "In Progress"
+    docs_all --baseline HEAD
+    [ "$status" -eq 0 ]
+}
+
+@test "baseline illegal transition" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md Implemented
+    fixture_commit "implemented"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/ADR/0001-a.md Draft
+    set_status .docs/slice-plans/p.md Approved
+    set_status .docs/spec/00-a.md Abandoned
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/ADR/0001-a.md: baseline: illegal status transition"* ]]
+    [[ "$output" == *".docs/slice-plans/p.md: baseline: illegal status transition (.docs/slice-plans/p.md 'Implemented' -> .docs/slice-plans/p.md 'Approved')"* ]]
+    [[ "$output" != *"spec/00-a.md: baseline"* ]]
+}
+
+@test "baseline archive rename" {
+    make_docs_root
+    set_status .docs/slice-plans/p.md "Ready to Publish"
+    fixture_commit "ready"
+    base="$(fixture_git rev-parse HEAD)"
+    mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
+    fixture_git mv .docs/slice-plans/p.md .docs/slice-plans/archive/p.md
+    set_status .docs/slice-plans/archive/p.md Archived
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+    set_status .docs/slice-plans/archive/p.md Landed
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+    fixture_commit "archive"
+    fixture_git mv .docs/slice-plans/archive/p.md .docs/slice-plans/p.md
+    docs_all --baseline HEAD
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"baseline: archived plan was reactivated"* ]]
+}
+
+@test "baseline archive rename before landing is rejected" {
+    make_docs_root
+    base="$(fixture_git rev-parse HEAD)"
+    mkdir -p "$TEST_ROOT/.docs/slice-plans/archive"
+    fixture_git mv .docs/slice-plans/p.md .docs/slice-plans/archive/p.md
+    set_status .docs/slice-plans/archive/p.md Landed
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"archive/p.md: baseline: archive rename before landing"* ]]
+}
+
+@test "baseline invalid ref" {
+    make_docs_root
+    docs_all --baseline no-such-ref
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"baseline ref is unavailable: no-such-ref"* ]]
+    fixture_git branch dup
+    fixture_git tag dup
+    docs_all --baseline dup
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"ambiguous baseline ref: dup"* ]]
+    docs_all --baseline --root
+    [ "$status" -eq 2 ]
+    make_owned_root nogit
+    TEST_ROOT="$NEW_OWNED_ROOT"
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all --baseline HEAD
+    [ "$status" -eq 2 ]
+}
+
+@test "baseline usage errors" {
+    make_docs_root
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --links --baseline HEAD
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"--baseline is only valid with --all"* ]]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --metadata --baseline HEAD
+    [ "$status" -eq 2 ]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --baseline HEAD
+    [ "$status" -eq 2 ]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all --baseline
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"--baseline requires a Git ref"* ]]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --all --baseline HEAD --baseline HEAD
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"usage: validate-repository.mjs [--root PATH] (--metadata|--links|--all) [--baseline REF]"* ]]
+}

@@ -17,7 +17,7 @@ Neither ADR fixed the **lock/claim *substrate*** — the concrete atomic primiti
 the coordination model. ADR 0014 §2 deliberately left the primitive **open** ("an
 OS-atomic primitive — a `mkdir`-based lock directory … **or** a git-ref
 compare-and-swap"), a slice-plan parameter. The
-[multi-session-lock-helper slice-plan](../slice-plans/multi-session-lock-helper-plan.md)
+[multi-session-lock-helper slice-plan](../slice-plans/archive/multi-session-lock-helper-plan.md)
 resolved that parameter to a **hand-rolled `mkdir` lock directory + a rename-capture CAS
 stale-steal + a TSV claims registry** (`<git-dir>/loom/main.lock/` with a `holder` file;
 `<git-dir>/loom/claims`). Spec [04](../spec/04-orchestrator.md)'s "Multi-session

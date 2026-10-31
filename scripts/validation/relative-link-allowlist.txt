@@ -1,2 +1,344 @@
-# source path<TAB>exact link target<TAB>reason; empty by default
-.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md	../slice-plans/multi-session-lock-helper-plan.md	The referenced completed plan moved to the excluded archive tree.
+# source path<TAB>exact link target or rule:<id><TAB>reason; inventory of immutable historical exceptions
+.docs/ADR/0001-plugin-architecture-and-orchestrator.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0002-model-selection-by-tier.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0003-cold-handoffs-commit-per-handoff.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0004-blind-evaluation-role-separation.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0005-specs-frozen-after-approval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0006-distribution-self-marketplace.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/0010-orchestrator-run-automated-review-in-code-eval-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0011-correct-automated-review-command-to-code-review-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0014-multi-session-worktree-coordination-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0015-lease-renewal-heartbeat-liveness-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0016-git-native-ref-cas-lock-mechanism-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0017-infrastructure-blocked-escalation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0018-shared-core-and-client-adapters-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0019-supported-runtime-and-release-contract-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0020-remote-publication-is-the-landing-authority-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0021-loom-owned-local-review-protocol-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0022-controlled-input-independent-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0025-reconciliation-authority-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0026-docs-governance-plugin-prompt-doc-scope-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0027-client-model-matrix-modernization-and-ambient-inheritance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-06-10-review-security-review-in-code-eval-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-07-03-claude-md-digest-discipline-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0008-parallel-docs-coordination-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0009-unaligned-migrate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0010-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0011-playbook-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0011-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0014-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0015-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0016-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr-0017-spec-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/adr0008-spec-fold-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/author-identity-enforcement-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/ci-baseline-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-autopropagation-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-autopropagation-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-shape-discipline-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/claude-md-slim-down-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/code-eval-adjudication-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coord-identifier-boundaries-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/coord-identifier-boundaries-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/coord-identifier-boundaries-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coord-identifier-boundaries-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coord-identifier-boundaries-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coordination-state-separation-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/coordination-state-separation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/coordination-state-separation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/docs-governance-reconciliation-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/docs-governance-reconciliation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/docs-governance-reconciliation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/errata-and-settled-record-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/errata-and-settled-record-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/evaluation-gate-runner-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/evaluation-output-recorder-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/gate-learning-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/governance-baseline-reconciliation-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/governance-baseline-reconciliation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/governance-baseline-reconciliation-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/greenfield-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/identity-guard-contract-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/identity-guard-contract-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/identity-guard-contract-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/identity-verification-hardening-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/infra-blocked-escalation-wiring-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/init-detection-spine-signal-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/init-mode-detection-code-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/init-mode-detection-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/initialized-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-agents-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-agents-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-helper-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/local-review-helper-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-helper-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-orchestration-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/local-review-orchestration-plan-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/local-review-orchestration-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/loom-doctor-foundation-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/loom-doctor-foundation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/loom-doctor-foundation-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/macos-dogfood-program-amendment-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/macos-dogfood-program-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/macos-dual-client-dogfood-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-plan-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/macos-dual-client-dogfood-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/migration-recipe-reference-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/model-matrix-and-dynamic-discovery-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/multi-session-lock-helper-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/multi-session-playbook-wiring-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/orchestration-review-step-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/parallelism-behavior-body-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/playbook-conformance-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/playbook-conformance-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/playbook-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/playbook-conformance-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/precompact-per-session-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/precompact-per-session-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/precompact-per-session-plan-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/precompact-per-session-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/precompact-write-ahead-backstop-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/recommended-tooling-and-mechanical-checks-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/remote-first-integration-candidate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/remote-first-integration-candidate-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/research-plugin-pretooluse-hook-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/retire-code-review-status-token-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/review-findings-format-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guard-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/evaluations/role-governance-guard-eval.md	rule:eval-sequence	Historical evaluation files record cumulative rounds across revisions; per-event ancestry is not recoverable.
+.docs/evaluations/role-governance-guard-eval.md	rule:heading-findings	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guard-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guard-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/role-governance-guardrails-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/round-limit-conformance-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-plan-eval.md	rule:eval-status-field	Historical evaluation recorded a Status field before the verdict protocol; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-plan-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/scope-identity-guard-to-commit-subcommands-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/shell-gate-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-00-overview-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-01-concepts-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-02-roles-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-03-artifact-lifecycle-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-03-round-limit-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-04-orchestrator-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-05-blind-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-init-modes-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-status-seed-clarification-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-06-unaligned-migrate-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-07-command-surface-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-08-playbook-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/spec-10-packaging-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/unaligned-bare-migrate-split-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/unaligned-init-behavior-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	../ADR/0011-correct-automated-review-command-to-code-review.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	../spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/adr-0011-playbook-conformance-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/author-identity-enforcement-guard.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/author-identity-enforcement-guard.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/ci-baseline.md	../ADR/0018-shared-core-and-client-adapters.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/ci-baseline.md	../ADR/0019-supported-runtime-and-release-contract.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/ci-baseline.md	../spec/08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/ci-baseline.md	../spec/10-packaging.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/ci-baseline.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/ci-baseline.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	.../03-artifact-lifecycle.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	.../08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	../../../../../.docs/spec/08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	`08-playbook.md`	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/claude-md-autopropagation-conformance-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/claude-md-slim-down-plan.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/slice-plans/archive/claude-md-slim-down-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/claude-md-slim-down-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/claude-md-slim-down-plan.md	severity.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/agents/code-evaluator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/skills/loom-playbook/references/commit-convention.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/skills/loom-playbook/references/orchestration.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/skills/loom-playbook/references/review-findings.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../../plugins/loom/skills/loom-playbook/references/severity.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../ADR/0010-orchestrator-run-automated-review-in-code-eval.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	review-findings.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/code-eval-adjudication-plan.md	severity.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/coord-identifier-boundaries.md	../ADR/0023-repository-self-hosting-bootstrap-transition.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/coord-identifier-boundaries.md	../repository-improvement-plan.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/coord-identifier-boundaries.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/coord-identifier-boundaries.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/docs-governance-reconciliation.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/docs-governance-reconciliation.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/errata-and-settled-record.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/slice-plans/archive/errata-and-settled-record.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/errata-and-settled-record.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/gate-learning.md	../gates/rust.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/gate-learning.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/gate-learning.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/governance-baseline-reconciliation.md	../ADR/0023-repository-self-hosting-bootstrap-transition.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/governance-baseline-reconciliation.md	../ADR/0024-macos-first-dual-client-dogfood-bootstrap-amendment.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/governance-baseline-reconciliation.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/governance-baseline-reconciliation.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/governance-baseline-reconciliation.md	rule:heading-steps	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/greenfield-init-behavior.md	greenfield.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/greenfield-init-behavior.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/greenfield-init-behavior.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/identity-verification-hardening-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/identity-verification-hardening-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../../../../../.docs/ADR/0017-infrastructure-blocked-escalation.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../../../../../.docs/spec/03-artifact-lifecycle.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../../../../../.docs/spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../ADR/0017-infrastructure-blocked-escalation.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../spec/03-artifact-lifecycle.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	../spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	orchestration.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/infra-blocked-escalation-wiring-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	../../../../../.docs/spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	../../plugins/loom/skills/loom-playbook/references/init-detection.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	../ADR/0009-unaligned-migrate-sub-mode.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	../spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/init-detection-spine-signal-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/init-mode-detection.md	init-detection.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/init-mode-detection.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/init-mode-detection.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/initialized-init-behavior.md	initialized.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/initialized-init-behavior.md	orchestration.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/initialized-init-behavior.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/initialized-init-behavior.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/initialized-init-behavior.md	status-machine.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../ADR/0024-macos-first-dual-client-dogfood-bootstrap-amendment.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/00-overview.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/03-artifact-lifecycle.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/07-command-surface.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	../spec/10-packaging.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/macos-dogfood-program-amendment.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../ADR/0024-macos-first-dual-client-dogfood-bootstrap-amendment.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../spec/07-command-surface.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../spec/08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	../spec/10-packaging.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/macos-dual-client-dogfood.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../../../../../.docs/ADR/0009-unaligned-migrate-sub-mode.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../../../../../.docs/spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../../plugins/loom/skills/loom-playbook/references/gate-learning.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../ADR/0009-unaligned-migrate-sub-mode.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../research/2026-06-09-unaligned-init-migration-field-report.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	../spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	README.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/migration-recipe-reference-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/multi-session-lock-helper-plan.md	../ADR/0014-multi-session-worktree-coordination.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/multi-session-lock-helper-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/multi-session-lock-helper-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/multi-session-playbook-wiring-plan.md	../../../../../.docs/ADR/0014-multi-session-worktree-coordination.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/multi-session-playbook-wiring-plan.md	../../../../../.docs/ADR/0015-lease-renewal-heartbeat-liveness.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/multi-session-playbook-wiring-plan.md	../../../../../.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/multi-session-playbook-wiring-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/multi-session-playbook-wiring-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/orchestration-review-step-plan.md	#automated-review-before-a-slice-lands	Historical record is immutable; the link was already broken when recorded (missing Markdown fragment).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../../../../../.docs/spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../../plugins/loom/skills/loom-playbook/references/orchestration.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../../plugins/loom/skills/loom-playbook/references/parallelism.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	../spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	commit-convention.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	review-findings.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/orchestration-review-step-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/orchestration-review-step-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/parallelism-behavior-body.md	parallelism.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/parallelism-behavior-body.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/parallelism-behavior-body.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/playbook-conformance.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/playbook-conformance.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/precompact-per-session.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/slice-plans/archive/precompact-write-ahead-backstop-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/precompact-write-ahead-backstop-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/recommended-tooling-and-mechanical-checks.md	../spec/08-playbook.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/recommended-tooling-and-mechanical-checks.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/recommended-tooling-and-mechanical-checks.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/retire-code-review-status-token.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/retire-code-review-status-token.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/review-findings-format-plan.md	../../../../../.docs/ADR/0001-plugin-architecture-and-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../../../../../.docs/ADR/0004-blind-evaluation-role-separation.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../../../../../.docs/ADR/0010-orchestrator-run-automated-review-in-code-eval.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../../../../../.docs/spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../../../../../.docs/spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../../plugins/loom/skills/loom-playbook/references/severity.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../spec/02-roles.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	../spec/04-orchestrator.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	commit-convention.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	parallelism.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/review-findings-format-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/review-findings-format-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/review-findings-format-plan.md	severity.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/round-limit-conformance-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/round-limit-conformance-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/scope-identity-guard-to-commit-subcommands.md	rule:archive-status	Abandoned slice plan was archived as a deliberate cessation record.
+.docs/slice-plans/archive/scope-identity-guard-to-commit-subcommands.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/scope-identity-guard-to-commit-subcommands.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/shell-gate-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/shell-gate-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	../../plugins/loom/skills/loom-playbook/SKILL.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	../../plugins/loom/skills/loom-playbook/references/migration-recipe.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	../../plugins/loom/skills/loom-playbook/references/unaligned.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	../ADR/0009-unaligned-migrate-sub-mode.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	../spec/06-init-modes.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	README.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	init-detection.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	migration-recipe.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/unaligned-bare-migrate-split-plan.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/unaligned-init-behavior.md	../../../../../.docs/spec/03-artifact-lifecycle.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-init-behavior.md	../gates/rust.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-init-behavior.md	commit-convention.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-init-behavior.md	greenfield.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/archive/unaligned-init-behavior.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/unaligned-init-behavior.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/archive/unaligned-init-behavior.md	unaligned.md	Historical record is immutable; the link was already broken when recorded (missing or unsafe relative-link target).
+.docs/slice-plans/ci-baseline.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:heading-context	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:heading-out-of-scope-threat-model-boundary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:heading-revision-log	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:heading-steps	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:heading-verification	Historical artifact predates the required template heading; record is not rewritten.
+.docs/slice-plans/ci-baseline.md	rule:plan-identity	Non-active location pointer retained for immutable authority links.
+.docs/slice-plans/ci-baseline.md	rule:status-field	Non-active location pointer retained for immutable authority links.
+.docs/spec/09-open-questions.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
+.docs/spec/09-open-questions.md	rule:heading-authority	Historical artifact predates the required template heading; record is not rewritten.
+.docs/spec/09-open-questions.md	rule:status-token	Living index-style document outside the lifecycle status vocabulary.

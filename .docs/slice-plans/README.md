@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [docs-state-validator.md](docs-state-validator.md) — `Approved` — mechanical documentation state validation.
+- [docs-state-validator.md](docs-state-validator.md) — `Implemented` — mechanical documentation state validation.
 
 ## Archived plans
 
