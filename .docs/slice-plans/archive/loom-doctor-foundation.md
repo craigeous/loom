@@ -1,6 +1,6 @@
 # Loom Doctor Foundation
 
-Status: Implemented
+Status: Landed
 Target specs: 06-init-modes.md, 08-playbook.md, 10-packaging.md
 Target size: <= 450 LOC net change excluding tests and schemas
 

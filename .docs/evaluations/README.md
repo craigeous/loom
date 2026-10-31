@@ -93,4 +93,5 @@ rewritten when a later decision supersedes their subject.
 - [`evaluation-output-recorder-plan-eval.md`](evaluation-output-recorder-plan-eval.md) — `evaluation-output-recorder` slice-plan evaluation (Round 1: PASS)
 - [`evaluation-output-recorder-eval.md`](evaluation-output-recorder-eval.md) — `evaluation-output-recorder` code evaluation (Round 3: PASS)
 - [`loom-doctor-foundation-plan-eval.md`](loom-doctor-foundation-plan-eval.md) — `loom-doctor-foundation` slice-plan evaluation (Round 0: PASS)
-- [`loom-doctor-foundation-eval.md`](loom-doctor-foundation-eval.md) — `loom-doctor-foundation` code evaluation (Round 0: FAIL)
+- [`loom-doctor-foundation-eval.md`](loom-doctor-foundation-eval.md) — `loom-doctor-foundation` code evaluation (Round 0: PASS)
+- [`loom-doctor-foundation-review-findings.md`](loom-doctor-foundation-review-findings.md) — `loom-doctor-foundation` local review findings (adjudicated)

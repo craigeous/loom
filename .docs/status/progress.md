@@ -6,7 +6,16 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-31) — M5 slice 3 (`evaluation-output-recorder`) Landed (Milestone M5 Complete):**
+- **Last action (2026-10-31) — M6 slice 1 (`loom-doctor-foundation`) Landed:**
+  Landed read-only foundation diagnostics helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom`.
+  Implements read-only diagnostics across host and OS (macOS/Linux), required tools (Bash >= 3.2, Git >= 2.34, jq >= 1.6),
+  effective Git author identity (`git var GIT_AUTHOR_IDENT`), repository root discovery and `.docs` layout, init mode
+  detection (Greenfield, Initialized, Unaligned-bare, Unaligned-migrate), coordination state and lock freshness, and
+  protocol assets. Exposed through human-readable CLI summary and `--json` machine-readable output format. Updated allowlists
+  across 9 repository locations. Added 39 comprehensive Bats tests (833 total repository Bats tests passing). Evaluated
+  blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_6d33d4fca5d6` with Verdict: PASS (Round: 0). M6 is now in progress.
+
+- **Prior action (2026-10-31) — M5 slice 3 (`evaluation-output-recorder`) Landed (Milestone M5 Complete):**
   Landed ADR 0022 / spec 03 / spec 04 / spec 05 evaluation output recorder `plugins/loom/bin/loom-eval-workspace record`.
   Separates analysis from repository mutation by recording schema-valid verdicts from the sanitized workspace into the
   repository's `.docs/evaluations/` directory, updating the target artifact's lifecycle status (`Approved`, `Accepted`,

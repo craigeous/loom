@@ -17,9 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [loom-doctor-foundation.md](loom-doctor-foundation.md) — `Implemented` — read-only doctor diagnostics foundation.
+None active.
 
 ## Archived plans
+
+- [archive/loom-doctor-foundation.md](archive/loom-doctor-foundation.md) — `Landed` —
+  M6 slice 1: read-only foundation diagnostics helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom`,
+  checks for host/OS, required tools (Bash >= 3.2, Git >= 2.34, jq >= 1.6), effective Git author identity (`git var GIT_AUTHOR_IDENT`),
+  repository root and .docs layout, init mode detection, coordination state and lock freshness, and protocol assets;
+  allowlist registration across 9 repository root definitions; human and `--json` diagnostic output, and 39 comprehensive Bats tests (833 total repository Bats tests passing).
 
 - [archive/evaluation-output-recorder.md](archive/evaluation-output-recorder.md) — `Landed` —
   M5 slice 3: deterministic evaluation verdict recording, schema-valid output validation (`loom-evaluation-output-v1.schema.json`),
