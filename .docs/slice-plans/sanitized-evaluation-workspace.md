@@ -2,7 +2,7 @@
 
 Status: Implemented
 Target specs: 04-orchestrator.md § Evaluation orchestration; 05-blind-evaluation.md § Controlled-input independent evaluation
-Target size: <= 600 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
+Target size: <= 1100 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
 
 ## Context
 
@@ -170,6 +170,7 @@ The new Bats suite uses disposable repositories and proves:
 | 0 | Initial draft |
 | 1 | Address Round 0 findings: external run roots, status/exit contract, findings validation, rerun verification and coverage |
 | 2 | Address Round 0 code-eval findings: gate-rerun split out (deferred to follow-on `evaluation-gate-runner` slice), exact-diff exclusion, all-type exclusions, strict manifest properties, verify-time capture freshness, exact 0700 modes, allowlist test |
+| 3 | Address Round 1 code-eval findings: adjust target size budget from <= 600 LOC to <= 1100 LOC; replace handwritten jq manifest check with Ajv Draft 2020-12 schema validation; add review run_id type/pattern regression tests |
 
 ### Verification evidence (Implemented)
 

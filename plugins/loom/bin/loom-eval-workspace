@@ -333,6 +333,37 @@ ERRS=""
 INFRA=0
 add_err() { printf '%s\n' "$*" >>"$ERRS"; }
 
+validate_manifest_schema() {
+    local m="$1" schema="$BIN_DIR/../schemas/loom-eval-workspace-manifest-v1.schema.json" err nm="${LOOM_NODE_MODULES:-}"
+    [ -f "$schema" ] || {
+        add_err "manifest schema missing"
+        return 1
+    }
+    local node_bin="${LOOM_NODE:-$(command -v node 2>/dev/null || true)}"
+    [ -n "$node_bin" ] || {
+        add_err "node is required for schema validation"
+        return 1
+    }
+    if [ -z "$nm" ]; then
+        if [ -n "$REPO_TOP" ] && [ -d "$REPO_TOP/scripts/check-tools/node_modules/ajv" ]; then
+            nm="$REPO_TOP/scripts/check-tools/node_modules"
+        elif [ -d "$BIN_DIR/../../../scripts/check-tools/node_modules/ajv" ]; then
+            nm="$BIN_DIR/../../../scripts/check-tools/node_modules"
+        fi
+    fi
+    [ -n "$nm" ] && [ -d "$nm/ajv" ] || {
+        add_err "ajv module missing"
+        return 1
+    }
+    if ! err="$("$node_bin" -e 'const fs=require("fs"),Ajv=require(process.argv[1]+"/ajv/dist/2020.js"),af=require(process.argv[1]+"/ajv-formats"),ajv=new Ajv({allErrors:true,strict:true,allowUnionTypes:true});af(ajv);const v=ajv.compile(JSON.parse(fs.readFileSync(process.argv[2],"utf8")));if(!v(JSON.parse(fs.readFileSync(process.argv[3],"utf8")))){for(const e of v.errors)console.error((e.instancePath||"/")+": "+(e.message||"violation"));process.exit(1);}' "$nm" "$schema" "$m" 2>&1)"; then
+        while IFS= read -r line; do
+            [ -n "$line" ] && add_err "manifest: $line"
+        done <<<"$err"
+        return 1
+    fi
+    return 0
+}
+
 # do_verify: validates $RUN against its manifest and local Git objects. Sets INFRA=1 when
 # a Git object/repo needed for a binding is unavailable; errors go to $ERRS.
 do_verify() {
@@ -349,9 +380,12 @@ do_verify() {
         return 1
     }
     [ "$(jq -S -c . "$m")" = "$(cat "$m")" ] || add_err "manifest.json is not canonical JSON"
+    validate_manifest_schema "$m" || true
     jq -r "$JQ_MANIFEST" "$m" >"$WORK/mchk" 2>/dev/null || add_err "manifest validation failed"
     if [ -s "$WORK/mchk" ]; then
         while IFS= read -r e; do add_err "manifest: $e"; done <"$WORK/mchk"
+    fi
+    if [ -s "$ERRS" ]; then
         return 1
     fi
     [ "$(jq -S -c 'del(.manifest_sha256)' "$m" | sha256_stdin)" = "$(jq -r .manifest_sha256 "$m")" ] ||

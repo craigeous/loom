@@ -184,9 +184,15 @@ edit_manifest() {
 
 verify() { ew verify "$OUT" --repo "$REPO"; }
 status_() { ew status "$OUT" --repo "$REPO" "$@"; }
-repo_hash() { shasum -a 256 <<<"" >/dev/null; printf '%s' "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)" | shasum -a 256 | cut -c1-16; }
+repo_hash() {
+    shasum -a 256 <<<"" >/dev/null
+    printf '%s' "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)" | shasum -a 256 | cut -c1-16
+}
 
-rmrun() { chmod -R u+w "$@" 2>/dev/null; rm -rf "$@"; }
+rmrun() {
+    chmod -R u+w "$@" 2>/dev/null
+    rm -rf "$@"
+}
 
 no_partial() { [ -z "$(find "$WORK/out" -maxdepth 1 -name '.tmp-*' -print)" ] && [ ! -e "$OUT" ]; }
 
@@ -869,6 +875,23 @@ excluded_commit() { # <path>: commit a change to an excluded path on top of DOCS
     edit_manifest '.captures[0].extra = 1'
     verify
     [ "$status" -eq 2 ]
+}
+
+@test "verify: manifest schema validates review run_id type and pattern" {
+    prep_code_review
+    [ "$status" -eq 0 ]
+    verify
+    [ "$status" -eq 0 ]
+    cp "$OUT/manifest.json" "$WORK/manifest.keep"
+    edit_manifest '.review.run_id = 123'
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"manifest: /review/run_id"* ]]
+    cp "$WORK/manifest.keep" "$OUT/manifest.json"
+    edit_manifest '.review.run_id = "INVALID_UPPERCASE"'
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"manifest: /review/run_id"* ]]
 }
 
 @test "verify: expired research captures are infrastructure-blocked (4) in verify and status" {
