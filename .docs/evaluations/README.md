@@ -82,3 +82,4 @@ rewritten when a later decision supersedes their subject.
 - [`identity-guard-contract-eval.md`](identity-guard-contract-eval.md) — `identity-guard-contract` code evaluation (Round 2: PASS)
 - [`local-review-helper-plan-eval.md`](local-review-helper-plan-eval.md) — `local-review-helper` slice-plan evaluation (Round 2: PASS)
 - [`local-review-helper-eval.md`](local-review-helper-eval.md) — `local-review-helper` code evaluation (Round 1: PASS)
+- [`local-review-agents-plan-eval.md`](local-review-agents-plan-eval.md) — `local-review-agents` slice-plan evaluation (Round 0: FAIL)
