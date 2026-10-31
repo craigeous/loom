@@ -1,7 +1,7 @@
 # Sanitized Evaluation Workspace
 
 Status: Plan Review
-Target specs: 04-orchestrator.md, 05-blind-evaluation.md
+Target specs: 04-orchestrator.md § Evaluation orchestration; 05-blind-evaluation.md § Controlled-input independent evaluation
 Target size: <= 600 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
 
 ## Context
@@ -11,7 +11,8 @@ a fresh, evidence-complete export with immutable judgment inputs and a determini
 code gate rerun. M5's `sanitized-evaluation-workspace` supplies the exporter and runner;
 prior gate evidence cannot substitute for a rerun. This slice builds a reusable helper,
 its schemas, registration, and tests, without claiming that the helper alone establishes
-the client adapter or recorder boundary.
+the client adapter or recorder boundary. If implementation exceeds the LOC budget, split
+the gate runner into a separately planned slice rather than silently exceeding it.
 
 ## Out of Scope & Threat-Model Boundary
 
@@ -26,14 +27,24 @@ the client adapter or recorder boundary.
   detect accidental changes, not writes by an owner deliberately changing permissions.
 - No network access or dependency downloads by the helper. Research captures and
   verified offline dependencies are supplied by trusted preparation; missing required
-  evidence or an unavailable offline gate is invalid/infrastructure-blocked, never PASS.
+  captures or an unavailable offline gate is infrastructure-blocked, never PASS.
 
 ## Steps
 
 Conventions: Bash 3.2+, Git 2.34+, jq 1.6+; `set -euo pipefail`, canonical JSON
-`jq -S -c`, SHA-256 via `shasum -a 256` or `sha256sum`. Exit 0 on success, 1 for
-usage/environment errors, 2 for invalid or unverifiable input/run, and 3 for incomplete
-status. Reject unknown options, protocol versions, duplicate paths and extra inputs.
+`jq -S -c`, SHA-256 via `shasum -a 256` or `sha256sum`.
+
+| Exit | Outcome and `status` mapping |
+|---|---|
+| 0 | Successful command, valid run, `prepared`, or `rerun-passed` |
+| 1 | Usage error or invalid flags; no run status implied |
+| 2 | Invalid input, rejected run, verification failure, `invalid`, or `rerun-failed` |
+| 3 | `status` on an in-flight or partial run (incomplete); no terminal status implied |
+| 4 | `infrastructure-blocked`: unavailable gate, missing Git objects or required captures, or interrupted execution |
+
+A nonzero gate exit produces `rerun-failed`; interruption or inability to execute it
+produces `infrastructure-blocked`. These states never imply a merits verdict.
+Reject unknown options, protocol versions, duplicate paths and extra inputs.
 Never evaluate shell text supplied by an evaluator. All paths in manifests are normalized
 relative paths; reject absolute paths, `..`, control bytes, links, special files, and
 collisions. Check file types and link counts on traversal; no symlink or hardlink is
@@ -56,7 +67,9 @@ staging directory; on failure remove only that staging directory.
    `verify`, `gate-rerun`, `status`, and `clean`. `prepare` accepts explicit evaluation
    type, full immutable SHA(s), approved artifact/authority/rubric paths, and for code
    base/head, gate evidence, valid local-review findings (or explicit docs-only status),
-   pinned gate argv/environment/tool versions and offline dependencies. Resolve commit
+   pinned gate argv/environment/tool versions and offline dependencies. Require assembled
+   findings and validate them with `plugins/loom/bin/loom-review validate` before
+   inclusion; reject bootstrap or unassembled findings. Resolve commit
    objects locally, require base ancestor of head, and materialize tracked inputs from
    exact objects, never the live checkout. External evidence must be regular, supplied
    explicitly, validated and copied; reject missing, mutable, unresolvable, or unapproved
@@ -65,8 +78,12 @@ staging directory; on failure remove only that staging directory.
    export its complete tracked tree subject only to recorded exclusions. Research inputs
    require complete, fresh captured citations and their locator, retrieval, status,
    content-type, tool, freshness and hash provenance; fail closed if unavailable.
-3. **Run layout and export** — default to `<git-common-dir>/loom/eval/<run_id>/`;
-   `--out <dir>` selects a new absolute directory outside the managed checkout. Require
+3. **Run layout and export** — default to a private `0700` root under
+   `${TMPDIR:-/tmp}/loom-eval-${REPO_HASH}/<run_id>/`, strictly outside the managed
+   repository, worktree and Git common directory; reject the default if it fails that
+   containment check. `--out <dir>` selects a new absolute directory, strictly outside
+   the managed checkout and Git directory (including common directory). Resolve physical
+   paths and reject overlap in either direction. Require
    unique safe run IDs, private `0700` run roots, no pre-existing destination, and no
    symlinked or escaping path components. Export `source/` from exact `head_sha` objects
    (or evidence snapshot when required), checking every path, type, mode and hash against
@@ -84,8 +101,8 @@ staging directory; on failure remove only that staging directory.
    object/tree and diff bindings against local objects, failing closed if unavailable.
    Reject extras, missing files, altered modes, links or paths outside the run. Verify
    independently supplied evidence provenance and recorded dependency hashes; no
-   unverified fallback. `status` is read-only and reports prepared, invalid, or rerun
-   result only after checking the current run; stale evidence cannot make a changed run
+   unverified fallback. `status` is read-only and reports `prepared`, `invalid`, `infrastructure-blocked`, `rerun-passed`, or
+   `rerun-failed` with the exit mapping above only after checking the current run; stale evidence cannot make a changed run
    valid. Neither command writes a verdict or advances lifecycle state.
 5. **Gate rerun** — `gate-rerun` is code-only and takes a run identifier, never an
    evaluator-supplied command, source, environment or dependency override. Verify inputs,
@@ -94,8 +111,8 @@ staging directory; on failure remove only that staging directory.
    prepared offline dependencies. Redirect home/config, cache, temp and declared build
    outputs to that copy or private scratch. Record command/environment digest, tool
    versions, UTC times, exit, stdout/stderr hashes and output inventory in schema-valid
-   `gate-rerun.json`, bound to the run and manifest. Reverify immutable source after every
-   attempt and delete the execution copy on success, gate failure, or interruption;
+   `gate-rerun.json`, bound to the run and manifest. Reverify both immutable source and the managed checkout tree against their
+   pre-run inventories after every attempt and delete the execution copy on success, gate failure, or interruption;
    failed verification or incomplete execution is invalid/infrastructure-blocked, never
    a successful rerun. Preserve separate evidence for repeated invocations without
    overwriting earlier results. This is a bounded runner, not an OS sandbox.
@@ -119,11 +136,13 @@ the helper. Final gate: `scripts/check` and
 The new Bats suite uses disposable repositories and proves:
 
 - Exact object export, diff, inventories, hashes, canonical manifest and schema validity;
+  base-not-ancestor rejection, and binary, rename and mode metadata in the diff;
   source is read-only, output/scratch are private and writable, and seeded identity,
   history, transcript, credentials and unrelated-evaluation canaries are absent.
 - Plan/research evidence and re-review bindings; complete evidence snapshot at declared
   SHA; required citation capture freshness/provenance; code review findings or explicit
-  docs-only status. Missing evidence, wrong SHA/tree/diff, invalid schema, duplicate or
+  docs-only status, including rejection of unassembled or invalid findings by the named
+  validator. Missing evidence, wrong SHA/tree/diff, invalid schema, duplicate or
   extra paths, altered source/input/mode, unavailable objects and unknown versions fail
   closed, including after a previously successful verification.
 - Rejection of symlinks, hardlinks, devices, sockets, gitlinks, escaping paths, unsafe
@@ -132,7 +151,9 @@ The new Bats suite uses disposable repositories and proves:
   verified copy with pinned offline inputs, leaves source and checkout hashes unchanged,
   records bound result hashes/inventories, and removes its copy on success and failure.
   Tampered dependencies, changed source, unavailable gate, nonzero exit, interrupted
-  execution and attempted command/environment substitution never report a valid rerun.
+  execution and attempted command/environment substitution never report a valid rerun;
+  `gate-rerun` rejects non-code runs. Test every exit/status mapping, including partial
+  runs and infrastructure-blocked cases.
 - Independent runs do not share writable paths; status detects stale evidence; clean
   removes only the selected recognized run. Resolver and validator tests cover both
   adapter metadata copies, schema registration and allowlist drift.
@@ -147,3 +168,4 @@ The new Bats suite uses disposable repositories and proves:
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Address Round 0 findings: external run roots, status/exit contract, findings validation, rerun verification and coverage |
