@@ -6,7 +6,17 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M2 slice 1 (`remote-first-integration-candidate`) Landed:**
+- **Last action (2026-10-30) — M2 slice 2 (`coordination-state-separation`) Landed:**
+  Landed ADR 0020 coordination state separation: removed tracked-main mutation
+  from claim/work-start paths in playbook, candidate-time deterministic living
+  document finalization (`loom-land --finalize`), untracked candidate manifest in
+  session dir, unlocked build and gate execution with short publish lock, and
+  distinguished positive rejection recovery (exit 3 with attempt reset) from
+  containment recovery (exit 0) and uncertain push (exit 10). Bats suite expanded
+  to 51 tests (597 repository Bats tests passing). Evaluated blind cross-family
+  by Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 1).
+
+- **Prior action (2026-10-30) — M2 slice 1 (`remote-first-integration-candidate`) Landed:**
   Landed ADR 0020 remote publication landing authority helper (`plugins/loom/bin/loom-land`)
   and Bats suite (`plugins/loom/bin/loom-land.bats`, 37 tests). Enforces candidate
   preparation against the configured remote target ref, atomic verification against

@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M2 slice 2 `coordination-state-separation` LANDED on `main` (2026-10-30):**
+  ADR 0020 coordination state separation: removed tracked-main mutation from claim/work-start,
+  candidate-time deterministic living doc finalization (`loom-land --finalize`), untracked
+  session manifest, unlocked build/gate with short publish lock, and positive rejection
+  recovery (51 Bats tests in suite, 597 total repository Bats tests passing).
 - **M2 slice 1 `remote-first-integration-candidate` LANDED on `main` (2026-10-30):**
   ADR 0020 landing authority helper (`plugins/loom/bin/loom-land`) and Bats suite
   (`plugins/loom/bin/loom-land.bats`, 37 tests). Enforces candidate preparation against

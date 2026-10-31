@@ -17,18 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-The Active index and every other living doc (progress, handoff, roadmap) change only
-inside the integration candidate (`loom-land --finalize`), never on a slice branch or
-`main` and never by claim acquisition. Slice-branch plan status edits stay in the plan
-file itself.
-
-- [coordination-state-separation.md](coordination-state-separation.md) — `Ready to Publish` —
-  ADR 0020 milestone M2 slice 2: remove tracked-main writes from the claim/work-start path
-  (playbook), finalize living docs only inside the integration candidate (`loom-land --finalize`, fail-closed),
-  keep the manifest untracked, publish with a short lock and recoverable push rejection, require `Ready to Publish`, and prove concurrent-publisher, offline, and
-  cleanup-recovery behavior in Bats.
+_None currently active._
 
 ## Archived plans
+
+- [archive/coordination-state-separation.md](archive/coordination-state-separation.md) — `Landed` —
+  ADR 0020 milestone M2 slice 2: separate coordination state from tracked main,
+  deterministic candidate-time living document finalization (`loom-land --finalize`),
+  untracked session manifest, unlocked build/gate with short publish lock, and recoverable push rejection (51 Bats tests in suite, 597 total repo tests).
 
 - [archive/remote-first-integration-candidate.md](archive/remote-first-integration-candidate.md) — `Landed` —
   ADR 0020 milestone M2 slice 1: remote publication as the landing authority through

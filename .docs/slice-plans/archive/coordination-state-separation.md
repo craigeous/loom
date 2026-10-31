@@ -1,6 +1,6 @@
 # Coordination State Separation
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md
 Target size: <= 250 LOC net change (keep this plan document <= 250 lines)
 
