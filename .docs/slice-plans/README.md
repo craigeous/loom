@@ -17,9 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [local-review-agents.md](local-review-agents.md) — `Ready to Publish` — M4 slice 3: versioned Loom-owned local review finder prompts and helper defaults.
+*(None currently in flight)*
 
 ## Archived plans
+
+- [archive/local-review-agents.md](archive/local-review-agents.md) — `Landed` —
+  M4 slice 3: versioned immutable Loom-owned finder prompts (`review-correctness/v1`,
+  `review-tests/v1`, `review-security/v1`) under `plugins/loom/finders/`, helper defaults
+  and strict override validation in `loom-review`, repo packaging validator, and 57
+  Bats tests with controlled per-finder defect fixtures (702 total repo Bats tests passing).
 
 - [archive/local-review-helper.md](archive/local-review-helper.md) — `Landed` —
   M4 slice 2: `plugins/loom/bin/loom-review` (`prepare`/`validate`/`assemble`/`status`/`clean`)

@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 slice 3 `local-review-agents` LANDED on `main` (2026-10-30):**
+  ADR 0021 immutable finder prompts under `plugins/loom/finders/` (`review-correctness/v1`,
+  `review-tests/v1`, `review-security/v1`), helper defaulting and strict override validation in
+  `loom-review`, repo packaging validator, and 57 Bats tests with controlled per-finder defect
+  fixtures (702 total repository Bats tests passing).
 - **M4 slice 2 `local-review-helper` LANDED on `main` (2026-10-30):**
   ADR 0021 local review helper `plugins/loom/bin/loom-review` with subcommands `prepare`,
   `validate`, `assemble`, `status`, and `clean`, exact commit object/tree binding, object-based

@@ -6,7 +6,20 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M4 slice 2 (`local-review-helper`) Landed:**
+- **Last action (2026-10-30) — M4 slice 3 (`local-review-agents`) Landed:**
+  Landed ADR 0021 versioned immutable Loom-owned finder prompts under `plugins/loom/finders/`
+  (`review-correctness-v1.md`, `review-tests-v1.md`, `review-security-v1.md`) with explicit
+  boundary enforcement (procedural boundaries, read-only inputs/source, assigned single output
+  result file, untrusted code handling, advisory findings, evaluator-only verdict). Updated
+  `plugins/loom/bin/loom-review` with script-relative physical root asset lookup, pinned prompt hash
+  defaulting and strict override validation (rejecting unknown finders/versions, empty values,
+  duplicates, and hash mismatches with exit 2), and `claude:sonnet` default profile. Added repository
+  packaging validation in `scripts/validate-repository.mjs` and expanded `plugins/loom/bin/loom-review.bats`
+  to 57 Bats tests including controlled per-finder defect fixtures with verified location and concrete
+  evidence (702 total repository Bats tests passing). Evaluated blind cross-family by Codex
+  (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with Verdict: PASS (Round: 0).
+
+- **Prior action (2026-10-30) — M4 slice 2 (`local-review-helper`) Landed:**
   Landed ADR 0021 local review helper `plugins/loom/bin/loom-review` with five subcommands
   (`prepare`, `validate`, `assemble`, `status`, `clean`), exact git commit object and tree
   binding, object-derived `.git`-free source snapshot, diff hash calculation, fail-closed
