@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/schemas/loom-eval-workspace-manifest-v1.schema.json",
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "utc": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "relpath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[^\\u0000-\\u001f\\u007f\\\\]+$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "origin", "role", "mode", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relpath" },
+        "origin": { "enum": ["git-object", "external", "generated"] },
+        "role": {
+          "enum": [
+            "source", "artifact", "authority", "rubric", "gate-evidence", "review-findings",
+            "diff", "revision-diff", "prior-verdict", "capture", "capture-index", "dependency"
+          ]
+        },
+        "mode": { "enum": ["100644", "100755"] },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "path", "retrieved_at", "fresh_until", "status", "content_type", "tool", "sha256"],
+      "properties": {
+        "locator": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/relpath" },
+        "retrieved_at": { "$ref": "#/$defs/utc" },
+        "fresh_until": { "$ref": "#/$defs/utc" },
+        "status": { "type": "integer", "minimum": 200, "maximum": 299 },
+        "content_type": { "type": "string", "minLength": 1 },
+        "tool": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol", "run_id", "evaluation_type", "created_at", "head_sha", "head_tree", "files",
+    "exclusions", "source_export", "manifest_sha256"
+  ],
+  "properties": {
+    "protocol": { "const": "loom-eval-workspace/v1" },
+    "run_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+    "evaluation_type": { "enum": ["plan", "research", "code"] },
+    "created_at": { "$ref": "#/$defs/utc" },
+    "head_sha": { "$ref": "#/$defs/sha" },
+    "head_tree": { "$ref": "#/$defs/sha" },
+    "base_sha": { "$ref": "#/$defs/sha" },
+    "evidence_sha": { "$ref": "#/$defs/sha" },
+    "evidence_tree": { "$ref": "#/$defs/sha" },
+    "diff_sha256": { "$ref": "#/$defs/sha256" },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior_sha", "diff_sha256"],
+      "properties": {
+        "prior_sha": { "$ref": "#/$defs/sha" },
+        "diff_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "$ref": "#/$defs/relpath" },
+          "reason": { "enum": ["credentials", "session-store", "status-history", "prior-evaluation", "transcript"] }
+        }
+      }
+    },
+    "source_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "file_count"],
+      "properties": {
+        "path": { "const": "source" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "file_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "captures": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/capture" } },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["assembled", "skipped: docs-only"] },
+        "run_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "findings_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "assembled" } } },
+          "then": { "required": ["run_id", "findings_sha256"], "properties": { "run_id": true, "findings_sha256": true } },
+          "else": { "properties": { "run_id": false, "findings_sha256": false } }
+        }
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "env", "command_env_sha256", "tools", "dependencies"],
+      "properties": {
+        "argv": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "env": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "properties": { "PATH": { "type": "string", "minLength": 1 } },
+          "additionalProperties": { "type": "string" },
+          "required": ["PATH"]
+        },
+        "command_env_sha256": { "$ref": "#/$defs/sha256" },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "version": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "$ref": "#/$defs/relpath" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "manifest_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "dependentRequired": {
+    "evidence_sha": ["evidence_tree"],
+    "evidence_tree": ["evidence_sha"]
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "evaluation_type": { "const": "code" } } },
+      "then": {
+        "required": ["base_sha", "diff_sha256", "review", "gate"],
+        "properties": { "base_sha": true, "diff_sha256": true, "review": true, "gate": true }
+      },
+      "else": { "properties": { "base_sha": false, "diff_sha256": false, "review": false, "gate": false } }
+    },
+    {
+      "if": { "properties": { "evaluation_type": { "const": "research" } } },
+      "then": { "required": ["captures"], "properties": { "captures": true } },
+      "else": { "properties": { "captures": false } }
+    }
+  ]
+}

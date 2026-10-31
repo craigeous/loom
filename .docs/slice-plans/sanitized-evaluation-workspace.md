@@ -1,6 +1,6 @@
 # Sanitized Evaluation Workspace
 
-Status: In Progress
+Status: Implemented
 Target specs: 04-orchestrator.md § Evaluation orchestration; 05-blind-evaluation.md § Controlled-input independent evaluation
 Target size: <= 600 LOC net change excluding tests/schemas (keep this plan document <= 250 lines)
 
@@ -169,3 +169,20 @@ The new Bats suite uses disposable repositories and proves:
 |---|---|
 | 0 | Initial draft |
 | 1 | Address Round 0 findings: external run roots, status/exit contract, findings validation, rerun verification and coverage |
+
+### Verification evidence (Implemented)
+
+Run on macOS with `TMPDIR=/private/tmp LOOM_TEST_BASH=/bin/bash LOOM_TEST_BASH_PHYSICAL=/bin/bash
+LOOM_EXPECTED_BASH_VERSION='^3\.2' LOOM_NODE=$(command -v node)`:
+
+- `loom-eval-workspace.bats`: 32/32 pass.
+- `loom-resolve-helper.bats`: 47/47 pass.
+- `scripts/tests/repository-validation.bats`: 148/148 pass.
+- `node scripts/validate-repository.mjs --root "$PWD" --all`: passed.
+- `shfmt -i 4 -d` and `shellcheck -s bash` on the helper: clean.
+
+Defects fixed during verification: empty executable-list `awk NR==FNR` merge in `scan_files`
+(emptied the manifest file inventory); `SEEN_INPUTS` missing leading delimiter (duplicate
+inputs accepted); jq `$keys` parameter shadowing `keys` (top-level extras accepted); unavailable
+commit objects (exit 4) outranking manifest integrity failures (exit 2); two Bats cases
+passing duplicate `--gate-evidence` / a host-PATH git version instead of the pinned PATH.

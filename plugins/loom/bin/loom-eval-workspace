@@ -1,0 +1,1265 @@
+#!/usr/bin/env bash
+# loom-eval-workspace — sanitized evaluation workspace exporter and code-gate rerun
+# runner (loom-eval-workspace/v1; ADR 0022, spec 05 § Controlled-input independent
+# evaluation, spec 04 § Evaluation orchestration; slice sanitized-evaluation-workspace).
+# It exports a hash-bound, read-only evaluation run from exact Git objects, verifies it,
+# reruns the pinned code gate in a disposable copy, and cleans runs. It never launches an
+# evaluator, records a verdict, advances lifecycle state, or uses the network. It is a
+# bounded runner, not an OS sandbox.
+#
+# Usage:
+#   loom-eval-workspace prepare --type <plan|research|code> --head <sha> --artifact <path>
+#       [--authority <path>]... [--rubric <path>]... [--evidence-sha <sha>]
+#       [--prior-verdict <path> --prior-sha <sha>] [--captures <index.json>]
+#       [--base <sha> --gate-evidence <file> (--review-run <dir> | --docs-only)
+#        --gate-arg <arg>... --gate-env <K=V>... [--tool-version <name>=<ver>]...
+#        [--dependency <path>]...]
+#       [--run-id <id>] [--out <dir>] [--repo <path>]
+#   loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
+#   loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
+#   loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
+#   loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
+#
+# Exit codes: 0 ok/prepared/valid/rerun-passed, 1 usage, 2 invalid input/rejected run/
+#   rerun-failed, 3 incomplete run (status), 4 infrastructure-blocked.
+# shellcheck disable=SC2016  # jq filters use $vars intentionally
+set -euo pipefail
+
+TAB=$'\t'
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES || true
+export GIT_OPTIONAL_LOCKS=0
+RESERVED_ENV=" HOME TMPDIR TMP TEMP XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME CARGO_HOME CARGO_TARGET_DIR GOCACHE GOPATH npm_config_cache PIP_CACHE_DIR LOOM_EVAL_DEPS LOOM_EVAL_BUILD LOOM_EVAL_SCRATCH "
+
+WORK=""
+BUILD=""
+ROOT_CREATED=""
+EXEC=""
+RR=""
+CHILD=""
+INTERRUPTED=0
+
+log() { printf 'loom-eval-workspace: %s\n' "$*" >&2; }
+die() {
+    local rc="$1"
+    shift
+    log "$*"
+    exit "$rc"
+}
+
+cleanup() {
+    local rc=$?
+    trap - EXIT
+    if [ -n "$BUILD" ] && [ -d "$BUILD" ]; then
+        chmod -R u+w "$BUILD" 2>/dev/null || true
+        rm -rf "$BUILD"
+    fi
+    if [ -n "$ROOT_CREATED" ]; then rmdir "$ROOT_CREATED" 2>/dev/null || true; fi
+    if [ -n "$EXEC" ] && [ -d "$EXEC" ]; then
+        chmod -R u+w "$EXEC" 2>/dev/null || true
+        rm -rf "$EXEC"
+    fi
+    if [ -n "$RR" ] && [ -e "$RR/inflight" ]; then rm -rf "$RR"; fi
+    if [ -n "$WORK" ] && [ -d "$WORK" ]; then rm -rf "$WORK"; fi
+    exit "$rc"
+}
+trap cleanup EXIT
+
+command -v jq >/dev/null 2>&1 || die 1 "jq is required"
+command -v git >/dev/null 2>&1 || die 1 "git is required"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/loom-eval-work.XXXXXX")" || die 1 "cannot create temp dir"
+mkdir "$WORK/wt"
+
+BIN_DIR="$(CDPATH='' cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+sha256_stdin() {
+    if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi | cut -d' ' -f1
+}
+sha256_file() { sha256_stdin <"$1"; }
+utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# ---------------------------------------------------------------- paths
+
+COMMON=""
+REPO_TOP=""
+gg() { git --git-dir="$COMMON" "$@"; }
+gdiff() {
+    git --git-dir="$COMMON" --work-tree="$WORK/wt" -c core.attributesFile=/dev/null \
+        -c core.quotepath=off diff --no-ext-diff --no-textconv --no-color \
+        --src-prefix=a/ --dst-prefix=b/ -M -C "$@"
+}
+
+# resolve_repo <path>: sets REPO_TOP and COMMON (physical paths); returns 1 if not a repo.
+resolve_repo() {
+    local d top common
+    d="$(CDPATH='' cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
+    top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+    REPO_TOP="$(CDPATH='' cd -P -- "$top" && pwd -P)"
+    COMMON="$(CDPATH='' cd -P -- "$common" && pwd -P)"
+}
+
+# safe_rel <path>: normalized relative path with no traversal, controls, backslash or .git.
+safe_rel() {
+    local LC_ALL=C p="$1"
+    [ -n "$p" ] || return 1
+    case "$p" in
+    /* | */ | *//* | . | .. | ./* | ../* | */./* | */../* | */. | */.. | *\\*) return 1 ;;
+    .git | .git/* | */.git | */.git/*) return 1 ;;
+    esac
+    [[ "$p" =~ [[:cntrl:]] ]] && return 1
+    return 0
+}
+
+# nocntrl <label> <value>: reject control bytes (including newline) in an option value.
+nocntrl() {
+    local LC_ALL=C
+    if [[ "$2" =~ [[:cntrl:]] ]]; then die 2 "control byte in $1"; fi
+    return 0
+}
+
+phys_dir() { CDPATH='' cd -P -- "$1" 2>/dev/null && pwd -P; }
+
+# overlaps <a> <b>: physical paths; true when either contains the other.
+overlaps() {
+    case "$1/" in "$2"/*) return 0 ;; esac
+    case "$2/" in "$1"/*) return 0 ;; esac
+    return 1
+}
+
+# regular_external <path>: an existing regular, non-symlink, single-link file.
+regular_external() {
+    [ -e "$1" ] && [ ! -L "$1" ] && [ -f "$1" ] || return 1
+    [ -z "$(find "$1" -maxdepth 0 -type f -links +1 -print 2>/dev/null)" ] || return 1
+}
+
+# ---------------------------------------------------------------- exclusion policy
+
+# exclude_reason <type> <path>: prints the policy exclusion reason, or nothing.
+exclude_reason() {
+    case "$2" in
+    .env | .env.* | */.env | */.env.* | *.pem | *id_rsa* | *id_ed25519* | .npmrc | */.npmrc | .netrc | */.netrc | *credentials*)
+        printf credentials
+        return
+        ;;
+    .claude/* | .codex/* | .orca/* | .agents/sessions/*)
+        printf session-store
+        return
+        ;;
+    transcripts/* | */transcripts/*)
+        printf transcript
+        return
+        ;;
+    esac
+    [ "$1" != code ] || return 0
+    case "$2" in
+    .docs/status/*) printf status-history ;;
+    .docs/evaluations/*) printf prior-evaluation ;;
+    esac
+}
+
+# ---------------------------------------------------------------- listings
+
+# tree_listing <tree-ish> <type> -> sorted "path<TAB>mode<TAB>oid" minus policy exclusions;
+# the excluded "path<TAB>reason" rows go to $WORK/excl.tsv. Dies 2 on unsafe objects.
+tree_listing() {
+    local rec meta path mode oid reason
+    : >"$WORK/excl.tsv"
+    : >"$WORK/tree.raw"
+    gg ls-tree -r -z "$1" >"$WORK/tree.bin"
+    while IFS= read -r -d '' rec; do
+        meta="${rec%%"$TAB"*}"
+        path="${rec#*"$TAB"}"
+        read -r mode _ oid <<<"$meta"
+        safe_rel "$path" || die 2 "unsupported path in tree: $path"
+        case "$mode" in
+        100644 | 100755) ;;
+        160000) die 2 "submodule/gitlink in tree: $path" ;;
+        120000) die 2 "symlink in tree: $path" ;;
+        *) die 2 "unsupported tree entry mode $mode: $path" ;;
+        esac
+        reason="$(exclude_reason "$2" "$path")"
+        if [ -n "$reason" ]; then
+            printf '%s\t%s\n' "$path" "$reason" >>"$WORK/excl.tsv"
+        else
+            printf '%s\t%s\t%s\n' "$path" "$mode" "$oid" >>"$WORK/tree.raw"
+        fi
+    done <"$WORK/tree.bin"
+    LC_ALL=C sort "$WORK/tree.raw"
+}
+
+# src_listing <dir> -> sorted "path<TAB>mode<TAB>oid" of the files below dir.
+src_listing() {
+    (
+        cd "$1" || exit 1
+        find . -type f -perm -100 | sed 's|^\./||' | LC_ALL=C sort >"$WORK/s.x"
+        find . -type f ! -perm -100 | sed 's|^\./||' | LC_ALL=C sort >"$WORK/s.n"
+        if [ -s "$WORK/s.x" ]; then
+            gg hash-object --no-filters --stdin-paths <"$WORK/s.x" >"$WORK/s.xo"
+            paste "$WORK/s.x" "$WORK/s.xo" |
+                awk -F'\t' '{printf "%s\t100755\t%s\n", $1, $2}'
+        fi
+        if [ -s "$WORK/s.n" ]; then
+            gg hash-object --no-filters --stdin-paths <"$WORK/s.n" >"$WORK/s.no"
+            paste "$WORK/s.n" "$WORK/s.no" |
+                awk -F'\t' '{printf "%s\t100644\t%s\n", $1, $2}'
+        fi
+    ) | LC_ALL=C sort
+}
+
+listing_hash() { tr '\t' '\0' <"$1" | sha256_stdin; }
+
+# scan_files <run> -> sorted "path<TAB>mode<TAB>sha256" for every immutable regular file.
+scan_files() {
+    (
+        cd "$1" || exit 1
+        find source inputs diff.patch revision.patch -type f 2>/dev/null | LC_ALL=C sort >"$WORK/sc.paths" || true
+        find source inputs diff.patch revision.patch -type f -perm -100 2>/dev/null | LC_ALL=C sort >"$WORK/sc.x" || true
+        if [ -s "$WORK/sc.paths" ]; then
+            tr '\n' '\0' <"$WORK/sc.paths" | xargs -0 shasum -a 256 2>/dev/null |
+                awk 'FILENAME != "-" {x[$0]=1; next} {p=substr($0,67); printf "%s\t%s\t%s\n", p, ((p in x)?"100755":"100644"), substr($0,1,64)}' "$WORK/sc.x" -
+        fi
+    ) | LC_ALL=C sort
+}
+
+# ---------------------------------------------------------------- jq programs
+
+read -r -d '' JQ_MANIFEST <<'EOF' || true
+def sha: type == "string" and test("^([0-9a-f]{40}|[0-9a-f]{64})$");
+def s256: type == "string" and test("^[0-9a-f]{64}$");
+def utc: type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$");
+def rel: type == "string" and length > 0 and (startswith("/") | not)
+    and (split("/") | all(. != "" and . != "." and . != ".."))
+    and (test("[[:cntrl:]\\\\]") | not);
+def chk($c; $m): if $c then empty else $m end;
+def allowed($allow): ((keys - $allow) | map("unexpected key " + .))[];
+. as $m
+| ["protocol","run_id","evaluation_type","created_at","head_sha","head_tree","base_sha","evidence_sha","evidence_tree",
+   "diff_sha256","revision","files","exclusions","source_export","captures","review","gate","manifest_sha256"] as $keys
+| if type != "object" then "not an object" else
+  allowed($keys),
+  chk(.protocol == "loom-eval-workspace/v1"; "unknown protocol"),
+  chk(.run_id | type == "string" and test("^[a-z0-9][a-z0-9._-]{0,63}$"); "run_id"),
+  chk(.evaluation_type | IN("plan","research","code"); "evaluation_type"),
+  chk(.created_at | utc; "created_at"),
+  chk((.head_sha | sha) and (.head_tree | sha); "head ids"),
+  chk(.manifest_sha256 | s256; "manifest_sha256"),
+  chk((has("evidence_sha") | not) or ((.evidence_sha | sha) and (.evidence_tree | sha)); "evidence ids"),
+  chk((has("evidence_sha") == has("evidence_tree")); "evidence_sha/evidence_tree pairing"),
+  chk((.files | type) == "array"; "files"),
+  (if (.files | type) == "array" then
+     (.files[] | chk((.path | rel) and (.origin | IN("git-object","external","generated"))
+        and (.role | IN("source","artifact","authority","rubric","gate-evidence","review-findings","diff","revision-diff","prior-verdict","capture","capture-index","dependency"))
+        and (.mode | IN("100644","100755")) and (.sha256 | s256)
+        and ((keys - ["path","origin","role","mode","sha256"]) == []); "file entry")),
+     chk((.files | map(.path) | length) == (.files | map(.path) | unique | length); "duplicate file paths")
+   else empty end),
+  chk((.exclusions | type) == "array" and (.exclusions | all((.path | rel) and (.reason | IN("credentials","session-store","status-history","prior-evaluation","transcript")))); "exclusions"),
+  chk((.source_export | type) == "object" and .source_export.path == "source" and (.source_export.sha256 | s256)
+      and (.source_export.file_count | type == "number" and . == floor and . >= 0); "source_export"),
+  (if .evaluation_type == "code" then
+     chk((.base_sha | sha) and (.diff_sha256 | s256); "code requires base_sha and diff_sha256"),
+     chk((.review | type) == "object" and (.review.status | IN("assembled","skipped: docs-only"))
+         and ((.review.status == "assembled") == (.review | has("run_id") and has("findings_sha256")))
+         and ((.review.findings_sha256 // "0" * 64) | s256); "review"),
+     chk((.gate | type) == "object" and (.gate.argv | type == "array" and length > 0 and all(type == "string" and length > 0))
+         and (.gate.env | type == "object" and has("PATH") and all(type == "string"))
+         and (.gate.command_env_sha256 | s256)
+         and (.gate.tools | type == "array" and all((.name | type == "string" and length > 0) and (.version | type == "string" and length > 0)))
+         and (.gate.dependencies | type == "array" and all((.path | rel) and (.sha256 | s256))); "gate")
+   else
+     chk((has("base_sha") or has("diff_sha256") or has("review") or has("gate")) | not; "code-only fields on non-code run")
+   end),
+  (if .evaluation_type == "research" then
+     chk((.captures | type == "array" and length > 0 and all(
+         (.locator | type == "string" and length > 0) and (.path | rel) and (.retrieved_at | utc) and (.fresh_until | utc)
+         and (.status | type == "number" and . >= 200 and . < 300) and (.content_type | type == "string" and length > 0)
+         and (.tool | type == "string" and length > 0) and (.sha256 | s256))); "captures")
+   else
+     chk(has("captures") | not; "captures on non-research run")
+   end),
+  chk((has("revision") | not) or ((.revision.prior_sha | sha) and (.revision.diff_sha256 | s256)); "revision")
+  end
+EOF
+
+read -r -d '' JQ_RERUN <<'EOF' || true
+def s256: type == "string" and test("^[0-9a-f]{64}$");
+def chk($c; $m): if $c then empty else $m end;
+def stream: type == "object" and (.sha256 | s256) and (.bytes | type == "number" and . >= 0);
+def inv: type == "object" and (.sha256 | s256) and (.file_count | type == "number" and . >= 0);
+if type != "object" then "not an object" else
+  chk(.protocol == "loom-eval-gate-rerun/v1"; "unknown protocol"),
+  chk(.run_id == $run; "run_id mismatch"),
+  chk(.manifest_sha256 == $msha; "manifest_sha256 mismatch"),
+  chk(.seq | type == "number" and . >= 1; "seq"),
+  chk(.command_env_sha256 == $cmd; "command/environment digest mismatch"),
+  chk(.completion | IN("completed","interrupted","blocked","invalid"); "completion"),
+  chk(.result | IN("rerun-passed","rerun-failed","infrastructure-blocked","invalid"); "result"),
+  chk((.stdout | stream) and (.stderr | stream) and (.start_inventory | inv) and (.end_inventory | inv); "streams/inventories"),
+  chk((.source_verification.source | IN("unchanged","changed")) and (.source_verification.checkout | IN("unchanged","changed")); "source_verification"),
+  chk(.result != "rerun-passed" or (.completion == "completed" and .exit_status == 0 and .source_verification.source == "unchanged" and .source_verification.checkout == "unchanged"); "inconsistent rerun-passed"),
+  chk(.result != "rerun-failed" or (.completion == "completed" and (.exit_status | type == "number" and . != 0)); "inconsistent rerun-failed"),
+  chk(.result != "infrastructure-blocked" or (.completion | IN("interrupted","blocked")); "inconsistent infrastructure-blocked")
+end
+EOF
+
+# ---------------------------------------------------------------- run resolution
+
+# default_root: prints the physical default run root; sets nothing. Needs COMMON.
+default_root() {
+    local base hash
+    base="${TMPDIR:-/tmp}"
+    base="$(phys_dir "$base")" || die 1 "TMPDIR is not a directory: ${TMPDIR:-/tmp}"
+    hash="$(printf '%s' "$COMMON" | sha256_stdin | cut -c1-16)"
+    printf '%s/loom-eval-%s' "$base" "$hash"
+}
+
+REPO_OK=0
+init_repo() { # <repo-arg-or-empty>
+    if resolve_repo "${1:-.}"; then REPO_OK=1; else
+        REPO_OK=0
+        COMMON=""
+        REPO_TOP=""
+    fi
+}
+
+RUN=""
+# resolve_run <arg>: sets RUN to a physical run directory.
+resolve_run() {
+    local arg="$1" root
+    case "$arg" in
+    */*)
+        [ -e "$arg" ] || die 1 "run directory not found: $arg"
+        [ ! -L "$arg" ] || die 2 "run directory is a symlink: $arg"
+        [ -d "$arg" ] || die 2 "run path is not a directory: $arg"
+        RUN="$(phys_dir "$arg")"
+        ;;
+    *)
+        [ "$REPO_OK" = 1 ] || die 1 "run id needs a git repository (use --repo)"
+        root="$(default_root)"
+        [ -d "$root/$arg" ] || [ -L "$root/$arg" ] || die 1 "run not found: $arg"
+        [ ! -L "$root/$arg" ] || die 2 "run directory is a symlink: $arg"
+        RUN="$root/$arg"
+        ;;
+    esac
+}
+
+# ---------------------------------------------------------------- verify
+
+ERRS=""
+INFRA=0
+add_err() { printf '%s\n' "$*" >>"$ERRS"; }
+
+# do_verify: validates $RUN against its manifest and local Git objects. Sets INFRA=1 when
+# a Git object/repo needed for a binding is unavailable; errors go to $ERRS.
+do_verify() {
+    local m="$RUN/manifest.json" type head base ev top e p n1 n2 x
+    ERRS="$WORK/errs"
+    : >"$ERRS"
+    INFRA=0
+    [ -f "$m" ] && [ ! -L "$m" ] || {
+        add_err "manifest.json missing"
+        return 1
+    }
+    jq -e . "$m" >/dev/null 2>&1 || {
+        add_err "manifest.json is not valid JSON"
+        return 1
+    }
+    [ "$(jq -S -c . "$m")" = "$(cat "$m")" ] || add_err "manifest.json is not canonical JSON"
+    jq -r "$JQ_MANIFEST" "$m" >"$WORK/mchk" 2>/dev/null || add_err "manifest validation failed"
+    if [ -s "$WORK/mchk" ]; then
+        while IFS= read -r e; do add_err "manifest: $e"; done <"$WORK/mchk"
+        return 1
+    fi
+    [ "$(jq -S -c 'del(.manifest_sha256)' "$m" | sha256_stdin)" = "$(jq -r .manifest_sha256 "$m")" ] ||
+        add_err "manifest_sha256 does not match"
+    type="$(jq -r .evaluation_type "$m")"
+    head="$(jq -r .head_sha "$m")"
+
+    # layout
+    [ "${STAGING:-0}" = 1 ] || [ "$(basename -- "$RUN")" = "$(jq -r .run_id "$m")" ] || add_err "run directory name does not match run_id"
+    [ -n "$(find "$RUN" -maxdepth 0 -type d -perm 700 -print)" ] || add_err "run root is not mode 0700"
+    for p in output scratch; do
+        [ -d "$RUN/$p" ] && [ ! -L "$RUN/$p" ] || add_err "$p/ missing"
+        [ -n "$(find "$RUN/$p" -maxdepth 0 -type d -perm 700 -print 2>/dev/null)" ] || add_err "$p/ is not private and writable (0700)"
+    done
+    for p in source inputs; do [ -d "$RUN/$p" ] && [ ! -L "$RUN/$p" ] || add_err "$p/ missing"; done
+    while IFS= read -r p; do
+        case "$p" in
+        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
+        *) add_err "unexpected top-level entry: $p" ;;
+        esac
+    done < <(ls -A "$RUN")
+    if [ "$type" = code ]; then [ -f "$RUN/diff.patch" ] || add_err "diff.patch missing"; else [ ! -e "$RUN/diff.patch" ] || add_err "unexpected diff.patch"; fi
+    if jq -e 'has("revision")' "$m" >/dev/null; then [ -f "$RUN/revision.patch" ] || add_err "revision.patch missing"; else [ ! -e "$RUN/revision.patch" ] || add_err "unexpected revision.patch"; fi
+    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" -o -path "$RUN/reruns" \) -prune -o ! -type f ! -type d -print | head -n 3)"
+    [ -z "$x" ] || add_err "links or special files present: $x"
+    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" -o -path "$RUN/reruns" \) -prune -o -type f -links +1 -print | head -n 3)"
+    [ -z "$x" ] || add_err "hardlinked files present: $x"
+    n1="$(find "$RUN/source" "$RUN/inputs" -print0 2>/dev/null | tr -cd '\0' | wc -c | tr -d ' ')"
+    n2="$(find "$RUN/source" "$RUN/inputs" -print 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$n1" = "$n2" ] || add_err "unsafe path characters present"
+    x="$(find "$RUN/source" "$RUN/inputs" "$RUN/diff.patch" "$RUN/revision.patch" \( -perm -200 -o -perm -020 -o -perm -002 \) -print 2>/dev/null | head -n 3)"
+    [ -z "$x" ] || add_err "writable immutable paths: $x"
+
+    # inventory + hashes
+    scan_files "$RUN" >"$WORK/scan.now"
+    jq -r '.files[] | .path + "\t" + .mode + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/scan.man"
+    cmp -s "$WORK/scan.now" "$WORK/scan.man" || add_err "file inventory, modes or hashes differ from manifest"
+
+    # binding to local Git objects
+    [ "$REPO_OK" = 1 ] || {
+        INFRA=1
+        add_err "git repository unavailable for object binding"
+        return 1
+    }
+    [ ! -s "$ERRS" ] || return 1 # integrity failures outrank unavailable objects
+    local sha_chk
+    for sha_chk in $(jq -r '[.head_sha, .base_sha, .evidence_sha, .revision.prior_sha] | map(select(. != null)) | .[]' "$m"); do
+        if [ "$(gg rev-parse --verify --quiet "${sha_chk}^{commit}" 2>/dev/null || true)" != "$sha_chk" ]; then
+            INFRA=1
+            add_err "commit object unavailable: $sha_chk"
+        fi
+    done
+    [ "$INFRA" = 0 ] || return 1
+    [ "$(gg rev-parse "${head}^{tree}")" = "$(jq -r .head_tree "$m")" ] || add_err "head_tree does not match head_sha"
+    ev="$(jq -r '.evidence_sha // empty' "$m")"
+    if [ -n "$ev" ]; then
+        [ "$(gg rev-parse "${ev}^{tree}")" = "$(jq -r .evidence_tree "$m")" ] || add_err "evidence_tree does not match evidence_sha"
+        top="$ev"
+    elif [ "$type" = code ]; then top="$head"; else top=""; fi
+    if [ -n "$top" ]; then
+        tree_listing "$top" "$type" >"$WORK/tree.exp"
+        src_listing "$RUN/source" >"$WORK/src.now"
+        cmp -s "$WORK/tree.exp" "$WORK/src.now" || add_err "source export does not match Git tree"
+        LC_ALL=C sort "$WORK/excl.tsv" >"$WORK/excl.exp"
+        jq -r '.exclusions[] | .path + "\t" + .reason' "$m" | LC_ALL=C sort >"$WORK/excl.man"
+        cmp -s "$WORK/excl.exp" "$WORK/excl.man" || add_err "recorded exclusions differ from policy"
+        [ "$(listing_hash "$WORK/src.now")" = "$(jq -r .source_export.sha256 "$m")" ] || add_err "source_export hash mismatch"
+    else
+        [ "$(jq '.exclusions | length' "$m")" = 0 ] && [ "$(jq -r .source_export.file_count "$m")" = 0 ] &&
+            [ -z "$(find "$RUN/source" -mindepth 1 -print -quit)" ] || add_err "source/ must be empty without an evidence snapshot"
+    fi
+    [ "$(find "$RUN/source" -type f | wc -l | tr -d ' ')" = "$(jq -r .source_export.file_count "$m")" ] || add_err "source file_count mismatch"
+    # tracked inputs equal their Git objects at head
+    local path role rel
+    while IFS="$TAB" read -r path role; do
+        rel="${path#inputs/*/}"
+        if ! gg cat-file -e "$head:$rel" 2>/dev/null; then
+            add_err "tracked input not at head: $rel"
+            continue
+        fi
+        [ "$(gg cat-file blob "$head:$rel" | sha256_stdin)" = "$(sha256_file "$RUN/$path")" ] || add_err "input differs from Git object: $rel"
+    done < <(jq -r '.files[] | select(.origin == "git-object" and .role != "source") | .path + "\t" + .role' "$m")
+    if [ "$type" = code ]; then
+        base="$(jq -r .base_sha "$m")"
+        gg merge-base --is-ancestor "$base" "$head" 2>/dev/null || add_err "base is not an ancestor of head"
+        gdiff --binary --full-index "$base" "$head" >"$WORK/diff.now"
+        [ "$(sha256_file "$WORK/diff.now")" = "$(jq -r .diff_sha256 "$m")" ] || add_err "diff_sha256 does not match base..head"
+        cmp -s "$WORK/diff.now" "$RUN/diff.patch" || add_err "diff.patch does not match base..head"
+        [ "$(jq -S -c '.gate | {argv, env}' "$m" | sha256_stdin)" = "$(jq -r .gate.command_env_sha256 "$m")" ] || add_err "command/environment digest mismatch"
+        jq -r '.gate.dependencies[] | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/dep.man"
+        jq -r '.files[] | select(.role == "dependency") | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/dep.files"
+        cmp -s "$WORK/dep.man" "$WORK/dep.files" || add_err "dependency inventory mismatch"
+        if [ "$(jq -r .review.status "$m")" = assembled ]; then
+            [ "$(jq -r '.files[] | select(.role == "review-findings") | .sha256' "$m")" = "$(jq -r .review.findings_sha256 "$m")" ] || add_err "review findings hash mismatch"
+        else
+            code_paths_docs_only "$base" "$head" || add_err "docs-only review skip but the diff touches non-doc paths"
+        fi
+    fi
+    if jq -e 'has("revision")' "$m" >/dev/null; then
+        p="$(jq -r .revision.prior_sha "$m")"
+        gg merge-base --is-ancestor "$p" "$head" 2>/dev/null || add_err "prior_sha is not an ancestor of head"
+        gdiff --binary --full-index "$p" "$head" >"$WORK/rev.now"
+        [ "$(sha256_file "$WORK/rev.now")" = "$(jq -r .revision.diff_sha256 "$m")" ] || add_err "revision diff hash mismatch"
+        cmp -s "$WORK/rev.now" "$RUN/revision.patch" || add_err "revision.patch does not match prior..head"
+    fi
+    if [ "$type" = research ]; then
+        jq -r '.captures[] | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/cap.man"
+        jq -r '.files[] | select(.role == "capture") | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/cap.files"
+        cmp -s "$WORK/cap.man" "$WORK/cap.files" || add_err "capture inventory mismatch"
+    fi
+    [ ! -s "$ERRS" ]
+}
+
+# code_paths_docs_only <base> <head>: every touched path is under .docs/ or is markdown.
+code_paths_docs_only() {
+    local p
+    gdiff --no-renames --name-only -z "$1" "$2" >"$WORK/names.bin"
+    while IFS= read -r -d '' p; do
+        case "$p" in .docs/* | *.md) ;; *) return 1 ;; esac
+    done <"$WORK/names.bin"
+}
+
+verify_rc() { # after do_verify: prints errors, returns the exit code
+    local rc=0
+    if [ "$INFRA" = 1 ]; then rc=4; elif [ -s "$ERRS" ]; then rc=2; fi
+    if [ "$rc" != 0 ]; then
+        while IFS= read -r line; do log "verify: $line"; done <"$ERRS"
+    fi
+    return "$rc"
+}
+
+# ---------------------------------------------------------------- prepare
+
+# tracked_input <role> <path>: copies the blob at $HEAD into the build inputs.
+SEEN_INPUTS=$'\n'
+tracked_input() {
+    local role="$1" arg="$2" rel meta mode otype
+    nocntrl "$role path" "$arg"
+    case "$arg" in
+    /*)
+        case "$arg" in "$REPO_TOP"/*) rel="${arg#"$REPO_TOP"/}" ;; *) die 2 "$role is outside the repository: $arg" ;; esac
+        ;;
+    *) rel="$arg" ;;
+    esac
+    safe_rel "$rel" || die 2 "unsafe $role path: $arg"
+    case "$SEEN_INPUTS" in *$'\n'"$rel"$'\n'*) die 2 "duplicate input path: $rel" ;; esac
+    SEEN_INPUTS="$SEEN_INPUTS$rel"$'\n'
+    meta="$(gg ls-tree -z "$HEAD" -- "$rel" | tr '\0' '\n' | head -n 1)"
+    [ -n "$meta" ] || die 2 "$role is not tracked at head: $rel"
+    [ "${meta#*"$TAB"}" = "$rel" ] || die 2 "$role is not an exact tracked file at head: $rel"
+    read -r mode otype _ <<<"${meta%%"$TAB"*}"
+    case "$otype:$mode" in
+    blob:100644 | blob:100755) ;;
+    *) die 2 "$role is not a regular tracked file: $rel" ;;
+    esac
+    mkdir -p "$BUILD/inputs/$role/$(dirname -- "$rel")"
+    gg cat-file blob "$HEAD:$rel" >"$BUILD/inputs/$role/$rel"
+    chmod 644 "$BUILD/inputs/$role/$rel"
+    printf '%s\tgit-object\t%s\n' "inputs/$role/$rel" "$role" >>"$WORK/meta.tsv"
+}
+
+# external_file <src> <dest-relative-to-run> <role>: copy one regular external file.
+external_file() {
+    local src="$1" dest="$2" role="$3"
+    nocntrl "$role path" "$src"
+    regular_external "$src" || die 2 "$role must be an existing regular, non-symlink, single-link file: $src"
+    safe_rel "$dest" || die 2 "unsafe destination for $role: $dest"
+    [ ! -e "$BUILD/$dest" ] || die 2 "duplicate input path: $dest"
+    mkdir -p "$BUILD/$(dirname -- "$dest")"
+    cp "$src" "$BUILD/$dest"
+    chmod 644 "$BUILD/$dest"
+    printf '%s\texternal\t%s\n' "$dest" "$role" >>"$WORK/meta.tsv"
+}
+
+validate_captures() { # <index.json> -> fills inputs/captures and $WORK/captures.json
+    local idx="$1" dir f now n
+    regular_external "$idx" || die 2 "captures index must be an existing regular, non-symlink file"
+    dir="$(phys_dir "$(dirname -- "$idx")")"
+    now="$(utc_now)"
+    jq -e 'type == "array" and length > 0 and all(type == "object"
+        and ((keys | sort) == ["content_type","file","fresh_until","locator","retrieved_at","sha256","status","tool"])
+        and (.locator | type == "string" and length > 0) and (.file | type == "string" and length > 0)
+        and (.retrieved_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+        and (.fresh_until | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+        and (.status | type == "number" and . >= 200 and . < 300 and . == floor)
+        and (.content_type | type == "string" and length > 0) and (.tool | type == "string" and length > 0)
+        and (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+        and (map(.file) | length) == (map(.file) | unique | length)' "$idx" >/dev/null 2>&1 ||
+        die 2 "captures index is malformed, incomplete or has duplicate files"
+    jq -e --arg now "$now" 'all(.retrieved_at <= $now and .fresh_until > $now and .retrieved_at < .fresh_until)' "$idx" >/dev/null ||
+        die 2 "captures are stale or not yet retrieved"
+    n=0
+    while IFS= read -r f; do
+        safe_rel "$f" || die 2 "unsafe capture file: $f"
+        regular_external "$dir/$f" || die 2 "capture file missing or not a regular file: $f"
+        [ "$(sha256_file "$dir/$f")" = "$(jq -r --arg f "$f" '.[] | select(.file == $f) | .sha256' "$idx")" ] || die 2 "capture hash mismatch: $f"
+        external_file "$dir/$f" "inputs/captures/files/$f" capture
+        n=$((n + 1))
+    done < <(jq -r '.[].file' "$idx")
+    external_file "$idx" "inputs/captures/index.json" capture-index
+    jq -c 'map({locator, path: ("inputs/captures/files/" + .file), retrieved_at, fresh_until, status, content_type, tool, sha256})' "$idx" >"$WORK/captures.json"
+}
+
+# add_dependency <path>: a regular file or a tree of regular files below inputs/deps.
+add_dependency() {
+    local src="$1" base f rel
+    nocntrl "dependency path" "$src"
+    [ -e "$src" ] && [ ! -L "$src" ] || die 2 "dependency not found or a symlink: $src"
+    base="$(basename -- "$src")"
+    safe_rel "$base" || die 2 "unsafe dependency name: $base"
+    if [ -f "$src" ]; then
+        external_file "$src" "inputs/deps/$base" dependency
+        return
+    fi
+    [ -d "$src" ] || die 2 "dependency is not a regular file or directory: $src"
+    [ -z "$(find "$src" ! -type f ! -type d -print -quit)" ] || die 2 "dependency tree contains links or special files: $src"
+    [ -z "$(find "$src" -type f -links +1 -print -quit)" ] || die 2 "dependency tree contains hardlinks: $src"
+    src="$(phys_dir "$src")"
+    while IFS= read -r f; do
+        rel="${f#"$src"/}"
+        safe_rel "$rel" || die 2 "unsafe dependency path: $rel"
+        external_file "$f" "inputs/deps/$base/$rel" dependency
+    done < <(find "$src" -type f | LC_ALL=C sort)
+}
+
+# check_review_run <dir> <base> <head>: validated, assembled loom-local-review/v1 run.
+REVIEW_RUN_ID=""
+check_review_run() {
+    local rr="$1" st out osha rid
+    [ -d "$rr" ] && [ ! -L "$rr" ] || die 2 "review run must be an existing non-symlink directory"
+    rr="$(phys_dir "$rr")"
+    "$BIN_DIR/loom-review" validate "$rr" --repo "$REPO_TOP" --quiet >/dev/null 2>&1 || die 2 "loom-review validate rejected the review run"
+    st="$rr/state.json"
+    out="$(jq -r '.assembled.out // empty' "$st" 2>/dev/null || true)"
+    osha="$(jq -r '.assembled.output_sha256 // empty' "$st" 2>/dev/null || true)"
+    [ -n "$out" ] && [ -n "$osha" ] || die 2 "review run is unassembled (no assembled findings)"
+    regular_external "$out" || die 2 "assembled findings file missing or not regular: $out"
+    [ "$(sha256_file "$out")" = "$osha" ] || die 2 "assembled findings changed since assembly"
+    rid="$(jq -r .run_id "$rr/manifest.json")"
+    jq -e --arg b "$BASE" --arg h "$HEAD" '.protocol == "loom-local-review/v1" and .base_sha == $b and .head_sha == $h' "$rr/manifest.json" >/dev/null ||
+        die 2 "review run is bound to a different protocol, base or head"
+    if ! { grep -qx -- '- Protocol: loom-local-review/v1' "$out" && grep -qx -- "- Run: $rid" "$out" &&
+        grep -qxE -- '- Aggregate: ran-(clean|with-findings)' "$out"; }; then
+        die 2 "findings are not assembled loom-local-review/v1 output (bootstrap or unassembled findings rejected)"
+    fi
+    REVIEW_RUN_ID="$rid"
+    REVIEW_OUT="$out"
+}
+
+prepare_usage() { die 1 "prepare: $*"; }
+
+cmd_prepare() {
+    local type="" head="" BASE="" evidence="" prior_verdict="" prior_sha="" captures="" gate_ev="" review_run="" docs_only=0
+    local run_id="" out="" repo="" artifacts="" authorities="" rubrics="" gargs="" genv="" tools="" deps=""
+    HEAD=""
+    while [ $# -gt 0 ]; do
+        if [ "$1" = --docs-only ]; then
+            [ "$docs_only" = 0 ] || prepare_usage "duplicate --docs-only"
+            docs_only=1
+            shift
+            continue
+        fi
+        case "$1" in
+        --type | --head | --base | --artifact | --authority | --rubric | --evidence-sha | --prior-verdict | --prior-sha | --captures | --gate-evidence | --review-run | --gate-arg | --gate-env | --tool-version | --dependency | --run-id | --out | --repo) ;;
+        *) die 1 "unknown argument: $1" ;;
+        esac
+        [ $# -ge 2 ] || die 1 "$1 requires a value"
+        nocntrl "$1" "$2"
+        case "$1" in
+        --type)
+            [ -z "$type" ] || prepare_usage "duplicate --type"
+            type="$2"
+            ;;
+        --head)
+            [ -z "$head" ] || prepare_usage "duplicate --head"
+            head="$2"
+            ;;
+        --base)
+            [ -z "$BASE" ] || prepare_usage "duplicate --base"
+            BASE="$2"
+            ;;
+        --evidence-sha)
+            [ -z "$evidence" ] || prepare_usage "duplicate --evidence-sha"
+            evidence="$2"
+            ;;
+        --prior-verdict)
+            [ -z "$prior_verdict" ] || prepare_usage "duplicate --prior-verdict"
+            prior_verdict="$2"
+            ;;
+        --prior-sha)
+            [ -z "$prior_sha" ] || prepare_usage "duplicate --prior-sha"
+            prior_sha="$2"
+            ;;
+        --captures)
+            [ -z "$captures" ] || prepare_usage "duplicate --captures"
+            captures="$2"
+            ;;
+        --gate-evidence)
+            [ -z "$gate_ev" ] || prepare_usage "duplicate --gate-evidence"
+            gate_ev="$2"
+            ;;
+        --review-run)
+            [ -z "$review_run" ] || prepare_usage "duplicate --review-run"
+            review_run="$2"
+            ;;
+        --run-id)
+            [ -z "$run_id" ] || prepare_usage "duplicate --run-id"
+            run_id="$2"
+            ;;
+        --out)
+            [ -z "$out" ] || prepare_usage "duplicate --out"
+            out="$2"
+            ;;
+        --repo)
+            [ -z "$repo" ] || prepare_usage "duplicate --repo"
+            repo="$2"
+            ;;
+        --artifact) artifacts="$artifacts$2"$'\n' ;;
+        --authority) authorities="$authorities$2"$'\n' ;;
+        --rubric) rubrics="$rubrics$2"$'\n' ;;
+        --gate-arg)
+            [ -n "$2" ] || die 2 "empty --gate-arg"
+            gargs="$gargs$2"$'\n'
+            ;;
+        --gate-env) genv="$genv$2"$'\n' ;;
+        --tool-version) tools="$tools$2"$'\n' ;;
+        --dependency) deps="$deps$2"$'\n' ;;
+        esac
+        shift 2
+    done
+    case "$type" in plan | research | code) ;; *) die 1 "--type must be plan, research or code" ;; esac
+    [ -n "$head" ] && [ -n "$artifacts" ] || die 1 "prepare requires --type --head and at least one --artifact"
+    if [ "$type" = code ]; then
+        [ -n "$BASE" ] && [ -n "$gate_ev" ] && [ -n "$gargs" ] || die 1 "code runs require --base --gate-evidence and --gate-arg"
+        { [ -n "$review_run" ] && [ "$docs_only" = 0 ]; } || { [ -z "$review_run" ] && [ "$docs_only" = 1 ]; } ||
+            die 1 "code runs require exactly one of --review-run or --docs-only"
+        [ -z "$evidence" ] || die 1 "--evidence-sha is not valid for code runs"
+        [ -z "$captures" ] || die 1 "--captures is only valid for research runs"
+    else
+        [ -z "$BASE$gate_ev$review_run$gargs$genv$tools$deps" ] && [ "$docs_only" = 0 ] || die 1 "code-only options on a $type run"
+        if [ "$type" = research ]; then [ -n "$captures" ] || die 2 "research runs require --captures (complete, fresh captured citations)"; else
+            [ -z "$captures" ] || die 1 "--captures is only valid for research runs"
+        fi
+    fi
+    { [ -z "$prior_verdict" ] && [ -z "$prior_sha" ]; } || { [ -n "$prior_verdict" ] && [ -n "$prior_sha" ]; } ||
+        die 1 "--prior-verdict and --prior-sha must be given together"
+    init_repo "$repo"
+    [ "$REPO_OK" = 1 ] || die 2 "not a git repository: ${repo:-.}"
+
+    local s r
+    for s in "$head" "$BASE" "$evidence" "$prior_sha"; do
+        [ -n "$s" ] || continue
+        [[ "$s" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || die 2 "not a full lowercase commit id: $s"
+        r="$(gg rev-parse --verify --quiet "${s}^{commit}" 2>/dev/null || true)"
+        [ "$r" = "$s" ] || die 4 "commit object not found locally: $s"
+    done
+    HEAD="$head"
+    if [ -n "$BASE" ]; then
+        [ "$BASE" != "$head" ] || die 2 "base equals head"
+        gg merge-base --is-ancestor "$BASE" "$head" 2>/dev/null || die 2 "base is not an ancestor of head"
+    fi
+    if [ -n "$prior_sha" ]; then
+        [ "$prior_sha" != "$head" ] || die 2 "prior_sha equals head"
+        gg merge-base --is-ancestor "$prior_sha" "$head" 2>/dev/null || die 2 "prior_sha is not an ancestor of head"
+    fi
+    if [ -n "$run_id" ]; then
+        [[ "$run_id" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die 2 "invalid run id: $run_id"
+    fi
+
+    # run location
+    local root final tmpbase
+    if [ -n "$out" ]; then
+        case "$out" in /*) ;; *) die 1 "--out must be an absolute directory" ;; esac
+        case "$out" in */ | */./* | */../* | */. | */.. | *//*) die 2 "unsafe --out path" ;; esac
+        [ ! -e "$out" ] && [ ! -L "$out" ] || die 2 "destination already exists: $out"
+        root="$(phys_dir "$(dirname -- "$out")")" || die 1 "--out parent does not exist"
+        final="$root/$(basename -- "$out")"
+        [ -n "$run_id" ] || run_id="$(basename -- "$out")"
+        [ "$run_id" = "$(basename -- "$out")" ] || die 2 "--run-id must equal the --out directory name"
+        [[ "$run_id" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die 2 "invalid run id: $run_id"
+    else
+        [ -n "$run_id" ] || run_id="$type-${head:0:12}-$(date +%s)-$$"
+        root="$(default_root)"
+        final="$root/$run_id"
+    fi
+    if overlaps "$root" "$REPO_TOP" || overlaps "$root" "$COMMON" || overlaps "$final" "$REPO_TOP" || overlaps "$final" "$COMMON"; then
+        die 2 "run location overlaps the managed repository, worktree or git directory"
+    fi
+    if [ -z "$out" ]; then
+        tmpbase="$(dirname -- "$root")"
+        [ -d "$tmpbase" ] || die 1 "temp directory missing: $tmpbase"
+        if [ -L "$root" ]; then die 2 "default run root is a symlink: $root"; fi
+        if [ ! -d "$root" ]; then
+            [ ! -e "$root" ] || die 2 "default run root is not a directory: $root"
+            mkdir -m 700 "$root"
+            ROOT_CREATED="$root"
+        fi
+        [ -n "$(find "$root" -maxdepth 0 -type d -perm 700 -print)" ] || die 2 "default run root is not private (0700): $root"
+    fi
+    [ ! -e "$final" ] && [ ! -L "$final" ] || die 2 "run already exists: $final"
+    BUILD="$root/.tmp-$run_id.$$"
+    umask 022
+    mkdir "$BUILD"
+    chmod 700 "$BUILD"
+    mkdir "$BUILD/source" "$BUILD/inputs"
+    : >"$WORK/meta.tsv"
+
+    local head_tree evidence_tree="" srcsha="" line
+    head_tree="$(gg rev-parse --verify "${head}^{tree}")"
+    # source export from exact objects
+    if [ -n "$evidence" ]; then
+        srcsha="$evidence"
+        evidence_tree="$(gg rev-parse --verify "${evidence}^{tree}")"
+    elif [ "$type" = code ]; then srcsha="$head"; fi
+    : >"$WORK/tree.exp"
+    : >"$WORK/excl.tsv"
+    : >"$WORK/src.list"
+    if [ -n "$srcsha" ]; then
+        tree_listing "$srcsha" "$type" >"$WORK/tree.exp"
+        local mode oid path
+        while IFS="$TAB" read -r path mode oid; do
+            case "$path" in */*) mkdir -p "$BUILD/source/${path%/*}" ;; esac
+            gg cat-file blob "$oid" >"$BUILD/source/$path"
+            if [ "$mode" = 100755 ]; then chmod 755 "$BUILD/source/$path"; else chmod 644 "$BUILD/source/$path"; fi
+        done <"$WORK/tree.exp"
+        src_listing "$BUILD/source" >"$WORK/src.list"
+        cmp -s "$WORK/tree.exp" "$WORK/src.list" || die 2 "source export does not match the Git tree"
+    fi
+    local nfiles export_sha
+    nfiles="$(wc -l <"$WORK/src.list" | tr -d ' ')"
+    export_sha="$(listing_hash "$WORK/src.list")"
+    LC_ALL=C sort "$WORK/excl.tsv" >"$WORK/excl.sorted"
+
+    # type-specific inputs
+    while IFS= read -r line; do [ -z "$line" ] || tracked_input artifact "$line"; done <<<"$artifacts"
+    while IFS= read -r line; do [ -z "$line" ] || tracked_input authority "$line"; done <<<"$authorities"
+    while IFS= read -r line; do [ -z "$line" ] || tracked_input rubric "$line"; done <<<"$rubrics"
+    [ -z "$prior_verdict" ] || tracked_input prior-verdict "$prior_verdict"
+    printf '{}' >"$WORK/revision.json"
+    if [ -n "$prior_sha" ]; then
+        gdiff --binary --full-index "$prior_sha" "$head" >"$BUILD/revision.patch"
+        printf 'revision.patch\tgenerated\trevision-diff\n' >>"$WORK/meta.tsv"
+        jq -n -c --arg p "$prior_sha" --arg d "$(sha256_file "$BUILD/revision.patch")" '{revision: {prior_sha: $p, diff_sha256: $d}}' >"$WORK/revision.json"
+    fi
+    printf '{}' >"$WORK/captures.json.wrap"
+    if [ "$type" = research ]; then
+        validate_captures "$captures"
+        jq -n -c --slurpfile c "$WORK/captures.json" '{captures: $c[0]}' >"$WORK/captures.json.wrap"
+    fi
+    printf '{}' >"$WORK/code.json"
+    if [ "$type" = code ]; then
+        build_code_inputs "$gate_ev" "$review_run" "$docs_only" "$gargs" "$genv" "$tools" "$deps"
+    fi
+
+    # normalize identity-bearing metadata, then make the immutable parts read-only
+    find "$BUILD/source" "$BUILD/inputs" "$BUILD"/diff.patch "$BUILD"/revision.patch -exec touch -t 200001010000 {} + 2>/dev/null || true
+    chmod -R a-w "$BUILD/source" "$BUILD/inputs"
+    for line in diff.patch revision.patch; do [ ! -e "$BUILD/$line" ] || chmod a-w "$BUILD/$line"; done
+    mkdir -m 700 "$BUILD/output" "$BUILD/scratch"
+
+    # manifest
+    scan_files "$BUILD" >"$WORK/scan.tsv"
+    jq -n -S -c --arg run_id "$run_id" --arg type "$type" --arg now "$(utc_now)" --arg head "$head" --arg tree "$head_tree" \
+        --arg base "$BASE" --arg ev "$evidence" --arg evt "$evidence_tree" --arg esha "$export_sha" --argjson ecount "$nfiles" \
+        --rawfile fs "$WORK/scan.tsv" --rawfile meta "$WORK/meta.tsv" --rawfile excl "$WORK/excl.sorted" \
+        --slurpfile rev "$WORK/revision.json" --slurpfile cap "$WORK/captures.json.wrap" --slurpfile code "$WORK/code.json" '
+        ($meta | split("\n") | map(select(length > 0) | split("\t") | {key: .[0], value: {origin: .[1], role: .[2]}}) | from_entries) as $m
+        | {protocol: "loom-eval-workspace/v1", run_id: $run_id, evaluation_type: $type, created_at: $now,
+           head_sha: $head, head_tree: $tree,
+           files: [$fs | split("\n")[] | select(length > 0) | split("\t") | . as $r | $r[0] as $p
+                   | ($m[$p] // (if ($p | startswith("source/")) then {origin: "git-object", role: "source"} else {} end)) as $mm
+                   | {path: $p, origin: $mm.origin, role: $mm.role, mode: $r[1], sha256: $r[2]}] | sort_by(.path),
+           exclusions: [$excl | split("\n")[] | select(length > 0) | split("\t") | {path: .[0], reason: .[1]}],
+           source_export: {path: "source", sha256: $esha, file_count: $ecount}}
+        + (if $base != "" then {base_sha: $base} else {} end)
+        + (if $ev != "" then {evidence_sha: $ev, evidence_tree: $evt} else {} end)
+        + $rev[0] + $cap[0] + $code[0]' >"$WORK/manifest.nohash"
+    local msha
+    msha="$(sha256_stdin <"$WORK/manifest.nohash")"
+    jq -S -c --arg h "$msha" '. + {manifest_sha256: $h}' "$WORK/manifest.nohash" >"$BUILD/manifest.json"
+    # fail closed: the freshly built run must verify before it is published
+    local keep_run="$RUN"
+    RUN="$BUILD"
+    STAGING=1
+    if ! do_verify; then
+        verify_rc || true
+        RUN="$keep_run"
+        die 2 "prepared run failed verification"
+    fi
+    RUN="$keep_run"
+    STAGING=0
+    mv "$BUILD" "$final"
+    BUILD=""
+    ROOT_CREATED=""
+    printf '%s\n' "$final"
+}
+
+# build_code_inputs <gate-evidence> <review-run> <docs-only> <args> <env> <tools> <deps>
+build_code_inputs() {
+    local gate_ev="$1" review_run="$2" docs_only="$3" gargs="$4" genv="$5" tools="$6" deps="$7" line k v
+    local review='{"status":"skipped: docs-only"}'
+    external_file "$gate_ev" "inputs/gate-evidence" gate-evidence
+    gdiff --binary --full-index "$BASE" "$HEAD" >"$BUILD/diff.patch"
+    printf 'diff.patch\tgenerated\tdiff\n' >>"$WORK/meta.tsv"
+    gdiff --raw "$BASE" "$HEAD" | awk '$1 == ":160000" || $2 == "160000" {f = 1} END {exit !f}' && die 2 "submodule/gitlink in diff"
+    if [ "$docs_only" = 1 ]; then
+        code_paths_docs_only "$BASE" "$HEAD" || die 2 "--docs-only is invalid: the diff touches non-doc paths"
+    else
+        check_review_run "$review_run"
+        cp "$REVIEW_OUT" "$BUILD/inputs/review-findings.md"
+        chmod 644 "$BUILD/inputs/review-findings.md"
+        printf 'inputs/review-findings.md\texternal\treview-findings\n' >>"$WORK/meta.tsv"
+        review="$(jq -n -c --arg r "$REVIEW_RUN_ID" --arg s "$(sha256_file "$BUILD/inputs/review-findings.md")" '{status: "assembled", run_id: $r, findings_sha256: $s}')"
+    fi
+    # pinned gate
+    local argv env_json='{}' tools_json='[]' seen=" "
+    case "$(printf '%s' "$gargs" | head -n 1)" in -*) die 2 "gate argv[0] must not start with '-'" ;; esac
+    argv="$(printf '%s' "$gargs" | jq -R -s -c 'split("\n")[:-1]')"
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in *=*) ;; *) die 2 "malformed --gate-env (want NAME=VALUE): $line" ;; esac
+        k="${line%%=*}"
+        v="${line#*=}"
+        [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die 2 "invalid environment name: $k"
+        case "$RESERVED_ENV" in *" $k "*) die 2 "environment name is reserved for the runner: $k" ;; esac
+        case "$seen" in *" $k "*) die 2 "duplicate environment name: $k" ;; esac
+        seen="$seen$k "
+        env_json="$(jq -c --arg k "$k" --arg v "$v" '. + {($k): $v}' <<<"$env_json")"
+    done <<<"$genv"
+    jq -e 'has("PATH") and (.PATH | length > 0)' <<<"$env_json" >/dev/null || die 2 "the pinned environment must define PATH"
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case "$line" in *=*) ;; *) die 2 "malformed --tool-version (want name=version): $line" ;; esac
+        [[ "${line%%=*}" =~ ^[A-Za-z0-9._+-]+$ ]] && [ -n "${line#*=}" ] || die 2 "invalid --tool-version: $line"
+        tools_json="$(jq -c --arg n "${line%%=*}" --arg v "${line#*=}" '. + [{name: $n, version: $v}]' <<<"$tools_json")"
+    done <<<"$tools"
+    while IFS= read -r line; do [ -z "$line" ] || add_dependency "$line"; done <<<"$deps"
+    local cmd_sha
+    cmd_sha="$(jq -n -S -c --argjson a "$argv" --argjson e "$env_json" '{argv: $a, env: $e}' | sha256_stdin)"
+    # dependency hashes come from the copied files (scan after copy)
+    (cd "$BUILD" && find inputs/deps -type f 2>/dev/null | LC_ALL=C sort) >"$WORK/dep.paths" || true
+    : >"$WORK/dep.tsv"
+    while IFS= read -r line; do
+        [ -z "$line" ] || printf '%s\t%s\n' "$line" "$(sha256_file "$BUILD/$line")" >>"$WORK/dep.tsv"
+    done <"$WORK/dep.paths"
+    jq -n -S -c --argjson r "$review" --argjson a "$argv" --argjson e "$env_json" --argjson t "$tools_json" --arg cmd "$cmd_sha" \
+        --arg d "$(sha256_file "$BUILD/diff.patch")" --rawfile deps "$WORK/dep.tsv" '
+        {diff_sha256: $d, review: $r,
+         gate: {argv: $a, env: $e, command_env_sha256: $cmd, tools: $t,
+                dependencies: [$deps | split("\n")[] | select(length > 0) | split("\t") | {path: .[0], sha256: .[1]}]}}' >"$WORK/code.json"
+}
+
+# ---------------------------------------------------------------- verify / status
+
+parse_run_args() { # sets RUN_ARG, REPO_ARG, JSON (when allowed)
+    RUN_ARG="" REPO_ARG="" JSON=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --repo)
+            [ $# -ge 2 ] || die 1 "--repo requires a value"
+            REPO_ARG="$2"
+            shift 2
+            ;;
+        --json)
+            [ "$ALLOW_JSON" = 1 ] || die 1 "unknown option: $1"
+            JSON=1
+            shift
+            ;;
+        -*) die 1 "unknown option: $1" ;;
+        *)
+            [ -z "$RUN_ARG" ] || die 1 "unexpected argument: $1"
+            RUN_ARG="$1"
+            shift
+            ;;
+        esac
+    done
+    [ -n "$RUN_ARG" ] || die 1 "missing <run-dir|run-id>"
+}
+
+cmd_verify() {
+    ALLOW_JSON=0
+    parse_run_args "$@"
+    init_repo "$REPO_ARG"
+    resolve_run "$RUN_ARG"
+    do_verify || true
+    verify_rc || exit $?
+    printf 'valid\n'
+}
+
+emit_status() { # <status> <exit> [detail]
+    if [ "$JSON" = 1 ]; then
+        jq -n -c --arg s "$1" --arg r "$(basename -- "$RUN")" --arg d "${3:-}" '{status: $s, run_id: $r} + (if $d != "" then {detail: $d} else {} end)'
+    else
+        printf 'status: %s\n' "$1"
+        [ -z "${3:-}" ] || printf '%s\n' "$3"
+    fi
+    exit "$2"
+}
+
+# latest_rerun: prints the highest rerun directory (empty if none).
+latest_rerun() {
+    [ -d "$RUN/reruns" ] || return 0
+    find "$RUN/reruns" -mindepth 1 -maxdepth 1 -type d -name '[0-9][0-9][0-9]' 2>/dev/null | LC_ALL=C sort | tail -n 1
+}
+
+cmd_status() {
+    ALLOW_JSON=1
+    parse_run_args "$@"
+    init_repo "$REPO_ARG"
+    resolve_run "$RUN_ARG"
+    local id parent rrd rc msha
+    id="$(basename -- "$RUN")"
+    parent="$(dirname -- "$RUN")"
+    # in-flight or partial runs: staging sibling, missing manifest, or a running rerun
+    if [ -n "$(find "$parent" -mindepth 1 -maxdepth 1 -name ".tmp-$id.*" -print -quit 2>/dev/null)" ]; then
+        emit_status incomplete 3 "prepare in flight"
+    fi
+    [ -f "$RUN/manifest.json" ] || emit_status incomplete 3 "manifest.json missing (partial run)"
+    if [ -d "$RUN/reruns" ] && [ -n "$(find "$RUN/reruns" -mindepth 2 -maxdepth 2 -name inflight -print -quit 2>/dev/null)" ]; then
+        emit_status incomplete 3 "gate rerun in flight or interrupted without a record"
+    fi
+    do_verify || true
+    rc=0
+    verify_rc 2>"$WORK/verify.err" || rc=$?
+    if [ "$rc" = 4 ]; then emit_status infrastructure-blocked 4 "$(head -n 3 "$WORK/verify.err")"; fi
+    if [ "$rc" != 0 ]; then emit_status invalid 2 "$(head -n 3 "$WORK/verify.err")"; fi
+    rrd="$(latest_rerun)"
+    [ -n "$rrd" ] || emit_status prepared 0
+    msha="$(jq -r .manifest_sha256 "$RUN/manifest.json")"
+    local rec="$rrd/gate-rerun.json" cmd
+    [ -f "$rec" ] && [ ! -L "$rec" ] || emit_status invalid 2 "rerun record missing"
+    cmd="$(jq -r '.gate.command_env_sha256 // empty' "$RUN/manifest.json")"
+    jq -e . "$rec" >/dev/null 2>&1 || emit_status invalid 2 "rerun record is not valid JSON"
+    jq -r --arg run "$id" --arg msha "$msha" --arg cmd "$cmd" "$JQ_RERUN" "$rec" >"$WORK/rrchk" 2>/dev/null || true
+    if [ -s "$WORK/rrchk" ]; then emit_status invalid 2 "rerun record: $(head -n 1 "$WORK/rrchk")"; fi
+    for s in stdout stderr; do
+        [ -f "$rrd/$s" ] && [ "$(sha256_file "$rrd/$s")" = "$(jq -r ".$s.sha256" "$rec")" ] || emit_status invalid 2 "rerun $s hash mismatch"
+    done
+    case "$(jq -r .result "$rec")" in
+    rerun-passed) emit_status rerun-passed 0 ;;
+    rerun-failed) emit_status rerun-failed 2 ;;
+    infrastructure-blocked) emit_status infrastructure-blocked 4 ;;
+    *) emit_status invalid 2 "rerun recorded an invalid result" ;;
+    esac
+}
+
+# ---------------------------------------------------------------- gate-rerun
+
+checkout_fp() { # fingerprint of the managed checkout tree (HEAD, status, tracked diff, untracked bytes)
+    {
+        git -C "$REPO_TOP" rev-parse HEAD
+        git -C "$REPO_TOP" status --porcelain=v1 -z --untracked-files=all --ignored=traditional
+        git -C "$REPO_TOP" diff HEAD --binary --no-ext-diff --no-textconv
+        git -C "$REPO_TOP" ls-files -z --others --exclude-standard >"$WORK/untracked.bin"
+        if [ -s "$WORK/untracked.bin" ]; then (cd "$REPO_TOP" && xargs -0 shasum -a 256 <"$WORK/untracked.bin" 2>/dev/null); fi
+    } 2>/dev/null | sha256_stdin
+}
+
+on_signal() {
+    INTERRUPTED=1
+    if [ -n "$CHILD" ]; then kill -TERM -- "-$CHILD" 2>/dev/null || kill -TERM "$CHILD" 2>/dev/null || true; fi
+}
+
+# write_rerun <completion> <exit|""> <result> <src-state> <chk-state> <start-inv> <end-inv>
+write_rerun() {
+    local completion="$1" ex="$2" result="$3" srcst="$4" chkst="$5"
+    local ob oe
+    ob="$(wc -c <"$RR/stdout" | tr -d ' ')"
+    oe="$(wc -c <"$RR/stderr" | tr -d ' ')"
+    jq -n -S -c --arg run "$(jq -r .run_id "$RUN/manifest.json")" --arg msha "$(jq -r .manifest_sha256 "$RUN/manifest.json")" \
+        --argjson seq "$((10#$(basename -- "$RR")))" --arg cmd "$(jq -r .gate.command_env_sha256 "$RUN/manifest.json")" \
+        --slurpfile tools "$WORK/tools.seen.json" --arg s "$STARTED" --arg e "$(utc_now)" --arg comp "$completion" --arg ex "$ex" \
+        --arg osha "$(sha256_file "$RR/stdout")" --argjson ob "$ob" --arg esha "$(sha256_file "$RR/stderr")" --argjson oe "$oe" \
+        --arg sc "$(wc -l <"$WORK/inv.start" | tr -d ' ')" --arg sh "$(listing_hash "$WORK/inv.start")" \
+        --arg ec "$(wc -l <"$WORK/inv.end" | tr -d ' ')" --arg eh "$(listing_hash "$WORK/inv.end")" \
+        --rawfile ch "$WORK/changes.tsv" --arg src "$srcst" --arg chk "$chkst" --arg res "$result" '
+        {protocol: "loom-eval-gate-rerun/v1", run_id: $run, manifest_sha256: $msha, seq: $seq, command_env_sha256: $cmd,
+         tool_versions: $tools[0], started_at: $s, ended_at: $e, completion: $comp,
+         exit_status: (if $ex == "" then null else ($ex | tonumber) end),
+         stdout: {sha256: $osha, bytes: $ob}, stderr: {sha256: $esha, bytes: $oe},
+         start_inventory: {file_count: ($sc | tonumber), sha256: $sh}, end_inventory: {file_count: ($ec | tonumber), sha256: $eh},
+         changes: [$ch | split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}],
+         source_verification: {source: $src, checkout: $chk}, result: $res}' >"$RR/gate-rerun.json.tmp"
+    mv "$RR/gate-rerun.json.tmp" "$RR/gate-rerun.json"
+    rm -f "$RR/inflight"
+    RR=""
+}
+
+cmd_gate_rerun() {
+    ALLOW_JSON=0
+    parse_run_args "$@"
+    init_repo "$REPO_ARG"
+    resolve_run "$RUN_ARG"
+    local m="$RUN/manifest.json" rc=0
+    do_verify || true
+    verify_rc || rc=$?
+    [ "$rc" = 0 ] || exit "$rc"
+    [ "$(jq -r .evaluation_type "$m")" = code ] || die 2 "gate-rerun is only valid for code runs"
+
+    # a new, separate evidence directory per attempt
+    local n=1 d
+    mkdir -p "$RUN/reruns"
+    chmod 700 "$RUN/reruns"
+    while :; do
+        d="$RUN/reruns/$(printf '%03d' "$n")"
+        if mkdir -m 700 "$d" 2>/dev/null; then break; fi
+        n=$((n + 1))
+        [ "$n" -lt 1000 ] || die 4 "too many gate reruns"
+    done
+    RR="$d"
+    : >"$RR/inflight"
+    : >"$RR/stdout"
+    : >"$RR/stderr"
+    STARTED="$(utc_now)"
+    : >"$WORK/changes.tsv"
+    printf '[]' >"$WORK/tools.seen.json"
+    EXEC="$(mktemp -d "$RUN/reruns/.exec.XXXXXX")"
+    chmod 700 "$EXEC"
+    mkdir "$EXEC/src" "$EXEC/home" "$EXEC/cache" "$EXEC/tmp" "$EXEC/build" "$EXEC/deps"
+
+    # private execution copy; compare its initial inventory and hashes to the verified source
+    cp -R "$RUN/source/." "$EXEC/src/"
+    if [ -d "$RUN/inputs/deps" ]; then cp -R "$RUN/inputs/deps/." "$EXEC/deps/"; fi
+    chmod -R u+w "$EXEC/src" "$EXEC/deps"
+    src_listing_hashed "$EXEC/src" >"$WORK/inv.start"
+    cp "$WORK/inv.start" "$WORK/inv.end"
+    src_listing_hashed "$RUN/source" >"$WORK/inv.src"
+    if ! cmp -s "$WORK/inv.start" "$WORK/inv.src"; then
+        discard_exec
+        write_rerun invalid "" invalid changed unchanged
+        log "execution copy does not match the verified source"
+        exit 2
+    fi
+    local pinned_path
+    pinned_path="$(jq -r .gate.env.PATH "$m")"
+
+    # pinned tool versions and gate availability
+    local name ver out tools_json='[]'
+    while IFS="$TAB" read -r name ver; do
+        [ -n "$name" ] || continue
+        out="$(env -i PATH="$pinned_path" "$name" --version 2>&1 | head -n 20 || true)"
+        case "$out" in
+        *"$ver"*) tools_json="$(jq -c --arg n "$name" --arg v "$ver" '. + [{name: $n, version: $v}]' <<<"$tools_json")" ;;
+        *)
+            discard_exec
+            printf '%s\n' "$tools_json" >"$WORK/tools.seen.json"
+            write_rerun blocked "" infrastructure-blocked unchanged unchanged
+            log "pinned tool unavailable or version mismatch: $name $ver"
+            exit 4
+            ;;
+        esac
+    done < <(jq -r '.gate.tools[] | .name + "\t" + .version' "$m")
+    printf '%s\n' "$tools_json" >"$WORK/tools.seen.json"
+    local argv0
+    argv0="$(jq -r '.gate.argv[0]' "$m")"
+    if ! (cd "$EXEC/src" && env -i PATH="$pinned_path" /bin/sh -c 'command -v "$1" >/dev/null 2>&1' sh "$argv0"); then
+        discard_exec
+        write_rerun blocked "" infrastructure-blocked unchanged unchanged
+        log "pinned gate command is unavailable: $argv0"
+        exit 4
+    fi
+
+    # execute the pinned argv with the pinned environment; caches and temps are redirected
+    local fp_before
+    fp_before="$(checkout_fp)"
+    set -- -i
+    while IFS= read -r line; do set -- "$@" "$line"; done < <(jq -r '.gate.env | to_entries[] | .key + "=" + .value' "$m")
+    set -- "$@" "HOME=$EXEC/home" "TMPDIR=$EXEC/tmp" "TMP=$EXEC/tmp" "TEMP=$EXEC/tmp" "XDG_CONFIG_HOME=$EXEC/home/.config" \
+        "XDG_CACHE_HOME=$EXEC/cache" "XDG_DATA_HOME=$EXEC/home/.local/share" "XDG_STATE_HOME=$EXEC/home/.local/state" \
+        "CARGO_HOME=$EXEC/cache/cargo" "CARGO_TARGET_DIR=$EXEC/build" "GOCACHE=$EXEC/cache/go" "GOPATH=$EXEC/cache/gopath" \
+        "npm_config_cache=$EXEC/cache/npm" "PIP_CACHE_DIR=$EXEC/cache/pip" "LOOM_EVAL_DEPS=$EXEC/deps" \
+        "LOOM_EVAL_BUILD=$EXEC/build" "LOOM_EVAL_SCRATCH=$EXEC/tmp"
+    while IFS= read -r line; do set -- "$@" "$line"; done < <(jq -r '.gate.argv[]' "$m")
+    trap on_signal INT TERM HUP
+    set -m
+    (cd "$EXEC/src" && exec env "$@") >"$RR/stdout" 2>"$RR/stderr" </dev/null &
+    CHILD=$!
+    local gate_rc=0
+    wait "$CHILD" || gate_rc=$?
+    if [ "$INTERRUPTED" = 1 ]; then wait "$CHILD" 2>/dev/null || true; fi
+    set +m
+    trap - INT TERM HUP
+    CHILD=""
+
+    # post-run: inventories, immutable source, managed checkout
+    src_listing_hashed "$EXEC/src" >"$WORK/inv.end"
+    awk -F'\t' 'NR==FNR{a[$1]=$3; next} {b[$1]=$3; if(!($1 in a)) print $1 "\tadded"; else if (a[$1]!=$3) print $1 "\tmodified"} END{for(p in a) if(!(p in b)) print p "\tdeleted"}' \
+        "$WORK/inv.start" "$WORK/inv.end" 2>/dev/null | LC_ALL=C sort >"$WORK/changes.tsv" || true
+    discard_exec
+    local srcst=unchanged chkst=unchanged
+    do_verify || true
+    [ ! -s "$ERRS" ] && [ "$INFRA" = 0 ] || srcst=changed
+    [ "$(checkout_fp)" = "$fp_before" ] || chkst=changed
+    if [ "$INTERRUPTED" = 1 ]; then
+        write_rerun interrupted "" infrastructure-blocked "$srcst" "$chkst"
+        log "gate execution was interrupted"
+        exit 4
+    fi
+    if [ "$srcst" = changed ] || [ "$chkst" = changed ]; then
+        write_rerun completed "$gate_rc" invalid "$srcst" "$chkst"
+        log "immutable source or managed checkout changed during the gate rerun"
+        exit 2
+    fi
+    if [ "$gate_rc" = 0 ]; then
+        write_rerun completed 0 rerun-passed unchanged unchanged
+        printf 'rerun-passed\n'
+        exit 0
+    fi
+    write_rerun completed "$gate_rc" rerun-failed unchanged unchanged
+    printf 'rerun-failed\n'
+    exit 2
+}
+
+# src_listing_hashed <dir> -> sorted "path<TAB>mode<TAB>sha256" of the regular files below dir.
+src_listing_hashed() {
+    (
+        cd "$1" || exit 1
+        find . -type f | sed 's|^\./||' | LC_ALL=C sort >"$WORK/h.paths"
+        find . -type f -perm -100 | sed 's|^\./||' | LC_ALL=C sort >"$WORK/h.x"
+        if [ -s "$WORK/h.paths" ]; then
+            tr '\n' '\0' <"$WORK/h.paths" | xargs -0 shasum -a 256 2>/dev/null |
+                awk 'FILENAME != "-" {x[$0]=1; next} {p=substr($0,67); printf "%s\t%s\t%s\n", p, ((p in x)?"100755":"100644"), substr($0,1,64)}' "$WORK/h.x" -
+        fi
+    ) | LC_ALL=C sort
+}
+
+discard_exec() {
+    if [ -n "$EXEC" ] && [ -d "$EXEC" ]; then
+        chmod -R u+w "$EXEC" 2>/dev/null || true
+        rm -rf "$EXEC"
+    fi
+    EXEC=""
+}
+
+# ---------------------------------------------------------------- clean
+
+cmd_clean() {
+    ALLOW_JSON=0
+    parse_run_args "$@"
+    init_repo "$REPO_ARG"
+    resolve_run "$RUN_ARG"
+    local m="$RUN/manifest.json" p
+    case "$RUN" in / | /tmp | /private/tmp) die 2 "refusing to clean a system directory" ;; esac
+    if [ "$REPO_OK" = 1 ] && { overlaps "$RUN" "$REPO_TOP" || overlaps "$RUN" "$COMMON"; }; then
+        die 2 "refusing to clean a path overlapping the managed repository"
+    fi
+    [ -f "$m" ] && [ ! -L "$m" ] || die 2 "not a recognized run: manifest.json missing"
+    jq -e . "$m" >/dev/null 2>&1 || die 2 "not a recognized run: malformed manifest"
+    jq -r "$JQ_MANIFEST" "$m" >"$WORK/mchk" 2>/dev/null || die 2 "not a recognized run: malformed manifest"
+    [ ! -s "$WORK/mchk" ] || die 2 "not a recognized run: manifest rejected ($(head -n 1 "$WORK/mchk"))"
+    [ "$(jq -r .run_id "$m")" = "$(basename -- "$RUN")" ] || die 2 "not a recognized run: run_id does not match the directory"
+    while IFS= read -r p; do
+        case "$p" in
+        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
+        *) die 2 "not a recognized run: unexpected entry $p" ;;
+        esac
+    done < <(ls -A "$RUN")
+    [ -z "$(find "$RUN" \( -type l -o \( ! -type f ! -type d \) -o \( -type f -links +1 \) \) -print -quit)" ] ||
+        die 2 "refusing to clean: links or special files present"
+    chmod -R u+w "$RUN"
+    rm -rf "$RUN"
+    printf 'removed %s\n' "$RUN"
+}
+
+# ---------------------------------------------------------------- main
+
+usage() {
+    cat >&2 <<'EOF'
+usage: loom-eval-workspace prepare --type <plan|research|code> --head <sha> --artifact <path>...
+                                   [--authority <path>]... [--rubric <path>]... [--evidence-sha <sha>]
+                                   [--prior-verdict <path> --prior-sha <sha>] [--captures <index.json>]
+                                   [--base <sha> --gate-evidence <file> (--review-run <dir> | --docs-only)
+                                    --gate-arg <arg>... --gate-env <NAME=VALUE>... [--tool-version <name>=<ver>]...
+                                    [--dependency <path>]...]
+                                   [--run-id <id>] [--out <dir>] [--repo <path>]
+       loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
+       loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
+       loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
+       loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
+EOF
+    exit 1
+}
+
+[ $# -ge 1 ] || usage
+sub="$1"
+shift
+case "$sub" in
+prepare) cmd_prepare "$@" ;;
+verify) cmd_verify "$@" ;;
+gate-rerun) cmd_gate_rerun "$@" ;;
+status) cmd_status "$@" ;;
+clean) cmd_clean "$@" ;;
+-h | --help | help) usage ;;
+*) die 1 "unknown subcommand: $sub" ;;
+esac

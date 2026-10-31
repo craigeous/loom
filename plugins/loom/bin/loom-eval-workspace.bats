@@ -1,0 +1,980 @@
+#!/usr/bin/env bats
+# Test suite for loom-eval-workspace (sanitized evaluation workspace, loom-eval-workspace/v1).
+# Every test builds a throwaway repository with no remote; no network is used.
+bats_require_minimum_version 1.5.0
+
+EW="${BATS_TEST_DIRNAME}/loom-eval-workspace"
+RV="${BATS_TEST_DIRNAME}/loom-review"
+SCHEMAS="${BATS_TEST_DIRNAME}/../schemas"
+SCRIPTS="${BATS_TEST_DIRNAME}/../../../scripts"
+FINDERS="review-correctness/v1 review-tests/v1 review-security/v1"
+PINPATH="/usr/bin:/bin"
+
+setup_file() {
+    : "${LOOM_TEST_BASH:?LOOM_TEST_BASH is required}"
+    : "${LOOM_EXPECTED_BASH_VERSION:?LOOM_EXPECTED_BASH_VERSION is required}"
+    case "$LOOM_TEST_BASH" in /*) ;; *) return 1 ;; esac
+    [ -x "$LOOM_TEST_BASH" ]
+    [[ "$($LOOM_TEST_BASH -c 'printf %s "$BASH_VERSION"')" =~ $LOOM_EXPECTED_BASH_VERSION ]]
+}
+
+asset_of() {
+    local b="${1//\//-}"
+    printf '%s/../finders/%s.md' "$BATS_TEST_DIRNAME" "$b"
+}
+pin_of() { shasum -a 256 <"$(asset_of "$1")" | cut -d' ' -f1; }
+
+setup() {
+    WORK="$(mktemp -d)"
+    WORK="$(CDPATH='' cd -- "$WORK" && pwd -P)"
+    REPO="$WORK/repo"
+    export TMPDIR="$WORK/tmp"
+    export HOME="$WORK/home"
+    mkdir -m 700 "$TMPDIR" "$HOME"
+    mkdir "$WORK/out"
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+    git init -q -b main "$REPO"
+    git -C "$REPO" config user.email test@example.com
+    git -C "$REPO" config user.name Test
+    mkdir -p "$REPO/plugins/loom/.claude-plugin" "$REPO/.docs/spec" "$REPO/.docs/adr" "$REPO/.docs/status" \
+        "$REPO/.docs/evaluations" "$REPO/.claude" "$REPO/transcripts" "$REPO/scripts"
+    printf '{"name":"loom","version":"9.8.7"}\n' >"$REPO/plugins/loom/.claude-plugin/plugin.json"
+    printf 'plan v1\n' >"$REPO/.docs/plan.md"
+    printf 'spec\n' >"$REPO/.docs/spec/s.md"
+    printf 'adr\n' >"$REPO/.docs/adr/a.md"
+    printf 'rubric\n' >"$REPO/.docs/rubric.md"
+    printf 'status history\n' >"$REPO/.docs/status/progress.md"
+    printf 'prior verdict\n' >"$REPO/.docs/evaluations/prior-eval.md"
+    printf 'unrelated evaluation CANARY-EVAL\n' >"$REPO/.docs/evaluations/other-eval.md"
+    printf 'SECRET=CANARY-CRED\n' >"$REPO/.env"
+    printf '{"session":"CANARY-SESSION"}\n' >"$REPO/.claude/session.json"
+    printf 'CANARY-TRANSCRIPT\n' >"$REPO/transcripts/t.txt"
+    printf 'a\nb\nc\n' >"$REPO/f.txt"
+    printf 'one\ntwo\nthree\nfour\nfive\n' >"$REPO/old.txt"
+    printf '#!/bin/sh\n' >"$REPO/mode.sh"
+    cat >"$REPO/scripts/gate" <<'EOF'
+#!/bin/sh
+# test gate: behaviour is selected by the pinned environment
+echo "gate stdout"
+echo "gate stderr" >&2
+[ -z "${MARKER:-}" ] || : >"$MARKER"
+echo x >written-beside-source.txt
+echo x >"$HOME/home.txt"
+echo x >"$TMPDIR/tmp.txt"
+echo x >"$XDG_CACHE_HOME/cache.txt"
+echo x >"$LOOM_EVAL_BUILD/build.txt"
+[ -z "${DEP_CHECK:-}" ] || cat "$LOOM_EVAL_DEPS/dep.txt"
+[ -z "${TOUCH_SOURCE:-}" ] || { chmod u+w "$TOUCH_SOURCE" "$(dirname "$TOUCH_SOURCE")" && echo tamper >>"$TOUCH_SOURCE"; }
+[ -z "${TOUCH_REPO:-}" ] || echo tamper >"$TOUCH_REPO"
+[ "${SLEEP:-0}" = 0 ] || sleep "$SLEEP"
+exit "${GATE_EXIT:-0}"
+EOF
+    chmod +x "$REPO/scripts/gate"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m base
+    BASE="$(git -C "$REPO" rev-parse HEAD)"
+    printf 'a\nB\nc\nd\n' >"$REPO/f.txt"
+    git -C "$REPO" mv old.txt new.txt
+    printf 'one\ntwo\nTHREE\nfour\nfive\n' >"$REPO/new.txt"
+    printf '\000\001\002binary' >"$REPO/bin.dat"
+    chmod +x "$REPO/mode.sh"
+    printf 'plan v2\n' >"$REPO/.docs/plan.md"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m head
+    HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
+    printf 'docs only\n' >"$REPO/.docs/note.md"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m docs
+    DOCS_SHA="$(git -C "$REPO" rev-parse HEAD)"
+    printf 'gate green\n' >"$WORK/evidence.txt"
+    printf 'dependency payload\n' >"$WORK/dep.txt"
+    OUT="$WORK/out/run1"
+}
+
+teardown() {
+    if [ -n "${WORK:-}" ] && [ -d "$WORK" ]; then
+        chmod -R u+w "$WORK" 2>/dev/null || true
+        rm -rf "$WORK"
+    fi
+}
+
+# ---------------------------------------------------------------- helpers
+
+ew() { run "$LOOM_TEST_BASH" "$EW" "$@"; }
+
+prep_plan() {
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --authority .docs/spec/s.md \
+        --authority .docs/adr/a.md --rubric .docs/rubric.md --evidence-sha "$HEAD_SHA" --out "$OUT" "$@"
+}
+
+# prep_code <extra args...>: code run for base..head with a docs-only skip is invalid (code
+# changed); use review-run helpers or the docs-only range.
+code_args() { # sets CODE_ARGS for the given base/head
+    CODE_ARGS=(--repo "$REPO" --type code --head "$1" --base "$2" --artifact .docs/plan.md --authority .docs/spec/s.md
+        --gate-evidence "$WORK/evidence.txt" --gate-arg scripts/gate --gate-env "PATH=$PINPATH" --out "$OUT")
+}
+
+prep_docs_code() { # docs-only range, code type
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only "$@"
+}
+
+mk_review_run() { # real loom-review run at HEAD_SHA for BASE..HEAD_SHA; sets RREV and RFINDINGS
+    git -C "$REPO" checkout -q "$HEAD_SHA"
+    local ph=() id
+    for id in $FINDERS; do ph+=(--prompt-hash "$id=$(pin_of "$id")"); done
+    run "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" --plan "$REPO/.docs/plan.md" \
+        --spec "$REPO/.docs/spec/s.md" --adr "$REPO/.docs/adr/a.md" --gate-evidence "$WORK/evidence.txt" --run-dir "$WORK/out/rv" "${ph[@]}"
+    [ "$status" -eq 0 ]
+    RREV="$WORK/out/rv"
+    for id in $FINDERS; do
+        jq -n --slurpfile m "$RREV/manifest.json" --arg id "$id" '
+            ($m[0]) as $m | ($m.finders[] | select(.id == $id)) as $fe
+            | {protocol: $m.protocol, run_id: $m.run_id, manifest_sha256: $m.manifest_sha256,
+               finder: {id: $id, prompt_version: $fe.prompt.version, prompt_sha256: $fe.prompt.sha256},
+               base_sha: $m.base_sha, head_sha: $m.head_sha, diff_sha256: $m.diff_sha256, status: "ran-clean", findings: [],
+               provenance: {adapter: $fe.adapter, model_profile: $fe.model_profile, started_at: "2026-01-01T00:00:00Z",
+                            finished_at: "2026-01-01T00:01:00Z", truncated: false, exit_status: 0}}' \
+            >"$RREV/results/${id//\//__}.json"
+    done
+    git -C "$REPO" checkout -q main
+}
+
+assemble_review() {
+    mk_review_run
+    git -C "$REPO" checkout -q "$HEAD_SHA"
+    run "$RV" assemble "$RREV" --repo "$REPO" --out "$WORK/out/review-findings.md"
+    [ "$status" -eq 0 ]
+    RFINDINGS="$WORK/out/review-findings.md"
+    git -C "$REPO" checkout -q main
+}
+
+prep_code_review() {
+    assemble_review
+    code_args "$HEAD_SHA" "$BASE"
+    ew prepare "${CODE_ARGS[@]}" --review-run "$RREV" "$@"
+}
+
+schema_check() { # <schema-file> <json-file>
+    [ -n "${LOOM_NODE:-}" ] && [ -d "$SCRIPTS/node_modules/ajv" ] || skip "pinned node/ajv not available"
+    cat >"$WORK/ajv.cjs" <<'EOF'
+const { createRequire } = require("module");
+const req = createRequire(process.argv[2] + "/validate-repository.mjs");
+const Ajv = req("ajv/dist/2020.js");
+const addFormats = req("ajv-formats");
+const fs = require("fs");
+const ajv = new Ajv({ allErrors: true, strict: true, allowUnionTypes: true });
+addFormats(ajv);
+const validate = ajv.compile(JSON.parse(fs.readFileSync(process.argv[3], "utf8")));
+const ok = validate(JSON.parse(fs.readFileSync(process.argv[4], "utf8")));
+if (!ok) console.log(JSON.stringify(validate.errors));
+process.exit(ok ? 0 : 1);
+EOF
+    "$LOOM_NODE" "$WORK/ajv.cjs" "$SCRIPTS" "$1" "$2"
+}
+
+# edit_manifest <jq filter>: edit and re-hash so the manifest stays self-consistent
+edit_manifest() {
+    local m="$OUT/manifest.json" h
+    jq -S -c "$1 | del(.manifest_sha256)" "$m" >"$m.new"
+    h="$(shasum -a 256 <"$m.new" | cut -d' ' -f1)"
+    jq -S -c --arg h "$h" '. + {manifest_sha256: $h}' "$m.new" >"$m"
+    rm -f "$m.new"
+}
+
+verify() { ew verify "$OUT" --repo "$REPO"; }
+status_() { ew status "$OUT" --repo "$REPO" "$@"; }
+repo_hash() { shasum -a 256 <<<"" >/dev/null; printf '%s' "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)" | shasum -a 256 | cut -c1-16; }
+
+rmrun() { chmod -R u+w "$@" 2>/dev/null; rm -rf "$@"; }
+
+no_partial() { [ -z "$(find "$WORK/out" -maxdepth 1 -name '.tmp-*' -print)" ] && [ ! -e "$OUT" ]; }
+
+# ---------------------------------------------------------------- plan runs
+
+@test "plan: exports exact objects, canonical schema-valid manifest, exclusions and permissions" {
+    prep_plan
+    [ "$status" -eq 0 ]
+    [ "$output" = "$OUT" ]
+    m="$OUT/manifest.json"
+    [ "$(jq -S -c . "$m")" = "$(cat "$m")" ]
+    [ "$(jq -r .protocol "$m")" = loom-eval-workspace/v1 ]
+    [ "$(jq -r .evaluation_type "$m")" = plan ]
+    [ "$(jq -r .head_sha "$m")" = "$HEAD_SHA" ]
+    [ "$(jq -r .head_tree "$m")" = "$(git -C "$REPO" rev-parse "$HEAD_SHA^{tree}")" ]
+    [ "$(jq -r .evidence_sha "$m")" = "$HEAD_SHA" ]
+    [ "$(jq -S -c 'del(.manifest_sha256)' "$m" | shasum -a 256 | cut -d' ' -f1)" = "$(jq -r .manifest_sha256 "$m")" ]
+    schema_check "$SCHEMAS/loom-eval-workspace-manifest-v1.schema.json" "$m"
+    # exact object content, not the live checkout
+    [ "$(cat "$OUT/inputs/artifact/.docs/plan.md")" = "plan v2" ]
+    cmp "$OUT/source/f.txt" <(git -C "$REPO" cat-file blob "$HEAD_SHA:f.txt")
+    [ -x "$OUT/source/mode.sh" ]
+    # sanitized: policy exclusions recorded, canaries and history absent
+    [ "$(jq -c '[.exclusions[] | .reason] | sort' "$m")" = '["credentials","prior-evaluation","prior-evaluation","session-store","status-history","transcript"]' ]
+    [ ! -e "$OUT/source/.git" ] && [ ! -e "$OUT/source/.env" ] && [ ! -e "$OUT/source/.docs/status" ]
+    ! grep -rq "CANARY" "$OUT/source" "$OUT/inputs"
+    ! grep -rq "Test <test@example.com>\|test@example.com" "$OUT/source" "$OUT/inputs" "$OUT/manifest.json"
+    # permissions: private root, read-only judgment inputs, private writable output/scratch
+    [ -n "$(find "$OUT" -maxdepth 0 -perm 700)" ]
+    [ -z "$(find "$OUT/source" "$OUT/inputs" \( -perm -200 -o -perm -020 -o -perm -002 \) -print)" ]
+    for d in output scratch; do
+        [ -n "$(find "$OUT/$d" -maxdepth 0 -perm 700)" ]
+        : >"$OUT/$d/probe"
+    done
+    # normalized filesystem metadata
+    [ "$(stat -f %Sm -t %Y "$OUT/source/f.txt" 2>/dev/null || date -r "$OUT/source/f.txt" +%Y)" = 2000 ]
+    verify
+    [ "$status" -eq 0 ]
+    status_
+    [ "$status" -eq 0 ]
+    [ "$output" = "status: prepared" ]
+}
+
+@test "plan: without an evidence snapshot the source directory is empty" {
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$OUT"
+    [ "$status" -eq 0 ]
+    [ -z "$(ls -A "$OUT/source")" ]
+    [ "$(jq -r .source_export.file_count "$OUT/manifest.json")" = 0 ]
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "plan: evidence snapshot is the complete tree at the declared evidence SHA" {
+    prep_plan --run-id run1 2>/dev/null || true
+    rmrun "$OUT"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --evidence-sha "$BASE" --out "$OUT"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$OUT/source/f.txt")" = "$(printf 'a\nb\nc')" ]
+    [ -e "$OUT/source/old.txt" ] && [ ! -e "$OUT/source/new.txt" ]
+    [ "$(jq -r .evidence_tree "$OUT/manifest.json")" = "$(git -C "$REPO" rev-parse "$BASE^{tree}")" ]
+    # an evidence SHA that is not a local object is infrastructure-blocked
+    rmrun "$OUT"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --evidence-sha 0123456789012345678901234567890123456789 --out "$OUT"
+    [ "$status" -eq 4 ]
+    no_partial
+}
+
+@test "plan: default root is a private 0700 directory outside the repository" {
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --run-id dflt
+    [ "$status" -eq 0 ]
+    run_dir="$output"
+    [ "$run_dir" = "$TMPDIR/loom-eval-$(repo_hash)/dflt" ]
+    [ -n "$(find "$TMPDIR/loom-eval-$(repo_hash)" -maxdepth 0 -perm 700)" ]
+    [ -n "$(find "$run_dir" -maxdepth 0 -perm 700)" ]
+    ew status dflt --repo "$REPO"
+    [ "$status" -eq 0 ]
+    # a default root that would land inside the repository is rejected
+    mkdir -m 700 "$REPO/tmp-inside"
+    TMPDIR="$REPO/tmp-inside" ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --run-id inside
+    [ "$status" -eq 2 ]
+    [[ "$output" == *overlaps* ]]
+}
+
+@test "plan: independent runs do not share writable paths" {
+    prep_plan
+    [ "$status" -eq 0 ]
+    OUT2="$WORK/out/run2"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$OUT2"
+    [ "$status" -eq 0 ]
+    : >"$OUT/output/only-here"
+    [ ! -e "$OUT2/output/only-here" ]
+    [ "$(stat -f %i "$OUT/output" 2>/dev/null || stat -c %i "$OUT/output")" != "$(stat -f %i "$OUT2/output" 2>/dev/null || stat -c %i "$OUT2/output")" ]
+}
+
+@test "plan: re-review binds the prior verdict and the exact revision diff" {
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --prior-verdict .docs/evaluations/prior-eval.md \
+        --prior-sha "$BASE" --out "$OUT"
+    [ "$status" -eq 0 ]
+    m="$OUT/manifest.json"
+    [ "$(jq -r .revision.prior_sha "$m")" = "$BASE" ]
+    cmp "$OUT/revision.patch" <(git -C "$REPO" diff --binary --full-index -M -C --no-ext-diff --no-color "$BASE" "$HEAD_SHA")
+    [ "$(jq -r .revision.diff_sha256 "$m")" = "$(shasum -a 256 <"$OUT/revision.patch" | cut -d' ' -f1)" ]
+    [ "$(cat "$OUT/inputs/prior-verdict/.docs/evaluations/prior-eval.md")" = "prior verdict" ]
+    schema_check "$SCHEMAS/loom-eval-workspace-manifest-v1.schema.json" "$m"
+    verify
+    [ "$status" -eq 0 ]
+    : >"$OUT/revision.patch.x" 2>/dev/null || true
+    rm -f "$OUT/revision.patch.x"
+    chmod u+w "$OUT/revision.patch"
+    printf 'x' >>"$OUT/revision.patch"
+    chmod a-w "$OUT/revision.patch"
+    verify
+    [ "$status" -eq 2 ]
+    # a prior verdict without its prior SHA, or a non-ancestor, is rejected
+    rmrun "$OUT"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --prior-verdict .docs/evaluations/prior-eval.md --out "$OUT"
+    [ "$status" -eq 1 ]
+    ew prepare --repo "$REPO" --type plan --head "$BASE" --artifact .docs/plan.md --prior-verdict .docs/evaluations/prior-eval.md --prior-sha "$HEAD_SHA" --out "$OUT"
+    [ "$status" -eq 2 ]
+    no_partial
+}
+
+# ---------------------------------------------------------------- research runs
+
+mk_captures() { # <fresh_until> -> $WORK/cap/index.json
+    mkdir -p "$WORK/cap"
+    printf 'captured page\n' >"$WORK/cap/page1.txt"
+    jq -n --arg h "$(shasum -a 256 <"$WORK/cap/page1.txt" | cut -d' ' -f1)" --arg fu "$1" '
+        [{locator: "https://example.test/page", file: "page1.txt", retrieved_at: "2020-01-01T00:00:00Z", fresh_until: $fu,
+          status: 200, content_type: "text/html", tool: "fetcher/1", sha256: $h}]' >"$WORK/cap/index.json"
+}
+
+@test "research: complete fresh captures with provenance are required and bound" {
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *captures* ]]
+    no_partial
+    mk_captures 2099-01-01T00:00:00Z
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
+    [ "$status" -eq 0 ]
+    m="$OUT/manifest.json"
+    [ "$(jq -r '.captures[0] | .locator + " " + (.status | tostring) + " " + .content_type + " " + .tool' "$m")" = "https://example.test/page 200 text/html fetcher/1" ]
+    [ "$(cat "$OUT/inputs/captures/files/page1.txt")" = "captured page" ]
+    schema_check "$SCHEMAS/loom-eval-workspace-manifest-v1.schema.json" "$m"
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "research: stale, hash-mismatched, incomplete and unsafe captures fail closed" {
+    mk_captures 2021-01-01T00:00:00Z
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *stale* ]]
+    mk_captures 2099-01-01T00:00:00Z
+    printf 'tampered\n' >"$WORK/cap/page1.txt"
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"hash mismatch"* ]]
+    mk_captures 2099-01-01T00:00:00Z
+    jq 'map(del(.tool))' "$WORK/cap/index.json" >"$WORK/cap/i2.json"
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/i2.json" --out "$OUT"
+    [ "$status" -eq 2 ]
+    jq 'map(.status = 404)' "$WORK/cap/index.json" >"$WORK/cap/i3.json"
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/i3.json" --out "$OUT"
+    [ "$status" -eq 2 ]
+    jq 'map(.file = "../page1.txt")' "$WORK/cap/index.json" >"$WORK/cap/i4.json"
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/i4.json" --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
+    [ "$status" -eq 1 ]
+    no_partial
+}
+
+# ---------------------------------------------------------------- code runs
+
+@test "code: exact diff with rename, binary and mode metadata; pinned gate; schema valid" {
+    prep_code_review --tool-version "git=$(env -i PATH="$PINPATH" git --version | awk '{print $3}')" --dependency "$WORK/dep.txt" --gate-env "FOO=bar"
+    [ "$status" -eq 0 ]
+    m="$OUT/manifest.json"
+    expected="$(git -C "$REPO" diff --binary --full-index -M -C --no-ext-diff --no-color "$BASE" "$HEAD_SHA")"
+    [ "$(printf '%s\n' "$expected")" = "$(cat "$OUT/diff.patch")" ]
+    [ "$(jq -r .diff_sha256 "$m")" = "$(shasum -a 256 <"$OUT/diff.patch" | cut -d' ' -f1)" ]
+    grep -q '^rename from old.txt' "$OUT/diff.patch"
+    grep -q '^GIT binary patch' "$OUT/diff.patch"
+    grep -q '^old mode 100644' "$OUT/diff.patch"
+    [ "$(jq -r .base_sha "$m")" = "$BASE" ]
+    [ "$(jq -c .gate.argv "$m")" = '["scripts/gate"]' ]
+    [ "$(jq -r .gate.env.FOO "$m")" = bar ]
+    [ "$(jq -r '.gate.dependencies[0].path' "$m")" = inputs/deps/dep.txt ]
+    [ "$(jq -r .review.status "$m")" = assembled ]
+    cmp "$OUT/inputs/review-findings.md" "$RFINDINGS"
+    [ -f "$OUT/inputs/gate-evidence" ]
+    # code source keeps the complete tree except credentials/session/transcripts
+    [ -f "$OUT/source/.docs/status/progress.md" ] && [ ! -e "$OUT/source/.env" ] && [ ! -e "$OUT/source/transcripts" ]
+    schema_check "$SCHEMAS/loom-eval-workspace-manifest-v1.schema.json" "$m"
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "code: base-not-ancestor, equal ids, bad options and unavailable objects are rejected" {
+    code_args "$BASE" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    [[ "$output" == *ancestor* ]]
+    code_args "$HEAD_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}"
+    [ "$status" -eq 1 ]
+    ew prepare "${CODE_ARGS[@]}" --docs-only --review-run "$WORK"
+    [ "$status" -eq 1 ]
+    ew prepare "${CODE_ARGS[@]}" --docs-only --bogus x
+    [ "$status" -eq 1 ]
+    ew prepare "${CODE_ARGS[@]}" --docs-only --head "$HEAD_SHA"
+    [ "$status" -eq 1 ]
+    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "HOME=/x"
+    [ "$status" -eq 2 ]
+    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "NOPATH"
+    [ "$status" -eq 2 ]
+    code_args "$DOCS_SHA" 0123456789012345678901234567890123456789
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 4 ]
+    # the docs-only skip is invalid when the diff touches code
+    code_args "$HEAD_SHA" "$BASE"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    [[ "$output" == *docs-only* ]]
+    # a pinned environment must define PATH
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    CODE_ARGS=("${CODE_ARGS[@]/PATH=$PINPATH/FOO=1}")
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    no_partial
+}
+
+@test "code: docs-only status is recorded explicitly and no review findings are included" {
+    prep_docs_code
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .review.status "$OUT/manifest.json")" = "skipped: docs-only" ]
+    [ ! -e "$OUT/inputs/review-findings.md" ]
+    schema_check "$SCHEMAS/loom-eval-workspace-manifest-v1.schema.json" "$OUT/manifest.json"
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "code: unassembled, invalid, mismatched and bootstrap review findings are rejected" {
+    mk_review_run
+    code_args "$HEAD_SHA" "$BASE"
+    # validated but never assembled
+    ew prepare "${CODE_ARGS[@]}" --review-run "$RREV"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *unassembled* ]]
+    no_partial
+    # a run missing finder results fails the named validator
+    rm "$RREV/results/review-tests__v1.json"
+    ew prepare "${CODE_ARGS[@]}" --review-run "$RREV"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *validate* ]]
+    rmrun "$RREV"
+    # assembled, then the findings file is edited (bootstrap-style text) after assembly
+    assemble_review
+    printf '# bootstrap review\n- Protocol: loom-repository-bootstrap/v1\n' >"$RFINDINGS"
+    ew prepare "${CODE_ARGS[@]}" --review-run "$RREV"
+    [ "$status" -eq 2 ]
+    no_partial
+    # a review run bound to different commits is rejected
+    rmrun "$RREV" "$RFINDINGS"
+    assemble_review
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --review-run "$RREV"
+    [ "$status" -eq 2 ]
+    no_partial
+}
+
+# ---------------------------------------------------------------- verify / status fail closed
+
+tamper_cases() {
+    prep_plan
+    [ "$status" -eq 0 ]
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "verify: altered source, input, mode, extra and missing files fail closed after a successful verification" {
+    tamper_cases
+    chmod u+w "$OUT/source" "$OUT/source/f.txt"
+    printf 'x' >>"$OUT/source/f.txt"
+    verify
+    [ "$status" -eq 2 ]
+    status_
+    [ "$status" -eq 2 ]
+    [[ "$output" == "status: invalid"* ]]
+    rmrun "$OUT"
+    tamper_cases
+    chmod u+w "$OUT/inputs/artifact/.docs" "$OUT/inputs/artifact/.docs/plan.md"
+    printf 'plan v3\n' >"$OUT/inputs/artifact/.docs/plan.md"
+    verify
+    [ "$status" -eq 2 ]
+    chmod -R u+w "$OUT/inputs"
+    rmrun "$OUT"
+    tamper_cases
+    chmod u+w "$OUT/source/mode.sh"
+    chmod 444 "$OUT/source/mode.sh"
+    verify
+    [ "$status" -eq 2 ]
+    chmod -R u+w "$OUT/source"
+    rmrun "$OUT"
+    tamper_cases
+    chmod u+w "$OUT/source"
+    : >"$OUT/source/extra.txt"
+    chmod a-w "$OUT/source/extra.txt" "$OUT/source"
+    verify
+    [ "$status" -eq 2 ]
+    chmod u+w "$OUT/source"
+    rm -f "$OUT/source/extra.txt" "$OUT/source/f.txt"
+    verify
+    [ "$status" -eq 2 ]
+    chmod -R u+w "$OUT"
+    rmrun "$OUT"
+    tamper_cases
+    printf 'x' >>"$OUT/inputs/gate-evidence" 2>/dev/null || true
+    chmod -R u+w "$OUT/source"
+    verify
+    [ "$status" -eq 2 ]
+}
+
+@test "verify: manifest edits, bad self-hash, unknown versions and top-level extras are rejected" {
+    tamper_cases
+    cp "$OUT/manifest.json" "$WORK/m.good"
+    jq -S -c '.head_sha = "0000000000000000000000000000000000000000"' "$WORK/m.good" >"$OUT/manifest.json"
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *self-hash* || "$output" == *manifest_sha256* ]]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    edit_manifest '.protocol = "loom-eval-workspace/v2"'
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"unknown protocol"* ]]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    edit_manifest '.surprise = 1'
+    verify
+    [ "$status" -eq 2 ]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    edit_manifest '.files += [.files[0]]'
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *duplicate* ]]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    edit_manifest '.files[0].path = "../escape"'
+    verify
+    [ "$status" -eq 2 ]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    edit_manifest '.head_tree = .head_sha'
+    verify
+    [ "$status" -eq 2 ]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    verify
+    [ "$status" -eq 0 ]
+    : >"$OUT/stray"
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"unexpected top-level"* ]]
+    rm "$OUT/stray"
+    chmod 755 "$OUT/output"
+    verify
+    [ "$status" -eq 2 ]
+}
+
+@test "verify: symlinks, hardlinks and special files inside the run are rejected" {
+    tamper_cases
+    chmod u+w "$OUT/source"
+    ln -s f.txt "$OUT/source/link"
+    verify
+    [ "$status" -eq 2 ]
+    rm "$OUT/source/link"
+    ln "$OUT/source/f.txt" "$OUT/source/hard"
+    verify
+    [ "$status" -eq 2 ]
+    rm "$OUT/source/hard"
+    mkfifo "$OUT/source/fifo"
+    verify
+    [ "$status" -eq 2 ]
+    rm "$OUT/source/fifo"
+    chmod a-w "$OUT/source"
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "verify: unavailable Git objects are infrastructure-blocked, never valid" {
+    tamper_cases
+    git init -q -b main "$WORK/empty"
+    ew verify "$OUT" --repo "$WORK/empty"
+    [ "$status" -eq 4 ]
+    ew status "$OUT" --repo "$WORK/empty"
+    [ "$status" -eq 4 ]
+    [[ "$output" == "status: infrastructure-blocked"* ]]
+    ew verify "$OUT" --repo "$WORK"
+    [ "$status" -eq 4 ]
+}
+
+@test "verify: diff, base and dependency bindings are rechecked for code runs" {
+    prep_docs_code --dependency "$WORK/dep.txt"
+    [ "$status" -eq 0 ]
+    verify
+    [ "$status" -eq 0 ]
+    chmod u+w "$OUT/inputs/deps" "$OUT/inputs/deps/dep.txt"
+    printf 'evil\n' >"$OUT/inputs/deps/dep.txt"
+    verify
+    [ "$status" -eq 2 ]
+    rmrun "$OUT"
+    prep_docs_code
+    chmod u+w "$OUT/diff.patch"
+    printf 'x' >>"$OUT/diff.patch"
+    verify
+    [ "$status" -eq 2 ]
+    cp "$OUT/manifest.json" "$WORK/m.good"
+    edit_manifest '.base_sha = .head_sha'
+    verify
+    [ "$status" -eq 2 ]
+}
+
+@test "status: incomplete runs exit 3 and a changed run is never valid" {
+    mkdir -m 700 "$WORK/out/partial"
+    ew status "$WORK/out/partial" --repo "$REPO"
+    [ "$status" -eq 3 ]
+    prep_plan
+    [ "$status" -eq 0 ]
+    mkdir "$WORK/out/.tmp-run1.99"
+    status_
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"in flight"* ]]
+    rmdir "$WORK/out/.tmp-run1.99"
+    status_ --json
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = prepared ]
+    chmod u+w "$OUT/source"
+    : >"$OUT/source/new-file"
+    status_
+    [ "$status" -eq 2 ]
+    ew status nosuchrun --repo "$REPO"
+    [ "$status" -eq 1 ]
+    ew status "$OUT" --repo "$REPO" --bogus
+    [ "$status" -eq 1 ]
+}
+
+# ---------------------------------------------------------------- unsafe locations and inputs
+
+@test "prepare: unsafe output roots, duplicate and extra inputs are rejected with no partial run" {
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$REPO/out-inside"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$REPO/.git/out-inside"
+    [ "$status" -eq 2 ]
+    [ ! -e "$REPO/out-inside" ] && [ ! -e "$REPO/.git/out-inside" ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "relative/dir"
+    [ "$status" -eq 1 ]
+    mkdir "$WORK/out/exists"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$WORK/out/exists"
+    [ "$status" -eq 2 ]
+    ln -s "$REPO" "$WORK/out/viarepo"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$WORK/out/viarepo/inside"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$WORK/out/a/../b"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --artifact .docs/plan.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *duplicate* ]]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --authority .docs/plan.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/nosuch.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact ../escape.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact /etc/passwd --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --type code --out "$OUT"
+    [ "$status" -eq 1 ]
+    ew prepare --repo "$REPO" --type bogus --head "$HEAD_SHA" --artifact .docs/plan.md --out "$OUT"
+    [ "$status" -eq 1 ]
+    ew prepare --repo "$REPO" --type plan --head abc123 --artifact .docs/plan.md --out "$OUT"
+    [ "$status" -eq 2 ]
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --gate-arg x --out "$OUT"
+    [ "$status" -eq 1 ]
+    no_partial
+}
+
+@test "prepare: tracked symlinks and gitlinks in the exported tree are rejected, not omitted" {
+    ln -s f.txt "$REPO/linked"
+    git -C "$REPO" add linked
+    git -C "$REPO" commit -q -m link
+    sha="$(git -C "$REPO" rev-parse HEAD)"
+    ew prepare --repo "$REPO" --type plan --head "$sha" --artifact .docs/plan.md --evidence-sha "$sha" --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *symlink* ]]
+    no_partial
+    git -C "$REPO" rm -q --cached linked
+    git -C "$REPO" update-index --add --cacheinfo "160000,$BASE,sub"
+    git -C "$REPO" commit -q -m gitlink
+    sha="$(git -C "$REPO" rev-parse HEAD)"
+    ew prepare --repo "$REPO" --type plan --head "$sha" --artifact .docs/plan.md --evidence-sha "$sha" --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *gitlink* ]]
+    no_partial
+}
+
+@test "prepare: external evidence must be a regular, single-link, non-symlink file" {
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ev_args() { CODE_ARGS=("${CODE_ARGS[@]/#$WORK\/evidence.txt/$1}"); }
+    cp_args=("${CODE_ARGS[@]}")
+    ln -s "$WORK/evidence.txt" "$WORK/ev-link"
+    ev_args "$WORK/ev-link"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    CODE_ARGS=("${cp_args[@]}")
+    ln "$WORK/evidence.txt" "$WORK/ev-hard"
+    ev_args "$WORK/ev-hard"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    rm "$WORK/ev-hard"
+    CODE_ARGS=("${cp_args[@]}")
+    mkfifo "$WORK/ev-fifo"
+    ev_args "$WORK/ev-fifo"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    CODE_ARGS=("${cp_args[@]}")
+    ev_args "$WORK/missing"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    CODE_ARGS=("${cp_args[@]}")
+    ew prepare "${CODE_ARGS[@]}" --docs-only --dependency "$WORK/ev-link"
+    [ "$status" -eq 2 ]
+    no_partial
+}
+
+# ---------------------------------------------------------------- clean
+
+@test "clean: removes only the selected recognized run" {
+    prep_plan
+    [ "$status" -eq 0 ]
+    OUT2="$WORK/out/run2"
+    ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --out "$OUT2"
+    [ "$status" -eq 0 ]
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ ! -e "$OUT" ] && [ -d "$OUT2" ] && [ -d "$WORK/out" ]
+    ew clean "$OUT2" --repo "$REPO" --json
+    [ "$status" -eq 1 ]
+    ew clean "$OUT2"
+    [ "$status" -eq 0 ]
+    [ -d "$WORK/out" ] && [ -d "$REPO/.git" ]
+}
+
+@test "clean: rejects foreign directories, symlinked roots, malformed manifests, links and the repository" {
+    mkdir "$WORK/out/foreign"
+    printf 'keep\n' >"$WORK/out/foreign/file"
+    ew clean "$WORK/out/foreign" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ -f "$WORK/out/foreign/file" ]
+    ew clean "$REPO" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ -d "$REPO/.git" ]
+    ew clean "$REPO/.git" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    prep_plan
+    ln -s "$OUT" "$WORK/out/symroot"
+    ew clean "$WORK/out/symroot" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ -d "$OUT" ]
+    cp "$OUT/manifest.json" "$WORK/m.good"
+    printf '{"protocol":"loom-eval-workspace/v1"}\n' >"$OUT/manifest.json"
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ -d "$OUT" ]
+    cp "$WORK/m.good" "$OUT/manifest.json"
+    mkdir "$WORK/precious"
+    : >"$WORK/precious/data"
+    ln -s "$WORK/precious" "$OUT/scratch/escape"
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ -e "$WORK/precious/data" ] && [ -d "$OUT" ]
+    rm "$OUT/scratch/escape"
+    : >"$OUT/extra-entry"
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    rm "$OUT/extra-entry"
+    ew clean "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ -e "$WORK/precious/data" ]
+}
+
+# ---------------------------------------------------------------- gate rerun
+
+gate_run() { # prepare a docs-only-range code run with the test gate; extra args are gate env/deps
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only "$@"
+    [ "$status" -eq 0 ]
+}
+
+checkout_hash() { git -C "$REPO" status --porcelain --untracked-files=all --ignored | shasum -a 256; }
+
+@test "gate-rerun: runs in a verified private copy, records bound evidence and removes the copy" {
+    gate_run --gate-env "DEP_CHECK=1" --dependency "$WORK/dep.txt" --tool-version "git=$(env -i PATH="$PINPATH" git --version | awk '{print $3}')"
+    src_before="$(cd "$OUT/source" && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256)"
+    co_before="$(checkout_hash)"
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$output" = rerun-passed ]
+    rec="$OUT/reruns/001/gate-rerun.json"
+    [ "$(jq -r .result "$rec")" = rerun-passed ]
+    [ "$(jq -r .exit_status "$rec")" = 0 ]
+    [ "$(jq -r .manifest_sha256 "$rec")" = "$(jq -r .manifest_sha256 "$OUT/manifest.json")" ]
+    [ "$(jq -r .command_env_sha256 "$rec")" = "$(jq -r .gate.command_env_sha256 "$OUT/manifest.json")" ]
+    [ "$(jq -r .stdout.sha256 "$rec")" = "$(shasum -a 256 <"$OUT/reruns/001/stdout" | cut -d' ' -f1)" ]
+    grep -q "gate stdout" "$OUT/reruns/001/stdout"
+    grep -q "dependency payload" "$OUT/reruns/001/stdout"
+    grep -q "gate stderr" "$OUT/reruns/001/stderr"
+    [ "$(jq -r '.tool_versions[0].name' "$rec")" = git ]
+    # writes beside source, to home/cache/temp/build stayed in the copy
+    [ "$(jq -c '[.changes[] | .path + ":" + .kind]' "$rec")" = '["written-beside-source.txt:added"]' ]
+    [ ! -e "$OUT/source/written-beside-source.txt" ] && [ ! -e "$HOME/home.txt" ]
+    [ -z "$(ls -A "$HOME")" ]
+    [ "$(cd "$OUT/source" && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256)" = "$src_before" ]
+    [ "$(checkout_hash)" = "$co_before" ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
+    [ ! -e "$OUT/reruns/001/inflight" ]
+    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
+    status_
+    [ "$status" -eq 0 ]
+    [ "$output" = "status: rerun-passed" ]
+    # repeated invocations keep separate evidence
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ -f "$OUT/reruns/001/gate-rerun.json" ] && [ -f "$OUT/reruns/002/gate-rerun.json" ]
+    [ "$(jq -r .seq "$OUT/reruns/002/gate-rerun.json")" = 2 ]
+    verify
+    [ "$status" -eq 0 ]
+}
+
+@test "gate-rerun: nonzero exit is rerun-failed with exit 2 and the copy is removed" {
+    gate_run --gate-env "GATE_EXIT=7"
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ "$output" = rerun-failed ]
+    rec="$OUT/reruns/001/gate-rerun.json"
+    [ "$(jq -r .result "$rec")" = rerun-failed ]
+    [ "$(jq -r .exit_status "$rec")" = 7 ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
+    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
+    status_
+    [ "$status" -eq 2 ]
+    [ "$output" = "status: rerun-failed" ]
+}
+
+@test "gate-rerun: a gate that alters immutable source or the managed checkout never reports a valid rerun" {
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "TOUCH_SOURCE=$OUT/source/f.txt"
+    [ "$status" -eq 0 ]
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ "$output" != rerun-passed ]
+    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = invalid ]
+    [ "$(jq -r .source_verification.source "$OUT/reruns/001/gate-rerun.json")" = changed ]
+    status_
+    [ "$status" -eq 2 ]
+    chmod -R u+w "$OUT"
+    rmrun "$OUT"
+    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "TOUCH_REPO=$REPO/injected.txt"
+    [ "$status" -eq 0 ]
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ "$(jq -r .source_verification.checkout "$OUT/reruns/001/gate-rerun.json")" = changed ]
+    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = invalid ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
+}
+
+@test "gate-rerun: tampered dependencies or source fail before execution and never report a valid rerun" {
+    gate_run --dependency "$WORK/dep.txt"
+    chmod u+w "$OUT/inputs/deps" "$OUT/inputs/deps/dep.txt"
+    printf 'evil\n' >"$OUT/inputs/deps/dep.txt"
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [ ! -e "$OUT/reruns/001" ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print 2>/dev/null)" ]
+    status_
+    [ "$status" -eq 2 ]
+    [[ "$output" == "status: invalid"* ]]
+}
+
+@test "gate-rerun: unavailable gate or tool version mismatch is infrastructure-blocked (4)" {
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    CODE_ARGS=("${CODE_ARGS[@]/scripts\/gate/scripts/no-such-gate}")
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 0 ]
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 4 ]
+    rec="$OUT/reruns/001/gate-rerun.json"
+    [ "$(jq -r .result "$rec")" = infrastructure-blocked ]
+    [ "$(jq -r .completion "$rec")" = blocked ]
+    [ "$(jq -r .exit_status "$rec")" = null ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
+    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
+    status_
+    [ "$status" -eq 4 ]
+    [ "$output" = "status: infrastructure-blocked" ]
+    rmrun "$OUT"
+    gate_run --tool-version "git=0.0.0-not-this-version"
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 4 ]
+    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = infrastructure-blocked ]
+}
+
+@test "gate-rerun: interrupted execution is infrastructure-blocked and discards the copy" {
+    marker="$WORK/started"
+    gate_run --gate-env "MARKER=$marker" --gate-env "SLEEP=30"
+    "$LOOM_TEST_BASH" "$EW" gate-rerun "$OUT" --repo "$REPO" >"$WORK/gr.out" 2>&1 &
+    pid=$!
+    for _ in $(seq 1 150); do
+        [ -e "$marker" ] && break
+        sleep 0.1
+    done
+    [ -e "$marker" ]
+    inflight_status="$("$LOOM_TEST_BASH" "$EW" status "$OUT" --repo "$REPO" || true)"
+    [[ "$inflight_status" == "status: incomplete"* ]]
+    kill -TERM "$pid"
+    rc=0
+    wait "$pid" || rc=$?
+    [ "$rc" -eq 4 ]
+    rec="$OUT/reruns/001/gate-rerun.json"
+    [ "$(jq -r .completion "$rec")" = interrupted ]
+    [ "$(jq -r .result "$rec")" = infrastructure-blocked ]
+    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
+    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
+    status_
+    [ "$status" -eq 4 ]
+}
+
+@test "gate-rerun: rejects non-code runs and any command, source, environment or dependency override" {
+    prep_plan
+    [ "$status" -eq 0 ]
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"code runs"* ]]
+    rmrun "$OUT"
+    gate_run
+    for opt in "--cmd" "--command" "--env" "--source" "--dependency" "--gate-arg" "--out"; do
+        ew gate-rerun "$OUT" --repo "$REPO" "$opt" x
+        [ "$status" -eq 1 ]
+    done
+    ew gate-rerun "$OUT" extra --repo "$REPO"
+    [ "$status" -eq 1 ]
+    ew gate-rerun
+    [ "$status" -eq 1 ]
+    [ ! -e "$OUT/reruns/001" ]
+}
+
+@test "gate-rerun: a stale rerun record cannot make a changed run valid" {
+    gate_run
+    ew gate-rerun "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    chmod u+w "$OUT/inputs" "$OUT/inputs/gate-evidence"
+    printf 'changed\n' >"$OUT/inputs/gate-evidence"
+    status_
+    [ "$status" -eq 2 ]
+    [[ "$output" == "status: invalid"* ]]
+    # a forged rerun record with a mismatched stdout hash is invalid
+    chmod -R u+w "$OUT"
+    rmrun "$OUT"
+    gate_run
+    ew gate-rerun "$OUT" --repo "$REPO"
+    printf 'forged\n' >>"$OUT/reruns/001/stdout"
+    status_
+    [ "$status" -eq 2 ]
+}
+
+# ---------------------------------------------------------------- usage
+
+@test "usage: unknown subcommands, missing arguments and help exit 1" {
+    ew
+    [ "$status" -eq 1 ]
+    ew bogus
+    [ "$status" -eq 1 ]
+    ew verify
+    [ "$status" -eq 1 ]
+    ew status "$OUT" extra --repo "$REPO"
+    [ "$status" -eq 1 ]
+    ew --help
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"usage: loom-eval-workspace"* ]]
+}

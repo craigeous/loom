@@ -13,7 +13,7 @@
   "expectedVersion": "0.2.0",
   "helperDirectory": "bin",
   "helperDirectoryMustBeDirectChild": true,
-  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review"],
+  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace"],
   "helperMustBeRegularFile": true,
   "helperMustBeExecutable": true
 }
