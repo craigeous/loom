@@ -868,6 +868,31 @@ phys_path() {
     printf '%s/%s' "$d" "$(basename -- "$1")"
 }
 
+# check_overrides <flag> <hash|profile> <newline-separated entries>: every supplied entry
+# must be <known finder>=<non-empty value> (valid shape), with no duplicate finders.
+check_overrides() {
+    local flag="$1" kind="$2" l k v seen="" f known
+    while IFS= read -r l; do
+        [ -n "$l" ] || continue
+        case "$l" in *=*) ;; *) die 2 "malformed $flag entry (want <finder>=<value>): $l" ;; esac
+        k="${l%%=*}"
+        v="${l#*=}"
+        [ -n "$k" ] || die 2 "malformed $flag entry (empty finder): $l"
+        known=0
+        for f in $REQUIRED_FINDERS; do [ "$f" = "$k" ] && known=1; done
+        [ "$known" -eq 1 ] || die 2 "unknown finder or prompt version in $flag: $k"
+        [ -n "$v" ] || die 2 "empty value in $flag for $k"
+        case " $seen " in *" $k "*) die 2 "duplicate $flag for $k" ;; esac
+        seen="$seen $k"
+        if [ "$kind" = hash ]; then
+            [[ "$v" =~ ^[0-9a-f]{64}$ ]] || die 2 "invalid $flag for $k"
+            [ "$v" = "$(pinned_sha "$k")" ] || die 2 "$flag for $k does not match the pinned prompt hash"
+        else
+            [[ "$v" =~ ^[^:]+:.+$ ]] || die 2 "invalid $flag for $k (want <adapter>:<model-profile>)"
+        fi
+    done <<<"$3"
+}
+
 cmd_prepare() {
     local slice="" base="" head="" plan="" gate="" run_id="" run_dir="" repo=""
     local specs=() adrs=() PH="" FP=""
@@ -883,8 +908,14 @@ cmd_prepare() {
             --spec) specs[${#specs[@]}]="$2" ;;
             --adr) adrs[${#adrs[@]}]="$2" ;;
             --gate-evidence) gate="$2" ;;
-            --prompt-hash) PH="$PH$2"$'\n' ;;
-            --finder-profile) FP="$FP$2"$'\n' ;;
+            --prompt-hash)
+                [ -n "$2" ] || die 2 "empty --prompt-hash entry"
+                PH="$PH$2"$'\n'
+                ;;
+            --finder-profile)
+                [ -n "$2" ] || die 2 "empty --finder-profile entry"
+                FP="$FP$2"$'\n'
+                ;;
             --run-id) run_id="$2" ;;
             --run-dir) run_dir="$2" ;;
             --repo) repo="$2" ;;
@@ -913,6 +944,8 @@ cmd_prepare() {
     local id v prof
     local pin asset
     PH_RES="" FP_RES=""
+    check_overrides --prompt-hash hash "$PH"
+    check_overrides --finder-profile profile "$FP"
     for id in $REQUIRED_FINDERS; do
         pin="$(pinned_sha "$id")"
         [ -n "$pin" ] || die 2 "unknown finder or prompt version: $id"

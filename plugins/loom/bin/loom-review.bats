@@ -353,6 +353,54 @@ EOF
     no_run_dir
 }
 
+# prep_raw [args...]: prepare with caller-controlled override flags only
+prep_raw() {
+    run "$LOOM_TEST_BASH" "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" \
+        --plan "$REPO/plan.md" --gate-evidence "$EVIDENCE" "$@"
+}
+
+@test "prepare rejects unknown finder IDs and versions in --prompt-hash and --finder-profile" {
+    for bad in review-tests/v2 review-bogus/v1 review-tests; do
+        prep_raw --prompt-hash "$bad=$(pin_of review-tests/v1)"
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"unknown finder"* ]]
+        no_run_dir
+        prep_raw --finder-profile "$bad=claude:sonnet"
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"unknown finder"* ]]
+        no_run_dir
+    done
+}
+
+@test "prepare rejects empty explicit override values and entries without a key or '='" {
+    prep_raw --prompt-hash "review-tests/v1="
+    [ "$status" -eq 2 ]
+    no_run_dir
+    prep_raw --finder-profile "review-tests/v1="
+    [ "$status" -eq 2 ]
+    no_run_dir
+    prep_raw --prompt-hash "=$(pin_of review-tests/v1)"
+    [ "$status" -eq 2 ]
+    no_run_dir
+    prep_raw --finder-profile "claude:sonnet"
+    [ "$status" -eq 2 ]
+    no_run_dir
+    prep_raw --prompt-hash ""
+    [ "$status" -eq 2 ]
+    no_run_dir
+}
+
+@test "prepare rejects duplicate overrides for the same finder" {
+    prep_raw --prompt-hash "review-tests/v1=$(pin_of review-tests/v1)" --prompt-hash "review-tests/v1=$(pin_of review-tests/v1)"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"duplicate"* ]]
+    no_run_dir
+    prep_raw --finder-profile "review-tests/v1=claude:a" --finder-profile "review-tests/v1=claude:b"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"duplicate"* ]]
+    no_run_dir
+}
+
 @test "prepare/validate: prompt byte drift or missing asset fails closed (script-relative root)" {
     root="$WORK/plugin"
     mkdir -p "$root/bin" "$root/finders"
@@ -948,32 +996,68 @@ has_text() {
     done
 }
 
-# fixture_runner <finder-id> <prefix> <file> <claim>: deterministic stand-in for a live
-# finder; reports a finding at the first changed line of <file> from the manifest.
+# defect_repo: commit three deliberate defects on top of the shared head, one per finder
+defect_repo() {
+    mkdir -p "$REPO/lib"
+    printf '#!/bin/sh\nmax=10\nif [ "$1" -ge "$max" ]; then echo allowed; fi\n' >"$REPO/lib/limit.sh"
+    printf '#!/bin/sh\ncleanup_failed() { rm -rf "$dir"; exit 3; }\n' >"$REPO/lib/errors.sh"
+    printf '#!/bin/sh\neval "$USER_INPUT"\n' >"$REPO/lib/run.sh"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m defects
+    BASE="$HEAD_SHA"
+    HEAD_SHA="$(git -C "$REPO" rev-parse HEAD)"
+}
+
+# fixture_runner <finder-id> <prefix> <file> <pattern> <claim> <evidence>: deterministic stand-in
+# for a live finder. It consumes the shipped prompt (finding ID and result path contract), then
+# locates <pattern> in the prepared source/ copy of <file> and reports it at that exact line.
 fixture_runner() {
-    local ln
-    ln="$(jq -r --arg f "$3" '.files[] | select(.path == $f) | .ranges[0].start' "$RUN/manifest.json")"
-    mkres "$1" ran-with-findings "[$(finding "$2-1" "$1" "$3" "$ln" | jq -c --arg c "$4" '.claim = $c')]"
+    local id="$1" prefix="$2" file="$3" pattern="$4" prompt ln
+    prompt="$(cat "$(asset_of "$id")")"
+    [[ "$prompt" == *"Finder ID: \`$id\`"* ]]
+    [[ "$prompt" == *"$prefix-1"* ]]
+    [[ "$prompt" == *"results/<finder-id>.json"* ]]
+    ln="$(grep -nF -- "$pattern" "$RUN/source/$file" | head -n1 | cut -d: -f1)"
+    [ -n "$ln" ]
+    # the line must be inside a changed range of the manifest
+    jq -e --arg f "$file" --argjson l "$ln" \
+        '.files[] | select(.path == $f) | .ranges | any(.[]; .start <= $l and $l <= .end)' \
+        "$RUN/manifest.json" >/dev/null
+    mkres "$id" ran-with-findings "[$(finding "$prefix-1" "$id" "$file" "$ln" |
+        jq -c --arg c "$5" --arg e "$6" '.claim = $c | .evidence = $e')]"
     FIXTURE_LINE="$ln"
 }
 
-@test "fixtures: synthetic defects per finder validate and assemble with normalized findings" {
+@test "fixtures: per-finder synthetic defects validate and assemble with normalized findings" {
+    defect_repo
     prepared
-    fixture_runner review-correctness/v1 COR f.txt "off-by-one: appended line d breaks the a/b/c contract"
+    jq -e '.files[] | select(.path == "lib/limit.sh") | .ranges[0] | has("start") and has("end")' "$RUN/manifest.json" >/dev/null
+    fixture_runner review-correctness/v1 COR lib/limit.sh '-ge "$max"' \
+        "off-by-one: -ge admits n == max although the limit is exclusive" 'lib/limit.sh: if [ "$1" -ge "$max" ]'
     cor_line="$FIXTURE_LINE"
-    fixture_runner review-tests/v1 TST new.txt "changed line has no regression assertion"
-    fixture_runner review-security/v1 SEC added.txt "untrusted input reaches a shell command"
+    fixture_runner review-tests/v1 TST lib/errors.sh 'exit 3' \
+        "new cleanup_failed error path exits 3 with no test covering it" 'lib/errors.sh: cleanup_failed() { rm -rf "$dir"; exit 3; } has no test'
+    tst_line="$FIXTURE_LINE"
+    fixture_runner review-security/v1 SEC lib/run.sh 'eval "$USER_INPUT"' \
+        "shell injection: untrusted USER_INPUT is passed to eval" 'lib/run.sh: eval "$USER_INPUT"'
+    sec_line="$FIXTURE_LINE"
+    [ "$cor_line" = 3 ] && [ "$tst_line" = 2 ] && [ "$sec_line" = 2 ]
     val
     [ "$status" -eq 0 ]
     [[ "$output" == *"aggregate: ran-with-findings"* ]]
-    for id in $FINDERS; do
-        [ "$(jq -r '.findings[0].evidence' "$(rfile "$id")")" = "evidence" ]
-    done
-    [ "$(jq -r '.findings[0].line' "$(rfile review-correctness/v1)")" = "$cor_line" ]
+    [ "$(jq -r '.findings[0].evidence' "$(rfile review-security/v1)")" = 'lib/run.sh: eval "$USER_INPUT"' ]
+    [ "$(jq -r '.findings[0].line' "$(rfile review-correctness/v1)")" = 3 ]
     out="$WORK/findings.md"
     run "$LOOM_TEST_BASH" "$RV" assemble "$RUN" --repo "$REPO" --out "$out"
     [ "$status" -eq 0 ]
-    for needle in COR-1 TST-1 SEC-1 f.txt new.txt added.txt; do grep -qF "$needle" "$out"; done
+    for needle in COR-1 TST-1 SEC-1 lib/limit.sh lib/errors.sh lib/run.sh \
+        'off-by-one' 'no test covering it' 'shell injection' 'eval "$USER_INPUT"' \
+        review-correctness/v1 review-tests/v1 review-security/v1; do
+        grep -qF -- "$needle" "$out" || {
+            echo "missing in artifact: $needle"
+            return 1
+        }
+    done
 }
 
 @test "fixtures: failed, truncated, out-of-diff and missing output never assemble or read clean" {

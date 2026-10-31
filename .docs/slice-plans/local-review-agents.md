@@ -113,6 +113,22 @@ Implementation evidence:
   strict Claude plugin validation, diff whitespace); `node scripts/validate-repository.mjs
   --root "$PWD" --all` passed.
 
+Code-evaluation Round 0 resolution:
+
+- `loom-review prepare` now validates every supplied `--prompt-hash` / `--finder-profile`
+  entry before applying defaults: `<finder>=<value>` shape, known finder ID and version,
+  non-empty value, no duplicates, hash equal to the pin, profile `<adapter>:<model-profile>`;
+  each violation exits 2 and creates no run. New Bats tests cover unknown IDs/versions,
+  empty explicit values, and duplicates.
+- The synthetic-defect fixture now commits three deliberate defects (off-by-one `-ge` in
+  `lib/limit.sh`, untested `exit 3` error path in `lib/errors.sh`, `eval "$USER_INPUT"`
+  injection in `lib/run.sh`). The runner reads each shipped prompt, locates the defect
+  in the prepared `source/`, checks the line lies in a manifest changed range, and emits
+  COR-1/TST-1/SEC-1 with concrete evidence; `validate` and `assemble` are asserted on the
+  exact lines, claims, evidence, and finder provenance.
+- `bats plugins/loom/bin/loom-review.bats`: 59 tests pass; full `scripts/check` (702 Bats tests, exit 0) and
+  `node scripts/validate-repository.mjs --root "$PWD" --all` results recorded below.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
