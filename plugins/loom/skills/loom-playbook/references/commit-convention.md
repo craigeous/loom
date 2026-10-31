@@ -27,39 +27,52 @@ metadata must never reveal who produced the work.
   `loom <loom@localhost>`); the orchestrator/`/loom:init` ensures an identity exists
   before any role commits.
 
-  A plugin PreToolUse hook (`plugins/loom/hooks/git-identity-guard.sh`) enforces
-  this by blocking the above commands before they run. The hook is best-effort
-  defense-in-depth — it may not fire in every Claude Code version due to a known
-  issue ([#34573](https://github.com/anthropics/claude-code/issues/34573)) — so
-  **this rule is binding regardless of whether the hook fires**. Consistent with
-  ADR 0003 (uniform identity rationale).
+  A plugin PreToolUse hook (`plugins/loom/hooks/git-identity-guard.sh`) blocks
+  commands containing **recognized identity-mutation tokens** before they run: the
+  author flag, `-c user.*`/`author.*`/`committer.*` and `-c GIT_AUTHOR*`/
+  `GIT_COMMITTER*`, `GIT_AUTHOR_*=`/`GIT_COMMITTER_*=` assignments, and
+  `git config` writes (including `--unset`, `--replace-all`, `--add`, `--edit`, in
+  any scope or `--file`) of `user|author|committer.name|email`. The raw command
+  text is scanned, so tokens inside `sh -c`, `bash -c`, and `env` wrappers are
+  seen. Bare reads (`git config user.name`, `--get`, `--list`) and ordinary
+  commands are allowed. This is defense in depth, not a shell parser or sandbox:
+  dynamically built commands, aliases, scripts, expansions, encoded text, and
+  commands run outside an active hook can evade it. The hook may also not fire in
+  every Claude Code version
+  ([#34573](https://github.com/anthropics/claude-code/issues/34573)) — so **this
+  rule is binding regardless of whether the hook fires**. Consistent with ADR 0003.
 
-  **Known limitation:** the guard matches `--author` unconditionally, so
-  read-only filter uses — `git log --author=alice`, `git shortlog --author=bob`,
-  `git blame --author x` — are also blocked. This is an accepted fail-closed
-  trade-off: scoping `--author` to commit-creating subcommands requires shell
-  parsing that proved fragile (two code-eval-caught false-negative classes). To
-  filter history by author, use `--pretty`/`--format`/`--grep` alternatives, or
-  run the query outside a loom-guarded session.
+  **Accepted false positives:** recognized tokens are matched even inside quotes,
+  so a commit message or read filter containing one — `git log --author=alice`,
+  `git commit -m "fix --author= parsing"` — is blocked. To filter history by
+  author, use `--pretty`/`--format`/`--grep` alternatives; reword messages.
 
-  **Verify after committing:** after every commit, run:
+  **Verify after committing (required):** capture the baseline **before** the
+  commit command (`BASE=$(git rev-parse --verify HEAD 2>/dev/null || echo unborn)`),
+  then invoke the verifier immediately afterward, before the workflow continues,
+  by its absolute resolved path (`loom-resolve-helper claude loom-verify-identity`,
+  or `loom-resolve-helper codex <abs SKILL.md path> loom-verify-identity`):
 
   ```
-  git show -s --format='%an <%ae>'
+  "$VERIFY" "$BASE"      # $VERIFY = absolute path printed by loom-resolve-helper
   ```
 
-  Confirm the author matches the repository's configured identity and is **NOT**
-  `loom <loom@localhost>`, any `*@localhost` address, or any auto-generated
-  fallback.
+  This is a required workflow step, not an automatic PostToolUse guarantee. If HEAD
+  advanced, it checks every newly reachable commit (including an amended HEAD):
+  author **and** committer must equal the configured `user.name`/`user.email`, and
+  must **NOT** be `loom <loom@localhost>`, any `*@localhost` address, or any
+  auto-generated fallback. Exit 0 = valid or no HEAD change; 1 = usage/config/
+  verification error; 2 = identity violation (offending SHA and remediation on
+  stderr). On exit 1 or 2, **stop the workflow**.
 
-  - **If the author is wrong AND a real identity is configured:** fix it in place
-    with `git commit --amend --reset-author --no-edit`, then re-verify. (This is
-    the one sanctioned `--amend --reset-author` use — it resets *to* the configured
-    identity, not away from it, so it does not violate the "must not set or override
-    identity" rule above.)
-  - **If the author is wrong AND no real identity is configured:** do NOT proceed —
-    stop and report. The init "ensure identity" step (`greenfield.md` Step F)
-    should have prevented this; this is the last-line safety net.
+  - **Violation AND a real identity is configured:** for an unpushed commit, fix it
+    in place with `git commit --amend --reset-author --no-edit` when safe, then
+    re-run the verifier. (This is the one sanctioned `--amend --reset-author` use —
+    it resets *to* the configured identity, not away from it.) **Published
+    commits: escalate to the owner;** never automatically rewrite history.
+  - **No real identity configured:** do NOT proceed — stop and report. The init
+    "ensure identity" step (`greenfield.md` Step F) should have prevented this;
+    this is the last-line safety net. The verifier fails closed (exit 1).
 - **One commit per handoff**, scoped to that handoff (a single slice's
   implementation, one evaluation, one planning artifact).
 

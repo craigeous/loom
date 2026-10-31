@@ -43,7 +43,7 @@ after approval and change only via planning. Design decisions are in
 - **`plugins/loom/adapters/`** — the v0.2.0 compatibility matrix, installed-root bindings, and release-owned static metadata fixtures.
 - **`.docs/`** — loom's own design memory (dogfooding); not a plugin component.
 - **`plugins/loom/hooks/`** — `git-identity-guard.sh` (ADR 0003) + `precompact-write-ahead-backstop.sh` (ADR 0013 §Decision 5); one shared `hooks.json` for both clients (policy/wire split at the executable boundary, spec 08; 12-case (2 clients × 2 events × 3 outcomes; 48 fixture files at 4/case) `hooks/fixtures/hook-wire-v1/` product); shell-gated.
-- **`plugins/loom/bin/`** — `loom-coord` (multi-session coordination CLI; ADR 0014/0015/0016), `loom-resolve-helper` (installed-root helper resolution, both clients), `loom-launch-role` (sole client role launcher, compatibility-matrix-driven); on `$PATH`.
+- **`plugins/loom/bin/`** — `loom-coord` (multi-session coordination CLI; ADR 0014/0015/0016), `loom-resolve-helper` (installed-root helper resolution, both clients), `loom-launch-role` (sole client role launcher, compatibility-matrix-driven), `loom-verify-identity` (post-commit identity check); on `$PATH`.
 - **`scripts/macos-dual-client-dogfood`** — private Apple-silicon dual-client dogfood harness (fail-closed supervisor/worker journal); private evidence only, not public Codex support (ADR 0024).
 - **`gates/rust.md`** — Rust gate loom imposes on managed projects.
 - **`references/init-detection.md`** — Greenfield/Unaligned/Initialized classifier; all `/loom:*` run this first (M2).

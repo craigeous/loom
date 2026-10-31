@@ -31,7 +31,7 @@ set -u
 
 EXPECTED_NAME="loom"
 EXPECTED_VERSION="0.2.0"
-ALLOWED_HELPERS=(loom-coord)
+ALLOWED_HELPERS=(loom-coord loom-verify-identity)
 
 _usage() {
     printf 'usage: loom-resolve-helper claude <helper>\n' >&2

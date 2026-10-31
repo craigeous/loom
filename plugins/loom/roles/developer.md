@@ -60,8 +60,13 @@ work with the gate. You do not design — the plan and specs are your authority.
 6. Set `Status: Implemented`, **commit** your work (author-neutral — see
    `skills/loom-playbook/references/commit-convention.md`). The commit diff is
    what the code evaluator reads, so make it a clean, single-slice commit. After
-   committing, verify the author identity per `commit-convention.md` ("Verify
-   after committing") and fix or stop if it is a fallback. Stop.
+   committing, verify identity per `commit-convention.md` ("Verify after
+   committing (required)"): capture `BASE=$(git rev-parse --verify HEAD 2>/dev/null || echo unborn)`
+   **before** each commit command, then immediately afterward run the verifier by
+   its absolute path (resolved with `loom-resolve-helper … loom-verify-identity`):
+   `"$VERIFY" "$BASE"`. Exit 0 continues; exit 1 or 2 stops the workflow — fix an
+   unpushed commit per the remediation it prints, escalate published commits.
+   Stop.
 
 ## Incremental-commit discipline (ADR 0017)
 

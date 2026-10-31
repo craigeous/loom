@@ -32,6 +32,8 @@ make_root() {
     printf -- '---\nname: loom-run\ndescription: x\n---\nbody\n' >"$ROOT/skills/loom-run/SKILL.md"
     printf '#!/usr/bin/env bash\necho hi\n' >"$ROOT/bin/loom-coord"
     chmod +x "$ROOT/bin/loom-coord"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$ROOT/bin/loom-verify-identity"
+    chmod +x "$ROOT/bin/loom-verify-identity"
     SKILL="$ROOT/skills/loom-run/SKILL.md"
 }
 
@@ -65,6 +67,20 @@ resolve_env() {
     CLAUDE_PLUGIN_ROOT="$ROOT" resolve claude loom-coord
     [ "$status" -eq 0 ]
     [ "$output" = "$ROOT/bin/loom-coord" ]
+}
+
+@test "claude: resolves loom-verify-identity from a valid CLAUDE_PLUGIN_ROOT" {
+    make_root
+    CLAUDE_PLUGIN_ROOT="$ROOT" resolve claude loom-verify-identity
+    [ "$status" -eq 0 ]
+    [ "$output" = "$ROOT/bin/loom-verify-identity" ]
+}
+
+@test "codex: resolves loom-verify-identity from a valid skill source path" {
+    make_root
+    resolve codex "$SKILL" loom-verify-identity
+    [ "$status" -eq 0 ]
+    [ "$output" = "$ROOT/bin/loom-verify-identity" ]
 }
 
 @test "codex: resolves loom-coord from a valid skill source path" {

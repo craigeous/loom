@@ -25,3 +25,10 @@ delegates (spec 02). Preserve the bounded-return contract from
 `roles/developer.md`: your final message is only the new `Status:`, the path(s)
 you touched, a ≤~150-token summary, and the one routing signal — never the diff,
 file contents, or gate logs.
+
+**Identity verification.** Before every commit command capture
+`BASE=$(git rev-parse --verify HEAD 2>/dev/null || echo unborn)`; immediately
+afterward run the verifier by its absolute resolved path
+(`loom-resolve-helper codex <this SKILL.md absolute path> loom-verify-identity`
+prints it): `"$VERIFY" "$BASE"`. Exit 0 continues; 1 or 2 stops the workflow. See
+`skills/loom-playbook/references/commit-convention.md` ("Verify after committing").

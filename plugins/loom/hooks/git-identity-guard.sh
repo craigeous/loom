@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
 # git-identity-guard.sh — PreToolUse hook guard (ADR 0003 policy; spec 08 wire)
 #
-# POLICY (unchanged from the original ADR 0003 design; Claude-path semantics are
-# preserved exactly): blocks git commands that override the uniform commit
-# identity. Reads tool_input.command; a detected override BLOCKS, everything
-# else ALLOWS (fail-open on unparseable/ambiguous shell quoting — this is
-# defense in depth, not a complete shell parser or security boundary).
+# POLICY: blocks recognized git identity-mutation tokens (ADR 0003). Reads
+# tool_input.command; a recognized token BLOCKS, everything else ALLOWS. This is
+# defense in depth, not a shell parser or hostile-code sandbox: dynamically
+# constructed commands, aliases, scripts, expansions, encoded text, commands
+# outside an active hook, and concurrent external mutations can evade it. The
+# post-command check is loom-verify-identity, which the developer workflow must
+# invoke explicitly (commit-convention.md); it is not an automatic guarantee.
 #
-# Override paths blocked:
-#   --author= / --author <value>
-#   -c user.name= / -c user.email= / any -c user.*=
-#   -c GIT_AUTHOR*= / -c GIT_COMMITTER*=
-#   GIT_AUTHOR_NAME= / GIT_AUTHOR_EMAIL= / GIT_COMMITTER_NAME= / GIT_COMMITTER_EMAIL=
+# The raw command text is scanned. Quoted bodies are NOT stripped, so tokens
+# inside sh -c, bash -c, env, and other wrappers are seen, and unbalanced
+# quoting never discards a token. Accepted false positives: recognized tokens in
+# commit messages or read filters (e.g. a log author filter) are blocked.
 #
-# De-quote transform (flag-vs-text discrimination):
-#   Stage A: remove backslash-escaped quote chars (\" and \')
-#   Stage B: strip contents of 'single' and "double" quoted segments
-#   Stage C: fail-open if odd quote count remains (unparseable quoting)
-# All override checks run on $STRIPPED, never on the raw command.
+# Recognized tokens blocked (any ambiguous mutation form is blocked):
+#   the commit author flag (bare or =value)
+#   -c user.* / author.* / committer.*  (also --config-env=...)
+#   -c GIT_AUTHOR* / -c GIT_COMMITTER*
+#   GIT_AUTHOR_*= / GIT_COMMITTER_*= assignments
+#   git config writes to user|author|committer . name|email in any scope
+#     (--local/--global/--system/--file), including --unset, --replace-all,
+#     --add, --edit. Bare reads (no value, --get*, --list) are allowed.
 #
 # WIRE (spec 08 -> Hook normalization and output adapters): this single physical
 # hook, reached through the one shared plugins/loom/hooks/hooks.json manifest,
@@ -136,53 +140,61 @@ esac
 
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
-# --- empty command → allow (fail open; no Bash target to evaluate) ---
+# --- empty command → allow (nothing to evaluate; allow) ---
 if [ -z "$CMD" ]; then
-    _loom_hook_allow
-fi
-
-# --- Stage A: remove backslash-escaped quote characters ---
-DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")
-
-# --- Stage B: strip contents (and delimiters) of quoted segments ---
-STRIPPED=$(printf '%s' "$DEESC" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
-
-# --- Stage C: fail-open backstop on unresolvable (odd) quote count ---
-DQ=$(printf '%s' "$STRIPPED" | tr -cd '"' | wc -c | tr -d ' ')
-SQ=$(printf '%s' "$STRIPPED" | tr -cd "'" | wc -c | tr -d ' ')
-if [ $((DQ % 2)) -ne 0 ] || [ $((SQ % 2)) -ne 0 ]; then
     _loom_hook_allow
 fi
 
 # --- git-word / env-var gate: only proceed for git-bearing commands ---
 IS_GIT=0
-if printf '%s' "$STRIPPED" | grep -qE '(^|[^[:alnum:]_./-])git([[:space:]]|$)'; then
+if printf '%s' "$CMD" | grep -qE '(^|[^[:alnum:]_./-])git([[:space:]]|$|["'"'"'])'; then
     IS_GIT=1
 fi
-if printf '%s' "$STRIPPED" | grep -qE '(GIT_AUTHOR_(NAME|EMAIL)|GIT_COMMITTER_(NAME|EMAIL))='; then
+if printf '%s' "$CMD" | grep -qE 'GIT_(AUTHOR|COMMITTER)_[A-Za-z_]*='; then
     IS_GIT=1
 fi
 if [ "$IS_GIT" -eq 0 ]; then
     _loom_hook_allow
 fi
 
-# --- Override detection (all on $STRIPPED) ---
+# --- Override detection (all on the raw $CMD; quoted bodies are not stripped) ---
 
-if printf '%s' "$STRIPPED" | grep -qE -- '--author([[:space:]]|=)'; then
+if printf '%s' "$CMD" | grep -qE -- '--author([[:space:]]|=|$)'; then
     _loom_hook_block "$CLIENT" "loom identity guard: blocked --author override (ADR 0003 requires the uniform commit identity)."
 fi
 
-if printf '%s' "$STRIPPED" | grep -qE -- '-c[[:space:]]+user\.[A-Za-z]+='; then
-    _loom_hook_block "$CLIENT" "loom identity guard: blocked -c user.* override (ADR 0003 requires the uniform commit identity)."
+if printf '%s' "$CMD" | grep -qiE -- '(-c[[:space:]]+|--config-env=)["'"'"']?(user|author|committer)\.'; then
+    _loom_hook_block "$CLIENT" "loom identity guard: blocked -c user.*/author.*/committer.* override (ADR 0003 requires the uniform commit identity)."
 fi
 
-if printf '%s' "$STRIPPED" | grep -qE -- '-c[[:space:]]+(GIT_AUTHOR|GIT_COMMITTER)[A-Z_]*='; then
+if printf '%s' "$CMD" | grep -qE -- '-c[[:space:]]+["'"'"']?GIT_(AUTHOR|COMMITTER)'; then
     _loom_hook_block "$CLIENT" "loom identity guard: blocked -c GIT_AUTHOR*/GIT_COMMITTER* override (ADR 0003 requires the uniform commit identity)."
 fi
 
-if printf '%s' "$STRIPPED" | grep -qE '(GIT_AUTHOR_(NAME|EMAIL)|GIT_COMMITTER_(NAME|EMAIL))='; then
+if printf '%s' "$CMD" | grep -qE 'GIT_(AUTHOR|COMMITTER)_[A-Za-z_]*='; then
     _loom_hook_block "$CLIENT" "loom identity guard: blocked GIT_AUTHOR_*/GIT_COMMITTER_* env override (ADR 0003 requires the uniform commit identity)."
 fi
 
-# --- No override detected → allow ---
+# _loom_hook_config_write_line <line> — returns 0 when the line writes (or is an
+# ambiguous mutation of) a recognized identity key via git config.
+_loom_hook_config_write_line() {
+    local line="$1" key='(user|author|committer)\.(name|email)'
+    printf '%s' "$line" | grep -qE '(^|[^[:alnum:]_.-])config([[:space:]]|$|[;&|)"'"'"'])' || return 1
+    printf '%s' "$line" | grep -qiE "(^|[^[:alnum:]_])${key}([^[:alnum:]_]|\$)" || return 1
+    if printf '%s' "$line" | grep -qE -- '--(unset|unset-all|replace-all|add|edit)([[:space:]]|$)|(^|[[:space:]])-e([[:space:]]|$)'; then
+        return 0
+    fi
+    if printf '%s' "$line" | grep -qE -- '--(get|get-all|get-regexp|list)([[:space:]]|$)|(^|[[:space:]])-l([[:space:]]|$)'; then
+        return 1
+    fi
+    printf '%s' "$line" | grep -qiE "(^|[^[:alnum:]_])${key}(=|[[:space:]]+[^-[:space:];&|)])"
+}
+
+while IFS= read -r LINE || [ -n "$LINE" ]; do
+    if _loom_hook_config_write_line "$LINE"; then
+        _loom_hook_block "$CLIENT" "loom identity guard: blocked git config write of an identity key (ADR 0003 requires the uniform commit identity)."
+    fi
+done <<<"$CMD"
+
+# --- No recognized token detected → allow ---
 _loom_hook_allow

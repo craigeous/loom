@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# loom-verify-identity — post-commit identity verification (ADR 0003; spec 08).
+#
+# Usage: loom-verify-identity <baseline-sha|unborn>
+#   Run from inside the repository, by its absolute resolved path (see
+#   loom-resolve-helper), IMMEDIATELY after the command that may have created or
+#   amended commits and before the workflow continues. The caller captures the
+#   baseline BEFORE the command: `git rev-parse --verify HEAD` or `unborn` when
+#   the repository has no commits yet. This is a required workflow step, not an
+#   automatic PostToolUse guarantee.
+#
+# Inspects every commit newly reachable from HEAD (including an amended HEAD)
+# and requires BOTH author and committer to equal the configured user.name and
+# user.email. Rejects any *@localhost address and empty/fallback identities.
+# Never rewrites history; it only reports and suggests remediation.
+#
+# Exit codes:
+#   0 — valid, or no-op (HEAD unchanged / still unborn)
+#   1 — usage, configuration, or verification error (fail-closed)
+#   2 — identity violation (offending SHA and remediation on stderr)
+set -u
+
+_err() {
+    printf 'loom-verify-identity: %s\n' "$1" >&2
+}
+
+_die() {
+    _err "$1"
+    exit 1
+}
+
+[ "$#" -eq 1 ] || {
+    printf 'usage: loom-verify-identity <baseline-sha|unborn>\n' >&2
+    exit 1
+}
+BASELINE="$1"
+case "$BASELINE" in
+unborn) ;;
+*)
+    printf '%s' "$BASELINE" | grep -qE '^[0-9a-fA-F]{7,64}$' ||
+        _die "invalid baseline '$BASELINE' (expected a commit SHA or 'unborn')"
+    ;;
+esac
+
+git rev-parse --git-dir >/dev/null 2>&1 || _die "not inside a git repository"
+
+CFG_NAME=$(git config --get user.name 2>/dev/null) || CFG_NAME=""
+CFG_EMAIL=$(git config --get user.email 2>/dev/null) || CFG_EMAIL=""
+[ -n "$CFG_NAME" ] && [ -n "$CFG_EMAIL" ] ||
+    _die "user.name and user.email must both be configured; stop and ask the owner to configure a real identity"
+case "$CFG_EMAIL" in
+*@localhost | *@localhost.*) _die "configured user.email '$CFG_EMAIL' is a localhost fallback; stop and ask the owner to configure a real identity" ;;
+esac
+
+HEAD_SHA=$(git rev-parse --verify -q 'HEAD^{commit}' 2>/dev/null) || HEAD_SHA=""
+
+if [ "$BASELINE" = "unborn" ]; then
+    [ -n "$HEAD_SHA" ] || exit 0
+    RANGE=(HEAD)
+else
+    BASE_SHA=$(git rev-parse --verify -q "${BASELINE}^{commit}" 2>/dev/null) ||
+        _die "baseline '$BASELINE' is not a commit in this repository"
+    [ -n "$HEAD_SHA" ] || _die "HEAD is unreadable or unborn but a baseline was given"
+    [ "$HEAD_SHA" != "$BASE_SHA" ] || exit 0
+    RANGE=(HEAD "^$BASE_SHA")
+fi
+
+COMMITS=$(git rev-list "${RANGE[@]}" 2>/dev/null) || _die "unable to read commit history"
+[ -n "$COMMITS" ] || exit 0
+
+BAD=0
+while IFS= read -r sha; do
+    [ -n "$sha" ] || continue
+    IDENT=$(git log -1 --format='%an%x09%ae%x09%cn%x09%ce' "$sha" 2>/dev/null) ||
+        _die "unable to read commit $sha"
+    IFS=$'\t' read -r an ae cn ce <<<"$IDENT"
+    reason=""
+    if [ -z "$an" ] || [ -z "$ae" ] || [ -z "$cn" ] || [ -z "$ce" ]; then
+        reason="missing author or committer identity"
+    else
+        case "$ae" in *@localhost | *@localhost.*) reason="author email '$ae' is a localhost fallback" ;; esac
+        case "$ce" in *@localhost | *@localhost.*) reason="committer email '$ce' is a localhost fallback" ;; esac
+        if [ -z "$reason" ]; then
+            if [ "$an" != "$CFG_NAME" ] || [ "$ae" != "$CFG_EMAIL" ]; then
+                reason="author '$an <$ae>' does not match configured identity"
+            elif [ "$cn" != "$CFG_NAME" ] || [ "$ce" != "$CFG_EMAIL" ]; then
+                reason="committer '$cn <$ce>' does not match configured identity"
+            fi
+        fi
+    fi
+    if [ -n "$reason" ]; then
+        BAD=1
+        _err "identity violation in commit $sha: $reason"
+    fi
+done <<<"$COMMITS"
+
+if [ "$BAD" -ne 0 ]; then
+    _err "STOP the workflow. Configured identity: '$CFG_NAME <$CFG_EMAIL>'."
+    _err "For an unpushed commit, once safe, remediate with: git commit --amend --reset-author --no-edit (then re-run this verifier)."
+    _err "Escalate published commits to the owner; this tool never rewrites history."
+    exit 2
+fi
+exit 0

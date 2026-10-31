@@ -70,7 +70,7 @@ guard_codex() {
     [ "$status" -eq 2 ]
 }
 
-@test "BLOCK B09: --author= beside escaped inner quote (Stage A no-op on real override)" {
+@test "BLOCK B09: --author= beside escaped inner quote" {
     guard '{"tool_input":{"command":"git commit --author=evil -m \"say \\\"hi\\\"\""}}'
     [ "$status" -eq 2 ]
 }
@@ -116,47 +116,167 @@ guard_codex() {
     [ "$status" -eq 0 ]
 }
 
-@test "ALLOW A05: --author= only inside message body" {
+# Accepted false positives: tokens are scanned in the raw text, quoted bodies
+# included, so recognized tokens inside messages or read filters are blocked.
+@test "BLOCK F05: author flag text inside message body (accepted false positive)" {
     guard '{"tool_input":{"command":"git commit -m \"fix --author= parsing\""}}'
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 2 ]
 }
 
-@test "ALLOW A06: --author flag text only inside message body" {
-    guard '{"tool_input":{"command":"git commit -m \"guard against --author flag\""}}'
-    [ "$status" -eq 0 ]
-}
-
-@test "ALLOW A07: GIT_AUTHOR_NAME= only inside message body" {
+@test "BLOCK F07: GIT_AUTHOR_NAME= inside message body (accepted false positive)" {
     guard '{"tool_input":{"command":"git commit -m \"set GIT_AUTHOR_NAME=foo in script\""}}'
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 2 ]
 }
 
-@test "ALLOW A08: -c user.email= only inside message body" {
+@test "BLOCK F08: -c user.email= inside message body (accepted false positive)" {
     guard '{"tool_input":{"command":"git commit -m \"add -c user.email= override\""}}'
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 2 ]
 }
 
-@test "ALLOW A09: --grep value is not an identity flag; stripped" {
+@test "BLOCK F09: --grep value naming the author flag (accepted false positive)" {
     guard '{"tool_input":{"command":"git log --grep=\"--author=\""}}'
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 2 ]
 }
 
-@test "ALLOW A10: escaped-inner-quote message with --author= text (Stage A)" {
+@test "BLOCK F10: escaped-inner-quote message with author flag text" {
     guard '{"tool_input":{"command":"git commit -m \"use \\\"--author=\\\" flag carefully\""}}'
+    [ "$status" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# Wrapped commands, unbalanced quoting, env/-c variants
+# ---------------------------------------------------------------------------
+
+@test "BLOCK W01: author flag inside bash -c quoted body" {
+    guard '{"tool_input":{"command":"bash -c \"git commit --author=x -m z\""}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W02: author flag inside sh -c single-quoted body" {
+    guard '{"tool_input":{"command":"sh -c '"'"'git commit --author x -m z'"'"'"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W03: env wrapper with GIT_COMMITTER_NAME assignment" {
+    guard '{"tool_input":{"command":"env GIT_COMMITTER_NAME=x git commit -m z"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W04: GIT_AUTHOR_DATE assignment" {
+    guard '{"tool_input":{"command":"GIT_AUTHOR_DATE=2020-01-01 git commit -m z"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W05: unbalanced quoting does not discard a recognized token" {
+    guard '{"tool_input":{"command":"git commit --author=x -m \"wip"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W06: -c author.name and -c committer.email overrides" {
+    guard '{"tool_input":{"command":"git -c author.name=x commit -m z"}}'
+    [ "$status" -eq 2 ]
+    guard '{"tool_input":{"command":"git -c committer.email=x@y commit -m z"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W07: -c with quoted user key inside bash -c" {
+    guard '{"tool_input":{"command":"bash -c \"git -c user.name=x commit -m z\""}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK W08: -c GIT_COMMITTER_EMAIL override" {
+    guard '{"tool_input":{"command":"git -c GIT_COMMITTER_EMAIL=x commit -m z"}}'
+    [ "$status" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# git config identity writes (all scopes) vs safe reads
+# ---------------------------------------------------------------------------
+
+@test "BLOCK C01: git config user.name value (the two known reproductions)" {
+    guard '{"tool_input":{"command":"git config user.name Foo"}}'
+    [ "$status" -eq 2 ]
+    guard '{"tool_input":{"command":"git config user.email x@y"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK C02: git config in each scope and file form" {
+    for c in \
+        'git config --local user.name Foo' \
+        'git config --global user.email x@y' \
+        'git config --system user.name Foo' \
+        'git config --file .gitconfig user.email x@y' \
+        'git config --global author.name Foo' \
+        'git config committer.email x@y'; do
+        guard "$(jq -nc --arg c "$c" '{tool_input:{command:$c}}')"
+        [ "$status" -eq 2 ]
+    done
+}
+
+@test "BLOCK C03: unset, replace-all, add and edit forms" {
+    for c in \
+        'git config --unset user.name' \
+        'git config --global --unset-all user.email' \
+        'git config --replace-all user.name Foo' \
+        'git config --add user.email x@y' \
+        'git config --edit --global user.name' \
+        'git config --global --unset committer.name'; do
+        guard "$(jq -nc --arg c "$c" '{tool_input:{command:$c}}')"
+        [ "$status" -eq 2 ]
+    done
+}
+
+@test "BLOCK C04: quoted value and wrapped git config write" {
+    guard '{"tool_input":{"command":"git config user.name \"Foo Bar\""}}'
+    [ "$status" -eq 2 ]
+    guard '{"tool_input":{"command":"bash -c \"git config --global user.email x@y\""}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "BLOCK C05: write after a safe read on a later line" {
+    guard '{"tool_input":{"command":"git config --get user.name\ngit config user.name Foo"}}'
+    [ "$status" -eq 2 ]
+}
+
+@test "ALLOW R01: bare reads of identity keys" {
+    for c in \
+        'git config user.name' \
+        'git config user.email' \
+        'git config --global user.name' \
+        'git config --get user.email' \
+        'git config --global --get user.name' \
+        'git config --list' \
+        'git config --get-all user.email' \
+        'git config user.name && git commit -m z' \
+        'git config --local user.email | cat'; do
+        guard "$(jq -nc --arg c "$c" '{tool_input:{command:$c}}')"
+        [ "$status" -eq 0 ]
+        [ -z "$output" ]
+    done
+}
+
+@test "ALLOW R02: non-identity git config writes are untouched" {
+    guard '{"tool_input":{"command":"git config core.editor vim"}}'
+    [ "$status" -eq 0 ]
+    guard '{"tool_input":{"command":"git config --global pull.rebase true"}}'
     [ "$status" -eq 0 ]
 }
 
-@test "ALLOW A11: escaped-inner-quote message with GIT_AUTHOR_NAME= text" {
-    guard '{"tool_input":{"command":"git commit -m \"mention \\\"GIT_AUTHOR_NAME=x\\\" here\""}}'
+@test "ALLOW R03: ordinary commit with message mentioning config in prose" {
+    guard '{"tool_input":{"command":"git commit -m \"tidy config loading\""}}'
     [ "$status" -eq 0 ]
 }
 
-@test "ALLOW A12: escaped-inner-quote message with -c user.email= text" {
-    guard '{"tool_input":{"command":"git commit -m \"note \\\"-c user.email=\\\" thing\""}}'
+@test "codex BLOCK: wrapped author bypass and config write use the Codex envelope" {
+    guard_codex '{"tool_input":{"command":"bash -c \"git config user.name x\""}}'
     [ "$status" -eq 0 ]
+    [[ "$output" == '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"loom identity guard: blocked git config write'* ]]
+    guard_codex '{"tool_input":{"command":"sh -c \"git commit --author=x\""}}'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"permissionDecision":"deny"'* ]]
 }
 
-@test "ALLOW A13: unbalanced quoting triggers Stage C fail-open" {
+@test "ALLOW A13: unbalanced quoting with no recognized token still allows" {
     guard '{"tool_input":{"command":"git commit -m \"wip"}}'
     [ "$status" -eq 0 ]
 }
