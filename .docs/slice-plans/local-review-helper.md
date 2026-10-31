@@ -163,14 +163,17 @@ associative arrays, `${var,,}`), `shfmt -i 4`, `shellcheck -s bash`; style mirro
    Claim/Evidence/Suggested verification). No names, hostnames, absolute paths, or
    timestamps beyond manifest `created_at`; byte-identical on re-run. Atomic write via
    temp file + `mv`, then record `assembled` (output sha256, `results_digest`) in `state.json`.
-7. **`status`** — `loom-review status <run-dir|run-id> [--json]`. Read-only. Phase is
-   derived from current files + `state.json`; `results_digest` = SHA-256 of sorted result
-   hashes: `prepared` (no result files) → `collecting` (any result file, and no verdict
-   or digest differs) → `validated`/`invalid` (written only by `validate`, digest equal)
-   → `assembled` (written only by `assemble`, digest equal, output hash matches). Any
-   result change resets to `collecting`. Per-finder: `pending` when no result, else last
-   validation state. Exit 0 aggregate valid, 3 pending/incomplete, 2 invalid, 1
-   usage/unreadable. `pending` appears only here; `validate` treats it as `invalid`.
+7. **`status`** — `loom-review status <run-dir|run-id> [--json]`. Read-only.
+   `results_digest` = SHA-256 of sorted result hashes. Precedence (first match wins):
+   1. `state.json` has a validation record whose digest equals the current
+      `results_digest` (even for zero results): report `validated` with the recorded
+      aggregate: `ran-clean`/`ran-with-findings` exit 0, `invalid` exit 2 (an unchanged
+      empty set that `validate` recorded `invalid` reports `invalid`, never `prepared`).
+      If `assemble` recorded an equal digest and matching output hash: `assembled`, exit 0.
+   2. Otherwise (no record or digest differs; stale verdicts are ignored entirely): 0
+      result files → `prepared`, >= 1 → `collecting`; both exit 3.
+   Per-finder: `pending` when no result, else last validation state (rule 1 only).
+   `pending` appears only here; `validate` treats it as `invalid`. Exit 1: usage/unreadable.
 8. **`clean`** — `loom-review clean (<run-id>... | --all | --older-than <days>)
    [--repo <path>]`. Removes only directories under `<git-common-dir>/loom/review/` that
    hold a `manifest.json` with the expected protocol (refuse symlinks and paths escaping
@@ -182,8 +185,8 @@ associative arrays, `${var,,}`), `shfmt -i 4`, `shellcheck -s bash`; style mirro
    `local-review-orchestration`). No spec/ADR edits.
 
 ## Verification
-Gate (once, on the candidate commit): `TMPDIR=/private/tmp LOOM_BATS_JOBS=4
-scripts/check` plus `node scripts/validate-repository.mjs --root "$PWD" --all`.
+Gate (once, on the candidate commit): `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`
+plus `node scripts/validate-repository.mjs --root "$PWD" --all`.
 Iteration: `shfmt -i 4 -d`, `shellcheck -s bash` on `plugins/loom/bin/loom-review`, and
 `TMPDIR=/private/tmp bats --filter '<pattern>' plugins/loom/bin/loom-review.bats`.
 
@@ -196,9 +199,8 @@ paths, a plan, spec, and gate-evidence file, and no remote). Required tests:
   renamed (with `old_path`), binary, added, deleted; changed ranges match hunks;
   export has no `.git` and matches `git ls-tree -r` path/mode/oid, including with tracked
   `.gitattributes` `export-ignore`/`export-subst`/eol rules (nothing omitted or
-  substituted); untracked gate evidence inside and outside the repo is accepted while
-  another untracked file still rejects; provenance fields recorded; inputs hashed; manifest hash
-  recomputes; schema-valid against the manifest schema.
+  substituted); untracked gate evidence inside/outside the repo accepted, other untracked
+  file rejects; provenance recorded; inputs hashed; manifest hash recomputes; schema-valid.
 - **prepare reject** (each exits 2, no run directory): abbreviated SHA, branch, tag,
   `HEAD`, `A..B`, nonexistent SHA, base == head, base not ancestor, dirty tracked file,
   other untracked file, HEAD != head, missing/symlinked/out-of-repo plan, modified spec,
@@ -224,23 +226,20 @@ paths, a plan, spec, and gate-evidence file, and no remote). Required tests:
   two runs, findings sorted, atomic (no partial file on failure injected via read-only
   target directory).
 - **status:** exit codes 0/2/3/1 (valid, invalid, pending, missing run); `--json` parses
-  with `jq`; phases `prepared` → `collecting` (result added) → `validated` → `assembled`,
-  a modified result resetting to `collecting`; `status` never writes.
+  with `jq`; phases `prepared` → `collecting` → `validated` → `assembled`; `status` never
+  writes. Focused: validate with zero results → status `invalid`, exit 2 (not `prepared`);
+  result file changed after a valid verdict → `collecting`, exit 3 (stale verdict ignored).
 - **clean:** removes only a named run; `--all`; `--older-than`; refuses paths outside
   the review root, symlinked run dirs, and dirs without a matching manifest; read-only
   `source/` is removed.
-- **registration:** `loom-resolve-helper` resolves `loom-review` for claude and codex;
-  `scripts/validate-repository.mjs --all` passes; the root-binding mutation test still
-  catches reordered/missing allowlist entries.
-- **Regression:** `loom-resolve-helper.bats`, `scripts/tests/repository-validation.bats`,
-  `loom-coord.bats`, `loom-verify-identity.bats` pass unchanged except allowlist updates.
+- **registration:** `loom-resolve-helper` resolves `loom-review` (claude, codex);
+  `validate-repository.mjs --all` passes; the mutation test still catches allowlist drift.
+- **Regression:** `loom-resolve-helper.bats`, `repository-validation.bats`, `loom-coord.bats`,
+  `loom-verify-identity.bats` pass unchanged except allowlist updates.
 
 ## Notes
-
-- `--prompt-hash`/`--finder-profile` are interim inputs; `local-review-agents` supplies a
-  pinned prompt registry and may default them (ADR 0021 §5: helper records, agents own prompts).
-- HEAD-must-equal-`head_sha` is stricter than ADR 0021 requires so the clean-tree check
-  is meaningful; relax only via a planner revision.
+- `--prompt-hash`/`--finder-profile` are interim; `local-review-agents` may default them (ADR 0021 §5).
+- HEAD-must-equal-`head_sha` is stricter than ADR 0021 so the clean-tree check is meaningful.
 
 ## Revision Log
 
@@ -248,3 +247,4 @@ paths, a plan, spec, and gate-evidence file, and no remote). Required tests:
 |---|---|
 | 0 | Initial draft |
 | 1 | Export from `ls-tree`/`cat-file` objects with per-entry verification; gate evidence excluded from clean check; fail-closed git-object binding in `validate`; `side`-tagged ranges and binary/deleted location rules; provenance sources (`--finder-profile`, plugin.json) and matching; derived state transitions; expanded tests |
+| 2 | Status precedence: matching validation digest reports recorded verdict (incl. empty `invalid`, exit 2); changed digest ignores stale verdicts (`prepared`/`collecting`, exit 3); focused status tests |
