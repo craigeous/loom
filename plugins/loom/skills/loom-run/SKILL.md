@@ -100,10 +100,23 @@ Requested scope: the workflow argument (if empty, ask).
    e. On return, invoke `loom-eval-workspace record <run-dir|run-id>` (or with
       `--claimed-gate <gate>`), inspect its JSON result, verify the author-neutral
       commit and the new status (the evaluator itself never commits — the recorder
-      installs the verdict and transitions status). On a code-eval PASS (status now
+      installs the verdict and transitions status). A `gate-held`, `state-held`
+      (bootstrap phase not `active`, e.g. `publication-intent`) or
+      `ratification-held` (ADR 0023 never self-ratifies; acceptance needs the owner
+      gate) result leaves the status unchanged — pause, do not advance by hand. On a code-eval PASS (status now
       `Ready to Publish`), launch the developer's **finalize pass** (update
       `status/`, archive the plan); the finalize/land sequence follows ADR 0020
       (publish → verify remote → receipt → `Landed`).
+      **Bootstrap sunset (settlement of `evaluation-output-recorder`):** after fresh
+      verification of its published result, freshly read the configured target and
+      require `git merge-base --is-ancestor <result_sha> <target_sha>` for the
+      recorded results of `local-review-orchestration`,
+      `sanitized-evaluation-workspace` and `evaluation-output-recorder`. Record the
+      first target containing all three as `full_sunset.sha`; the terminal successor
+      retires every component, retires full sunset and empties `allowed_slices`. An
+      unavailable or unverifiable target blocks settlement; never force-push or
+      reopen bootstrap (ADR 0023 §6). From then on recording goes only through the
+      recorder, and degraded bootstrap evidence is never claimed as production.
    f. Honor the round limit (5 **FAIL** cycles per artifact → escalate = pause +
       summary; see spec 03 `## Round limits` for the counting + summary contract).
       **Goalpost-shift early escalation:** if an artifact receives **2 consecutive

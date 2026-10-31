@@ -212,6 +212,29 @@ review before a slice lands" (the run step),
 - **Not the gate.** This is a new, separate review dimension — **not** part of
   the `format → lint → test` gate, which is unchanged (ADR 0010 §8).
 
+## Recording verdicts and bootstrap sunset
+
+- **Record, then commit.** The orchestrator runs `loom-eval-workspace record <run>`
+  (`--claimed-gate <gate>` at an owner-claimed gate; `--bootstrap-phase <phase>` with
+  the verified transition-state phase), inspects the JSON, and commits report and
+  status together under the uniform identity. The recorder rejects duplicate JSON
+  keys, then schema and binding violations, with no report and no status change; a
+  failure consumes no round. A retry with a matching report completes a pending legal
+  transition; a conflicting report blocks.
+- **Held transitions.** `gate-held`, `state-held` (phase other than `active`, such as
+  `publication-intent`) and `ratification-held` (ADR 0023 PASS never self-ratifies —
+  owner gate required) write the report but leave the status; resolve the hold, never
+  edit status by hand.
+- **Sunset settlement.** After fresh verification of the published
+  `evaluation-output-recorder` result, freshly read the configured target and prove
+  with `git merge-base --is-ancestor <result_sha> <target_sha>` that the recorded
+  results of `local-review-orchestration`, `sanitized-evaluation-workspace` and
+  `evaluation-output-recorder` are all ancestors. Record the first such target as
+  `full_sunset.sha`; the terminal successor retires all components and full sunset and
+  empties `allowed_slices`. Unavailable or unverifiable target blocks settlement;
+  never force-push, and bootstrap is never reopened (ADR 0023 §6). Degraded
+  bootstrap evidence is not retroactively production conformance.
+
 ## Scope & claimed gates (for `/loom:run`)
 
 At kickoff, confirm with the owner (AskUserQuestion if not already given):

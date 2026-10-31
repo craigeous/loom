@@ -1620,6 +1620,46 @@ mk_verdict() {
     [ "$(art_status)" = "Plan Review" ]
 }
 
+@test "record: duplicate object keys in verdict.json are rejected before validation" {
+    rec_plan
+    mk_verdict
+    sed -i.bak 's/^{/{"verdict":"FAIL",/' "$OUT/output/verdict.json"
+    rm -f "$OUT/output/verdict.json.bak"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"duplicate object keys"* ]]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: nested duplicate object keys in verdict.json are rejected" {
+    rec_plan
+    mk_verdict
+    jq -c '. + {findings: []}' "$OUT/output/verdict.json" | sed 's/"findings":\[\]/"findings":[],"notes":[],"notes":[]/' >"$WORK/dup.json"
+    cp "$WORK/dup.json" "$OUT/output/verdict.json"
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"duplicate object keys"* ]]
+}
+
+@test "record: --bootstrap-phase publication-intent holds the transition" {
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO" --bootstrap-phase publication-intent
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
+@test "record: ADR 0023 PASS cannot self-ratify into Accepted" {
+    PLAN_REL=.docs/adr/0023-demo.md
+    rec_plan
+    mk_verdict
+    ew record "$OUT" --repo "$REPO"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = ratification-held ]
+    [ "$(art_status)" = "Plan Review" ]
+}
+
 @test "record: usage text lists the subcommand" {
     ew --help
     [[ "$output" =~ record[[:space:]]+"<run-dir|run-id>" ]]

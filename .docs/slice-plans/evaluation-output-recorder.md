@@ -1,6 +1,6 @@
 # Evaluation Output Recorder
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022, ADR 0023
 Target size: <= 350 LOC net change excluding tests and schemas (keep this plan <= 200 lines)
 
@@ -116,6 +116,20 @@ confinement, rerun and retry behavior; existing workspace tests must pass unchan
 as regression proof. Review settlement guidance against ADR 0023 and specs 03/04/05,
 including fresh target ancestry and terminal-state requirements. The 350 net LOC budget
 remains the implementation target.
+
+## Round 2 fix evidence
+
+- Local review companion: `.docs/evaluations/evaluation-output-recorder-review-findings.md`
+  (`loom-review` run over `41e9904..7113890`; three cold finders; aggregate
+  `ran-with-findings`).
+- Recorder: duplicate JSON keys rejected before schema/binding validation (exit 2);
+  `--bootstrap-phase` non-`active` yields `state-held`; ADR 0023 PASS yields
+  `ratification-held`; `--claimed-gate` yields `gate-held`. Bats cases added for each.
+- Guidance: sunset settlement (`git merge-base --is-ancestor`, `full_sunset.sha`) added to
+  `orchestration.md` and `loom-run/SKILL.md`.
+- `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: All checks passed (exit 0).
+- `node scripts/validate-repository.mjs --root "$PWD" --all`: passed; the root-copy
+  guidance retirement grep is clean.
 
 ## Notes
 

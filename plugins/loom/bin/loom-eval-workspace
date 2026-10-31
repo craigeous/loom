@@ -20,7 +20,7 @@
 #       [--run-id <id>] [--out <dir>] [--repo <path>]
 #   loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
 #   loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
-#   loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>]
+#   loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>] [--bootstrap-phase <phase>]
 #   loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
 #   loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 #
@@ -1407,14 +1407,49 @@ render_report() {
         "Evidence mode: " + $ev' "$1"
 }
 
+# reject_duplicate_keys <file>: deterministic JSON scan; exits non-zero when any object repeats a key.
+reject_duplicate_keys() {
+    local node_bin="${LOOM_NODE:-$(command -v node 2>/dev/null || true)}"
+    [ -n "$node_bin" ] || return 2
+    "$node_bin" -e '
+const t = require("fs").readFileSync(process.argv[1], "utf8");
+let i = 0;
+const ws = () => { while (i < t.length && " \t\n\r".includes(t[i])) i++; };
+const str = () => { const st = i++; while (t[i] !== "\"") { if (t[i] === "\\") i++; i++; } i++; return JSON.parse(t.slice(st, i)); };
+const val = () => {
+    ws();
+    if (t[i] === "{") {
+        i++; const seen = new Set(); ws();
+        if (t[i] === "}") { i++; return; }
+        for (;;) {
+            ws(); const k = str();
+            if (seen.has(k)) { console.error("duplicate key: " + k); process.exit(1); }
+            seen.add(k); ws(); i++; val(); ws();
+            if (t[i++] === "}") return;
+        }
+    } else if (t[i] === "[") {
+        i++; ws();
+        if (t[i] === "]") { i++; return; }
+        for (;;) { val(); ws(); if (t[i++] === "]") return; }
+    } else if (t[i] === "\"") { str(); }
+    else { while (i < t.length && !",]} \t\n\r".includes(t[i])) i++; }
+};
+val();' "$1" 2>/dev/null
+}
+
 cmd_record() {
     ALLOW_JSON=0
-    local claimed="" args=() m vf="" n art_rel prior_rel="" prior_file="" prior_sha="" exp_round=0 pr pv type verdict
+    local claimed="" bphase="active" args=() m vf="" n art_rel prior_rel="" prior_file="" prior_sha="" exp_round=0 pr pv type verdict
     while [ $# -gt 0 ]; do
         case "$1" in
         --claimed-gate)
             [ $# -ge 2 ] || die 1 "--claimed-gate requires a value"
             claimed="$2"
+            shift 2
+            ;;
+        --bootstrap-phase)
+            [ $# -ge 2 ] || die 1 "--bootstrap-phase requires a value"
+            bphase="$2"
             shift 2
             ;;
         *)
@@ -1441,6 +1476,7 @@ cmd_record() {
     [ "$n" = 1 ] && [ -n "$(find "$RUN/output" -mindepth 1 -maxdepth 1 -name verdict.json -print)" ] || die 2 "record: output must contain exactly verdict.json"
     [ -f "$vf" ] && [ ! -L "$vf" ] && [ -z "$(find "$vf" -links +1 -print)" ] || die 2 "record: verdict.json must be a regular, non-symlink, single-link file"
     jq -e . "$vf" >/dev/null 2>&1 || die 2 "record: verdict.json is not valid JSON"
+    reject_duplicate_keys "$vf" || die 2 "record: verdict.json contains duplicate object keys or is not scannable"
     ERRS="$WORK/errs"
     : >"$ERRS"
     if ! validate_json_schema "$SCHEMA_VERDICT" "$vf"; then
@@ -1541,6 +1577,10 @@ cmd_record() {
     if [ "$cur" != "$target" ]; then
         if [ -n "$claimed" ] && [ "$verdict" = PASS ]; then
             result=gate-held
+        elif [ "$bphase" != active ]; then
+            result=state-held # ADR 0023: a non-active bootstrap phase (e.g. publication-intent) blocks advancement
+        elif [ "$verdict" = PASS ] && [ "$target" = Accepted ] && [[ "$art_rel" == .docs/[Aa][Dd][Rr]/0023-* ]]; then
+            result=ratification-held # ADR 0023 cannot self-ratify; acceptance needs the owner gate
         else
             set_status "$art_file" "$cur" "$target"
             cur="$target"
@@ -1594,7 +1634,7 @@ usage: loom-eval-workspace prepare --type <plan|research|code> --head <sha> --ar
                                    [--run-id <id>] [--out <dir>] [--repo <path>]
        loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
        loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
-       loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>]
+       loom-eval-workspace record     <run-dir|run-id> [--repo <path>] [--claimed-gate <gate>] [--bootstrap-phase <phase>]
        loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
        loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 EOF
