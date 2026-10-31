@@ -36,12 +36,12 @@ setup() {
     git init -q -b main "$REPO"
     git -C "$REPO" config user.email test@example.com
     git -C "$REPO" config user.name Test
-    mkdir -p "$REPO/plugins/loom/.claude-plugin" "$REPO/.docs/spec" "$REPO/.docs/adr" "$REPO/.docs/status" \
+    mkdir -p "$REPO/plugins/loom/.claude-plugin" "$REPO/.docs/spec" "$REPO/.docs/ADR" "$REPO/.docs/status" \
         "$REPO/.docs/evaluations" "$REPO/.claude" "$REPO/transcripts" "$REPO/scripts"
     printf '{"name":"loom","version":"9.8.7"}\n' >"$REPO/plugins/loom/.claude-plugin/plugin.json"
     printf 'plan v1\n' >"$REPO/.docs/plan.md"
     printf 'spec\n' >"$REPO/.docs/spec/s.md"
-    printf 'adr\n' >"$REPO/.docs/adr/a.md"
+    printf 'adr\n' >"$REPO/.docs/ADR/a.md"
     printf 'rubric\n' >"$REPO/.docs/rubric.md"
     printf 'status history\n' >"$REPO/.docs/status/progress.md"
     printf 'prior verdict\n' >"$REPO/.docs/evaluations/prior-eval.md"
@@ -104,7 +104,7 @@ ew() { run "$LOOM_TEST_BASH" "$EW" "$@"; }
 
 prep_plan() {
     ew prepare --repo "$REPO" --type plan --head "$HEAD_SHA" --artifact .docs/plan.md --authority .docs/spec/s.md \
-        --authority .docs/adr/a.md --rubric .docs/rubric.md --evidence-sha "$HEAD_SHA" --out "$OUT" "$@"
+        --authority .docs/ADR/a.md --rubric .docs/rubric.md --evidence-sha "$HEAD_SHA" --out "$OUT" "$@"
 }
 
 # prep_code <extra args...>: code run for base..head with a docs-only skip is invalid (code
@@ -124,7 +124,7 @@ mk_review_run() { # real loom-review run at HEAD_SHA for BASE..HEAD_SHA; sets RR
     local ph=() id
     for id in $FINDERS; do ph+=(--prompt-hash "$id=$(pin_of "$id")"); done
     run "$RV" prepare --repo "$REPO" --slice demo --base "$BASE" --head "$HEAD_SHA" --plan "$REPO/.docs/plan.md" \
-        --spec "$REPO/.docs/spec/s.md" --adr "$REPO/.docs/adr/a.md" --gate-evidence "$WORK/evidence.txt" --run-dir "$WORK/out/rv" "${ph[@]}"
+        --spec "$REPO/.docs/spec/s.md" --adr "$REPO/.docs/ADR/a.md" --gate-evidence "$WORK/evidence.txt" --run-dir "$WORK/out/rv" "${ph[@]}"
     [ "$status" -eq 0 ]
     RREV="$WORK/out/rv"
     for id in $FINDERS; do
@@ -1344,12 +1344,21 @@ rec_commit() {
     mkdir -p "$REPO/.docs/ADR" "$REPO/.git/loom"
     # a blob's id is its content hash, so the cited authority snapshot cannot be forged; borrow the real Loom object database
     printf '%s\n' "$(git -C "$BATS_TEST_DIRNAME" rev-parse --path-format=absolute --git-common-dir)/objects" >"$REPO/.git/objects/info/alternates"
-    [ -e "$REPO/$ADR23_REL" ] || printf '# ADR 23\n\nStatus: Accepted\n\nAuthority snapshot: 316ae4bc964fb422134151478b6369e1f9b4cfa5\nEvidence mode: loom-repository-bootstrap/v1\n' >"$REPO/$ADR23_REL"
+    [ -e "$REPO/$ADR23_REL" ] || git cat-file blob ae4bdb4ae51093e6314e961ac0124622c20e3d20 >"$REPO/$ADR23_REL"
     [ -e "$REPO/.git/loom/bootstrap-phase" ] || printf 'active\n' >"$REPO/.git/loom/bootstrap-phase"
     mkdir -p "$(dirname -- "$REPO/$1")"
     printf '%s\n' "$2" >"$REPO/$1"
     git -C "$REPO" add -A
-    git -C "$REPO" commit -q -m "$1"
+    if git -C "$REPO" merge-base --is-ancestor 523cc0138fa671c194104d03523fed613ec6fe5b HEAD 2>/dev/null; then
+        git -C "$REPO" commit -q -m "$1"
+    else
+        # derive the history from Loom's immutable root commit as a second parent (ADR 0023 repository eligibility)
+        local tree commit parents=()
+        git -C "$REPO" rev-parse -q --verify HEAD >/dev/null && parents=(-p HEAD)
+        tree="$(git -C "$REPO" write-tree)"
+        commit="$(git -C "$REPO" commit-tree "$tree" ${parents[@]+"${parents[@]}"} -p 523cc0138fa671c194104d03523fed613ec6fe5b -m "$1")"
+        git -C "$REPO" update-ref HEAD "$commit"
+    fi
 }
 rec_head() { git -C "$REPO" rev-parse HEAD; }
 art_status() { sed -n 's/^Status: //p' "$REPO/${1:-$PLAN_REL}" | head -n 1; }
@@ -1457,7 +1466,7 @@ mk_verdict() {
 }
 
 @test "record: valid ADR evaluation transitions to Accepted" {
-    local adr=.docs/adr/0099-test.md
+    local adr=.docs/ADR/0099-test.md
     rec_commit "$adr" $'# ADR 99\n\nStatus: Plan Review\n\n## Content\n'
     ew prepare --repo "$REPO" --type plan --head "$(rec_head)" --artifact "$adr" --authority .docs/spec/s.md --out "$OUT"
     [ "$status" -eq 0 ] || {
@@ -1722,6 +1731,27 @@ mk_verdict() {
     [ "$(art_status)" = "Plan Review" ]
 }
 
+@test "record: unrelated repository with copied ADR 0023, alternates, and active marker remains state-held" {
+    local other="$WORK/unrelated"
+    git init -q "$other"
+    mkdir -p "$other/.docs/ADR" "$other/.docs/slice-plans" "$other/.docs/evaluations" "$other/.git/loom"
+    printf '%s\n' "$(git -C "$BATS_TEST_DIRNAME" rev-parse --path-format=absolute --git-common-dir)/objects" >"$other/.git/objects/info/alternates"
+    git cat-file blob ae4bdb4ae51093e6314e961ac0124622c20e3d20 >"$other/$ADR23_REL"
+    printf 'active\n' >"$other/.git/loom/bootstrap-phase"
+    printf '# Demo\n\nStatus: Plan Review\n\n## Content\n\n' >"$other/$PLAN_REL"
+    printf '# Spec\n' >"$other/s.md"
+    : >"$other/.docs/evaluations/.keep"
+    git -C "$other" add -A
+    git -C "$other" commit -q -m unrelated
+    ew prepare --repo "$other" --type plan --head "$(git -C "$other" rev-parse HEAD)" --artifact "$PLAN_REL" --authority s.md --out "$OUT"
+    [ "$status" -eq 0 ]
+    mk_verdict
+    ew record "$OUT" --repo "$other"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .status <<<"$output")" = state-held ]
+    [ "$(sed -n 's/^Status: //p' "$other/$PLAN_REL" | head -n 1)" = "Plan Review" ]
+}
+
 @test "record: ADR 0023 that is a symlink makes the repository ineligible" {
     rec_plan
     rm "$REPO/$ADR23_REL"
@@ -1744,7 +1774,7 @@ mk_verdict() {
 }
 
 @test "record: ADR 0023 PASS cannot self-ratify into Accepted" {
-    PLAN_REL=.docs/adr/0023-demo.md
+    PLAN_REL=.docs/ADR/0023-demo.md
     rec_plan
     mk_verdict
     ew record "$OUT" --repo "$REPO"

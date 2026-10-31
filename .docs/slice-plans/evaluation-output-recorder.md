@@ -1,6 +1,6 @@
 # Evaluation Output Recorder
 
-Status: In Progress
+Status: Implemented
 Target specs: 03-artifact-lifecycle.md, 04-orchestrator.md, 05-blind-evaluation.md; ADR 0022, ADR 0023
 Target size: <= 350 LOC net change excluding tests and schemas (keep this plan <= 200 lines)
 
@@ -144,6 +144,12 @@ remains the implementation target.
 - Repository eligibility (Round 2): `bootstrap_eligible` also requires the ADR 0023 authority snapshot blob `316ae4bc…` or the Loom initial commit `523cc013…` in the object database, and ADR 0023 content citing that blob and `loom-repository-bootstrap/v1`; a placeholder ADR with an active marker stays `state-held`.
 - `bats plugins/loom/bin/loom-eval-workspace.bats`: 87 tests passed; shfmt and shellcheck clean; `scripts/check` (LOOM_BATS_JOBS=4) passed; `validate-repository.mjs --all` passed.
 - Full gate and repository validation: see commit verification below.
+
+## Round 3 remediation evidence
+
+- Eligibility: `bootstrap_eligible` now requires `git merge-base --is-ancestor 523cc013… HEAD` (history derives from Loom's immutable root commit) and that `HEAD:.docs/ADR/0023-…md` is exactly the canonical blob `ae4bdb4a…`, in addition to the authoritative active phase marker and the ADR 0023 section 1 closed list. The Round 2 content/alternates-based checks are superseded.
+- Tests: `rec_commit` borrows Loom's object database via alternates, writes the authentic ADR 0023 blob, and roots the first commit at `523cc013…`; new negative case: an unrelated repository with copied ADR 0023, alternates and an active marker stays `state-held` and does not advance status.
+- `bats plugins/loom/bin/loom-eval-workspace.bats`: 88 tests passed; shfmt and shellcheck clean; `scripts/check` (LOOM_BATS_JOBS=4) passed; `validate-repository.mjs --all` passed.
 
 ## Notes
 

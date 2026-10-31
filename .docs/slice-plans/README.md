@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [evaluation-output-recorder.md](evaluation-output-recorder.md) — `In Progress` — deterministic evaluation verdict recording and bootstrap sunset.
+- [evaluation-output-recorder.md](evaluation-output-recorder.md) — `Implemented` — deterministic evaluation verdict recording and bootstrap sunset.
 
 ## Archived plans
 
