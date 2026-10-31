@@ -1,35 +1,31 @@
 # Evaluation: local-review-agents (slice-plan)
 
-Verdict: FAIL
+Verdict: PASS
 Round: 0
-Reviewed against: ADR 0021 §§1–5; ADR 0022 §2; repository-improvement-plan.md M4 `local-review-agents` (lines 560–630); archived `local-review-helper` plan; `loom-local-review-findings-v1.schema.json`; plan-eval-rubric.md; severity.md; evaluation template. Spot-checked the live tree (`plugins/loom/bin/loom-review`, `loom-review.bats`) to verify path and flag claims.
+Reviewed against: ADR 0021 §§1–5; ADR 0022 §2; repository-improvement-plan.md M4 `local-review-agents` (lines 560–630); `loom-local-review-findings-v1.schema.json`; plan-eval-rubric.md; severity.md; evaluation template; Round 0 findings; revision diff `ddeba51..HEAD`. Spot-checked `plugins/loom/bin/loom-review`, `loom-review.bats` and `scripts/validate-repository.mjs` for existence and path claims.
 
 ## Findings
 
-- [MAJOR] Override semantics for pinned prompt hashes are contradictory — Step 4 says `prepare` "preserves explicit supported overrides" and also rejects "a mismatch with pinned prompt bytes." It never says what an explicit `--prompt-hash` that differs from the pinned asset hash does. An independent reader could (a) accept it, which lets an unpinned prompt into a run and violates ADR 0021 §5 (a release pins prompt versions/hashes), or (b) reject it, which breaks existing `loom-review.bats` cases. Those cases currently pass arbitrary 64-hex hashes (`loom-review:889` only checks the shape), and the plan never says to migrate them. This is ambiguity on the central pinning invariant.
-- [MINOR] Wrong test path in Verification — the plan names `bats tests/loom-review.bats`, but the suite is `plugins/loom/bin/loom-review.bats` and no `tests/` directory exists. The "adjust only if the existing suite path differs" hedge covers it, but the plan should name the real path (Step 5 and Verification).
-- [MINOR] Asset location and packaging are under-specified — Step 4 does not say how `loom-review` finds `plugins/loom/finders/` at runtime. The helpers resolve from the physical plugin root, and the same question applies to the path a client hands the worker. Step 5 says only "ensure installation/packaging includes all prompt assets." Name the lookup (script-relative physical root) and the packaging check (`scripts/validate-repository.mjs` or a Bats assertion).
-- [MINOR] Prompt boundary clauses are not mechanically checked — Step 2's strict boundary (no edits, no verdict or lifecycle change, no delegation, untrusted-data handling, exact manifest output path) is only prose in the prompts. Fixture runners cannot prove a prompt says it. Add an `rg`-based Bats assertion that each of the three prompts contains the required clauses and its own finder ID. This follows the rubric's "invariants verified mechanically" rule.
-- [MINOR] Header says `Target specs: ADR 0021 §§2–5, ADR 0022 §2`, but the work touches spec-governed packaging and playbook surfaces (specs 08 and 10). Cite the governing specs, or state that none is amended.
+None. This Round 1 re-review is limited to the revision diff under the non-expansion rule. All Round 0 findings are resolved, and the diff introduces no new defect.
 
-## Required changes (for FAIL)
+### Round 0 resolution check
 
-1. In Step 4, state the override rule. Recommended: `--prompt-hash` for a standard finder is accepted only if it equals the pinned SHA-256 of the shipped asset, and otherwise fails with exit 2. An omitted value defaults to the pinned hash. `--finder-profile` may be overridden freely, subject to the existing `<adapter>:<profile>` shape check. Add that existing Bats cases using arbitrary hashes are migrated to the pinned or defaulted values, with one negative test for a mismatched explicit hash.
+- **[MAJOR] Pinned prompt-hash override semantics — resolved.** Step 4 now says an omitted `--prompt-hash` defaults to the pinned SHA-256 of the shipped asset, and an explicit value is accepted only if it equals that hash, otherwise exit 2. `--finder-profile` defaults to a stable profile and may be overridden freely subject to the existing `<adapter>:<profile>` shape. Step 5 migrates the existing arbitrary-hash Bats cases (the live helper only checks 64-hex shape at `loom-review:889`) and adds a negative test for a mismatched explicit hash. This is the recommended rule, and it is consistent with ADR 0021 §5 pinning.
+- **[MINOR] Wrong test path — resolved.** Step 5 and Verification now name `plugins/loom/bin/loom-review.bats`, which exists.
+- **[MINOR] Asset location and packaging — resolved.** Step 4 specifies script-relative physical plugin root lookup, including the asset path handed to a client. Step 5 adds packaging verification via `scripts/validate-repository.mjs` (exists) plus Bats assertions against the installed physical root.
+- **[MINOR] Prompt boundary clauses not mechanically checked — resolved.** Step 5 adds `rg`-based Bats assertions for each prompt's own finder ID and each Step 2 boundary clause, including permitted inputs and output path, read-only inputs and source, no edits or other results, no lifecycle change or verdict, no external services or delegation, untrusted-data handling, and evaluator authority.
+- **[MINOR] Target specs header — resolved.** The header now cites specs 08 and 10 alongside ADR 0021 and ADR 0022 and states that none are amended.
 
-Optionally fold in the MINORs above while revising. They do not block.
+### Diff-introduced defects
+
+None. The new Step 4 text is internally consistent: the sentence rejecting "a mismatch with pinned prompt bytes" now agrees with the explicit-override rule. The revision log row is accurate.
 
 ## Notes
 
-Adherence checks that passed:
-
-- **ADR 0021 §4:** exactly three auxiliary workers, `review-correctness/v1`, `review-tests/v1` and `review-security/v1`. All three are required, with no cost-driven omission, which correctly overrides the improvement plan's "start with correctness and security" hint. Workers are cold and non-delegating, and are explicitly not a sixth lifecycle role. They are read-only on inputs and source, with a single manifest-assigned output path. The evaluator alone decides PASS/FAIL, and the helper never launches workers.
-- **ADR 0021 §5:** immutable versioned assets. A behavioral change needs a new major, formatting changes alter the SHA-256, and a released version is never overwritten. Detection-rate measurement is kept out of deterministic CI.
-- **Schema conformance:** IDs `COR-/TST-/SEC-N` match `^[A-Z]{2,5}-[0-9]+$`. The severity enum, confidence 0–1, `line_end` requires `line`, the `finder.{id,prompt_version,prompt_sha256}` object and the provenance fields all match the schema. `ran-clean` and `ran-with-findings` follow the `if/then` constraints, and `failed` is available for failures.
-- **Verification:** fixtures cover clean, malformed, missing, failed, truncated, out-of-diff, hash-drift and mutation cases. Results run through `validate` and `assemble` for mixed and all-clean runs, and partial runs must not assemble. The gate and repository validation are named.
-- **Canonical structure:** 97 lines, within the 250-line budget. It has a `Target size:` line, an Out of Scope & Threat-Model Boundary section that respects the non-goals, and a Revision Log. It is single-purpose.
+Prior adherence checks still hold and are unaffected by the diff: exactly three required workers per ADR 0021 §4 (cold, non-delegating, read-only inputs, a single manifest-assigned output path, evaluator-only verdict); immutable versioned assets per §5; schema conformance for IDs, severity, confidence, `line_end`, finder and provenance fields, and `ran-clean`/`ran-with-findings`/`failed` handling; fixture coverage and fail-closed verification. The plan is about 110 lines, within the 250-line budget, and keeps its `Target size:` line and Out of Scope section.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
-| 0 | plan | FAIL | First review. One MAJOR (prompt-hash override semantics) plus four MINORs. |
+| 0 | plan | FAIL | First review. One MAJOR (prompt-hash override semantics) plus four MINORs (test path, asset lookup/packaging, prompt-clause assertions, target specs). All five resolved in the Round 1 revision. Per the spec 03 counting rule, a PASS resolving a Round 0 FAIL keeps Round: 0. |
