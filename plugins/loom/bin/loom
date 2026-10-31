@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# loom — CLI entry point. Dispatches `loom doctor [--json]` to the adjacent
+# loom-doctor helper and forwards its exit status.
+#
+# Exit codes: the helper's, or 2 for an unsupported command.
+set -u
+
+_usage() {
+    printf 'usage: loom doctor [--json]\n' >&2
+    exit 2
+}
+
+_self_dir() {
+    local src="${BASH_SOURCE[0]}" dir link i=0
+    while [ -L "$src" ] && [ "$i" -lt 40 ]; do
+        i=$((i + 1))
+        dir=$(CDPATH='' cd -- "$(dirname -- "$src")" && pwd -P) || return 1
+        link=$(readlink -- "$src") || return 1
+        case "$link" in
+        /*) src="$link" ;;
+        *) src="$dir/$link" ;;
+        esac
+    done
+    CDPATH='' cd -- "$(dirname -- "$src")" && pwd -P
+}
+
+[ "${1:-}" = doctor ] || _usage
+shift
+dir=$(_self_dir) || exit 2
+exec "$dir/loom-doctor" "$@"

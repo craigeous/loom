@@ -1,0 +1,348 @@
+#!/usr/bin/env bash
+# loom-doctor — read-only foundation diagnostics (spec 06/08/10; slice loom-doctor-foundation).
+#
+# Usage:
+#   loom-doctor           human-readable report
+#   loom-doctor --json    JSON report (schemas/loom-doctor-report-v1.schema.json)
+#
+# Reads state only: never mutates the repository, installs, or repairs. Checks the
+# fixed foundation inventory; client adapter, hook trust, and egress sandbox are
+# reported as "unchecked" — never as a pass or a client-support claim.
+#
+# Exit codes:
+#   0 — every checked item passed or warned
+#   1 — at least one check is an error
+#   2 — invalid invocation
+set -u
+
+REPORT_SCHEMA="loom-doctor-report/v1"
+
+IDS=()
+STATUSES=()
+EVIDENCE=()
+REPO_ROOT=""
+
+_add() {
+    IDS[${#IDS[@]}]="$1"
+    STATUSES[${#STATUSES[@]}]="$2"
+    EVIDENCE[${#EVIDENCE[@]}]="$3"
+}
+
+_self_dir() {
+    local src="${BASH_SOURCE[0]}" dir link i=0
+    while [ -L "$src" ] && [ "$i" -lt 40 ]; do
+        i=$((i + 1))
+        dir=$(CDPATH='' cd -- "$(dirname -- "$src")" && pwd -P) || return 1
+        link=$(readlink -- "$src") || return 1
+        case "$link" in
+        /*) src="$link" ;;
+        *) src="$dir/$link" ;;
+        esac
+    done
+    CDPATH='' cd -- "$(dirname -- "$src")" && pwd -P
+}
+
+# _ver_ge <version-text> <major> <minor> — leading "major.minor" of the text is >= floor.
+_ver_ge() {
+    local v="$1" fmajor="$2" fminor="$3" major minor
+    v=$(printf '%s' "$v" | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
+    [ -n "$v" ] || return 1
+    major=${v% *}
+    minor=${v#* }
+    [ "$major" -gt "$fmajor" ] || { [ "$major" -eq "$fmajor" ] && [ "$minor" -ge "$fminor" ]; }
+}
+
+_norm_int() {
+    local n="$1"
+    while [ "${#n}" -gt 1 ]; do
+        case "$n" in
+        0*) n="${n#0}" ;;
+        *) break ;;
+        esac
+    done
+    printf '%s' "$n"
+}
+
+check_host_and_os() {
+    local os arch rel bash_ver major ok=0
+    os=$(uname -s 2>/dev/null) || os=""
+    arch=$(uname -m 2>/dev/null) || arch=""
+    rel=$(uname -r 2>/dev/null) || rel=""
+    bash_ver="${LOOM_DOCTOR_BASH_VERSION:-${BASH_VERSION:-}}"
+    major=${rel%%.*}
+    case "$os:$arch" in
+    Darwin:arm64 | Darwin:x86_64)
+        case "$major" in
+        '' | *[!0-9]*) ;;
+        *) [ "$major" -ge 23 ] && ok=1 ;;
+        esac
+        ;;
+    Linux:x86_64) ok=1 ;;
+    esac
+    if [ "$ok" -ne 1 ]; then
+        _add host_and_os error "unsupported host: ${os:-unknown} ${arch:-unknown} ${rel:-unknown} (spec 10 supports macOS 14+ and Linux x86-64)"
+    elif ! _ver_ge "$bash_ver" 3 2; then
+        _add host_and_os error "unsupported shell: bash ${bash_ver:-unknown} (need >= 3.2)"
+    else
+        _add host_and_os pass "$os $arch $rel, bash $bash_ver"
+    fi
+}
+
+check_required_tools() {
+    local missing="" v
+    v=$(git --version 2>/dev/null) || v=""
+    _ver_ge "$v" 2 34 || missing="$missing git>=2.34"
+    v=$(jq --version 2>/dev/null) || v=""
+    _ver_ge "$v" 1 6 || missing="$missing jq>=1.6"
+    v=$(node --version 2>/dev/null) || v=""
+    _ver_ge "$v" 18 0 || missing="$missing node>=18"
+    if ! { printf x | shasum -a 256 >/dev/null 2>&1; } && ! { printf x | sha256sum >/dev/null 2>&1; }; then
+        missing="$missing sha256(shasum|sha256sum)"
+    fi
+    if [ -n "$missing" ]; then
+        _add required_tools error "missing or too old:$missing"
+    else
+        _add required_tools pass "bash, git>=2.34, jq>=1.6, node>=18, sha256 usable"
+    fi
+}
+
+check_git_identity() {
+    local name email
+    name="${GIT_AUTHOR_NAME:-$(git config --get user.name 2>/dev/null || true)}"
+    email="${GIT_AUTHOR_EMAIL:-$(git config --get user.email 2>/dev/null || true)}"
+    if [ -n "$name" ] && [ -n "$email" ]; then
+        _add git_identity pass "effective Git name and email are set"
+    else
+        _add git_identity error "effective Git identity incomplete (name or email empty)"
+    fi
+}
+
+check_repo_cleanliness() {
+    local st
+    if [ -z "$REPO_ROOT" ]; then
+        _add repo_cleanliness error "not inside a Git work tree; status unavailable"
+        return
+    fi
+    if ! st=$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal 2>/dev/null); then
+        _add repo_cleanliness error "git status failed"
+    elif [ -n "$st" ]; then
+        _add repo_cleanliness warning "working tree has $(printf '%s\n' "$st" | wc -l | tr -d ' ') uncommitted or untracked path(s)"
+    else
+        _add repo_cleanliness pass "working tree clean"
+    fi
+}
+
+# _near_empty — tracked files (or work tree when no commits) match the init-detection allowlist.
+_near_empty() {
+    local files f
+    if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+        files=$(git -C "$REPO_ROOT" -c core.quotepath=off ls-files)
+    else
+        files=$(cd "$REPO_ROOT" && find . -path ./.git -prune -o -type f -print | sed 's|^\./||')
+    fi
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        case "$f" in
+        .git* | README* | LICENSE* | .editorconfig) ;;
+        CLAUDE.md)
+            [ "$(wc -c <"$REPO_ROOT/$f" | tr -d ' ')" -le 200 ] || return 1
+            ;;
+        *) return 1 ;;
+        esac
+    done <<EOF_FILES
+$files
+EOF_FILES
+    return 0
+}
+
+# _docs_spine — print the first pre-existing docs spine root (docs/doc/documentation), if any.
+_docs_spine() {
+    git -C "$REPO_ROOT" -c core.quotepath=off ls-files | tr '[:upper:]' '[:lower:]' | awk -F/ '
+        NF >= 2 && ($1 == "docs" || $1 == "doc" || $1 == "documentation") {
+            r = $1; last = $NF
+            for (i = 2; i < NF; i++) {
+                if ($i == "spec" || $i == "specs" || $i == "adr" || $i == "adrs" || $i == "decisions" || $i == "slice-plans" || $i == "plans") mark[r] = 1
+            }
+            if (last ~ /^adr/ || last ~ /decision/ || last ~ /roadmap/ || last ~ /progress/ || last ~ /handoff/) mark[r] = 1
+            if (NF == 2 && last ~ /^[0-9][0-9]-.*\.md$/) num[r]++
+            seen[r] = 1
+        }
+        END {
+            for (r in seen) if (mark[r] || num[r] >= 2) { print r; exit }
+        }'
+}
+
+check_init_mode() {
+    local d spine
+    if [ -z "$REPO_ROOT" ]; then
+        _add init_mode error "not inside a Git work tree; mode cannot be determined"
+        return
+    fi
+    d="$REPO_ROOT/.docs"
+    if [ -f "$d/spec/README.md" ] && [ -f "$d/status/roadmap.md" ] &&
+        [ -f "$d/status/progress.md" ] && [ -f "$d/status/handoff.md" ]; then
+        _add init_mode pass "mode=Initialized (loom-shaped .docs/ present)"
+    elif [ ! -d "$d" ] && _near_empty; then
+        _add init_mode pass "mode=Greenfield (no .docs/, repo empty or near-empty)"
+    else
+        spine=$(_docs_spine)
+        if [ -n "$spine" ]; then
+            _add init_mode pass "mode=Unaligned-migrate (pre-existing docs spine at $spine/)"
+        else
+            _add init_mode pass "mode=Unaligned-bare (no loom-shaped .docs/, no docs spine)"
+        fi
+    fi
+}
+
+check_coordination() {
+    local ttl sha ver refs line ref blob ts now age stale=0 total=0 bad=""
+    if [ -z "$REPO_ROOT" ]; then
+        _add coordination error "not inside a Git work tree; coordination refs unreadable"
+        return
+    fi
+    ttl="${LOOM_LEASE_TTL:-3600}"
+    case "$ttl" in
+    *[!0-9]* | '') ttl=3600 ;;
+    *) ttl=$(_norm_int "$ttl") ;;
+    esac
+    [ "$ttl" -lt 1 ] && ttl=1
+    refs=$(git -C "$REPO_ROOT" for-each-ref --format='%(refname) %(objectname)' refs/loom/claims 2>/dev/null) || {
+        _add coordination error "cannot enumerate refs/loom/claims"
+        return
+    }
+    sha=$(git -C "$REPO_ROOT" rev-parse --verify refs/loom/schema 2>/dev/null || true)
+    if [ -z "$sha" ]; then
+        if [ -z "$refs" ]; then
+            _add coordination pass "no coordination state (refs/loom/schema absent, no claims)"
+        else
+            _add coordination error "claims exist without refs/loom/schema"
+        fi
+        return
+    fi
+    ver=$(git -C "$REPO_ROOT" cat-file blob "$sha" 2>/dev/null) || ver=""
+    if [ "$ver" != "2" ]; then
+        _add coordination error "incompatible or malformed refs/loom/schema (expected 2)"
+        return
+    fi
+    now=$(date +%s)
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        ref=${line% *}
+        total=$((total + 1))
+        blob=$(git -C "$REPO_ROOT" cat-file blob "${line##* }" 2>/dev/null) || blob=""
+        ts=$(printf '%s' "$blob" | head -n 1 | awk -F'\t' '{print $2}')
+        case "$ts" in
+        '' | *[!0-9]*)
+            bad="$bad ${ref#refs/loom/claims/}"
+            continue
+            ;;
+        esac
+        ts=$(_norm_int "$ts")
+        age=$((now - ts))
+        [ "$age" -ge "$ttl" ] && stale=$((stale + 1))
+    done <<EOF_REFS
+$refs
+EOF_REFS
+    if [ -n "$bad" ]; then
+        _add coordination error "unreadable claim lease timestamp:$bad"
+    elif [ "$stale" -gt 0 ]; then
+        _add coordination warning "schema 2; $stale of $total claim(s) stale (lease >= ${ttl}s old)"
+    else
+        _add coordination pass "schema 2; $total claim(s), all fresh"
+    fi
+}
+
+check_review_protocol() {
+    local root="$1" missing="" f
+    { [ -f "$root/bin/loom-review" ] && [ -x "$root/bin/loom-review" ]; } || missing="$missing bin/loom-review"
+    for f in correctness tests security; do
+        { [ -f "$root/finders/review-$f-v1.md" ] && [ -r "$root/finders/review-$f-v1.md" ]; } ||
+            missing="$missing finders/review-$f-v1.md"
+    done
+    if [ -n "$missing" ]; then
+        _add review_protocol error "missing or not usable:$missing"
+    else
+        _add review_protocol pass "loom-review and 3 finder assets present"
+    fi
+}
+
+check_eval_protocol() {
+    local root="$1"
+    if [ -f "$root/bin/loom-eval-workspace" ] && [ -x "$root/bin/loom-eval-workspace" ]; then
+        _add eval_protocol pass "loom-eval-workspace present and executable"
+    else
+        _add eval_protocol error "missing or not executable: bin/loom-eval-workspace"
+    fi
+}
+
+_json_str() {
+    printf '"%s"' "$(printf '%s' "$1" | tr '\n\t\r' '   ' | tr -d '\000-\010\013\014\016-\037' |
+        sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+}
+
+main() {
+    local json=0 root i result=pass n label
+    case "$#" in
+    0) ;;
+    1)
+        if [ "$1" = "--json" ]; then
+            json=1
+        else
+            printf 'usage: loom-doctor [--json]\n' >&2
+            exit 2
+        fi
+        ;;
+    *)
+        printf 'usage: loom-doctor [--json]\n' >&2
+        exit 2
+        ;;
+    esac
+
+    root=$(CDPATH='' cd -- "$(_self_dir)/.." && pwd -P) || root=""
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || REPO_ROOT=""
+
+    check_host_and_os
+    check_required_tools
+    check_git_identity
+    check_repo_cleanliness
+    check_init_mode
+    check_coordination
+    check_review_protocol "$root"
+    check_eval_protocol "$root"
+    _add client_adapter unchecked "unchecked: client version, manifest/catalog loading, instruction parity and profile mapping; no client support conclusion"
+    _add hook_trust unchecked "unchecked: hook trust is not evaluated"
+    _add egress_sandbox unchecked "unchecked: egress sandbox and remote landing configuration are not evaluated"
+
+    n=${#IDS[@]}
+    for ((i = 0; i < n; i++)); do
+        case "${STATUSES[$i]}" in
+        error) result=error ;;
+        warning) [ "$result" = error ] || result=warning ;;
+        esac
+    done
+
+    if [ "$json" -eq 1 ]; then
+        printf '{"schema":"%s","result":"%s","checks":[' "$REPORT_SCHEMA" "$result"
+        for ((i = 0; i < n; i++)); do
+            [ "$i" -gt 0 ] && printf ','
+            printf '{"id":"%s","status":"%s","evidence":%s}' "${IDS[$i]}" "${STATUSES[$i]}" "$(_json_str "${EVIDENCE[$i]}")"
+        done
+        printf ']}\n'
+    else
+        printf 'loom doctor (foundation diagnostics; not a release or client-support claim)\n'
+        for ((i = 0; i < n; i++)); do
+            case "${STATUSES[$i]}" in
+            pass) label=PASS ;;
+            warning) label=WARN ;;
+            error) label=FAIL ;;
+            *) label=UNCHECKED ;;
+            esac
+            printf '[%s] %s: %s\n' "$label" "${IDS[$i]}" "${EVIDENCE[$i]}"
+        done
+        printf 'Result: %s\n' "$result"
+    fi
+    [ "$result" = error ] && exit 1
+    exit 0
+}
+
+main "$@"

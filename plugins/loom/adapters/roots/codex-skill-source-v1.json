@@ -17,7 +17,7 @@
   "expectedVersion": "0.2.0",
   "helperDirectory": "bin",
   "helperDirectoryMustBeDirectChild": true,
-  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace"],
+  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor"],
   "helperMustBeRegularFile": true,
   "helperMustBeExecutable": true,
   "forbiddenWorkflowRootGuesses": ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"],

@@ -1,6 +1,6 @@
 # Loom Doctor Foundation
 
-Status: Approved
+Status: Implemented
 Target specs: 06-init-modes.md, 08-playbook.md, 10-packaging.md
 Target size: <= 450 LOC net change excluding tests and schemas
 
@@ -102,6 +102,15 @@ without an adapter are outside scope; diagnostics do not replace owner judgment.
 ## Notes
 
 None.
+
+## Verification Evidence
+
+- `shfmt -i 4 -d` and `shellcheck -s bash` on `loom-doctor` and `loom`: clean.
+- `bats plugins/loom/bin/loom-doctor.bats plugins/loom/bin/loom-resolve-helper.bats`
+  green under Bash 3.2 and current Bash (schema tests run with the pinned Node/Ajv).
+- `node scripts/validate-repository.mjs --root . --all`: passed.
+- `scripts/check`: see the implementation commit.
+- Test seam: `LOOM_DOCTOR_BASH_VERSION` overrides the probed Bash version (tests only).
 
 ## Revision Log
 

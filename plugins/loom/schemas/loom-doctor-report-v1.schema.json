@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/craigeous/loom/schemas/loom-doctor-report-v1.schema.json",
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "host_and_os",
+            "required_tools",
+            "git_identity",
+            "repo_cleanliness",
+            "init_mode",
+            "coordination",
+            "review_protocol",
+            "eval_protocol",
+            "client_adapter",
+            "hook_trust",
+            "egress_sandbox"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "warning",
+            "error",
+            "unchecked"
+          ]
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "result",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "loom-doctor-report/v1"
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "warning",
+        "error"
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "host_and_os"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "required_tools"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "git_identity"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "repo_cleanliness"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "init_mode"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "coordination"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "review_protocol"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "eval_protocol"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "client_adapter"
+                },
+                "status": {
+                  "const": "unchecked"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "hook_trust"
+                },
+                "status": {
+                  "const": "unchecked"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "const": "egress_sandbox"
+                },
+                "status": {
+                  "const": "unchecked"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    }
+  }
+}

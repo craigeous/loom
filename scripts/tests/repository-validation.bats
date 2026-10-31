@@ -455,7 +455,7 @@ EOF
         'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.manifest="other.json"' \
         'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.allowedHelpers=["other"]' \
         'plugins/loom/adapters/roots/claude-plugin-root-v1.json|.allowedHelpers=["loom-coord"]' \
-        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.allowedHelpers=["loom-eval-workspace","loom-review","loom-verify-identity","loom-coord"]' \
+        'plugins/loom/adapters/roots/codex-skill-source-v1.json|.allowedHelpers=["loom-doctor","loom-eval-workspace","loom-review","loom-verify-identity","loom-coord"]' \
         'plugins/loom/adapters/roots/codex-skill-source-v1.json|.skillSuffix="SKILL.md"' \
         'plugins/loom/adapters/roots/codex-skill-source-v1.json|.pluginRootAscent=".."' \
         'plugins/loom/adapters/roots/codex-skill-source-v1.json|.skillIdentitySource="directory"' \
