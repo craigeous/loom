@@ -1750,7 +1750,7 @@ DOC
     # The fixture README's inventoried link to this evidence file now resolves.
     grep -v 'dogfood-evidence.json' "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt" >"$TEST_ROOT/allowlist.next" || true
     mv "$TEST_ROOT/allowlist.next" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
-    put_eval 2026-01-02-q-eval.md PASS 0 "Artifact: [p](../slice-plans/p.md)"
+    put_eval 2026-01-02-r-eval.md PASS 0 "Artifact: [r](../research/r.md)"
     docs_all
     [ "$status" -eq 0 ]
     put .docs/evaluations/notes.md <<'DOC'
@@ -2049,9 +2049,95 @@ DOC
     docs_all --baseline "$base"
     [ "$status" -eq 1 ]
     [[ "$output" == *"p.md: baseline: FAIL return without a recorded FAIL evaluation"* ]]
-    put_eval p-plan-eval.md FAIL 0
+    put_eval p-plan-eval.md FAIL 0 "Commit: $base"
     docs_all --baseline "$base"
     [ "$status" -eq 0 ]
+}
+
+@test "baseline FAIL return evidence must match the phase and be ordered after the rejected status" {
+    make_docs_root
+    old="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md "Plan Review"
+    fixture_commit "review"
+    base="$(fixture_git rev-parse HEAD)"
+    set_status .docs/slice-plans/p.md Draft
+    # A code evaluation FAIL cannot justify a plan-review return.
+    put_eval p-eval.md FAIL 0 "Commit: $base"
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: FAIL return without a recorded FAIL evaluation"* ]]
+    rm "$TEST_ROOT/.docs/evaluations/p-eval.md"
+    # A plan FAIL that reviewed a commit before the plan entered Plan Review is stale.
+    put_eval p-plan-eval.md FAIL 0 "Commit: $old"
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: FAIL return without a recorded FAIL evaluation"* ]]
+    # Without a recorded reviewed commit the ordering is ambiguous, not assumed.
+    put_eval p-plan-eval.md FAIL 0
+    docs_all --baseline "$base"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p.md: baseline: FAIL return evidence cannot be ordered"* ]]
+    put_eval p-plan-eval.md FAIL 0 "Commit: $base"
+    docs_all --baseline "$base"
+    [ "$status" -eq 0 ]
+}
+
+@test "docs state: Owner-Reset is validated on the first event and requires the owner decision text" {
+    make_docs_root
+    first="$(fixture_git rev-parse HEAD)"
+    put_eval p-plan-eval.md FAIL 3 "Commit: $first" "Owner-Reset: yes"
+    fixture_commit "plan fail"
+    second="$(fixture_git rev-parse HEAD)"
+    put_eval p-eval.md PASS 0 "Commit: $second"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: Owner-Reset must record an owner decision naming 'p'"* ]]
+    # Mentioning the identity, 'direction' and a reset is not an owner decision.
+    put_eval p-plan-eval.md FAIL 0 "Commit: $first" "Owner-Reset: p direction reset 0"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"p-plan-eval.md: Owner-Reset must record an owner decision"* ]]
+    put_eval p-plan-eval.md FAIL 0 "Commit: $first" "Owner-Reset: owner decision for p: materially new direction, reset to 0"
+    docs_all
+    [[ "$output" != *"must record an owner decision"* ]]
+}
+
+@test "docs state: ADR problem statement must be approved research or a top-level problem document" {
+    make_docs_root
+    mkdir -p "$TEST_ROOT/.docs/status"
+    printf '# Notes\nStatus: Approved\n' >"$TEST_ROOT/.docs/status/notes.md"
+    printf '# ADR\nStatus: Accepted\n\n## Context\n[notes](../status/notes.md) and [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+    printf '# Problem\nStatus: Draft\n' >"$TEST_ROOT/.docs/problem.md"
+    printf '# ADR\nStatus: Accepted\n\n## Context\n[problem](../problem.md) and [spec](../spec/00-a.md).\n\n## Decision\nd\n\n## Consequences\nc\n' >"$TEST_ROOT/.docs/ADR/0001-a.md"
+    docs_all
+    [[ "$output" == *"ADR/0001-a.md: body must link existing approved research or a problem statement"* ]]
+    printf '# Problem\nStatus: Approved\n' >"$TEST_ROOT/.docs/problem.md"
+    docs_all
+    [[ "$output" != *"ADR/0001-a.md: body must link existing approved research"* ]]
+}
+
+@test "docs state: evaluation artifact and authority must be applicable references" {
+    make_docs_root
+    # An artifact link to an unrelated existing file does not identify the reviewed artifact.
+    put_eval q-eval.md PASS 0 "Artifact: [other](../slice-plans/p.md)"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"q-eval.md: evaluation does not identify a resolvable reviewed artifact"* ]]
+    # A bare Artifact: value that names nothing real is not identification.
+    put_eval q-eval.md PASS 0 "Artifact: anything"
+    docs_all
+    [[ "$output" == *"q-eval.md: evaluation does not identify a resolvable reviewed artifact"* ]]
+    # Authority that links only another evaluation, or names no authority, is not applicable.
+    put_eval p-eval.md PASS 0
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: [prior](p-eval.md)\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority must reference applicable specs"* ]]
+    printf '# E\nVerdict: PASS\nRound: 0\nReviewed against: ADR 9999\n\n## Summary\nx\n\n## Findings\nNone.\n' >"$TEST_ROOT/.docs/evaluations/p-plan-eval.md"
+    docs_all
+    [[ "$output" == *"p-plan-eval.md: evaluation authority names an ADR that does not exist: 9999"* ]]
 }
 
 @test "docs state: ADR authority needs approved research or problem and accepted prior authority" {
@@ -2089,7 +2175,16 @@ DOC
     [[ "$output" == *"unknown-thing-eval.md: evaluation does not identify a resolvable reviewed artifact: unknown-thing"* ]]
     put_eval unknown-thing-eval.md PASS 0 "Artifact: [thing](../slice-plans/p.md)"
     docs_all
+    [ "$status" -eq 1 ]
+    put_eval unknown-thing-eval.md PASS 0 "Artifact: [thing](../research/r.md)"
+    docs_all
+    [ "$status" -eq 1 ]
+    rm "$TEST_ROOT/.docs/evaluations/unknown-thing-eval.md"
+    put_eval r-eval.md PASS 0 "Artifact: [thing](../research/r.md)"
+    docs_all
     [ "$status" -eq 0 ]
+    rm "$TEST_ROOT/.docs/evaluations/r-eval.md"
+    put_eval unknown-thing-eval.md PASS 0
     put_eval unknown-thing-eval.md PASS 0 "Artifact: [thing](../slice-plans/nope.md)"
     docs_all
     [[ "$output" == *"unknown-thing-eval.md: evaluation does not identify a resolvable reviewed artifact"* ]]

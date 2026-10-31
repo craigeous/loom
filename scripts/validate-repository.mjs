@@ -873,7 +873,8 @@ function checkAuthority(relative, kind, text, artifacts, markdownParser) {
     if (!adrs.length) ruleReport(relative, "authority", "Authority section must link at least one existing ADR");
     else if (!adrs.some((target) => statusOf(target) === "Accepted")) ruleReport(relative, "authority", "Authority section must link at least one accepted ADR");
   } else if (kind === "adr") {
-    const grounding = targets.filter((target) => (/^\.docs\/research\//.test(target) && statusOf(target) === "Approved") || !/^\.docs\/(?:research|ADR|spec)\//.test(target) && target.startsWith(".docs/"));
+    // Grounding is an approved research note or an accepted/approved top-level problem document, never an arbitrary doc.
+    const grounding = targets.filter((target) => (/^\.docs\/research\/[^/]+\.md$/.test(target) || /^\.docs\/[^/]+\.md$/.test(target)) && ["Approved", "Accepted"].includes(statusOf(target)) && (target.startsWith(".docs/research/") ? statusOf(target) === "Approved" : true));
     const prior = targets.filter((target) => target !== relative && ((/^\.docs\/ADR\//.test(target) && statusOf(target) === "Accepted") || (/^\.docs\/spec\//.test(target) && statusOf(target) === "Approved")));
     if (!grounding.length) ruleReport(relative, "authority", "body must link existing approved research or a problem statement");
     if (!prior.length) ruleReport(relative, "authority", "body must link accepted prior authority (an accepted ADR or approved spec)");
@@ -894,17 +895,40 @@ function checkAuthority(relative, kind, text, artifacts, markdownParser) {
   }
 }
 
-// An evaluation names its artifact (field or filename identity) and links resolvable authority.
+// An evaluation names its artifact (field or filename identity) and links applicable, resolvable authority.
+const AUTHORITY_ROOT = /^(?:\.docs\/(?:spec|ADR|research|status)\/|\.docs\/[^/]+\.md$|plugins\/|scripts\/|gates\/|references\/)/;
 function checkEvaluationIdentification(relative, text, identity, markdownParser) {
   const artifactField = identificationLines(text, "Artifact").join(" ");
   const authorityField = identificationLines(text, "Reviewed against").join(" ");
+  const identities = artifactIdentities();
   const artifactLinks = relativeHrefs(artifactField, markdownParser);
-  const artifactOk = artifactLinks.length ? artifactLinks.every((href) => resolveHref(relative, href)) : artifactField.length > 0 || artifactIdentities().has(identity);
+  const strip = (name) => name.replace(/^(?:\d+|\d{4}-\d{2}-\d{2})-/, "");
+  let artifactOk;
+  if (artifactLinks.length) {
+    // Every link must resolve to the artifact this evaluation is named for, not just any file.
+    artifactOk = artifactLinks.every((href) => {
+      const target = resolveHref(relative, href);
+      if (!target || target.startsWith(".docs/evaluations/")) return false;
+      const base = path.posix.basename(target, ".md");
+      return [identity, strip(identity)].some((name) => name === planIdentity(target) || name === base || name === strip(base));
+    });
+  } else artifactOk = identities.has(identity) || identities.has(strip(identity));
   if (!artifactOk) ruleReport(relative, "authority", `evaluation does not identify a resolvable reviewed artifact: ${artifactField || identity}`);
-  // Authority must be named; any linked local authority must resolve (a bare title is identification only).
+  if (!authorityField) { ruleReport(relative, "authority", "evaluation header must identify the reviewed artifact and authority ('Artifact:' or 'Reviewed against:')"); return; }
   const authorityLinks = relativeHrefs(authorityField, markdownParser);
-  if (!authorityField) ruleReport(relative, "authority", "evaluation header must identify the reviewed artifact and authority ('Artifact:' or 'Reviewed against:')");
-  else if (!authorityLinks.every((href) => resolveHref(relative, href))) ruleReport(relative, "authority", `evaluation authority links must resolve to local files: ${authorityField}`);
+  const resolved = authorityLinks.map((href) => resolveHref(relative, href));
+  if (resolved.some((target) => !target)) { ruleReport(relative, "authority", `evaluation authority links must resolve to local files: ${authorityField}`); return; }
+  const adrNumbers = [...authorityField.matchAll(/\bADRs?\s+((?:\d{4}(?:\s*[,/\u2013-]\s*|\s+and\s+)?)+)/gi)].flatMap((match) => match[1].match(/\d{4}/g));
+  const missing = adrNumbers.filter((number) => !files.some((file) => file.startsWith(`.docs/ADR/${number}-`)));
+  if (missing.length) { ruleReport(relative, "authority", `evaluation authority names an ADR that does not exist: ${missing.join(", ")}`); return; }
+  const named = adrNumbers.length > 0
+    || /\bspecs?\s+\d\d\b|\b\d\d-[a-z0-9-]+\.md\b/i.test(authorityField)
+    || (/\brepository[- ]improvement[- ]plan\b/i.test(authorityField) && files.includes(".docs/repository-improvement-plan.md"))
+    || /\b(?:approved|accepted)\b[^;]*\bresearch\b|\bresearch notes?\b/i.test(authorityField)
+    || /\brubric\b|\bplaybook\b|\bslice[- ]plan\b|\.docs\/slice-plans\/[\w./-]+\.md/i.test(authorityField);
+  const codePaths = [...authorityField.matchAll(/`([^`\s]+)`/g)].map((match) => match[1].replace(/^\.\//, "")).filter((candidate) => files.includes(candidate));
+  const applicable = resolved.concat(codePaths).filter((target) => AUTHORITY_ROOT.test(target) || /^\.docs\/slice-plans\//.test(target));
+  if (!applicable.length && !named) ruleReport(relative, "authority", `evaluation authority must reference applicable specs, ADRs, research, plan or rubric: ${authorityField}`);
 }
 
 const evaluationRecords = [];
@@ -944,14 +968,23 @@ function validateEvaluations(markdownParser) {
     if (!events.has(identity)) events.set(identity, []);
     const runClass = fieldValues(text, "Run-Status")[0];
     if (runClass !== undefined && !NON_MERITS.includes(runClass)) ruleReport(relative, "eval-sequence", `Run-Status must be one of ${NON_MERITS.join(", ")}, found '${runClass}'`);
-    const event = { relative, identity, round, verdict: verdicts[0], nonMerits: NON_MERITS.includes(runClass), resetText: fieldValues(text, "Owner-Reset").join(" "), commit: (fieldValues(text, "Commit").concat(fieldValues(text, "Reviewed commit"))[0] || "").match(/[0-9a-f]{7,40}/)?.[0] };
+    const event = { relative, identity, round, verdict: verdicts[0], nonMerits: NON_MERITS.includes(runClass), planEval: Boolean(match[2]), resetText: fieldValues(text, "Owner-Reset").join(" "), commit: (fieldValues(text, "Commit").concat(fieldValues(text, "Reviewed commit"))[0] || "").match(/[0-9a-f]{7,40}/)?.[0] };
     events.get(identity).push(event);
     evaluationRecords.push(event);
   }
   for (const [identity, group] of events) {
     const hasReset = (event) => event.resetText.length > 0;
+    // Every recorded reset is validated, wherever it sits in the group.
+    for (const event of group.filter(hasReset)) {
+      const text = event.resetText;
+      const valid = event.round === 0 && text.toLowerCase().includes(identity.toLowerCase())
+        && /\bowner\b[^.;]*\b(?:decision|decided|directed|approved)\b|\b(?:decision|decided|directed|approved)\b[^.;]*\bowner\b/i.test(text)
+        && /\bmaterially\s+new\s+direction\b/i.test(text) && /\breset\b[^.;]*\b0\b|\b0\b[^.;]*\breset\b/i.test(text);
+      event.resetValid = valid;
+      if (!valid) ruleReport(event.relative, "eval-sequence", `Owner-Reset must record an owner decision naming '${identity}', a materially new direction and a reset to 0, with Round: 0`);
+    }
     if (group.length < 2) {
-      if (group[0].round !== 0) ruleReport(group[0].relative, "eval-sequence", `first evaluation of '${identity}' must be Round: 0, found ${group[0].round}`);
+      if (group[0].round !== 0 && !hasReset(group[0])) ruleReport(group[0].relative, "eval-sequence", `first evaluation of '${identity}' must be Round: 0, found ${group[0].round}`);
       continue;
     }
     for (const event of group) event.sha = eventCommit(event);
@@ -969,11 +1002,7 @@ function validateEvaluations(markdownParser) {
         ruleReport(later.relative, "eval-sequence", `ordering is ambiguous against ${earlier.relative}`);
         continue;
       }
-      if (hasReset(later)) {
-        const valid = later.round === 0 && later.resetText.toLowerCase().includes(identity.toLowerCase()) && /direction/i.test(later.resetText) && /reset\b[^.]*\b0\b|\b0\b[^.]*reset/i.test(later.resetText);
-        if (!valid) ruleReport(later.relative, "eval-sequence", `Owner-Reset must record an owner decision naming '${identity}', a materially new direction and a reset to 0, with Round: 0`);
-        continue;
-      }
+      if (hasReset(later)) continue;
       const expected = earlier.verdict === "FAIL" && !earlier.nonMerits ? earlier.round + 1 : earlier.round;
       if (later.round !== expected) ruleReport(later.relative, "eval-sequence", `round ${later.round} follows ${earlier.relative} (round ${earlier.round} ${earlier.verdict}); expected exactly ${expected}, and a reset needs an 'Owner-Reset:' decision`);
     }
@@ -1011,6 +1040,7 @@ function validateBaseline(current) {
     const problem = checkTransitions(before, artifact);
     if (problem === "illegal") report(artifact.relative, `baseline: illegal status transition (${arrow})`);
     else if (problem === "ambiguous") report(artifact.relative, `baseline: ambiguous clarification restoration; the status before Needs Clarification cannot be established (${arrow})`);
+    else if (problem === "fail-ambiguous") report(artifact.relative, `baseline: FAIL return evidence cannot be ordered; a matching FAIL evaluation needs a recorded reviewed 'Commit:' at or after the rejected status (${arrow})`);
     else if (problem === "fail-evidence") report(artifact.relative, `baseline: FAIL return without a recorded FAIL evaluation (${arrow})`);
   }
 }
@@ -1018,17 +1048,17 @@ function statusAt(sha, relative) {
   try { const statuses = statusField(git(["show", `${sha}:${relative}`])); return statuses.length === 1 ? statuses[0] : undefined; }
   catch { return undefined; }
 }
-// Statuses observed from the baseline through each commit that touched the artifact to the working tree.
+// Statuses (with the commit that first showed each) from the baseline through every commit that touched the artifact.
 function statusSequence(before, artifact) {
   let log = "";
   try { log = git(["log", "--reverse", "--format=%H", `${baselineCommit}..HEAD`, "--", before.relative, artifact.relative]); } catch { /* no intermediate history */ }
-  const sequence = [before.status];
+  const sequence = [{ status: before.status, sha: baselineCommit }];
   for (const sha of log.split("\n").filter(Boolean)) {
     const seen = statusAt(sha, artifact.relative) ?? statusAt(sha, before.relative);
-    if (seen) sequence.push(seen);
+    if (seen) sequence.push({ status: seen, sha });
   }
-  sequence.push(artifact.status);
-  return sequence.filter((status, index) => index === 0 || status !== sequence[index - 1]);
+  sequence.push({ status: artifact.status, sha: undefined });
+  return sequence.filter((entry, index) => index === 0 || entry.status !== sequence[index - 1].status);
 }
 function priorStatus(relative) {
   let log = "";
@@ -1039,20 +1069,34 @@ function priorStatus(relative) {
   }
   return undefined;
 }
+// A FAIL return needs a merits FAIL of the matching phase, reviewing a commit at or after the commit that entered the rejected status.
+function failEvidence(artifact, from, to, entered) {
+  const base = path.posix.basename(artifact.relative, ".md");
+  const names = new Set([planIdentity(artifact.relative), base, base.replace(/^\d+-/, "")]);
+  const wantPlanEval = artifact.kind === "plan" ? from === "Plan Review" : undefined;
+  const candidates = evaluationRecords.filter((record) => record.verdict === "FAIL" && !record.nonMerits && names.has(record.identity) && (wantPlanEval === undefined || record.planEval === wantPlanEval));
+  if (!candidates.length) return "fail-evidence";
+  let ambiguous = false;
+  for (const record of candidates) {
+    const sha = eventCommit(record);
+    if (!sha || !entered || !isAncestor(sha, "HEAD")) { ambiguous = true; continue; }
+    if (isAncestor(entered, sha)) return null;
+  }
+  return ambiguous ? "fail-ambiguous" : "fail-evidence";
+}
 function checkTransitions(before, artifact) {
   const sequence = statusSequence(before, artifact);
   let prior = before.status === "Needs Clarification" ? priorStatus(before.relative) : undefined;
   for (let index = 1; index < sequence.length; index += 1) {
-    const from = sequence[index - 1];
-    const to = sequence[index];
+    const from = sequence[index - 1].status;
+    const to = sequence[index].status;
     const step = legalStep(artifact.kind, from, to, prior);
     if (step === "ambiguous") return "ambiguous";
     if (!step) return "illegal";
     if (to === "Needs Clarification") prior = from;
     if (isFailReturn(artifact.kind, from, to)) {
-      const base = path.posix.basename(artifact.relative, ".md");
-      const names = new Set([planIdentity(artifact.relative), base, base.replace(/^\d+-/, "")]);
-      if (!evaluationRecords.some((record) => record.verdict === "FAIL" && !record.nonMerits && names.has(record.identity))) return "fail-evidence";
+      const problem = failEvidence(artifact, from, to, sequence[index - 1].sha);
+      if (problem) return problem;
     }
   }
   return null;

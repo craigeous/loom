@@ -144,6 +144,22 @@ transitions or landing.
 - Verification: `node scripts/validate-repository.mjs --root . --all` passed;
   `bats scripts/tests/repository-validation.bats` and `scripts/check` results recorded in the commit message below.
 
+### Round 0 re-review remediation
+
+- FAIL returns: `checkTransitions()` now requires a merits FAIL of the matching phase (`-plan-eval` for
+  Plan Review -> Draft of a plan; code evaluation for Implemented -> In Progress) whose recorded
+  reviewed `Commit:` is reachable from HEAD and at or after the commit that entered the rejected status.
+  A missing or unresolvable commit reports ambiguity instead of accepting the record.
+- Resets: every `Owner-Reset:` (including the first event of a group) must be `Round: 0`, name the
+  artifact, record an owner decision, a materially new direction and a reset to 0.
+- Authority: ADR grounding is approved research or an approved/accepted top-level `.docs/*.md` problem
+  document; evaluation `Artifact:` links must resolve to the named artifact (not an evaluation), and
+  `Reviewed against:` must resolve to existing ADRs/specs/research/plan/rubric references.
+- Two historical records (ADR 0016, `sanitized-evaluation-workspace-eval`) gained exact-source
+  `rule:authority` exceptions, pending owner authorization.
+- Tests: new Bats cases for phase/order FAIL evidence, first-event reset validation, ADR problem-statement
+  grounding and applicable evaluation references; two existing cases updated to the stricter rules.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |

@@ -452,3 +452,5 @@
 .docs/spec/09-open-questions.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/spec/09-open-questions.md	rule:heading-authority	Historical artifact predates the required template heading; record is not rewritten.
 .docs/spec/09-open-questions.md	rule:status-token	Living index-style document outside the lifecycle status vocabulary.
+.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md	rule:authority	Accepted ADR is immutable and predates the problem-statement grounding check; record is not rewritten.
+.docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:authority	Historical evaluation names its re-review scope without an authority reference; record is not rewritten.
