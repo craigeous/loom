@@ -43,7 +43,7 @@ after approval and change only via planning. Design decisions are in
 - **`plugins/loom/adapters/`** — the v0.2.0 compatibility matrix, installed-root bindings, and release-owned static metadata fixtures.
 - **`.docs/`** — loom's own design memory (dogfooding); not a plugin component.
 - **`plugins/loom/hooks/`** — `git-identity-guard.sh` (ADR 0003) + `precompact-write-ahead-backstop.sh` (ADR 0013 §Decision 5); one shared `hooks.json` for both clients (policy/wire split at the executable boundary, spec 08; 12-case (2 clients × 2 events × 3 outcomes; 48 fixture files at 4/case) `hooks/fixtures/hook-wire-v1/` product); shell-gated.
-- **`plugins/loom/bin/`** — `loom-coord` (multi-session coordination CLI; ADR 0014/0015/0016), `loom-resolve-helper` (installed-root helper resolution, both clients), `loom-launch-role` (sole client role launcher, compatibility-matrix-driven), `loom-verify-identity` (post-commit identity check); on `$PATH`.
+- **`plugins/loom/bin/`** — `loom` (unified CLI entry point), `loom-doctor` (foundation diagnostics), `loom-coord` (multi-session coordination CLI; ADR 0014/0015/0016), `loom-land` (remote landing helper; ADR 0020), `loom-review` (local 3-finder review runner; ADR 0021), `loom-eval-workspace` (sanitized workspace and gate runner; ADR 0022), `loom-resolve-helper` (installed-root helper resolution), `loom-launch-role` (sole client role launcher, compatibility-matrix-driven), `loom-verify-identity` (post-commit identity check); on `$PATH`.
 - **`scripts/macos-dual-client-dogfood`** — private Apple-silicon dual-client dogfood harness (fail-closed supervisor/worker journal); private evidence only, not public Codex support (ADR 0024).
 - **`gates/rust.md`** — Rust gate loom imposes on managed projects.
 - **`references/init-detection.md`** — Greenfield/Unaligned/Initialized classifier; all `/loom:*` run this first (M2).
@@ -54,7 +54,7 @@ after approval and change only via planning. Design decisions are in
 - **`references/tooling.md`** — recommended CLI/LSP toolkit + verify-mechanically-not-by-eye discipline.
 - **`references/parallelism.md`** — worktree-per-slice ops + multi-session coordination (ADR 0008, 0014/0015/0016).
 - **`references/migration-recipe.md`** — reusable Unaligned-migrate recipe (ADR 0009 §5/§7).
-- **`references/review-findings.md`** — review-findings artifact + orchestrator-runs-`/code-review`+`/security-review` at `Implemented` (ADR 0010, 0011).
+- **`references/review-findings.md`** — review-findings artifact + Loom-owned local 3-finder review protocol at `Implemented` (ADR 0021).
 - **`references/orchestration.md`** — context discipline + cold restart + ~60% trigger + bounded return (ADR 0012, 0013); infra-blocked escalation + degraded-review honesty + incremental-commit (ADR 0017).
 
 When editing the playbook/agents, keep them consistent with `.docs/spec/` + ADRs.
