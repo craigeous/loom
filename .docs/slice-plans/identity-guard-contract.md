@@ -1,6 +1,6 @@
 # Identity Guard Contract
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 08-playbook.md, 10-packaging.md
 Target size: <= 250 LOC net change excluding tests/docs (keep this plan document <= 250 lines)
 
