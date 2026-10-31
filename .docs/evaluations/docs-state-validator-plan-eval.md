@@ -1,8 +1,13 @@
 # Evaluation: Docs State Validator (slice-plan)
 
-Verdict: FAIL
+> Re-review of the Round 0 FAIL (reviewed commit f5a3220) against revision b689a2d.
+> The re-review verdict is recorded in the header; the Round 0 findings below are
+> retained as history. Per the counting rule, a PASS that resolves a FAIL keeps the
+> round number.
+
+Verdict: PASS
 Round: 0
-Commit: f5a3220
+Commit: b689a2d
 Artifact: `.docs/slice-plans/docs-state-validator.md` (Status: Plan Review)
 Reviewed against: specs 00, 03, 05, 06, 08; ADR 0016; repository improvement plan
 `### Slice: docs-state-validator`; `scripts/validate-repository.mjs`; plan-evaluation
@@ -151,3 +156,37 @@ code 2 are not mentioned. State the flag name and the usage text update.
 
 Resolve blockers 1–2 and majors 3–5 in place (Context, Out of Scope, Steps,
 Verification; add a Revision Log row for Round 1).
+
+## Re-review (revision b689a2d)
+
+Scope: Round >= 1 non-expansion rule. I verified each Round 0 BLOCKER and MAJOR
+against the diff `f5a3220..b689a2d` and checked the diff for regressions.
+
+| # | Finding | Result |
+|---|---|---|
+| 1 | BLOCKER: evaluation naming and round rules | Resolved. Step 4 has a closed table of filename forms (canonical, companion, static, dated). It defines a single top-level `Round:` and `Verdict:` per file and orders events by reviewed-commit ancestry. It also sets the increment and reset rules and treats historical multi-section files as one event. The Notes deferral is deleted. |
+| 2 | BLOCKER: status, heading and authority rules | Resolved. Step 2 has a status-by-type table and rejects `Status:` on evaluations. Step 5 has a headings and authority table per type. Baseline exceptions are recorded in the implementation evaluation record, and only the owner may authorize corrections. The Spec, ADR and Slice-plan status sets match the spec 03 legal statuses and its ADR-only `Accepted` rule. |
+| 3 | MAJOR: LOC budget | Resolved. The budget is restated as <= 450 LOC. Transitions are snapshot-by-default with an optional `--baseline`, and tests are stated as proportionate. |
+| 4 | MAJOR: ADR 0016 edit authority | Resolved. Step 6 cites ADR 0025 reconciliation authority and the improvement-plan request. It limits the edit to the single link and requires a `git diff` check. ADR 0025 itself lists the 0016 errata among its deferred reconciliation edits. The archived target exists. |
+| 5 | MAJOR: link-scope blast radius | Resolved. Historical files are never rewritten. Each known broken link is inventoried in `scripts/validation/relative-link-allowlist.txt` (source, target, reason). Live links and broad patterns are disallowed, the bound is exactly the inventoried failures with no unused entries, and the count is reported. |
+| 6 | MINOR: spec 06 | Resolved (dropped from Target specs). |
+| 7 | MINOR: verification | Resolved. `--baseline <ref>`, the `usage()` update and exit 2 are specified, and named Bats cases are listed. |
+
+Regression check: the plan is 122 lines (<= 250). It keeps the canonical sections and
+adds a Revision Log row. No new BLOCKER or MAJOR is introduced by the revision.
+
+### Non-blocking notes (MINOR)
+
+- Step 6 cites "improvement plan line 737", but the slice's ADR 0016 request is at
+  about lines 734-735 (line 737 is blank). The anchor `#slice-docs-state-validator`
+  may not resolve either. Prefer a stable heading reference when the plan is next
+  touched, or when the implementation record is written.
+- `.docs/evaluations/README.md` still lists this evaluation as "Round 0: FAIL". The
+  index entry should be updated to PASS at the next documentation commit.
+- Step 3 leaves the exact set of "invalid flag/mode combinations" to the developer.
+  The named `baseline usage errors` test pins this adequately.
+
+## Re-review verdict
+
+PASS. All Round 0 blockers and majors are resolved and the revision introduces no new
+blockers or majors. The plan may move to Approved.

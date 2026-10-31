@@ -1,6 +1,6 @@
 # Docs State Validator
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 05-blind-evaluation.md, 08-playbook.md
 Target size: <= 450 LOC net change (keep this plan document <= 250 lines)
 
