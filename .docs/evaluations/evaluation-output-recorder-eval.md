@@ -6,21 +6,22 @@ Verdict: FAIL
 
 ## Findings
 
-- [MAJOR] Missing mandatory local review: `.docs/evaluations/evaluation-output-recorder-review-findings.md` is absent, and no sealed finder inputs were supplied. The rubric requires valid review evidence for this code slice, so the review cannot be adjudicated or treated as clean.
-- [MAJOR] The recorder does not enforce the ADR 0023 ratification exception or repository/state eligibility before applying transitions (`plugins/loom/bin/loom-eval-workspace`, transition plan). It can therefore advance an ineligible or held artifact, contrary to plan step 5.
-- [MAJOR] The required bootstrap retirement and settlement guidance is absent: `orchestration.md` is unchanged, and the required fresh remote target ancestry checks and `full_sunset.sha` settlement procedure are not specified. Plan step 6 is incomplete.
-- [MAJOR] Verdict JSON parsing uses `jq` and Ajv without rejecting duplicate object keys (`cmd_record`); the plan explicitly requires rejection of duplicate data. Different parsers can interpret duplicate keys differently.
+- [MAJOR] The ADR 0023 repository/state eligibility finding remains unresolved. `cmd_record` defaults `--bootstrap-phase` to `active` and trusts the supplied value; it does not establish the repository or transition-state eligibility before advancing. Omitting the option therefore advances even when the actual state is held or ineligible. The special case for an ADR 0023 artifact does not establish eligibility for other transitions, and the new test exercises only an explicitly supplied held phase.
+- [MAJOR] The supplied local review identifies a material gap in negative tests for recorder binding and rerun integrity (TST-1). The revision adds no tests for the cited cross-run/authority bindings or rerun reference mismatches; those guards are essential to the plan's recording boundary and could regress without these tests detecting it.
 
 ## Required changes
 
-1. Supply a valid local-review findings artifact or sealed finder inputs for independent adjudication.
-2. Implement and test the ADR 0023 repository/state eligibility and held-transition checks.
-3. Add the plan-required recorder recovery, commit, evidence-mode and bootstrap sunset settlement guidance.
-4. Reject duplicate JSON keys before schema and binding validation, with regression tests.
+1. Establish and enforce the ADR 0023 repository and state eligibility from authoritative state before advancing, including omitted or stale phase input, and test eligible and ineligible cases.
+2. Add negative regression tests for the manifest/verdict bindings and latest rerun reference, asserting rejection and no report or status advance.
+
+## Local review adjudication
+
+- COR-1: Accepted as MAJOR; the revised transition guard still does not verify repository/state eligibility.
+- TST-1: Accepted as MAJOR; the identified binding and rerun integrity cases remain untested.
+- COR-2: MINOR; extra report sections preserve judgment and evidence, although the specified order differs.
+- TST-2 and TST-3: MINOR test coverage and assertion gaps; they do not independently determine this verdict.
 
 ## Evidence
 
-- Reviewed `41e9904..7113890` against the slice plan and rubric. The previous plan evaluation is Round 1 PASS; this first code FAIL increments the artifact counter to Round 2.
-- Size: 242 additions and 24 deletions, net 218 lines excluding tests and schemas; within the 350-line budget.
-- Repository validation: `node scripts/validate-repository.mjs --root /Users/craig/git/loom --all` passed.
-- Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed, including 769 Bats tests and all remaining checks.
+- Re-reviewed only the Round 2 findings and `git diff 7113890..b1f73a3`. The companion local review is now present; duplicate keys are scanned before schema and binding checks; and sunset ancestry and `full_sunset.sha` guidance has been added.
+- Gate rerun: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed (exit 0; 773 Bats tests and all remaining checks).
