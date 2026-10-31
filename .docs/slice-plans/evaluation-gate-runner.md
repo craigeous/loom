@@ -30,8 +30,11 @@ its checks or reuse prior evidence.
    `verify_rc`. Accept no gate command, environment, source or dependency overrides;
    reject non-code runs and malformed options. Verify the complete current manifest,
    self-hash, source, dependencies, permissions and Git object bindings before work.
-   Capture a deterministic inventory of the managed checkout, including untracked
-   files and modes, before execution; inability to inventory is infrastructure-blocked.
+   Update the helper header to describe the implemented runner. When `REPO_OK=1`,
+   inventory tracked index paths via `git ls-files -s` and untracked non-ignored paths,
+   including actual path types, modes and content hashes; exclude ignored files and
+   `.git` internals. When `REPO_OK=0`, there is no checkout inventory or comparison;
+   retain all run/source verification. Inability to inventory is infrastructure-blocked.
 2. **Execution boundary** — Create a unique private disposable execution tree outside
    the checkout and Git common directory. Copy the verified source without links or
    special files, preserve executable modes, and compare its initial path/type/mode/
@@ -40,37 +43,55 @@ its checks or reuse prior evidence.
    evaluation or word splitting, from the copy. Start from an empty environment with
    only the pinned variables plus runner-owned redirects; provide the verified prepared
    offline dependencies and redirect home/config, caches, temp and declared build
-   outputs to the copy or private scratch using the existing reserved environment names.
-   Never inherit credentials or ambient environment. Capture actual declared tool
-   versions and compare with the pinned versions before execution; unavailable or
-   mismatched tools/dependencies block the attempt rather than silently substituting.
+   outputs to the copy or private scratch. Map `HOME` to scratch/home;
+   `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` to
+   scratch/xdg/{config,cache,data,state}; `TMPDIR`, `TMP`, `TEMP` to scratch/tmp;
+   `CARGO_HOME` to scratch/cargo, `CARGO_TARGET_DIR` to scratch/build/cargo,
+   `GOCACHE` to scratch/cache/go, `GOPATH` to scratch/go, `npm_config_cache` to
+   scratch/cache/npm, `PIP_CACHE_DIR` to scratch/cache/pip; `LOOM_EVAL_DEPS` to
+   read-only `inputs/deps`, `LOOM_EVAL_BUILD` to scratch/build and
+   `LOOM_EVAL_SCRATCH` to scratch. Create these private directories as needed.
+   Never inherit credentials or ambient environment. For each declared tool resolve
+   `name` only on the pinned `PATH` under the empty pinned environment, run the resolved
+   tool as `name --version 2>&1` in that environment, record the observed first non-empty
+   line, and require the pinned version as a whole token on that line. Missing tools,
+   probe failure, version mismatch or unavailable dependencies block the attempt (4).
 3. **Evidence and cleanup** — For each attempt allocate a unique monotonic sequence
-   under private scratch, retaining earlier evidence without overwrite. Capture UTC
+   under runner-owned `reruns/attempt-<seq>/` within the run, retaining earlier
+   evidence without overwrite. Add `reruns` to the top-level allowlists in `do_verify`
+   and `cmd_clean`. Preserve `stdout.log` and `stderr.log` in each attempt. Capture UTC
    start/end, process completion and exit status, stdout/stderr byte counts and SHA-256,
    canonical start/end inventories (file count and SHA-256) and sorted added/modified/
    deleted paths, command/environment digest, tool versions, run ID and exact manifest
    hash. Reverify immutable source and the checkout against pre-run inventories after
    every attempt, including failures and interruptions. Write `gate-rerun.json` in the
    attempt's own directory atomically only after validating it with
-   `plugins/loom/schemas/loom-eval-gate-rerun-v1.schema.json` (Draft 2020-12 and
-   formats, using the existing schema-validation dependencies). Encode completion,
+   `plugins/loom/schemas/loom-eval-gate-rerun-v1.schema.json` (Draft 2020-12,
+   using the existing schema-validation dependencies). Refactor `validate_manifest_schema`
+   into reusable `validate_json_schema <schema> <file>` for both schemas. Encode completion,
    source verification and result consistently with that schema. Incomplete execution,
    failed verification, evidence write/validation failure or interruption cannot pass;
-   classify changed inputs as invalid and unavailable infrastructure/interruption as
-   infrastructure-blocked. Use traps and safe containment checks to remove the execution
-   tree on success, failure and catchable interruption, after recording evidence when
-   possible; never delete the run, repository or arbitrary parent. A hard kill that
+   classify changed inputs as invalid and unavailable infrastructure as blocked. A
+   pre-execution tool/dependency block records `completion: "blocked"`, null exit status,
+   empty stream files and copy-only start/end inventories when available, or leaves an
+   incomplete attempt if a valid record cannot be written; the command exits 4. Use
+   traps and safe containment checks: terminate the gate process group with SIGTERM, wait,
+   then SIGKILL remaining processes and wait before recording evidence and removing the
+   execution tree on catchable interruption. Never delete the run, repository or arbitrary
+   parent. A hard kill that
    prevents cleanup must leave an incomplete attempt, never a passing result.
 4. **Status and exit contract** — Extend read-only `status` to verify the current run
-   first, then validate the latest attempt's schema, run/manifest/command digest binding
-   and evidence integrity before reporting `rerun-passed` or `rerun-failed`. Missing,
-   partial, corrupt or stale evidence cannot yield either status. Preserve existing
-   `prepared`, `incomplete`, `invalid` and `infrastructure-blocked` distinctions;
-   `verify` remains read-only and does not treat rerun evidence as a verdict. For
-   `gate-rerun` and completed rerun status use 0 for passed, 1 for completed nonzero
-   gate, 2 for invalid input/evidence or changed source/checkout, and 4 for unavailable
-   infrastructure or interrupted execution. Preserve existing usage-error and incomplete
-   status behavior. Neither operation advances lifecycle state.
+   first, then validate the latest attempt against `loom-eval-gate-rerun-v1.schema.json`,
+   its run/manifest/command digest binding, contiguous monotonic attempt sequences,
+   and stream bytes and SHA-256 recomputed from both retained logs. Only intact, current
+   evidence can report `rerun-passed` or `rerun-failed`. A latest attempt without a
+   completed record (including killed or in-progress) is `incomplete` (3), blocked is
+   `infrastructure-blocked` (4), and corrupt, stale, changed or invalid evidence is
+   `invalid` (2); never fall back to `prepared` or an earlier pass. `verify` remains
+   read-only and does not treat rerun evidence as a verdict. For both commands use 0
+   for pass, 1 strictly for usage errors, 2 for rerun-failed or invalid, 3 for incomplete
+   status, and 4 for infrastructure-blocked. Catchable interruption exits 4; a hard kill
+   leaves an incomplete attempt. Neither operation advances lifecycle state.
 5. **`plugins/loom/bin/loom-eval-workspace.bats`** — Add isolated repository fixtures
    covering the boundary and evidence contract below; update usage/status assertions as
    needed. Reuse existing helper/schema registration, adding repository validator checks
@@ -91,7 +112,8 @@ checkout. Cover pinned dependencies and tools, non-code and override rejection,
 missing/mismatched tools, invalid manifests and changed source/checkout, copy inventory
 mismatch, passing and nonzero gates, interruptions, evidence schema and hash validation,
 corrupt/stale/cross-run evidence, repeat attempts without overwrite, and cleanup on each
-outcome. Assert exit/status mappings and that prior evidence cannot mask a changed run.
+outcome. Assert all exit/status mappings, retained stream byte/hash checks, sequence continuity,
+blocked and incomplete attempts, and that prior evidence cannot mask a changed run.
 Run existing exporter tests unchanged as regression coverage.
 
 ## Notes
@@ -103,3 +125,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Resolve Round 0 findings on exits, evidence, tool probes, redirects, inventory, interruption and schema validation. |
