@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [loom-doctor-foundation.md](loom-doctor-foundation.md) — `Plan Review` — read-only doctor diagnostics foundation.
+- [loom-doctor-foundation.md](loom-doctor-foundation.md) — `Approved` — read-only doctor diagnostics foundation.
 
 ## Archived plans
 
