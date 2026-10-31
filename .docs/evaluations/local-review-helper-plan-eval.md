@@ -1,31 +1,23 @@
 # Evaluation: Local Review Helper slice plan
 
 Verdict: FAIL
-Round: 0
-Reviewed against: ADR 0021, ADR 0022, repository improvement plan M4, plan-evaluation rubric and severity guidance.
+Round: 1
+Reviewed against: ADR 0021, ADR 0022, repository improvement plan M4, plan-evaluation rubric and severity guidance; revision diff 6935a15..ff76975.
 
 ## Findings
 
-- [BLOCKER] The export is not necessarily the source tree at `head_sha`: the plan uses `git archive` with `core.attributesFile=/dev/null` (lines 117–120), but tracked `.gitattributes` can still apply `export-ignore` and `export-subst`. A self-consistent export hash cannot detect an omitted or substituted tracked file. ADR 0021 requires the source tree at the exact head; ADR 0022 requires exact reviewed source. Export directly from the commit tree or otherwise verify every exported path, mode and content against it, and test tracked export attributes.
-- [BLOCKER] The clean-tree rule and gate-evidence input conflict (lines 100–108): `--untracked-files=all` rejects untracked evidence inside the repo, while evidence outside it is also rejected. This rules out the expressly supported untracked scratch evidence. Define a narrow exclusion for the supplied evidence, or accept a safely validated external evidence path, while retaining rejection of unrelated dirty state; test both.
-- [BLOCKER] Validation does not establish that the manifest's SHAs, tree, inventory and export actually correspond to the reviewed commits (lines 127–137). It only checks self-recorded hashes and makes diff re-derivation optional when objects are absent; a manifest and source from a different tree can be internally consistent and accepted. Define verifiable binding to the exact commit objects and tree, including a fail-closed policy or independently verifiable object evidence when objects are unavailable, and exercise mismatched head/tree/export and unavailable-object cases. ADR 0021 requires recalculation of every object/hash; ADR 0022 depends on the exact source and diff.
-- [BLOCKER] The declared manifest schema excludes its own deleted-file representation: `ranges[]` permits only `{start,end}` with `additionalProperties: false` (lines 48–56), while preparation adds `side: old` (lines 114–115). Also findings require `line` or `line_end` (lines 67–69), but validation requires binary findings to omit `line` (lines 148–150) without defining a valid location shape. Specify consistent conditional schemas and location rules for deleted and binary changes, and test valid and invalid examples.
-- [MAJOR] The plan does not define how `prepare` obtains several required manifest fields, including Loom/helper versions, adapter and model profile (lines 50–59, 92–94, 122). Nor does validation compare result provenance adapter/model profile with the manifest (lines 141–145). Specify inputs or deterministic sources and matching checks, with a provenance-mismatch test, so the required provenance is reliable.
-- [MAJOR] State transitions are under-specified: `validate` writes state but `assemble` never specifies recording `assembled`, and `status` reports pending or last-recorded state without specifying how newly written results change `prepared` to `collecting` (lines 124–126, 153–174). Specify deterministic transitions or derive status from current files, and test status before and after results, validation and assembly.
-- [MAJOR] The test matrix omits explicit nonzero exit-status rejection, exact base/head/diff result mismatch, and deleted/binary location acceptance and rejection (lines 210–219). These are distinct protocol validation rules; add focused cases proving each fails closed or succeeds as appropriate.
+- [MAJOR] The revised status derivation gives conflicting answers after `validate` runs with no results. Step 5 writes an `invalid` verdict for missing finders, but step 7 defines `prepared` as having no result files and says `invalid` is reported when the validation digest matches. Both conditions hold for this case, with no precedence specified; an implementation can report `prepared` and exit 3 instead of the recorded invalid verdict and exit 2. The revision also says any result change resets to `collecting`, but does not explicitly override the stale valid aggregate for the exit code. Specify precedence and test validation with zero results and a result change after a valid verdict.
 
 ## Required changes
 
-1. Bind the exported snapshot and validated review inputs to the exact reviewed Git objects, including attribute and missing-object cases.
-2. Resolve gate-evidence cleanliness, schema/location, provenance, and state-transition ambiguities as described above.
-3. Add focused tests for those fixes and the missing validation cases.
+1. Define phase and exit-code precedence for an unchanged validated empty result set and for a changed result set, so the current state cannot report a stale valid verdict. Add focused status tests for both cases.
 
 ## Notes
 
-The plan is 250 lines, within its stated budget. Its registration inventory covers the resolver, root bindings, fixtures, binding schema, validator and tests; the prompt-hash split can be implemented as an interim input, provided the later release pins prompt assets as ADR 0021 requires. The plan's workspace-construction exclusion is consistent with ADR 0022's separate implementation slices, but the helper's exported review evidence must still be correct.
+The revision diff resolves the seven Round 0 findings: object-based export includes per-entry verification and attribute tests; the clean-tree check narrowly excludes supplied gate evidence; validation requires Git objects and rederives the tree, diff, inventory, inputs, and export; the schema and validation define deleted and binary locations; provenance has defined sources and matching checks; assembly records its state and status derives transitions; and the requested validation cases are in the test matrix. The state-transition resolution has the remaining ambiguity identified above. The plan is 250 lines, within the limit.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
-| 0 | plan | FAIL | Initial review; changes required as listed above. |
+| 0 | plan | FAIL | Revision 6935a15..ff76975 addresses export, gate evidence, Git-object binding, location schemas, provenance, transitions, and missing tests; the revised transition rules retain the ambiguity identified in Round 1. |
