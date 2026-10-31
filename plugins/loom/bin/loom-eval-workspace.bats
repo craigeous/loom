@@ -779,188 +779,134 @@ tamper_cases() {
     [ -e "$WORK/precious/data" ]
 }
 
-# ---------------------------------------------------------------- gate rerun
+# ---------------------------------------------------------------- Round 0 regressions
 
-gate_run() { # prepare a docs-only-range code run with the test gate; extra args are gate env/deps
-    code_args "$DOCS_SHA" "$HEAD_SHA"
-    ew prepare "${CODE_ARGS[@]}" --docs-only "$@"
-    [ "$status" -eq 0 ]
+excluded_commit() { # <path>: commit a change to an excluded path on top of DOCS_SHA; sets EXCL_SHA
+    printf 'changed CANARY-DIFF\n' >"$REPO/$1"
+    git -C "$REPO" add -A
+    git -C "$REPO" commit -q -m excluded
+    EXCL_SHA="$(git -C "$REPO" rev-parse HEAD)"
 }
 
-checkout_hash() { git -C "$REPO" status --porcelain --untracked-files=all --ignored | shasum -a 256; }
+@test "diff: a code diff or revision diff touching excluded content is rejected, with no partial run" {
+    excluded_commit .env
+    code_args "$EXCL_SHA" "$DOCS_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"excluded content: .env"* ]]
+    no_partial
+    ew prepare --repo "$REPO" --type plan --head "$EXCL_SHA" --artifact .docs/plan.md --prior-verdict .docs/evaluations/prior-eval.md \
+        --prior-sha "$DOCS_SHA" --out "$OUT"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"excluded content: .env"* ]]
+    no_partial
+    excluded_commit .docs/status/progress.md
+    code_args "$EXCL_SHA" "$DOCS_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"excluded content: .docs/status/progress.md"* ]]
+    no_partial
+}
 
-@test "gate-rerun: runs in a verified private copy, records bound evidence and removes the copy" {
-    gate_run --gate-env "DEP_CHECK=1" --dependency "$WORK/dep.txt" --tool-version "git=$(env -i PATH="$PINPATH" git --version | awk '{print $3}')"
-    src_before="$(cd "$OUT/source" && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256)"
-    co_before="$(checkout_hash)"
-    ew gate-rerun "$OUT" --repo "$REPO"
+@test "diff: a changed excluded path that is an explicit input is allowed and rechecked by verify" {
+    excluded_commit .docs/evaluations/prior-eval.md
+    ew prepare --repo "$REPO" --type plan --head "$EXCL_SHA" --artifact .docs/plan.md --prior-verdict .docs/evaluations/prior-eval.md \
+        --prior-sha "$DOCS_SHA" --out "$OUT"
     [ "$status" -eq 0 ]
-    [ "$output" = rerun-passed ]
-    rec="$OUT/reruns/001/gate-rerun.json"
-    [ "$(jq -r .result "$rec")" = rerun-passed ]
-    [ "$(jq -r .exit_status "$rec")" = 0 ]
-    [ "$(jq -r .manifest_sha256 "$rec")" = "$(jq -r .manifest_sha256 "$OUT/manifest.json")" ]
-    [ "$(jq -r .command_env_sha256 "$rec")" = "$(jq -r .gate.command_env_sha256 "$OUT/manifest.json")" ]
-    [ "$(jq -r .stdout.sha256 "$rec")" = "$(shasum -a 256 <"$OUT/reruns/001/stdout" | cut -d' ' -f1)" ]
-    grep -q "gate stdout" "$OUT/reruns/001/stdout"
-    grep -q "dependency payload" "$OUT/reruns/001/stdout"
-    grep -q "gate stderr" "$OUT/reruns/001/stderr"
-    [ "$(jq -r '.tool_versions[0].name' "$rec")" = git ]
-    # writes beside source, to home/cache/temp/build stayed in the copy
-    [ "$(jq -c '[.changes[] | .path + ":" + .kind]' "$rec")" = '["written-beside-source.txt:added"]' ]
-    [ ! -e "$OUT/source/written-beside-source.txt" ] && [ ! -e "$HOME/home.txt" ]
-    [ -z "$(ls -A "$HOME")" ]
-    [ "$(cd "$OUT/source" && find . -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256)" = "$src_before" ]
-    [ "$(checkout_hash)" = "$co_before" ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
-    [ ! -e "$OUT/reruns/001/inflight" ]
-    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
-    status_
-    [ "$status" -eq 0 ]
-    [ "$output" = "status: rerun-passed" ]
-    # repeated invocations keep separate evidence
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 0 ]
-    [ -f "$OUT/reruns/001/gate-rerun.json" ] && [ -f "$OUT/reruns/002/gate-rerun.json" ]
-    [ "$(jq -r .seq "$OUT/reruns/002/gate-rerun.json")" = 2 ]
     verify
     [ "$status" -eq 0 ]
 }
 
-@test "gate-rerun: nonzero exit is rerun-failed with exit 2 and the copy is removed" {
-    gate_run --gate-env "GATE_EXIT=7"
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 2 ]
-    [ "$output" = rerun-failed ]
-    rec="$OUT/reruns/001/gate-rerun.json"
-    [ "$(jq -r .result "$rec")" = rerun-failed ]
-    [ "$(jq -r .exit_status "$rec")" = 7 ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
-    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
-    status_
-    [ "$status" -eq 2 ]
-    [ "$output" = "status: rerun-failed" ]
-}
-
-@test "gate-rerun: a gate that alters immutable source or the managed checkout never reports a valid rerun" {
-    code_args "$DOCS_SHA" "$HEAD_SHA"
-    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "TOUCH_SOURCE=$OUT/source/f.txt"
+@test "exclusions: plan, research and code snapshots omit status history and unrelated evaluations" {
+    mk_captures 2099-01-01T00:00:00Z
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --evidence-sha "$HEAD_SHA" \
+        --captures "$WORK/cap/index.json" --out "$OUT"
     [ "$status" -eq 0 ]
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 2 ]
-    [ "$output" != rerun-passed ]
-    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = invalid ]
-    [ "$(jq -r .source_verification.source "$OUT/reruns/001/gate-rerun.json")" = changed ]
-    status_
-    [ "$status" -eq 2 ]
-    chmod -R u+w "$OUT"
+    [ ! -e "$OUT/source/.docs/status" ] && [ ! -e "$OUT/source/.docs/evaluations" ]
+    ! grep -rq "CANARY" "$OUT/source" "$OUT/inputs"
+    [ "$(jq -c '[.exclusions[] | .reason] | unique' "$OUT/manifest.json")" = '["credentials","prior-evaluation","session-store","status-history","transcript"]' ]
+    verify
+    [ "$status" -eq 0 ]
     rmrun "$OUT"
-    ew prepare "${CODE_ARGS[@]}" --docs-only --gate-env "TOUCH_REPO=$REPO/injected.txt"
-    [ "$status" -eq 0 ]
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 2 ]
-    [ "$(jq -r .source_verification.checkout "$OUT/reruns/001/gate-rerun.json")" = changed ]
-    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = invalid ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
-}
-
-@test "gate-rerun: tampered dependencies or source fail before execution and never report a valid rerun" {
-    gate_run --dependency "$WORK/dep.txt"
-    chmod u+w "$OUT/inputs/deps" "$OUT/inputs/deps/dep.txt"
-    printf 'evil\n' >"$OUT/inputs/deps/dep.txt"
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 2 ]
-    [ ! -e "$OUT/reruns/001" ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print 2>/dev/null)" ]
-    status_
-    [ "$status" -eq 2 ]
-    [[ "$output" == "status: invalid"* ]]
-}
-
-@test "gate-rerun: unavailable gate or tool version mismatch is infrastructure-blocked (4)" {
     code_args "$DOCS_SHA" "$HEAD_SHA"
-    CODE_ARGS=("${CODE_ARGS[@]/scripts\/gate/scripts/no-such-gate}")
     ew prepare "${CODE_ARGS[@]}" --docs-only
     [ "$status" -eq 0 ]
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 4 ]
-    rec="$OUT/reruns/001/gate-rerun.json"
-    [ "$(jq -r .result "$rec")" = infrastructure-blocked ]
-    [ "$(jq -r .completion "$rec")" = blocked ]
-    [ "$(jq -r .exit_status "$rec")" = null ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
-    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
-    status_
-    [ "$status" -eq 4 ]
-    [ "$output" = "status: infrastructure-blocked" ]
-    rmrun "$OUT"
-    gate_run --tool-version "git=0.0.0-not-this-version"
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 4 ]
-    [ "$(jq -r .result "$OUT/reruns/001/gate-rerun.json")" = infrastructure-blocked ]
+    [ ! -e "$OUT/source/.docs/status" ] && [ ! -e "$OUT/source/.docs/evaluations" ]
+    verify
+    [ "$status" -eq 0 ]
 }
 
-@test "gate-rerun: interrupted execution is infrastructure-blocked and discards the copy" {
-    marker="$WORK/started"
-    gate_run --gate-env "MARKER=$marker" --gate-env "SLEEP=30"
-    "$LOOM_TEST_BASH" "$EW" gate-rerun "$OUT" --repo "$REPO" >"$WORK/gr.out" 2>&1 &
-    pid=$!
-    for _ in $(seq 1 150); do
-        [ -e "$marker" ] && break
-        sleep 0.1
-    done
-    [ -e "$marker" ]
-    inflight_status="$("$LOOM_TEST_BASH" "$EW" status "$OUT" --repo "$REPO" || true)"
-    [[ "$inflight_status" == "status: incomplete"* ]]
-    kill -TERM "$pid"
-    rc=0
-    wait "$pid" || rc=$?
-    [ "$rc" -eq 4 ]
-    rec="$OUT/reruns/001/gate-rerun.json"
-    [ "$(jq -r .completion "$rec")" = interrupted ]
-    [ "$(jq -r .result "$rec")" = infrastructure-blocked ]
-    [ -z "$(find "$OUT/reruns" -name '.exec.*' -print)" ]
-    schema_check "$SCHEMAS/loom-eval-gate-rerun-v1.schema.json" "$rec"
-    status_
-    [ "$status" -eq 4 ]
-}
-
-@test "gate-rerun: rejects non-code runs and any command, source, environment or dependency override" {
+@test "verify: nested unknown manifest properties are rejected" {
     prep_plan
     [ "$status" -eq 0 ]
-    ew gate-rerun "$OUT" --repo "$REPO"
-    [ "$status" -eq 2 ]
-    [[ "$output" == *"code runs"* ]]
-    rmrun "$OUT"
-    gate_run
-    for opt in "--cmd" "--command" "--env" "--source" "--dependency" "--gate-arg" "--out"; do
-        ew gate-rerun "$OUT" --repo "$REPO" "$opt" x
-        [ "$status" -eq 1 ]
+    local f
+    for f in '.source_export.extra = 1' '.exclusions[0].extra = 1' '.files[0].extra = 1'; do
+        cp "$OUT/manifest.json" "$WORK/manifest.keep"
+        chmod u+w "$OUT/manifest.json" "$OUT" 2>/dev/null || true
+        edit_manifest "$f"
+        verify
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"manifest:"* ]]
+        cp "$WORK/manifest.keep" "$OUT/manifest.json"
     done
-    ew gate-rerun "$OUT" extra --repo "$REPO"
-    [ "$status" -eq 1 ]
-    ew gate-rerun
-    [ "$status" -eq 1 ]
-    [ ! -e "$OUT/reruns/001" ]
+    verify
+    [ "$status" -eq 0 ]
+    rmrun "$OUT"
+    code_args "$DOCS_SHA" "$HEAD_SHA"
+    ew prepare "${CODE_ARGS[@]}" --docs-only
+    [ "$status" -eq 0 ]
+    for f in '.gate.extra = 1' '.review.extra = 1' '.gate.tools = [{name: "git", version: "2", extra: 1}]'; do
+        cp "$OUT/manifest.json" "$WORK/manifest.keep"
+        edit_manifest "$f"
+        verify
+        [ "$status" -eq 2 ]
+        cp "$WORK/manifest.keep" "$OUT/manifest.json"
+    done
+    rmrun "$OUT"
+    mk_captures 2099-01-01T00:00:00Z
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
+    [ "$status" -eq 0 ]
+    edit_manifest '.captures[0].extra = 1'
+    verify
+    [ "$status" -eq 2 ]
 }
 
-@test "gate-rerun: a stale rerun record cannot make a changed run valid" {
-    gate_run
-    ew gate-rerun "$OUT" --repo "$REPO"
+@test "verify: expired research captures are infrastructure-blocked (4) in verify and status" {
+    mk_captures 2099-01-01T00:00:00Z
+    ew prepare --repo "$REPO" --type research --head "$HEAD_SHA" --artifact .docs/plan.md --captures "$WORK/cap/index.json" --out "$OUT"
     [ "$status" -eq 0 ]
-    chmod u+w "$OUT/inputs" "$OUT/inputs/gate-evidence"
-    printf 'changed\n' >"$OUT/inputs/gate-evidence"
+    edit_manifest '.captures[0].fresh_until = "2021-01-01T00:00:00Z"'
+    verify
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"expired"* ]]
+    status_
+    [ "$status" -eq 4 ]
+    [[ "$output" == "status: infrastructure-blocked"* ]]
+}
+
+@test "verify: run root, output and scratch must be exactly mode 0700" {
+    prep_plan
+    [ "$status" -eq 0 ]
+    local d
+    for d in output scratch; do
+        chmod 777 "$OUT/$d"
+        verify
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"$d/ is not mode 0700"* ]]
+        chmod 750 "$OUT/$d"
+        verify
+        [ "$status" -eq 2 ]
+        chmod 700 "$OUT/$d"
+    done
+    chmod 777 "$OUT"
+    verify
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"run root is not mode 0700"* ]]
     status_
     [ "$status" -eq 2 ]
-    [[ "$output" == "status: invalid"* ]]
-    # a forged rerun record with a mismatched stdout hash is invalid
-    chmod -R u+w "$OUT"
-    rmrun "$OUT"
-    gate_run
-    ew gate-rerun "$OUT" --repo "$REPO"
-    printf 'forged\n' >>"$OUT/reruns/001/stdout"
-    status_
-    [ "$status" -eq 2 ]
+    chmod 700 "$OUT"
+    verify
+    [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------- usage

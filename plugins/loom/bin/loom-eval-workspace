@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# loom-eval-workspace — sanitized evaluation workspace exporter and code-gate rerun
-# runner (loom-eval-workspace/v1; ADR 0022, spec 05 § Controlled-input independent
+# loom-eval-workspace — sanitized evaluation workspace exporter (loom-eval-workspace/v1; ADR 0022, spec 05 § Controlled-input independent
 # evaluation, spec 04 § Evaluation orchestration; slice sanitized-evaluation-workspace).
 # It exports a hash-bound, read-only evaluation run from exact Git objects, verifies it,
-# reruns the pinned code gate in a disposable copy, and cleans runs. It never launches an
+# reports its status, and cleans runs. The gate runner is deferred to the follow-on
+# evaluation-gate-runner slice. It never launches an
 # evaluator, records a verdict, advances lifecycle state, or uses the network. It is a
 # bounded runner, not an OS sandbox.
 #
@@ -16,12 +16,10 @@
 #        [--dependency <path>]...]
 #       [--run-id <id>] [--out <dir>] [--repo <path>]
 #   loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
-#   loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
 #   loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
 #   loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 #
-# Exit codes: 0 ok/prepared/valid/rerun-passed, 1 usage, 2 invalid input/rejected run/
-#   rerun-failed, 3 incomplete run (status), 4 infrastructure-blocked.
+# Exit codes: 0 ok/prepared/valid, 1 usage, 2 invalid input/rejected run, 3 incomplete run (status), 4 infrastructure-blocked.
 # shellcheck disable=SC2016  # jq filters use $vars intentionally
 set -euo pipefail
 
@@ -33,10 +31,6 @@ RESERVED_ENV=" HOME TMPDIR TMP TEMP XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
 WORK=""
 BUILD=""
 ROOT_CREATED=""
-EXEC=""
-RR=""
-CHILD=""
-INTERRUPTED=0
 
 log() { printf 'loom-eval-workspace: %s\n' "$*" >&2; }
 die() {
@@ -54,11 +48,6 @@ cleanup() {
         rm -rf "$BUILD"
     fi
     if [ -n "$ROOT_CREATED" ]; then rmdir "$ROOT_CREATED" 2>/dev/null || true; fi
-    if [ -n "$EXEC" ] && [ -d "$EXEC" ]; then
-        chmod -R u+w "$EXEC" 2>/dev/null || true
-        rm -rf "$EXEC"
-    fi
-    if [ -n "$RR" ] && [ -e "$RR/inflight" ]; then rm -rf "$RR"; fi
     if [ -n "$WORK" ] && [ -d "$WORK" ]; then rm -rf "$WORK"; fi
     exit "$rc"
 }
@@ -75,6 +64,8 @@ sha256_stdin() {
     if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi | cut -d' ' -f1
 }
 sha256_file() { sha256_stdin <"$1"; }
+# mode_of <path>: the octal permission bits (BSD or GNU stat).
+mode_of() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1" 2>/dev/null; }
 utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 # ---------------------------------------------------------------- paths
@@ -150,11 +141,24 @@ exclude_reason() {
         return
         ;;
     esac
-    [ "$1" != code ] || return 0
     case "$2" in
     .docs/status/*) printf status-history ;;
     .docs/evaluations/*) printf prior-evaluation ;;
     esac
+}
+
+# diff_excluded <from> <to> <allowed-list-file>: prints the first changed path that the
+# exclusion policy omits from the source and that was not explicitly supplied as an input.
+diff_excluded() {
+    local p
+    gdiff --no-renames --name-only -z "$1" "$2" >"$WORK/dx.bin"
+    while IFS= read -r -d '' p; do
+        if [ -n "$(exclude_reason "" "$p")" ] && ! grep -qxF -- "$p" "$3"; then
+            printf '%s' "$p"
+            return 0
+        fi
+    done <"$WORK/dx.bin"
+    return 0
 }
 
 # ---------------------------------------------------------------- listings
@@ -231,6 +235,7 @@ def rel: type == "string" and length > 0 and (startswith("/") | not)
     and (split("/") | all(. != "" and . != "." and . != ".."))
     and (test("[[:cntrl:]\\\\]") | not);
 def chk($c; $m): if $c then empty else $m end;
+def only($a): type == "object" and ((keys - $a) == []);
 def allowed($allow): ((keys - $allow) | map("unexpected key " + .))[];
 . as $m
 | ["protocol","run_id","evaluation_type","created_at","head_sha","head_tree","base_sha","evidence_sha","evidence_tree",
@@ -253,53 +258,32 @@ def allowed($allow): ((keys - $allow) | map("unexpected key " + .))[];
         and ((keys - ["path","origin","role","mode","sha256"]) == []); "file entry")),
      chk((.files | map(.path) | length) == (.files | map(.path) | unique | length); "duplicate file paths")
    else empty end),
-  chk((.exclusions | type) == "array" and (.exclusions | all((.path | rel) and (.reason | IN("credentials","session-store","status-history","prior-evaluation","transcript")))); "exclusions"),
-  chk((.source_export | type) == "object" and .source_export.path == "source" and (.source_export.sha256 | s256)
+  chk((.exclusions | type) == "array" and (.exclusions | all(only(["path","reason"]) and (.path | rel) and (.reason | IN("credentials","session-store","status-history","prior-evaluation","transcript")))); "exclusions"),
+  chk((.source_export | only(["path","sha256","file_count"])) and .source_export.path == "source" and (.source_export.sha256 | s256)
       and (.source_export.file_count | type == "number" and . == floor and . >= 0); "source_export"),
   (if .evaluation_type == "code" then
      chk((.base_sha | sha) and (.diff_sha256 | s256); "code requires base_sha and diff_sha256"),
-     chk((.review | type) == "object" and (.review.status | IN("assembled","skipped: docs-only"))
+     chk((.review | only(["status","run_id","findings_sha256"])) and (.review.status | IN("assembled","skipped: docs-only"))
          and ((.review.status == "assembled") == (.review | has("run_id") and has("findings_sha256")))
          and ((.review.findings_sha256 // "0" * 64) | s256); "review"),
-     chk((.gate | type) == "object" and (.gate.argv | type == "array" and length > 0 and all(type == "string" and length > 0))
+     chk((.gate | only(["argv","env","command_env_sha256","tools","dependencies"])) and (.gate.argv | type == "array" and length > 0 and all(type == "string" and length > 0))
          and (.gate.env | type == "object" and has("PATH") and all(type == "string"))
          and (.gate.command_env_sha256 | s256)
-         and (.gate.tools | type == "array" and all((.name | type == "string" and length > 0) and (.version | type == "string" and length > 0)))
-         and (.gate.dependencies | type == "array" and all((.path | rel) and (.sha256 | s256))); "gate")
+         and (.gate.tools | type == "array" and all(only(["name","version"]) and (.name | type == "string" and length > 0) and (.version | type == "string" and length > 0)))
+         and (.gate.dependencies | type == "array" and all(only(["path","sha256"]) and (.path | rel) and (.sha256 | s256))); "gate")
    else
      chk((has("base_sha") or has("diff_sha256") or has("review") or has("gate")) | not; "code-only fields on non-code run")
    end),
   (if .evaluation_type == "research" then
      chk((.captures | type == "array" and length > 0 and all(
-         (.locator | type == "string" and length > 0) and (.path | rel) and (.retrieved_at | utc) and (.fresh_until | utc)
+         only(["locator","path","retrieved_at","fresh_until","status","content_type","tool","sha256"]) and (.locator | type == "string" and length > 0) and (.path | rel) and (.retrieved_at | utc) and (.fresh_until | utc)
          and (.status | type == "number" and . >= 200 and . < 300) and (.content_type | type == "string" and length > 0)
          and (.tool | type == "string" and length > 0) and (.sha256 | s256))); "captures")
    else
      chk(has("captures") | not; "captures on non-research run")
    end),
-  chk((has("revision") | not) or ((.revision.prior_sha | sha) and (.revision.diff_sha256 | s256)); "revision")
+  chk((has("revision") | not) or ((.revision | only(["prior_sha","diff_sha256"])) and (.revision.prior_sha | sha) and (.revision.diff_sha256 | s256)); "revision")
   end
-EOF
-
-read -r -d '' JQ_RERUN <<'EOF' || true
-def s256: type == "string" and test("^[0-9a-f]{64}$");
-def chk($c; $m): if $c then empty else $m end;
-def stream: type == "object" and (.sha256 | s256) and (.bytes | type == "number" and . >= 0);
-def inv: type == "object" and (.sha256 | s256) and (.file_count | type == "number" and . >= 0);
-if type != "object" then "not an object" else
-  chk(.protocol == "loom-eval-gate-rerun/v1"; "unknown protocol"),
-  chk(.run_id == $run; "run_id mismatch"),
-  chk(.manifest_sha256 == $msha; "manifest_sha256 mismatch"),
-  chk(.seq | type == "number" and . >= 1; "seq"),
-  chk(.command_env_sha256 == $cmd; "command/environment digest mismatch"),
-  chk(.completion | IN("completed","interrupted","blocked","invalid"); "completion"),
-  chk(.result | IN("rerun-passed","rerun-failed","infrastructure-blocked","invalid"); "result"),
-  chk((.stdout | stream) and (.stderr | stream) and (.start_inventory | inv) and (.end_inventory | inv); "streams/inventories"),
-  chk((.source_verification.source | IN("unchanged","changed")) and (.source_verification.checkout | IN("unchanged","changed")); "source_verification"),
-  chk(.result != "rerun-passed" or (.completion == "completed" and .exit_status == 0 and .source_verification.source == "unchanged" and .source_verification.checkout == "unchanged"); "inconsistent rerun-passed"),
-  chk(.result != "rerun-failed" or (.completion == "completed" and (.exit_status | type == "number" and . != 0)); "inconsistent rerun-failed"),
-  chk(.result != "infrastructure-blocked" or (.completion | IN("interrupted","blocked")); "inconsistent infrastructure-blocked")
-end
 EOF
 
 # ---------------------------------------------------------------- run resolution
@@ -377,23 +361,23 @@ do_verify() {
 
     # layout
     [ "${STAGING:-0}" = 1 ] || [ "$(basename -- "$RUN")" = "$(jq -r .run_id "$m")" ] || add_err "run directory name does not match run_id"
-    [ -n "$(find "$RUN" -maxdepth 0 -type d -perm 700 -print)" ] || add_err "run root is not mode 0700"
+    [ "$(mode_of "$RUN")" = 700 ] || add_err "run root is not mode 0700"
     for p in output scratch; do
         [ -d "$RUN/$p" ] && [ ! -L "$RUN/$p" ] || add_err "$p/ missing"
-        [ -n "$(find "$RUN/$p" -maxdepth 0 -type d -perm 700 -print 2>/dev/null)" ] || add_err "$p/ is not private and writable (0700)"
+        [ "$(mode_of "$RUN/$p")" = 700 ] || add_err "$p/ is not mode 0700"
     done
     for p in source inputs; do [ -d "$RUN/$p" ] && [ ! -L "$RUN/$p" ] || add_err "$p/ missing"; done
     while IFS= read -r p; do
         case "$p" in
-        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
+        manifest.json | source | inputs | output | scratch | diff.patch | revision.patch) ;;
         *) add_err "unexpected top-level entry: $p" ;;
         esac
     done < <(ls -A "$RUN")
     if [ "$type" = code ]; then [ -f "$RUN/diff.patch" ] || add_err "diff.patch missing"; else [ ! -e "$RUN/diff.patch" ] || add_err "unexpected diff.patch"; fi
     if jq -e 'has("revision")' "$m" >/dev/null; then [ -f "$RUN/revision.patch" ] || add_err "revision.patch missing"; else [ ! -e "$RUN/revision.patch" ] || add_err "unexpected revision.patch"; fi
-    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" -o -path "$RUN/reruns" \) -prune -o ! -type f ! -type d -print | head -n 3)"
+    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" \) -prune -o ! -type f ! -type d -print | head -n 3)"
     [ -z "$x" ] || add_err "links or special files present: $x"
-    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" -o -path "$RUN/reruns" \) -prune -o -type f -links +1 -print | head -n 3)"
+    x="$(find "$RUN" \( -path "$RUN/output" -o -path "$RUN/scratch" \) -prune -o -type f -links +1 -print | head -n 3)"
     [ -z "$x" ] || add_err "hardlinked files present: $x"
     n1="$(find "$RUN/source" "$RUN/inputs" -print0 2>/dev/null | tr -cd '\0' | wc -c | tr -d ' ')"
     n2="$(find "$RUN/source" "$RUN/inputs" -print 2>/dev/null | wc -l | tr -d ' ')"
@@ -406,6 +390,7 @@ do_verify() {
     jq -r '.files[] | .path + "\t" + .mode + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/scan.man"
     cmp -s "$WORK/scan.now" "$WORK/scan.man" || add_err "file inventory, modes or hashes differ from manifest"
 
+    jq -r '.files[] | select(.origin == "git-object" and .role != "source") | .path | sub("^inputs/[^/]*/"; "")' "$m" >"$WORK/allowed.txt"
     # binding to local Git objects
     [ "$REPO_OK" = 1 ] || {
         INFRA=1
@@ -453,6 +438,8 @@ do_verify() {
     if [ "$type" = code ]; then
         base="$(jq -r .base_sha "$m")"
         gg merge-base --is-ancestor "$base" "$head" 2>/dev/null || add_err "base is not an ancestor of head"
+        x="$(diff_excluded "$base" "$head" "$WORK/allowed.txt")"
+        [ -z "$x" ] || add_err "diff touches excluded content: $x"
         gdiff --binary --full-index "$base" "$head" >"$WORK/diff.now"
         [ "$(sha256_file "$WORK/diff.now")" = "$(jq -r .diff_sha256 "$m")" ] || add_err "diff_sha256 does not match base..head"
         cmp -s "$WORK/diff.now" "$RUN/diff.patch" || add_err "diff.patch does not match base..head"
@@ -469,6 +456,8 @@ do_verify() {
     if jq -e 'has("revision")' "$m" >/dev/null; then
         p="$(jq -r .revision.prior_sha "$m")"
         gg merge-base --is-ancestor "$p" "$head" 2>/dev/null || add_err "prior_sha is not an ancestor of head"
+        x="$(diff_excluded "$p" "$head" "$WORK/allowed.txt")"
+        [ -z "$x" ] || add_err "revision diff touches excluded content: $x"
         gdiff --binary --full-index "$p" "$head" >"$WORK/rev.now"
         [ "$(sha256_file "$WORK/rev.now")" = "$(jq -r .revision.diff_sha256 "$m")" ] || add_err "revision diff hash mismatch"
         cmp -s "$WORK/rev.now" "$RUN/revision.patch" || add_err "revision.patch does not match prior..head"
@@ -477,6 +466,11 @@ do_verify() {
         jq -r '.captures[] | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/cap.man"
         jq -r '.files[] | select(.role == "capture") | .path + "\t" + .sha256' "$m" | LC_ALL=C sort >"$WORK/cap.files"
         cmp -s "$WORK/cap.man" "$WORK/cap.files" || add_err "capture inventory mismatch"
+        x="$(jq -r --arg now "$(utc_now)" '[.captures[] | select(.fresh_until < $now) | .locator] | .[]' "$m" | head -n 1)"
+        if [ -n "$x" ]; then
+            [ -s "$ERRS" ] || INFRA=1 # integrity failures outrank expired evidence
+            add_err "required fresh evidence expired: $x"
+        fi
     fi
     [ ! -s "$ERRS" ]
 }
@@ -808,6 +802,9 @@ cmd_prepare() {
     [ -z "$prior_verdict" ] || tracked_input prior-verdict "$prior_verdict"
     printf '{}' >"$WORK/revision.json"
     if [ -n "$prior_sha" ]; then
+        printf '%s' "$SEEN_INPUTS" >"$WORK/allowed.txt"
+        [ -z "$(diff_excluded "$prior_sha" "$head" "$WORK/allowed.txt")" ] ||
+            die 2 "revision diff touches excluded content: $(diff_excluded "$prior_sha" "$head" "$WORK/allowed.txt")"
         gdiff --binary --full-index "$prior_sha" "$head" >"$BUILD/revision.patch"
         printf 'revision.patch\tgenerated\trevision-diff\n' >>"$WORK/meta.tsv"
         jq -n -c --arg p "$prior_sha" --arg d "$(sha256_file "$BUILD/revision.patch")" '{revision: {prior_sha: $p, diff_sha256: $d}}' >"$WORK/revision.json"
@@ -870,6 +867,9 @@ build_code_inputs() {
     local gate_ev="$1" review_run="$2" docs_only="$3" gargs="$4" genv="$5" tools="$6" deps="$7" line k v
     local review='{"status":"skipped: docs-only"}'
     external_file "$gate_ev" "inputs/gate-evidence" gate-evidence
+    printf '%s' "$SEEN_INPUTS" >"$WORK/allowed.txt"
+    [ -z "$(diff_excluded "$BASE" "$HEAD" "$WORK/allowed.txt")" ] ||
+        die 2 "diff touches excluded content: $(diff_excluded "$BASE" "$HEAD" "$WORK/allowed.txt")"
     gdiff --binary --full-index "$BASE" "$HEAD" >"$BUILD/diff.patch"
     printf 'diff.patch\tgenerated\tdiff\n' >>"$WORK/meta.tsv"
     gdiff --raw "$BASE" "$HEAD" | awk '$1 == ":160000" || $2 == "160000" {f = 1} END {exit !f}' && die 2 "submodule/gitlink in diff"
@@ -967,239 +967,25 @@ emit_status() { # <status> <exit> [detail]
     exit "$2"
 }
 
-# latest_rerun: prints the highest rerun directory (empty if none).
-latest_rerun() {
-    [ -d "$RUN/reruns" ] || return 0
-    find "$RUN/reruns" -mindepth 1 -maxdepth 1 -type d -name '[0-9][0-9][0-9]' 2>/dev/null | LC_ALL=C sort | tail -n 1
-}
-
 cmd_status() {
     ALLOW_JSON=1
     parse_run_args "$@"
     init_repo "$REPO_ARG"
     resolve_run "$RUN_ARG"
-    local id parent rrd rc msha
+    local id parent rc
     id="$(basename -- "$RUN")"
     parent="$(dirname -- "$RUN")"
-    # in-flight or partial runs: staging sibling, missing manifest, or a running rerun
+    # in-flight or partial runs: staging sibling or missing manifest
     if [ -n "$(find "$parent" -mindepth 1 -maxdepth 1 -name ".tmp-$id.*" -print -quit 2>/dev/null)" ]; then
         emit_status incomplete 3 "prepare in flight"
     fi
     [ -f "$RUN/manifest.json" ] || emit_status incomplete 3 "manifest.json missing (partial run)"
-    if [ -d "$RUN/reruns" ] && [ -n "$(find "$RUN/reruns" -mindepth 2 -maxdepth 2 -name inflight -print -quit 2>/dev/null)" ]; then
-        emit_status incomplete 3 "gate rerun in flight or interrupted without a record"
-    fi
     do_verify || true
     rc=0
     verify_rc 2>"$WORK/verify.err" || rc=$?
     if [ "$rc" = 4 ]; then emit_status infrastructure-blocked 4 "$(head -n 3 "$WORK/verify.err")"; fi
     if [ "$rc" != 0 ]; then emit_status invalid 2 "$(head -n 3 "$WORK/verify.err")"; fi
-    rrd="$(latest_rerun)"
-    [ -n "$rrd" ] || emit_status prepared 0
-    msha="$(jq -r .manifest_sha256 "$RUN/manifest.json")"
-    local rec="$rrd/gate-rerun.json" cmd
-    [ -f "$rec" ] && [ ! -L "$rec" ] || emit_status invalid 2 "rerun record missing"
-    cmd="$(jq -r '.gate.command_env_sha256 // empty' "$RUN/manifest.json")"
-    jq -e . "$rec" >/dev/null 2>&1 || emit_status invalid 2 "rerun record is not valid JSON"
-    jq -r --arg run "$id" --arg msha "$msha" --arg cmd "$cmd" "$JQ_RERUN" "$rec" >"$WORK/rrchk" 2>/dev/null || true
-    if [ -s "$WORK/rrchk" ]; then emit_status invalid 2 "rerun record: $(head -n 1 "$WORK/rrchk")"; fi
-    for s in stdout stderr; do
-        [ -f "$rrd/$s" ] && [ "$(sha256_file "$rrd/$s")" = "$(jq -r ".$s.sha256" "$rec")" ] || emit_status invalid 2 "rerun $s hash mismatch"
-    done
-    case "$(jq -r .result "$rec")" in
-    rerun-passed) emit_status rerun-passed 0 ;;
-    rerun-failed) emit_status rerun-failed 2 ;;
-    infrastructure-blocked) emit_status infrastructure-blocked 4 ;;
-    *) emit_status invalid 2 "rerun recorded an invalid result" ;;
-    esac
-}
-
-# ---------------------------------------------------------------- gate-rerun
-
-checkout_fp() { # fingerprint of the managed checkout tree (HEAD, status, tracked diff, untracked bytes)
-    {
-        git -C "$REPO_TOP" rev-parse HEAD
-        git -C "$REPO_TOP" status --porcelain=v1 -z --untracked-files=all --ignored=traditional
-        git -C "$REPO_TOP" diff HEAD --binary --no-ext-diff --no-textconv
-        git -C "$REPO_TOP" ls-files -z --others --exclude-standard >"$WORK/untracked.bin"
-        if [ -s "$WORK/untracked.bin" ]; then (cd "$REPO_TOP" && xargs -0 shasum -a 256 <"$WORK/untracked.bin" 2>/dev/null); fi
-    } 2>/dev/null | sha256_stdin
-}
-
-on_signal() {
-    INTERRUPTED=1
-    if [ -n "$CHILD" ]; then kill -TERM -- "-$CHILD" 2>/dev/null || kill -TERM "$CHILD" 2>/dev/null || true; fi
-}
-
-# write_rerun <completion> <exit|""> <result> <src-state> <chk-state> <start-inv> <end-inv>
-write_rerun() {
-    local completion="$1" ex="$2" result="$3" srcst="$4" chkst="$5"
-    local ob oe
-    ob="$(wc -c <"$RR/stdout" | tr -d ' ')"
-    oe="$(wc -c <"$RR/stderr" | tr -d ' ')"
-    jq -n -S -c --arg run "$(jq -r .run_id "$RUN/manifest.json")" --arg msha "$(jq -r .manifest_sha256 "$RUN/manifest.json")" \
-        --argjson seq "$((10#$(basename -- "$RR")))" --arg cmd "$(jq -r .gate.command_env_sha256 "$RUN/manifest.json")" \
-        --slurpfile tools "$WORK/tools.seen.json" --arg s "$STARTED" --arg e "$(utc_now)" --arg comp "$completion" --arg ex "$ex" \
-        --arg osha "$(sha256_file "$RR/stdout")" --argjson ob "$ob" --arg esha "$(sha256_file "$RR/stderr")" --argjson oe "$oe" \
-        --arg sc "$(wc -l <"$WORK/inv.start" | tr -d ' ')" --arg sh "$(listing_hash "$WORK/inv.start")" \
-        --arg ec "$(wc -l <"$WORK/inv.end" | tr -d ' ')" --arg eh "$(listing_hash "$WORK/inv.end")" \
-        --rawfile ch "$WORK/changes.tsv" --arg src "$srcst" --arg chk "$chkst" --arg res "$result" '
-        {protocol: "loom-eval-gate-rerun/v1", run_id: $run, manifest_sha256: $msha, seq: $seq, command_env_sha256: $cmd,
-         tool_versions: $tools[0], started_at: $s, ended_at: $e, completion: $comp,
-         exit_status: (if $ex == "" then null else ($ex | tonumber) end),
-         stdout: {sha256: $osha, bytes: $ob}, stderr: {sha256: $esha, bytes: $oe},
-         start_inventory: {file_count: ($sc | tonumber), sha256: $sh}, end_inventory: {file_count: ($ec | tonumber), sha256: $eh},
-         changes: [$ch | split("\n")[] | select(length > 0) | split("\t") | {path: .[0], kind: .[1]}],
-         source_verification: {source: $src, checkout: $chk}, result: $res}' >"$RR/gate-rerun.json.tmp"
-    mv "$RR/gate-rerun.json.tmp" "$RR/gate-rerun.json"
-    rm -f "$RR/inflight"
-    RR=""
-}
-
-cmd_gate_rerun() {
-    ALLOW_JSON=0
-    parse_run_args "$@"
-    init_repo "$REPO_ARG"
-    resolve_run "$RUN_ARG"
-    local m="$RUN/manifest.json" rc=0
-    do_verify || true
-    verify_rc || rc=$?
-    [ "$rc" = 0 ] || exit "$rc"
-    [ "$(jq -r .evaluation_type "$m")" = code ] || die 2 "gate-rerun is only valid for code runs"
-
-    # a new, separate evidence directory per attempt
-    local n=1 d
-    mkdir -p "$RUN/reruns"
-    chmod 700 "$RUN/reruns"
-    while :; do
-        d="$RUN/reruns/$(printf '%03d' "$n")"
-        if mkdir -m 700 "$d" 2>/dev/null; then break; fi
-        n=$((n + 1))
-        [ "$n" -lt 1000 ] || die 4 "too many gate reruns"
-    done
-    RR="$d"
-    : >"$RR/inflight"
-    : >"$RR/stdout"
-    : >"$RR/stderr"
-    STARTED="$(utc_now)"
-    : >"$WORK/changes.tsv"
-    printf '[]' >"$WORK/tools.seen.json"
-    EXEC="$(mktemp -d "$RUN/reruns/.exec.XXXXXX")"
-    chmod 700 "$EXEC"
-    mkdir "$EXEC/src" "$EXEC/home" "$EXEC/cache" "$EXEC/tmp" "$EXEC/build" "$EXEC/deps"
-
-    # private execution copy; compare its initial inventory and hashes to the verified source
-    cp -R "$RUN/source/." "$EXEC/src/"
-    if [ -d "$RUN/inputs/deps" ]; then cp -R "$RUN/inputs/deps/." "$EXEC/deps/"; fi
-    chmod -R u+w "$EXEC/src" "$EXEC/deps"
-    src_listing_hashed "$EXEC/src" >"$WORK/inv.start"
-    cp "$WORK/inv.start" "$WORK/inv.end"
-    src_listing_hashed "$RUN/source" >"$WORK/inv.src"
-    if ! cmp -s "$WORK/inv.start" "$WORK/inv.src"; then
-        discard_exec
-        write_rerun invalid "" invalid changed unchanged
-        log "execution copy does not match the verified source"
-        exit 2
-    fi
-    local pinned_path
-    pinned_path="$(jq -r .gate.env.PATH "$m")"
-
-    # pinned tool versions and gate availability
-    local name ver out tools_json='[]'
-    while IFS="$TAB" read -r name ver; do
-        [ -n "$name" ] || continue
-        out="$(env -i PATH="$pinned_path" "$name" --version 2>&1 | head -n 20 || true)"
-        case "$out" in
-        *"$ver"*) tools_json="$(jq -c --arg n "$name" --arg v "$ver" '. + [{name: $n, version: $v}]' <<<"$tools_json")" ;;
-        *)
-            discard_exec
-            printf '%s\n' "$tools_json" >"$WORK/tools.seen.json"
-            write_rerun blocked "" infrastructure-blocked unchanged unchanged
-            log "pinned tool unavailable or version mismatch: $name $ver"
-            exit 4
-            ;;
-        esac
-    done < <(jq -r '.gate.tools[] | .name + "\t" + .version' "$m")
-    printf '%s\n' "$tools_json" >"$WORK/tools.seen.json"
-    local argv0
-    argv0="$(jq -r '.gate.argv[0]' "$m")"
-    if ! (cd "$EXEC/src" && env -i PATH="$pinned_path" /bin/sh -c 'command -v "$1" >/dev/null 2>&1' sh "$argv0"); then
-        discard_exec
-        write_rerun blocked "" infrastructure-blocked unchanged unchanged
-        log "pinned gate command is unavailable: $argv0"
-        exit 4
-    fi
-
-    # execute the pinned argv with the pinned environment; caches and temps are redirected
-    local fp_before
-    fp_before="$(checkout_fp)"
-    set -- -i
-    while IFS= read -r line; do set -- "$@" "$line"; done < <(jq -r '.gate.env | to_entries[] | .key + "=" + .value' "$m")
-    set -- "$@" "HOME=$EXEC/home" "TMPDIR=$EXEC/tmp" "TMP=$EXEC/tmp" "TEMP=$EXEC/tmp" "XDG_CONFIG_HOME=$EXEC/home/.config" \
-        "XDG_CACHE_HOME=$EXEC/cache" "XDG_DATA_HOME=$EXEC/home/.local/share" "XDG_STATE_HOME=$EXEC/home/.local/state" \
-        "CARGO_HOME=$EXEC/cache/cargo" "CARGO_TARGET_DIR=$EXEC/build" "GOCACHE=$EXEC/cache/go" "GOPATH=$EXEC/cache/gopath" \
-        "npm_config_cache=$EXEC/cache/npm" "PIP_CACHE_DIR=$EXEC/cache/pip" "LOOM_EVAL_DEPS=$EXEC/deps" \
-        "LOOM_EVAL_BUILD=$EXEC/build" "LOOM_EVAL_SCRATCH=$EXEC/tmp"
-    while IFS= read -r line; do set -- "$@" "$line"; done < <(jq -r '.gate.argv[]' "$m")
-    trap on_signal INT TERM HUP
-    set -m
-    (cd "$EXEC/src" && exec env "$@") >"$RR/stdout" 2>"$RR/stderr" </dev/null &
-    CHILD=$!
-    local gate_rc=0
-    wait "$CHILD" || gate_rc=$?
-    if [ "$INTERRUPTED" = 1 ]; then wait "$CHILD" 2>/dev/null || true; fi
-    set +m
-    trap - INT TERM HUP
-    CHILD=""
-
-    # post-run: inventories, immutable source, managed checkout
-    src_listing_hashed "$EXEC/src" >"$WORK/inv.end"
-    awk -F'\t' 'NR==FNR{a[$1]=$3; next} {b[$1]=$3; if(!($1 in a)) print $1 "\tadded"; else if (a[$1]!=$3) print $1 "\tmodified"} END{for(p in a) if(!(p in b)) print p "\tdeleted"}' \
-        "$WORK/inv.start" "$WORK/inv.end" 2>/dev/null | LC_ALL=C sort >"$WORK/changes.tsv" || true
-    discard_exec
-    local srcst=unchanged chkst=unchanged
-    do_verify || true
-    [ ! -s "$ERRS" ] && [ "$INFRA" = 0 ] || srcst=changed
-    [ "$(checkout_fp)" = "$fp_before" ] || chkst=changed
-    if [ "$INTERRUPTED" = 1 ]; then
-        write_rerun interrupted "" infrastructure-blocked "$srcst" "$chkst"
-        log "gate execution was interrupted"
-        exit 4
-    fi
-    if [ "$srcst" = changed ] || [ "$chkst" = changed ]; then
-        write_rerun completed "$gate_rc" invalid "$srcst" "$chkst"
-        log "immutable source or managed checkout changed during the gate rerun"
-        exit 2
-    fi
-    if [ "$gate_rc" = 0 ]; then
-        write_rerun completed 0 rerun-passed unchanged unchanged
-        printf 'rerun-passed\n'
-        exit 0
-    fi
-    write_rerun completed "$gate_rc" rerun-failed unchanged unchanged
-    printf 'rerun-failed\n'
-    exit 2
-}
-
-# src_listing_hashed <dir> -> sorted "path<TAB>mode<TAB>sha256" of the regular files below dir.
-src_listing_hashed() {
-    (
-        cd "$1" || exit 1
-        find . -type f | sed 's|^\./||' | LC_ALL=C sort >"$WORK/h.paths"
-        find . -type f -perm -100 | sed 's|^\./||' | LC_ALL=C sort >"$WORK/h.x"
-        if [ -s "$WORK/h.paths" ]; then
-            tr '\n' '\0' <"$WORK/h.paths" | xargs -0 shasum -a 256 2>/dev/null |
-                awk 'FILENAME != "-" {x[$0]=1; next} {p=substr($0,67); printf "%s\t%s\t%s\n", p, ((p in x)?"100755":"100644"), substr($0,1,64)}' "$WORK/h.x" -
-        fi
-    ) | LC_ALL=C sort
-}
-
-discard_exec() {
-    if [ -n "$EXEC" ] && [ -d "$EXEC" ]; then
-        chmod -R u+w "$EXEC" 2>/dev/null || true
-        rm -rf "$EXEC"
-    fi
-    EXEC=""
+    emit_status prepared 0
 }
 
 # ---------------------------------------------------------------- clean
@@ -1221,7 +1007,7 @@ cmd_clean() {
     [ "$(jq -r .run_id "$m")" = "$(basename -- "$RUN")" ] || die 2 "not a recognized run: run_id does not match the directory"
     while IFS= read -r p; do
         case "$p" in
-        manifest.json | source | inputs | output | scratch | reruns | diff.patch | revision.patch) ;;
+        manifest.json | source | inputs | output | scratch | diff.patch | revision.patch) ;;
         *) die 2 "not a recognized run: unexpected entry $p" ;;
         esac
     done < <(ls -A "$RUN")
@@ -1244,7 +1030,6 @@ usage: loom-eval-workspace prepare --type <plan|research|code> --head <sha> --ar
                                     [--dependency <path>]...]
                                    [--run-id <id>] [--out <dir>] [--repo <path>]
        loom-eval-workspace verify     <run-dir|run-id> [--repo <path>]
-       loom-eval-workspace gate-rerun <run-dir|run-id> [--repo <path>]
        loom-eval-workspace status     <run-dir|run-id> [--json] [--repo <path>]
        loom-eval-workspace clean      <run-dir|run-id> [--repo <path>]
 EOF
@@ -1257,7 +1042,6 @@ shift
 case "$sub" in
 prepare) cmd_prepare "$@" ;;
 verify) cmd_verify "$@" ;;
-gate-rerun) cmd_gate_rerun "$@" ;;
 status) cmd_status "$@" ;;
 clean) cmd_clean "$@" ;;
 -h | --help | help) usage ;;

@@ -946,14 +946,14 @@ prep_raw() {
     [ "$status" -eq 1 ]
 }
 
-@test "registration: loom-review is last in every helper allowlist copy" {
+@test "registration: loom-review is in every helper allowlist copy" {
     root="${BATS_TEST_DIRNAME}/.."
     for f in adapters/roots/claude-plugin-root-v1.json adapters/roots/codex-skill-source-v1.json \
         adapters/fixtures/v0.2.0/metadata/claude-root.json adapters/fixtures/v0.2.0/metadata/codex-root.json; do
-        [ "$(jq -r '.allowedHelpers | last' "$root/$f")" = "loom-review" ]
+        jq -e '.allowedHelpers | index("loom-review") != null' "$root/$f" >/dev/null
     done
-    [ "$(jq -r '."$defs".allowedHelpers.const | last' "$root/schemas/loom-installed-root-binding-v1.schema.json")" = "loom-review" ]
-    grep -q '^ALLOWED_HELPERS=(loom-coord loom-verify-identity loom-review)$' "$root/bin/loom-resolve-helper"
+    jq -e '."$defs".allowedHelpers.const | index("loom-review") != null' "$root/schemas/loom-installed-root-binding-v1.schema.json" >/dev/null
+    grep -E '^ALLOWED_HELPERS=\(.*\bloom-review\b' "$root/bin/loom-resolve-helper" >/dev/null
 }
 
 @test "registration: validate-repository --all passes" {

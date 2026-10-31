@@ -104,7 +104,7 @@ staging directory; on failure remove only that staging directory.
    unverified fallback. `status` is read-only and reports `prepared`, `invalid`, `infrastructure-blocked`, `rerun-passed`, or
    `rerun-failed` with the exit mapping above only after checking the current run; stale evidence cannot make a changed run
    valid. Neither command writes a verdict or advances lifecycle state.
-5. **Gate rerun** — `gate-rerun` is code-only and takes a run identifier, never an
+5. **Gate rerun (deferred)** — split out of this slice to the follow-on `evaluation-gate-runner` slice per the LOC rule; this helper keeps `prepare`, `verify`, `status` and `clean`, so `status` reports only `prepared`, `invalid`, `incomplete` and `infrastructure-blocked`, and `plugins/loom/schemas/loom-eval-gate-rerun-v1.schema.json` is shipped for that slice. Original contract: `gate-rerun` is code-only and takes a run identifier, never an
    evaluator-supplied command, source, environment or dependency override. Verify inputs,
    create a private disposable execution copy, and compare its initial inventory and
    hashes to source before invoking the pinned argv with the pinned environment and
@@ -169,6 +169,7 @@ The new Bats suite uses disposable repositories and proves:
 |---|---|
 | 0 | Initial draft |
 | 1 | Address Round 0 findings: external run roots, status/exit contract, findings validation, rerun verification and coverage |
+| 2 | Address Round 0 code-eval findings: gate-rerun split out (deferred to follow-on `evaluation-gate-runner` slice), exact-diff exclusion, all-type exclusions, strict manifest properties, verify-time capture freshness, exact 0700 modes, allowlist test |
 
 ### Verification evidence (Implemented)
 
@@ -186,3 +187,17 @@ Defects fixed during verification: empty executable-list `awk NR==FNR` merge in 
 inputs accepted); jq `$keys` parameter shadowing `keys` (top-level extras accepted); unavailable
 commit objects (exit 4) outranking manifest integrity failures (exit 2); two Bats cases
 passing duplicate `--gate-evidence` / a host-PATH git version instead of the pinned PATH.
+
+### Round 0 code-eval resolution
+
+| Finding | Resolution |
+|---|---|
+| Full gate failed (`loom-review` "last" test) | Test now asserts membership in each `allowedHelpers` copy and `ALLOWED_HELPERS`; full gate green |
+| Excluded content in `diff.patch`/`revision.patch` | `diff_excluded` fails closed (exit 2) at prepare, and `verify` rechecks, unless the path is an explicitly supplied input |
+| Exclusions only for code | `.docs/status/*` and `.docs/evaluations/*` exclusions apply to every type; explicit artifact/authority/prior-verdict inputs are unaffected |
+| LOC budget / split | `gate-rerun`, its schema validator, status rerun logic and tests removed; deferred to `evaluation-gate-runner`. Helper is ~1020 lines because prepare still binds gate argv/env/tools/dependencies in the manifest (see Notes) |
+| Schema validation | `JQ_MANIFEST` rejects unknown properties in manifest, files, exclusions, source_export, review, gate (and tools/dependencies), revision and captures |
+| Freshness at verify | `do_verify` rejects any capture with `fresh_until` before now: exit 4 (verify and status), unless an integrity error outranks it |
+| Mode 0700 | Exact `stat` mode compared for run root, `output/` and `scratch/` |
+
+New regression tests cover each boundary (`loom-eval-workspace.bats` Round 0 section).
