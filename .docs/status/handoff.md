@@ -16,6 +16,11 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M4 slice 2 `local-review-helper` LANDED on `main` (2026-10-30):**
+  ADR 0021 local review helper `plugins/loom/bin/loom-review` with subcommands `prepare`,
+  `validate`, `assemble`, `status`, and `clean`, exact commit object/tree binding, object-based
+  export, diff hashing, fail-closed validation, findings assembly, and JSON Schemas (48 Bats tests,
+  691 total repository Bats tests passing).
 - **M3 slice 1 `identity-guard-contract` LANDED on `main` (2026-10-30) — Milestone M3 COMPLETE:**
   Recognized identity-mutation hook guard (`git-identity-guard.sh`) scanning raw text without stripping
   quotes, blocking git config writes and author overrides across wrappers (`sh -c`, `bash -c`, `env`),

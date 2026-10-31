@@ -17,12 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [local-review-helper.md](local-review-helper.md) — `Ready to Publish` — M4 slice 2:
-  `plugins/loom/bin/loom-review` (`prepare`/`validate`/`assemble`/`status`/`clean`) for
-  `loom-local-review/v1`, manifest and findings JSON Schemas, helper allowlist registration,
-  and Bats coverage (ADR 0021/0022).
+*(No active slice plans at this time)*
 
 ## Archived plans
+
+- [archive/local-review-helper.md](archive/local-review-helper.md) — `Landed` —
+  M4 slice 2: `plugins/loom/bin/loom-review` (`prepare`/`validate`/`assemble`/`status`/`clean`)
+  for `loom-local-review/v1`, manifest and findings JSON Schemas, helper allowlist registration,
+  and 48 Bats tests (691 total repo Bats tests passing).
 
 - [archive/identity-guard-contract.md](archive/identity-guard-contract.md) — `Landed` —
   M3 slice 1: recognized identity-mutation guard (`git-identity-guard.sh`) scanning

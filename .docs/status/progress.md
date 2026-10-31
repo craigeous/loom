@@ -6,7 +6,19 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-30) — M3 slice 1 (`identity-guard-contract`) Landed (Milestone M3 Complete):**
+- **Last action (2026-10-30) — M4 slice 2 (`local-review-helper`) Landed:**
+  Landed ADR 0021 local review helper `plugins/loom/bin/loom-review` with five subcommands
+  (`prepare`, `validate`, `assemble`, `status`, `clean`), exact git commit object and tree
+  binding, object-derived `.git`-free source snapshot, diff hash calculation, fail-closed
+  validation against corrupt/missing objects and malformed/truncated results, deterministic
+  identity-neutral findings assembly (`*-review-findings.md`), derived lifecycle status
+  transitions, and safe run cleanup. Added JSON Schemas `loom-local-review-manifest-v1.schema.json`
+  and `loom-local-review-findings-v1.schema.json`, registered `loom-review` across all helper
+  allowlists, and added 48 comprehensive Bats tests (691 total repository Bats tests passing).
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_735a9227ba0e` with
+  Verdict: PASS (Round: 1).
+
+- **Prior action (2026-10-30) — M3 slice 1 (`identity-guard-contract`) Landed (Milestone M3 Complete):**
   Landed recognized identity-mutation guard and post-command verification: `plugins/loom/hooks/git-identity-guard.sh`
   scans command text without stripping quoted segments, blocking `git config` identity writes across all scopes
   (`--local`, `--global`, `--system`, `--file`), bare and quoted `--author` overrides, `-c` user/author/committer overrides,
