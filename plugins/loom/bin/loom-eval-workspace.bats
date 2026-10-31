@@ -1171,6 +1171,31 @@ wait_for() { # <file>: wait up to 20s for a marker file
     [ "$(ev 2 .seq)" = 2 ]
 }
 
+@test "gate-rerun: succeeds without a git repository and records the checkout as unchanged" {
+    prep_run
+    mkdir "$WORK/norepo"
+    cd "$WORK/norepo"
+    ew gate-rerun "$OUT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"status: rerun-passed"* ]]
+    [ "$(ev 1 .result)" = rerun-passed ]
+    [ "$(ev 1 .source_verification.source)" = unchanged ] && [ "$(ev 1 .source_verification.checkout)" = unchanged ]
+    # verify still needs the repository for object binding
+    ew verify "$OUT"
+    [ "$status" -eq 4 ]
+}
+
+@test "gate-rerun: succeeds against a bare repository with no checkout" {
+    prep_run
+    git clone --bare --quiet "$REPO" "$WORK/bare.git"
+    ew gate-rerun "$OUT" --repo "$WORK/bare.git"
+    [ "$status" -eq 0 ]
+    [ "$(ev 1 .result)" = rerun-passed ]
+    [ "$(ev 1 .source_verification.source)" = unchanged ] && [ "$(ev 1 .source_verification.checkout)" = unchanged ]
+    ew verify "$OUT" --repo "$WORK/bare.git"
+    [ "$status" -eq 0 ]
+}
+
 @test "gate-rerun: a corrupted execution copy is invalid (2) and the gate never runs" {
     mkdir "$WORK/shim"
     cat >"$WORK/shim/cp" <<'SHIM'

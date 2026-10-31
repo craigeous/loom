@@ -96,12 +96,14 @@ gdiff() {
 }
 
 # resolve_repo <path>: sets REPO_TOP and COMMON (physical paths); returns 1 if not a repo.
+# REPO_TOP stays empty for a repository without a checkout (bare repository or .git dir).
 resolve_repo() {
     local d top common
     d="$(CDPATH='' cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
-    top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || return 1
     common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
-    REPO_TOP="$(CDPATH='' cd -P -- "$top" && pwd -P)"
+    top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || true)"
+    REPO_TOP=""
+    if [ -n "$top" ]; then REPO_TOP="$(CDPATH='' cd -P -- "$top" && pwd -P)"; fi
     COMMON="$(CDPATH='' cd -P -- "$common" && pwd -P)"
 }
 
@@ -314,6 +316,8 @@ default_root() {
 }
 
 REPO_OK=0
+# do_verify: REQUIRE_REPO=1 makes a missing repository infrastructure-blocked; 0 skips object binding.
+REQUIRE_REPO=1
 init_repo() { # <repo-arg-or-empty>
     if resolve_repo "${1:-.}"; then REPO_OK=1; else
         REPO_OK=0
@@ -447,11 +451,14 @@ do_verify() {
 
     jq -r '.files[] | select(.origin == "git-object" and .role != "source") | .path | sub("^inputs/[^/]*/"; "")' "$m" >"$WORK/allowed.txt"
     # binding to local Git objects
-    [ "$REPO_OK" = 1 ] || {
-        INFRA=1
-        add_err "git repository unavailable for object binding"
-        return 1
-    }
+    if [ "$REPO_OK" != 1 ]; then
+        if [ "$REQUIRE_REPO" = 1 ]; then
+            INFRA=1
+            add_err "git repository unavailable for object binding"
+            return 1
+        fi
+        if [ -s "$ERRS" ]; then return 1; else return 0; fi
+    fi
     [ ! -s "$ERRS" ] || return 1 # integrity failures outrank unavailable objects
     local sha_chk
     for sha_chk in $(jq -r '[.head_sha, .base_sha, .evidence_sha, .revision.prior_sha] | map(select(. != null)) | .[]' "$m"); do
@@ -1101,6 +1108,7 @@ kill_group() {
 }
 
 on_signal() {
+    [ "${INTERRUPTED:-0}" = 0 ] || return 0
     INTERRUPTED=1
     kill_group
 }
@@ -1171,6 +1179,7 @@ write_rerun_evidence() {
 
 cmd_gate_rerun() {
     ALLOW_JSON=0
+    REQUIRE_REPO=0
     parse_run_args "$@"
     init_repo "$REPO_ARG"
     resolve_run "$RUN_ARG"
@@ -1178,10 +1187,16 @@ cmd_gate_rerun() {
     do_verify || true
     verify_rc || exit $?
     [ "$(jq -r .evaluation_type "$m")" = code ] || die 2 "gate-rerun requires a code run"
-    if overlaps "$RUN" "$REPO_TOP" || overlaps "$RUN" "$COMMON"; then die 2 "run overlaps the managed repository"; fi
+    if [ "$REPO_OK" = 1 ]; then
+        if { [ -n "$REPO_TOP" ] && overlaps "$RUN" "$REPO_TOP"; } || overlaps "$RUN" "$COMMON"; then die 2 "run overlaps the managed repository"; fi
+    fi
     umask 077
-    checkout_inventory "$WORK/ci.start" || die 4 "cannot inventory the checkout"
-    cp "$WORK/ci.start" "$WORK/ci.start.keep"
+    HAVE_CHECKOUT=0
+    if [ "$REPO_OK" = 1 ] && [ -n "$REPO_TOP" ]; then
+        HAVE_CHECKOUT=1
+        checkout_inventory "$WORK/ci.start" || die 4 "cannot inventory the checkout"
+        cp "$WORK/ci.start" "$WORK/ci.start.keep"
+    fi
 
     # attempt allocation: unique monotonic sequence, earlier evidence retained
     [ -d "$RUN/reruns" ] || mkdir -m 700 "$RUN/reruns" || die 4 "cannot create reruns/"
@@ -1251,7 +1266,6 @@ cmd_gate_rerun() {
             EXIT_JSON="$grc"
         fi
     fi
-    trap - INT TERM HUP
     ENDED="$(utc_now)"
 
     src_listing "$EXEC/copy" >"$WORK/copy.end"
@@ -1261,7 +1275,7 @@ cmd_gate_rerun() {
         END {for (p in s) if (!(p in e)) print p "\tdeleted"}' "$WORK/copy.start" "$WORK/copy.end" | LC_ALL=C sort >"$WORK/changes.tsv"
     # reverify the immutable run and the checkout after every attempt
     if do_verify; then SRC_STATE=unchanged; else SRC_STATE=changed; fi
-    if checkout_inventory "$WORK/ci.end" && cmp -s "$WORK/ci.start.keep" "$WORK/ci.end"; then CHK_STATE=unchanged; else CHK_STATE=changed; fi
+    if [ "$HAVE_CHECKOUT" = 0 ] || { checkout_inventory "$WORK/ci.end" && cmp -s "$WORK/ci.start.keep" "$WORK/ci.end"; }; then CHK_STATE=unchanged; else CHK_STATE=changed; fi
     if [ "$SRC_STATE" = changed ] || [ "$CHK_STATE" = changed ]; then
         log "inputs changed during the attempt (source: $SRC_STATE, checkout: $CHK_STATE)"
         if [ "$COMPLETION" != completed ]; then COMPLETION=invalid; fi
