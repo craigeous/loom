@@ -35,17 +35,17 @@ _loom_hook_validate_root() {
 }
 
 _loom_hook_select_client() {
-    local codex_ok=1 claude_ok=1
-    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0
-    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0
-    if [ "$codex_ok" -eq 0 ] && [ "$claude_ok" -eq 0 ]; then
-        return 1
-    elif [ "$codex_ok" -eq 0 ]; then
+    local codex_ok=1 claude_ok=1 n=0
+    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0 && n=$((n + 1))
+    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0 && n=$((n + 1))
+    _loom_hook_validate_root "${HERDR_PLUGIN_ROOT:-}" ".herdr-plugin/plugin.json" && n=$((n + 1))
+    [ "$n" -eq 1 ] || return 1
+    if [ "$codex_ok" -eq 0 ]; then
         printf 'codex'
     elif [ "$claude_ok" -eq 0 ]; then
         printf 'claude'
     else
-        return 1
+        printf 'herdr'
     fi
 }
 
@@ -82,7 +82,7 @@ _loom_hook_block() {
         printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":%s}}\n' "$reason_json"
         exit 0
         ;;
-    *)
+    claude | herdr | *)
         printf '%s\n' "$reason" >&2
         exit 2
         ;;

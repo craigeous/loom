@@ -330,7 +330,8 @@ function validateHerdrMetadata(fail) {
       name: (v) => v === "loom",
       version: (v) => v === "0.2.0",
       description: (v) => typeof v === "string" && v.length > 0,
-      main: (v) => v === undefined || v === "bin/loom-doctor"
+      main: (v) => v === undefined || v === "bin/loom-doctor",
+      hooks: (v) => v === "hooks/hooks.json"
     }],
     [".herdr-plugin/marketplace.json", {
       name: (v) => v === "loom",
@@ -605,7 +606,7 @@ function semanticMetadata() {
     if (!deepEqual(binding, expectedRoots[index])) report(rootPaths[index], "installed-root contract drift");
   }
 
-  // One physical hook manifest for both clients (spec 08; ADR 0018 decision
+  // One physical hook manifest for all three clients (spec 08; ADR 0018 decision
   // 4): the Codex root binding above pins hookManifest to exactly
   // ./hooks/hooks.json, and no second client-specific hook manifest may
   // exist alongside it.

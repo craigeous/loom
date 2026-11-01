@@ -190,3 +190,14 @@ EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or che
     guard orchestrator 'echo FOO=1 "/tmp/my tools/bats"'
     [ "$status" -eq 0 ]
 }
+
+@test "herdr: valid root runs; policy allow is silent and block uses exit 2 stderr" {
+    json=$(jq -cn --arg c "scripts/check" '{tool_input:{command:$c}}')
+    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT -u LOOM_ALLOW_ORCHESTRATOR_GATE LOOM_ROLE=code-evaluator HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    json=$(jq -cn --arg c "git commit -m x" '{tool_input:{command:$c}}')
+    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT LOOM_ROLE=code-evaluator HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    [ "$status" -eq 2 ]
+    [ "$output" = "$EVAL" ]
+}

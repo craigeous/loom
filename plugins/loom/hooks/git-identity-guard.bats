@@ -430,6 +430,7 @@ FIXTURE_ROOT="${BATS_TEST_DIRNAME}/fixtures/hook-wire-v1"
 fixture_env_var() {
     case "$1" in
     codex) printf 'PLUGIN_ROOT' ;;
+    herdr) printf 'HERDR_PLUGIN_ROOT' ;;
     *) printf 'CLAUDE_PLUGIN_ROOT' ;;
     esac
 }
@@ -475,3 +476,65 @@ assert_fixture() {
 @test "fixture codex/pre-tool-use/block" { assert_fixture codex block; }
 
 @test "fixture codex/pre-tool-use/malformed" { assert_fixture codex malformed; }
+
+@test "fixture herdr/pre-tool-use/allow" { assert_fixture herdr allow; }
+
+@test "fixture herdr/pre-tool-use/block" { assert_fixture herdr block; }
+
+@test "fixture herdr/pre-tool-use/malformed" { assert_fixture herdr malformed; }
+
+# --- Herdr root selection matrix (ADR 0030): exactly one validated root ---
+
+HERDR_OK='{"tool_input":{"command":"git commit -m ok"}}'
+HERDR_BAD='{"tool_input":{"command":"git commit --author=x -m ok"}}'
+
+herdr_run() { run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT -u HERDR_PLUGIN_ROOT "$@" "$LOOM_TEST_BASH" "$GUARD" <<<"$HERDR_OK"; }
+
+mk_herdr_root() { # <dir> <name> <version>
+    mkdir -p "$1/.herdr-plugin"
+    printf '{"name":"%s","version":"%s"}\n' "$2" "$3" >"$1/.herdr-plugin/plugin.json"
+}
+
+@test "herdr root: valid root allows and blocks with the stderr wire" {
+    herdr_run HERDR_PLUGIN_ROOT="$REAL_ROOT"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$HERDR_BAD"
+    [ "$status" -eq 2 ]
+    [[ "$output" == "loom identity guard: blocked --author"* ]]
+}
+
+@test "herdr root: missing, relative, and non-plugin roots fail closed" {
+    herdr_run
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-tool-use." ]
+    herdr_run HERDR_PLUGIN_ROOT="relative/path"
+    [ "$status" -eq 2 ]
+    herdr_run HERDR_PLUGIN_ROOT="$BATS_TEST_TMPDIR"
+    [ "$status" -eq 2 ]
+}
+
+@test "herdr root: wrong manifest name or version fails closed" {
+    mk_herdr_root "$BATS_TEST_TMPDIR/n" other 0.2.0
+    herdr_run HERDR_PLUGIN_ROOT="$BATS_TEST_TMPDIR/n"
+    [ "$status" -eq 2 ]
+    mk_herdr_root "$BATS_TEST_TMPDIR/v" loom 9.9.9
+    herdr_run HERDR_PLUGIN_ROOT="$BATS_TEST_TMPDIR/v"
+    [ "$status" -eq 2 ]
+}
+
+@test "herdr root: two or three validated roots are ambiguous and fail closed" {
+    herdr_run HERDR_PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT"
+    [ "$status" -eq 2 ]
+    herdr_run HERDR_PLUGIN_ROOT="$REAL_ROOT" PLUGIN_ROOT="$REAL_ROOT"
+    [ "$status" -eq 2 ]
+    herdr_run HERDR_PLUGIN_ROOT="$REAL_ROOT" PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT"
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-tool-use." ]
+}
+
+@test "herdr root: a valid root alongside an invalid one still selects Herdr" {
+    herdr_run HERDR_PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}

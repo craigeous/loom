@@ -21,7 +21,7 @@
 # WIRE (spec 08 -> Hook normalization and output adapters): this single
 # physical hook, reached through the one shared plugins/loom/hooks/hooks.json
 # manifest, selects its client wire adapter at runtime from whichever of
-# PLUGIN_ROOT (Codex) or CLAUDE_PLUGIN_ROOT (Claude) resolves to a validated
+# PLUGIN_ROOT (Codex), CLAUDE_PLUGIN_ROOT (Claude), or HERDR_PLUGIN_ROOT (Herdr) resolves to a validated
 # physical loom plugin root. The only accepted `trigger` values are `manual`
 # and `auto`; the obsolete `compaction_trigger` field is not read. Invalid
 # JSON, a missing/wrong-typed/unknown trigger, or a missing/invalid
@@ -58,14 +58,24 @@ _loom_hook_validate_root() {
 # Codex intentionally sets both roots for compatibility; preferring its
 # specific binding keeps the shared hook's Codex wire adapter selected.
 _loom_hook_select_client() {
+    local herdr_ok=1 other_ok=1
+    _loom_hook_validate_root "${HERDR_PLUGIN_ROOT:-}" ".herdr-plugin/plugin.json" && herdr_ok=0
     if _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json"; then
-        printf 'codex'
-        return 0
+        other_ok=0
+        [ "$herdr_ok" -eq 0 ] || {
+            printf 'codex'
+            return 0
+        }
     elif _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json"; then
-        printf 'claude'
-        return 0
+        other_ok=0
+        [ "$herdr_ok" -eq 0 ] || {
+            printf 'claude'
+            return 0
+        }
     fi
-    return 1
+    # Herdr selects only when it is the sole validated root (ADR 0030).
+    [ "$herdr_ok" -eq 0 ] && [ "$other_ok" -ne 0 ] || return 1
+    printf 'herdr'
 }
 
 # _loom_hook_sanitize_reason <reason> — bounds/normalizes a policy reason to
@@ -105,7 +115,7 @@ _loom_hook_block() {
         printf '{"continue":false,"stopReason":%s}\n' "$reason_json"
         exit 0
         ;;
-    *)
+    claude | herdr | *)
         printf '%s\n' "$reason" >&2
         exit 2
         ;;
