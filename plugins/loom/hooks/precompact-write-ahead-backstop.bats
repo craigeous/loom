@@ -645,13 +645,11 @@ assert_fixture() {
 
 @test "fixture codex/pre-compact/malformed" { assert_fixture codex malformed; }
 
-@test "root: Codex prefers its valid PLUGIN_ROOT when both compatibility roots validate" {
+@test "root: multiple valid roots fail closed (ambiguous root selection)" {
     make_repo
-    write_marker s-both "$DOCS_SHA"
     run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual s-both)"
-    [ "$status" -eq 0 ]
-    expected='{"continue":false,"stopReason":"loom write-ahead backstop: .docs/ has not advanced before manual compaction (ADR 0013); commit a .docs/ checkpoint, then retry."}'
-    [ "$output" = "$expected" ]
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-compact." ]
 }
 
 @test "fixture herdr/pre-compact/allow" { assert_fixture herdr allow; }

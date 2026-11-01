@@ -53,29 +53,22 @@ _loom_hook_validate_root() {
     [ "$name" = "loom" ] && [ "$version" = "0.2.0" ] || return 1
 }
 
-# _loom_hook_select_client — prints "codex" when the Codex-specific root
-# validates, otherwise "claude" when the Claude-specific root validates.
-# Codex intentionally sets both roots for compatibility; preferring its
-# specific binding keeps the shared hook's Codex wire adapter selected.
+# _loom_hook_select_client — prints "codex", "claude", or "herdr" and
+# returns 0 only when exactly one valid root validates. Ambiguous (multiple valid)
+# or zero valid roots fail closed with return 1 (ADR 0030 decision 3).
 _loom_hook_select_client() {
-    local herdr_ok=1 other_ok=1
-    _loom_hook_validate_root "${HERDR_PLUGIN_ROOT:-}" ".herdr-plugin/plugin.json" && herdr_ok=0
-    if _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json"; then
-        other_ok=0
-        [ "$herdr_ok" -eq 0 ] || {
-            printf 'codex'
-            return 0
-        }
-    elif _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json"; then
-        other_ok=0
-        [ "$herdr_ok" -eq 0 ] || {
-            printf 'claude'
-            return 0
-        }
+    local codex_ok=1 claude_ok=1 n=0
+    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0 && n=$((n + 1))
+    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0 && n=$((n + 1))
+    _loom_hook_validate_root "${HERDR_PLUGIN_ROOT:-}" ".herdr-plugin/plugin.json" && n=$((n + 1))
+    [ "$n" -eq 1 ] || return 1
+    if [ "$codex_ok" -eq 0 ]; then
+        printf 'codex'
+    elif [ "$claude_ok" -eq 0 ]; then
+        printf 'claude'
+    else
+        printf 'herdr'
     fi
-    # Herdr selects only when it is the sole validated root (ADR 0030).
-    [ "$herdr_ok" -eq 0 ] && [ "$other_ok" -ne 0 ] || return 1
-    printf 'herdr'
 }
 
 # _loom_hook_sanitize_reason <reason> — bounds/normalizes a policy reason to
