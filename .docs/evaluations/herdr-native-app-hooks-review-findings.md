@@ -1,13 +1,13 @@
 # Review findings — herdr-native-app-hooks
 
 - Protocol: loom-local-review/v1
-- Run: herdr-native-app-hooks-0254ddad1d61
+- Run: herdr-native-app-hooks-7f5b0820966e
 - Aggregate: ran-clean
 - Base: f27623968267c702fe7baa771dcac6ec8d808315
-- Head: 0254ddad1d613d10e5a531f68159b52ecbce51e6
-- Diff sha256: 2cf4d057794a99d21f8591ee09115446f1fea47fa99f10674f02f349313acaaf
-- Manifest sha256: e4f2c3f96a765d548bbf78f240217dae71f471542d2fa494db340e00ad94ec8a
-- Findings sha256: 97e2353e28c0604736b124390e248cda9d72dcbc438848d594022b5ee2436407
+- Head: 7f5b0820966e979c564f5f3536c26cbde9d80d30
+- Diff sha256: 97f154b73defcfa8da287e1fdf71d0d9dca6832028fd85bc748d3072164d416a
+- Manifest sha256: 13413c9683547b7e1e7fc09cd962b6b992bbdc75fbc2da5981a72194d4e944ad
+- Findings sha256: d1bb2d968c249103d13db50729eb26a8f8f5c6c7b130739255168a02e1411797
 
 ## Provenance
 
