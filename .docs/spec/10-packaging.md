@@ -11,7 +11,7 @@ ADRs [0006](../ADR/0006-distribution-self-marketplace.md),
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
 [0021](../ADR/0021-loom-owned-local-review-protocol.md),
 [0022](../ADR/0022-controlled-input-independent-evaluation.md), and
-[0030](../ADR/0030-herdr-native-app-hooks.md), informed by the
+[0031](../ADR/0031-herdr-as-an-hc-driven-client.md), informed by the
 [approved dual-platform research](../research/2026-07-21-dual-platform-plugin-architecture.md).
 
 ## One distribution, two catalogs
@@ -142,6 +142,11 @@ doctor checks. Changing any table value requires a reviewed matrix change, full 
 revalidation, and a product release; roles and shared skills do not carry duplicate
 vendor mappings.
 
+The matrix records `hc` as a host with a floor of `0.1.16` (the only observed
+version) and does not floor herdr-app, which loom does not call. It carries no Herdr
+root binding and no per-profile Herdr entry. A host entry never changes the profile
+map; model and effort are carried in the inner client's command string.
+
 ## Installed-root and helper binding
 
 The matrix binds Claude to `claude-plugin-root/v1`, defined at
@@ -164,9 +169,11 @@ The matrix binds Claude to `claude-plugin-root/v1`, defined at
 - **Codex hooks.** The manifest uses a root-relative `./hooks/hooks.json`; hook commands
   may use Codex's hook-process-only `PLUGIN_ROOT` to invoke the shared hook dispatcher
   absolutely. That environment binding is not reused by skills or workflow helpers.
-- **Herdr hooks.** The manifest declares root-relative `hooks/hooks.json`; hook commands
-  may use Herdr's hook-process `HERDR_PLUGIN_ROOT` to invoke the shared hook dispatcher
-  absolutely.
+- **Herdr.** Herdr has no installed root, manifest, marketplace or hook binding. It is a
+  host driven through `hc` (spec 07 §Host surfaces); roles it launches resolve helpers
+  through their own client's root above. Herdr does not install, host or intercept hooks;
+  Claude Code and Codex hooks keep running in their own plugin systems under the
+  existing wires of spec 08.
 
 There is one physical `bin/`, one set of shared skills, and one helper implementation.
 Adapters may contain only binding metadata/bootstrap logic; copying helpers or workflow

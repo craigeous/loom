@@ -12,7 +12,7 @@ ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md),
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
 [0021](../ADR/0021-loom-owned-local-review-protocol.md),
 [0022](../ADR/0022-controlled-input-independent-evaluation.md), and
-[0030](../ADR/0030-herdr-native-app-hooks.md).
+[0031](../ADR/0031-herdr-as-an-hc-driven-client.md).
 
 ## Portable core
 
@@ -121,7 +121,7 @@ best-effort reinterpret it.
 
 ## Hook normalization and output adapters
 
-Hook policy receives a normalized internal event. All three clients' current `PreCompact`
+Hook policy receives a normalized internal event. Claude's and Codex's current `PreCompact`
 adapters read `trigger` with the only accepted values `manual` and `auto`; the obsolete
 `compaction_trigger` field is not recognized as current input. Client-only supplemental
 fields may be recorded in adapter fixtures but cannot alter shared state transitions.
@@ -137,8 +137,6 @@ results; `<reason-json>` means that same reason encoded as a JSON string value:
 | Claude `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 | Codex `PreToolUse` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":<reason-json>}}\n` |
 | Codex `PreCompact` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"continue":false,"stopReason":<reason-json>}\n` |
-| Herdr `PreToolUse` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
-| Herdr `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 
 No adapter may substitute another documented encoding. In particular, Claude does not
 emit block JSON, Codex `PreToolUse` does not use the older top-level
@@ -154,14 +152,20 @@ and validate against
 `plugins/loom/schemas/loom-hook-wire-fixture-v1.schema.json`. The `.stdout` and
 `.stderr` files are exact bytes, including the one required trailing LF for nonempty
 output; `.exit` contains the decimal status plus LF. The only path values are clients
-`claude`, `codex`, and `herdr`, events `pre-tool-use` and `pre-compact`, and cases
-`allow`, `block`, and `malformed`: 18 cases and 72 files across three clients.
-Conformance runs the same policy outcome through all three adapters and byte-compares
-all three outputs.
+`claude` and `codex`, events `pre-tool-use` and `pre-compact`, and cases
+`allow`, `block`, and `malformed`: 12 cases and 48 files across two clients.
+Conformance runs the same policy outcome through both adapters and byte-compares
+both outputs.
 
 Identity policy fails closed on recognized mutation tokens and a post-command verifier
 detects any advanced HEAD with wrong author/committer identity. This is defense in
 depth, not a complete shell parser or security boundary.
+
+For any non-orchestrator `LOOM_ROLE`, every `hc` invocation is refused (deny by default,
+no allowlist; covers `exec`, `label`, `keep`, `put`, `connect` and any later verb as well
+as `run`, `send`, `kill`, `rm`, `keys`, `interrupt`, `attach`, `file`, `machine`,
+`server`, `update`, and the read verbs); only the orchestrator calls `hc`. Defense in
+depth, evadable, not a boundary.
 
 PreCompact write-ahead state is per validated session under
 `.git/loom/precompact/<session-id>/`, atomic, concurrency-safe, and bound to actual
@@ -218,7 +222,7 @@ The local `scripts/check` entry point and CI validate at least:
 - canonical-digest schema/hash and both instruction renderings;
 - Bash syntax at the floor, shfmt, ShellCheck, Bats, and Git diff whitespace;
 - every `hook-wire-v1` allow/block/malformed fixture with byte-exact exit, stdout,
-  and stderr results for all three clients and both supported events;
+  and stderr results for the `claude` and `codex` clients and both supported events;
 - local-review/evaluation/recorder protocol fixtures and failure cases; and
 - active client adapter install, invocation, role hierarchy, helper resolution, and
   uninstall/upgrade matrix where applicable.

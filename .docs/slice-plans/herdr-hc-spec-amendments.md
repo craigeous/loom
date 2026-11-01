@@ -1,7 +1,7 @@
 # Proposed spec amendments — Herdr as an hc-driven client
 
-Status: Plan Review
-Authority: ADR [0031](../ADR/0031-herdr-as-an-hc-driven-client.md) (Plan Review)
+Status: Applied (A, C, D to specs 07, 08, 10; B not applied: spec 05 outside owner scope)
+Authority: ADR [0031](../ADR/0031-herdr-as-an-hc-driven-client.md) (Accepted)
 Date: 2026-11-01
 
 This is a **drafted diff for the plan evaluator**. Nothing here is applied. Specs 07,

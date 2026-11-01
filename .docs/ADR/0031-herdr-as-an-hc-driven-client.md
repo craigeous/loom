@@ -1,6 +1,6 @@
 # 0031 — Herdr as an hc-Driven Client
 
-Status: Plan Review
+Status: Accepted
 Supersedes (in part): ADR 0029, ADR 0030
 Extends: ADR 0018, ADR 0027
 Date: 2026-11-01
