@@ -85,3 +85,4 @@ None.
 |---|---|
 | 0 | Initial draft. |
 | 1 | Implemented; status set to Implemented. |
+| 1 (remed.) | Round 0 code-eval remediation: corrected snapshot test count wording from 'Over 886' to '886' in README.md and added skipped: docs-only review-findings artifact. |
