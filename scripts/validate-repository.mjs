@@ -827,11 +827,58 @@ function validateDocsState() {
     }
   }
 
+  validateLivingDocs(markdownParser);
   validateEvaluations(markdownParser);
   if (baselineCommit) validateBaseline(artifacts);
   else console.error("validate-repository: snapshot checks only; status transitions were not verified (pass --baseline <ref>)");
   for (const key of ruleExceptions.keys()) {
     if (!ruleExceptionsUsed.has(key)) report(allowlistPath, `stale rule exception: ${key}`);
+  }
+}
+
+const HANDOFF_LINE_CAP = 150;
+const LIVING_DOCS = { readme: "README.md", handoff: ".docs/status/handoff.md", progress: ".docs/status/progress.md", roadmap: ".docs/status/roadmap.md" };
+// Structural contract for the living documents; prose ownership stays a human review.
+function validateLivingDocs(markdownParser) {
+  const texts = {};
+  for (const [key, relative] of Object.entries(LIVING_DOCS)) {
+    texts[key] = readText(relative);
+    if (texts[key] === null && !fs.existsSync(path.join(root, relative))) ruleReport(relative, "living-doc-missing", "required living document is missing");
+  }
+  const markers = [];
+  for (const [key, relative] of Object.entries(LIVING_DOCS)) {
+    if (texts[key] === null) continue;
+    const found = texts[key].split(/\r?\n/).filter((line) => /^Current milestone:/.test(line));
+    const valid = found.length === 1 && /^Current milestone: (M\d+)$/.exec(found[0]);
+    if (!valid) { ruleReport(relative, "milestone-marker", `expected exactly one 'Current milestone: M<N>' line, found ${found.length === 1 ? `malformed '${found[0]}'` : found.length}`); continue; }
+    markers.push([relative, valid[1]]);
+  }
+  const milestone = markers.length && markers.every(([, value]) => value === markers[0][1]) ? markers[0][1] : null;
+  if (markers.length && !milestone) {
+    for (const [relative, value] of markers) ruleReport(relative, "milestone-mismatch", `milestone marker '${value}' does not match across living documents (${markers.map(([name, other]) => `${name}=${other}`).join(", ")})`);
+  }
+  if (texts.handoff !== null) {
+    for (const heading of ["Start here each session", "Where things stand"]) requireHeading(LIVING_DOCS.handoff, texts.handoff, heading, markdownParser);
+    const lineCount = texts.handoff.length === 0 ? 0 : texts.handoff.split(/\r?\n/).length - (/\r?\n$/.test(texts.handoff) ? 1 : 0);
+    if (lineCount > HANDOFF_LINE_CAP) ruleReport(LIVING_DOCS.handoff, "handoff-size", `handoff has ${lineCount} lines; maximum is ${HANDOFF_LINE_CAP}`);
+  }
+  if (texts.progress !== null) {
+    requireHeading(LIVING_DOCS.progress, texts.progress, "Action history", markdownParser);
+    const entries = sectionText(texts.progress, "Action history").split(/\r?\n/).filter((line) => /^\s*-\s/.test(line));
+    const standard = /^- \d{4}-\d{2}-\d{2} — \S/;
+    if (!entries.length) ruleReport(LIVING_DOCS.progress, "action-history-entry", "Action history needs at least one '- YYYY-MM-DD — <action>' entry");
+    for (const entry of entries) if (!standard.test(entry)) ruleReport(LIVING_DOCS.progress, "action-history-entry", `malformed Action history entry '${entry}'`);
+  }
+  if (texts.roadmap !== null) {
+    requireHeading(LIVING_DOCS.roadmap, texts.roadmap, "Repository improvement program (2026)", markdownParser);
+    const lines = texts.roadmap.split(/\r?\n/);
+    const start = lines.findIndex((line) => /^##\s+Repository improvement program \(2026\)/.test(line));
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((line) => /^##\s/.test(line));
+    const program = end < 0 ? rest : rest.slice(0, end);
+    const active = program.filter((line) => /^- \[ \] \*\*M\d+\b.*\(in progress\)/.test(line)).map((line) => /^- \[ \] \*\*(M\d+)\b/.exec(line)[1]);
+    if (active.length !== 1) ruleReport(LIVING_DOCS.roadmap, "roadmap-in-progress", `expected exactly one unchecked '(in progress)' milestone, found ${active.length}`);
+    else if (milestone && active[0] !== milestone) ruleReport(LIVING_DOCS.roadmap, "roadmap-in-progress", `in-progress milestone '${active[0]}' does not match marker '${milestone}'`);
   }
 }
 

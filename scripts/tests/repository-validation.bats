@@ -1634,6 +1634,40 @@ inventory_plugin_links() {
 
 make_docs_root() {
     make_metadata_root
+    put .docs/status/handoff.md <<'DOC'
+# Session Handoff
+Status: Living
+
+Current milestone: M6
+
+## Start here each session
+Read.
+
+## Where things stand
+Fine.
+DOC
+    put .docs/status/progress.md <<'DOC'
+# Progress
+Status: Living
+
+Current milestone: M6
+
+## Action history
+
+- 2026-10-31 — Did a thing.
+DOC
+    put .docs/status/roadmap.md <<'DOC'
+# Roadmap
+Status: Living
+
+Current milestone: M6
+
+## Repository improvement program (2026)
+
+- [x] **M5 — Done** (complete):
+- [ ] **M6 — Current** (in progress):
+- [ ] **M7 — Later**:
+DOC
     inventory_plugin_links
     fixture_git init -q
     fixture_git config user.name Fixture
@@ -2321,4 +2355,102 @@ DOC
     [[ "$output" == *"stale allowlist record: .docs/evaluations/deleted-eval.md"$'\t'"gone.md"* ]]
     links
     [ "$status" -eq 0 ]
+}
+
+living_fail() {
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"$1"* ]]
+}
+
+@test "docs state: living docs fixture passes and metadata/links ignore living rules" {
+    make_docs_root
+    docs_all
+    [ "$status" -eq 0 ]
+    printf '\nCurrent milestone: M9\n' >>"$TEST_ROOT/README.md"
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --metadata
+    [[ "$output" != *"milestone"* ]]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --links
+    [[ "$output" != *"milestone"* ]]
+}
+
+@test "docs state: handoff passes at 150 lines and fails at 151, with or without final newline" {
+    make_docs_root
+    local f="$TEST_ROOT/.docs/status/handoff.md" n
+    n=$(wc -l <"$f")
+    yes filler | head -n $((150 - n)) >>"$f"
+    docs_all
+    [ "$status" -eq 0 ]
+    printf 'one more' >>"$f"
+    living_fail "status/handoff.md: handoff has 151 lines; maximum is 150"
+    printf '\n' >>"$f"
+    living_fail "handoff has 151 lines"
+}
+
+@test "docs state: missing living documents fail naming the path" {
+    local doc
+    for doc in README.md .docs/status/handoff.md .docs/status/progress.md .docs/status/roadmap.md; do
+        make_docs_root
+        rm "$TEST_ROOT/$doc"
+        living_fail "$doc: required living document is missing"
+    done
+}
+
+@test "docs state: milestone markers must be single, well formed and matching in all four documents" {
+    local doc
+    for doc in README.md .docs/status/handoff.md .docs/status/progress.md .docs/status/roadmap.md; do
+        make_docs_root
+        edit_file "$doc" 's/^Current milestone: M6$/Current milestone: M7/'
+        living_fail "$doc: milestone marker 'M7' does not match"
+        make_docs_root
+        edit_file "$doc" '/^Current milestone: M6$/d'
+        living_fail "$doc: expected exactly one 'Current milestone: M<N>' line, found 0"
+        make_docs_root
+        printf 'Current milestone: M6\n' >>"$TEST_ROOT/$doc"
+        living_fail "$doc: expected exactly one 'Current milestone: M<N>' line, found 2"
+        make_docs_root
+        edit_file "$doc" 's/^Current milestone: M6$/Current milestone: six/'
+        living_fail "$doc: expected exactly one 'Current milestone: M<N>' line, found malformed"
+    done
+}
+
+@test "docs state: handoff, progress and roadmap required headings are enforced" {
+    make_docs_root
+    edit_file .docs/status/handoff.md 's/^## Start here each session/## Other/'
+    edit_file .docs/status/handoff.md 's/^## Where things stand/## Elsewhere/'
+    edit_file .docs/status/progress.md 's/^## Action history/## History/'
+    edit_file .docs/status/roadmap.md 's/^## Repository improvement program (2026)/## Program/'
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"handoff.md: missing required heading 'Start here each session'"* ]]
+    [[ "$output" == *"handoff.md: missing required heading 'Where things stand'"* ]]
+    [[ "$output" == *"progress.md: missing required heading 'Action history'"* ]]
+    [[ "$output" == *"roadmap.md: missing required heading 'Repository improvement program (2026)'"* ]]
+}
+
+@test "docs state: action history needs standard dated entries" {
+    make_docs_root
+    edit_file .docs/status/progress.md '/^- 2026-10-31/d'
+    living_fail "progress.md: Action history needs at least one"
+    make_docs_root
+    printf -- '- 2026-10-31 - hyphen not em dash\n' >>"$TEST_ROOT/.docs/status/progress.md"
+    living_fail "progress.md: malformed Action history entry '- 2026-10-31 - hyphen"
+    make_docs_root
+    printf -- '- yesterday — undated\n' >>"$TEST_ROOT/.docs/status/progress.md"
+    living_fail "malformed Action history entry '- yesterday"
+}
+
+@test "docs state: roadmap needs exactly one in-progress unchecked milestone matching the marker" {
+    make_docs_root
+    edit_file .docs/status/roadmap.md 's/^- \[ \] \*\*M6 — Current\*\* (in progress)/- [ ] **M6 — Current**/'
+    living_fail "roadmap.md: expected exactly one unchecked '(in progress)' milestone, found 0"
+    make_docs_root
+    edit_file .docs/status/roadmap.md 's/^- \[ \] \*\*M7 — Later\*\*/- [ ] **M7 — Later** (in progress)/'
+    living_fail "roadmap.md: expected exactly one unchecked '(in progress)' milestone, found 2"
+    make_docs_root
+    edit_file .docs/status/roadmap.md 's/^- \[ \] \*\*M6 — Current\*\* (in progress)/- [ ] **M6 — Current**/;s/^- \[ \] \*\*M7 — Later\*\*/- [ ] **M7 — Later** (in progress)/'
+    living_fail "roadmap.md: in-progress milestone 'M7' does not match marker 'M6'"
+    make_docs_root
+    edit_file .docs/status/roadmap.md 's/^- \[ \] \*\*M6 — Current\*\* (in progress)/- [x] **M6 — Current** (in progress)/'
+    living_fail "roadmap.md: expected exactly one unchecked '(in progress)' milestone, found 0"
 }

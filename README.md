@@ -32,6 +32,8 @@ or human checkpoint you declare.
 
 ## Status
 
+Current milestone: M6
+
 **Milestones M0 through M5 complete; M6 in progress.**
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),

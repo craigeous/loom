@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [living-doc-shape.md](living-doc-shape.md) — `Approved` — M6 living document shape and consistency checks.
+- [living-doc-shape.md](living-doc-shape.md) — `Implemented` — M6 living document shape and consistency checks.
 
 ## Archived plans
 

@@ -4,6 +4,15 @@ Status: Living
 
 The status source of truth and decision index for building loom.
 
+Current milestone: M6
+
+## Action history
+
+- 2026-10-31 — M6 `docs-state-validator` landed (see Current state for detail).
+- 2026-10-31 — M6 `loom-doctor-foundation` landed (see Current state for detail).
+- 2026-10-31 — M5 completed with `evaluation-output-recorder`.
+- 2026-10-31 — `living-doc-shape` plan approved after plan-eval Round 0 PASS.
+
 ## Current state
 
 - **Last action (2026-10-31) — M6 slice 2 (`docs-state-validator`) Landed:**
