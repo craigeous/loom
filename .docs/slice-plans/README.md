@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None active.
+- [workflow-profiles.md](workflow-profiles.md) — `Plan Review` — M8 slice 2: owner-selected workflow profiles and recommendations.
 
 ## Archived plans
 
