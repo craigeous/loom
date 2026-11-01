@@ -1,6 +1,6 @@
 # Workflow Benchmark
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 250 LOC net script code; tests and protocol documentation separate
 
@@ -114,7 +114,7 @@ specification or out-of-scope change; do not silently weaken requirements.
 
 ## Notes
 
-None.
+Implemented as planned in `scripts/workflow-benchmark.sh` (161 lines), `docs/workflow-benchmark.md` and `scripts/tests/workflow-benchmark.bats` (12 tests covering init/exists, usage, missing, invalid, duplicate, provenance, evidence, unknown reason for both validate and summarize, the 120/90 and reverse deltas, and unknown comparisons). Gate evidence is recorded in the implementing commit's verification run (bats, shfmt, shellcheck, `bash -n`, repository validation, `scripts/check`).
 
 ## Revision Log
 
