@@ -1,7 +1,7 @@
 # Docs State Validator Code Evaluation
 
-Artifact: [Docs State Validator](../slice-plans/docs-state-validator.md)
-Reviewed against: [slice plan](../slice-plans/docs-state-validator.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
+Artifact: [Docs State Validator](../slice-plans/archive/docs-state-validator.md)
+Reviewed against: [slice plan](../slice-plans/archive/docs-state-validator.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
 Commit: a82acb8
 Round: 2
 Verdict: PASS

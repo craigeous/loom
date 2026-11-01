@@ -1,6 +1,6 @@
 # Docs State Validator
 
-Status: Implemented
+Status: Landed
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 05-blind-evaluation.md, 08-playbook.md
 Target size: <= 450 LOC net change (keep this plan document <= 250 lines)
 
@@ -94,8 +94,8 @@ or mutate accepted ADR decisions to make checks pass.
    allowlist live broken links or broad patterns. The acceptance bound is exactly the
    inventoried historical failures, with no unused entries; report the count in the
    implementation evaluation record. Ignore external URLs and literal code.
-6. Under [ADR 0025 reconciliation authority](../ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md)
-   and the explicit request at [improvement plan line 737](../repository-improvement-plan.md#slice-docs-state-validator),
+6. Under [ADR 0025 reconciliation authority](../../ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md)
+   and the explicit request at [improvement plan line 737](../../repository-improvement-plan.md#slice-docs-state-validator),
    repair only the single link in `.docs/ADR/0016-git-native-ref-cas-lock-mechanism.md`
    to `../slice-plans/archive/multi-session-lock-helper-plan.md`. Verify `git diff`
    for that ADR changes only that line; do not alter its accepted decision. Add

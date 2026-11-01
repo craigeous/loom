@@ -17,9 +17,15 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [docs-state-validator.md](docs-state-validator.md) — `Implemented` — mechanical documentation state validation.
+None active.
 
 ## Archived plans
+
+- [archive/docs-state-validator.md](archive/docs-state-validator.md) — `Landed` —
+  M6 slice 2: mechanical documentation state validation in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,
+  enforcing active slice plan uniqueness, documentation lifecycle status transitions with baseline verification,
+  clean owner reset validation, interval-bounded FAIL return evidence, authority reference resolution to applicable files,
+  allowlist staleness enforcement under `--all`, and 13 new comprehensive Bats tests (867 total repository Bats tests passing).
 
 - [archive/loom-doctor-foundation.md](archive/loom-doctor-foundation.md) — `Landed` —
   M6 slice 1: read-only foundation diagnostics helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom`,

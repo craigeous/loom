@@ -16,6 +16,18 @@ source of truth; `roadmap.md` is milestone order.
 
 ## Where things stand
 
+- **M6 slice 2 `docs-state-validator` LANDED on `main` (2026-10-31):**
+  Mechanical documentation state validation in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
+  Enforces active slice plan uniqueness, documentation lifecycle status transitions with baseline verification,
+  clean owner reset validation, interval-bounded FAIL return evidence, authority reference resolution to applicable files,
+  allowlist staleness enforcement under `--all`, and 13 new comprehensive Bats tests (867 total repository Bats tests passing).
+- **M6 slice 1 `loom-doctor-foundation` LANDED on `main` (2026-10-31):**
+  Read-only foundation diagnostics helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom`.
+  Implements read-only diagnostics across host/OS, required tools (Bash >= 3.2, Git >= 2.34, jq >= 1.6), effective Git author
+  identity (`git var GIT_AUTHOR_IDENT`), repository root discovery, `.docs` layout, init modes, coordination state, and
+  protocol assets (39 Bats tests, 833 total repository Bats tests passing).
+- **Milestone M5 Complete (`evaluation-output-recorder`, `evaluation-gate-runner`, `sanitized-evaluation-workspace`) (2026-10-31):**
+  Deterministic evaluation output recording, bounded gate rerun execution in isolated copies, and sanitized evaluation workspaces.
 - **M4 slice 4 `local-review-orchestration` LANDED on `main` (2026-10-31) — Milestone M4 COMPLETE:**
   ADR 0021 / ADR 0022 Loom-owned local review orchestration workflow across `loom-run`, `orchestration.md`,
   `review-findings.md`, `code-eval-rubric.md`, and `SKILL.md`. Replaced legacy external slash commands (`/code-review`,

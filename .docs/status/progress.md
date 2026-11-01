@@ -6,7 +6,14 @@ The status source of truth and decision index for building loom.
 
 ## Current state
 
-- **Last action (2026-10-31) — M6 slice 1 (`loom-doctor-foundation`) Landed:**
+- **Last action (2026-10-31) — M6 slice 2 (`docs-state-validator`) Landed:**
+  Landed mechanical documentation state validation in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
+  Enforces active slice plan uniqueness, documentation lifecycle status transitions with baseline verification,
+  clean owner reset validation, interval-bounded FAIL return evidence, authority reference resolution to applicable files,
+  allowlist staleness enforcement under `--all`, and 13 new comprehensive Bats tests (867 total repository Bats tests passing).
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_7d824f09e44d` with Verdict: PASS (Round: 2).
+
+- **Prior action (2026-10-31) — M6 slice 1 (`loom-doctor-foundation`) Landed:**
   Landed read-only foundation diagnostics helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom`.
   Implements read-only diagnostics across host and OS (macOS/Linux), required tools (Bash >= 3.2, Git >= 2.34, jq >= 1.6),
   effective Git author identity (`git var GIT_AUTHOR_IDENT`), repository root discovery and `.docs` layout, init mode
