@@ -10,28 +10,33 @@ Date: 2026-11-01
 ADR [0029](0029-herdr-client-adapter-and-native-app-support.md) and ADR
 [0030](0030-herdr-native-app-hooks.md) treated Herdr as a **plugin host**: a
 `.herdr-plugin/` manifest and marketplace, a `HERDR_PLUGIN_ROOT` installed-root
-binding, and Herdr-installed hooks with an exit-2 wire. Milestone M9 was recorded
-complete on offline fixtures alone.
+binding, and Herdr-installed hooks with an exit-2 wire. Milestone M9 is in progress
+(`roadmap.md`): its three slices landed on offline fixtures only, and `progress.md`
+keeps live Herdr and native-app evidence as outstanding owner-run work.
 
 Two research notes show that framing has no support in the installed product:
 
 - [Extension loading](../research/2026-11-01-herdr-extension-loading.md): the app's
-  extension unit is a "mod" (`~/.config/herdr-app/mods/<name>/main.js`). There is no
-  hook, plugin-install or marketplace API in the app, the CLI or the bundle. A
+  extension unit is a "mod" (`~/.config/herdr-app/mods/<name>/main.js`). The search of
+  the app, the CLI and the bundle found no evidence of a hook, plugin-install or
+  marketplace API (absence of evidence, not proof of absence). A
   `gpui-shell.json` manifest validator exists in the binary, but no loader or install
   path was found (unverified). The `.herdr-plugin/` format loom shipped is not
   evidenced anywhere in the product. The `exit 2` hook wire in ADR 0030 §4 is a
   "provisional default", not an observed contract.
 - [hc runtime reference](../research/2026-11-01-hc-agent-runtime-reference.md): `hc`
   (herdr-core 0.1.16) launches, messages, waits on and reads agent programs in
-  persistent terminals. The desktop app (herdr-app 0.1.11) only displays what `hc`
-  runs.
+  persistent terminals. The desktop app (herdr-app 0.1.11) displays `hc`-run terminals. It
+  can also start programs itself (`herdr-app --skill` documents `tab.new` and
+  `terminal.open`; the note observed an app-started terminal). Loom launching only
+  through `hc` is an owner-selected integration constraint, not a claim about what
+  the app can do.
 
 **Owner decision (binding).** Herdr is its own client, the way Orca is a client
 within loom. Loom is made Herdr-aware. The plugin framing is dropped: loom ships no
 Herdr plugin, marketplace or `.herdr-plugin` manifest as its integration. Herdr is
-driven through `hc`. Loom's hooks stay inside Claude Code (and Codex) and are not
-installed through Herdr.
+driven through `hc`. Loom's hooks stay inside Claude Code and are not
+installed through Herdr. This ADR adds, changes or removes no Codex hook wiring.
 
 **Versions.** `hc` 0.1.16 and herdr-app 0.1.11. The owner's earlier brief, ADR 0029,
 ADR 0030 and `clientFloors.herdr` said 0.1.10; the installed app is 0.1.11
@@ -53,7 +58,7 @@ worktree placement, readiness and wait, not a model, a plugin root or a hook run
 Consequently:
 
 - Claude Code and Codex keep their own installed roots (`claude-plugin-root/v1`,
-  `codex-skill-source/v1`) and their own hook wiring. A role launched under `hc`
+  `codex-skill-source/v1`). Hooks stay inside Claude Code. A role launched under `hc`
   resolves helpers exactly as it does elsewhere. There is no Herdr root.
 - Loom drives only the `hc` CLI. It does not call `herdr-app do`, write
   `~/.config/herdr-app` or `~/.config/herdr-core`, or ship a mod. Read-only
@@ -72,8 +77,8 @@ Consequently:
 | 0029 §5 `loom-resolve-helper herdr`; `loom-launch-role herdr` descriptor-only with ambient model | **Superseded**: see §3. The launch invariants (`delegation: false`, permissions `one-level`, `LOOM_ROLE=<role>`, cold) **survive** and apply to the `hc` path. |
 | 0029 Consequences: thin adapters, portable core, non-delegation, cross-family evaluation, uniform identity | **Survive unchanged.** |
 | 0030 §1 manifest `hooks` field | **Superseded.** |
-| 0030 §2 `HERDR_PLUGIN_ROOT` in the hook dispatcher path | **Superseded**; the Claude/Codex path expressions remain. |
-| 0030 §3 `herdr` hook client selection and three-way mutual exclusion | **Superseded**; two-client fail-closed selection (Claude, Codex) **survives**. |
+| 0030 §2 `HERDR_PLUGIN_ROOT` in the hook dispatcher path | **Superseded**; this ADR makes no other change to the dispatcher path. |
+| 0030 §3 `herdr` hook client selection and three-way mutual exclusion | **Superseded**: the `herdr` selection branch is removed; this ADR makes no other change to hook client selection. |
 | 0030 §4 Herdr `exit 2` wire | **Superseded** (provisional, never observed). |
 | 0030 §5 fixtures as offline, deterministic verification; live evidence is owner-run | **Survives as a principle**: the `hc` path is verified offline with a stub `hc` plus owner-run live probes; offline fixtures alone never establish support (see §7). |
 | The fail-closed rule for ambiguous or invalid client state | **Survives.** |
@@ -131,10 +136,14 @@ reported as degraded, never as completion.
 
 "Only root delegates" is not enforced by `hc` (any process with Bash may call
 `hc run`). The enforcement stays in Claude Code: the role-governance PreToolUse guard
-gains a deny for `hc` mutation verbs (`run`, `send`, `kill`, `rm`, `keys`,
-`interrupt`, `attach`, `file write|edit`, `machine`, `server`, `update`) when
-`LOOM_ROLE` is a non-orchestrator role. Like the git guard this is defense in depth,
-evadable, and not a boundary.
+gains a **deny-by-default `hc` policy**: when `LOOM_ROLE` is a non-orchestrator role,
+every `hc` invocation is refused. There is no allowlist for role sessions; the
+orchestrator is the only caller of `hc`. This covers every verb in the research note's
+table (`run`, `exec`, `send`, `keys`, `interrupt`, `attach`, `kill`, `rm`, `label`,
+`keep`, `put`, `file write|edit`, `machine …`, `server …`, `update`, `connect`, and the
+read verbs), and any verb added by a later `hc` version. Like the git guard this is
+defense in depth, evadable (for example through a shell wrapper or the core socket),
+and not a boundary.
 
 ### 5. Blind-review constraint (hard requirement)
 
@@ -156,8 +165,8 @@ core socket.
 3. **No author terminal in the core.** Before an evaluator starts, every author-role
    terminal for the artifact is `kill`ed **and** `rm`ed, so `hc ls --all` shows none.
 4. **No `hc` in the evaluator's hands.** The evaluator's tool policy and the
-   role-governance guard deny every `hc` verb (read verbs included: `ls`, `get`,
-   `read`, `events`, `attach --observe`) for evaluator roles.
+   role-governance guard deny every `hc` verb (§4 deny-by-default, read verbs included:
+   `ls`, `get`, `read`, `events`, `attach --observe`) for evaluator roles.
 
 Items 1–4 are necessary and **not sufficient**: item 4 is evadable from Bash, and an
 evaluator with a shell under the owner's account can still reach the core socket.
@@ -225,8 +234,12 @@ recorded.
   and a three-way root-selection complexity from the hooks.
 - Blind evaluation stays on its current host until the owner resolves §5; the `hc`
   path cannot weaken ADR 0022 by default.
-- Hooks live only in Claude Code (and Codex). Herdr cannot intercept tool calls, so
-  anything depending on interception already has its home there.
+- Loom's hooks live only in Claude Code. Herdr is shown no hook surface, so anything
+  depending on interception stays there.
+- **Open blocker:** blind review through `hc` is unresolved (§5). Items 1–4 are
+  necessary, not sufficient (`hc <hc from=…>` tags, names, cwd and argv can reveal
+  authorship). No evaluator role runs on `hc` until a follow-up ADR records the
+  owner's choice of isolation or explicit degraded blindness.
 - Follow-on: owner decision on §5; amended specs 07, 08, 10 (drafted in
   `.docs/slice-plans/herdr-hc-spec-amendments.md`); `CLAUDE.md` Map line on the
   hook fixture product ("18-case (3 clients …; 72 fixture files)") and the

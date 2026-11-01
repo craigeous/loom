@@ -43,11 +43,10 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 - [0028 — Landing History Policy](0028-landing-history-policy.md) — `Accepted`; extends ADR 0020: squash on the target with granular slice commits and tracked `.docs/` evidence as a provisional default to test; integration and cleanup by checked-tree equivalence and receipt binding, not slice-head ancestry.
 - [0029 — Herdr Client Adapter and Native App Support](0029-herdr-client-adapter-and-native-app-support.md) — `Accepted`; extends ADR 0018 and ADR 0027: authorizes Herdr as supported client adapter, defining manifest, root binding, matrix, and launch integration.
 - [0030 — Herdr Native App Lifecycle and Event Hooks](0030-herdr-native-app-hooks.md) — `Accepted`; extends ADR 0003, ADR 0013, ADR 0018, and ADR 0029: authorizes Herdr native app lifecycle and event hook contracts, manifest hook discovery, multi-client dispatcher resolution, and provisional block wire envelope.
-- [0031 — Herdr as an hc-Driven Client](0031-herdr-as-an-hc-driven-client.md) — `Plan Review`; supersedes in part ADR 0029 and ADR 0030, extends ADR 0018 and ADR 0027: Herdr is a launch host driven through `hc` (no plugin, marketplace, root binding or Herdr-installed hooks); retires the Herdr files; blind-review requirement blocks `hc` evaluators; M9 reopened.
 
 ## In Review
 
-None.
+- [0031 — Herdr as an hc-Driven Client](0031-herdr-as-an-hc-driven-client.md) — `Plan Review`; supersedes in part ADR 0029 and ADR 0030, extends ADR 0018 and ADR 0027: Herdr is a launch host driven through `hc` (no plugin, marketplace, root binding or Herdr-installed hooks); retires the Herdr files; blind-review requirement blocks `hc` evaluators; M9 reopened.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 

@@ -35,7 +35,7 @@ Add a new section after `## Role launch mapping`:
 +commands. Host adapters are thin and add no policy.
 +
 +Herdr is driven only through the `hc` CLI (herdr-core; observed 0.1.16, with herdr-app
-+0.1.11 as display only). Loom does not call `herdr-app do`, write Herdr config, ship a
++0.1.11, not called by loom). Loom does not call `herdr-app do`, write Herdr config, ship a
 +Herdr manifest, marketplace or mod, or install hooks through Herdr. The mapping is:
 +
 +| Loom input | `hc` form |
@@ -89,6 +89,9 @@ Add a new section after `## Role launch mapping`:
 @@ wire table
 -| Herdr `PreToolUse` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 -| Herdr `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
+@@ conformance gate list (line 221)
+-  and stderr results for all three clients and both supported events;
++  and stderr results for the two remaining clients and both supported events;
 @@ fixtures paragraph
 -`claude`, `codex`, and `herdr`, events `pre-tool-use` and `pre-compact`, and cases
 -`allow`, `block`, and `malformed`: 18 cases and 72 files across three clients.
@@ -102,9 +105,11 @@ Add a new section after `## Role launch mapping`:
 
 Also add, to the role-governance policy text of spec 08 where `LOOM_ROLE` guard rules
 are specified (planner to locate the exact paragraph during revision): "For any
-non-orchestrator `LOOM_ROLE`, `hc` mutation verbs (`run`, `send`, `kill`, `rm`, `keys`,
-`interrupt`, `attach`, `file write|edit`, `machine`, `server`, `update`) are blocked;
-for evaluator roles every `hc` verb is blocked. Defense in depth, not a boundary."
+non-orchestrator `LOOM_ROLE`, every `hc` invocation is refused (deny by default, no
+allowlist; covers `exec`, `label`, `keep`, `put`, `connect` and any later verb as well as
+`run`, `send`, `kill`, `rm`, `keys`, `interrupt`, `attach`, `file`, `machine`, `server`,
+`update`, and the read verbs); only the orchestrator calls `hc`. Defense in depth,
+evadable, not a boundary."
 
 ## Amendment D — `10-packaging.md`
 
@@ -118,7 +123,8 @@ for evaluator roles every `hc` verb is blocked. Defense in depth, not a boundary
 -  absolutely.
 +- **Herdr.** Herdr has no installed root, manifest, marketplace or hook binding. It is a
 +  host driven through `hc` (spec 07 §Host surfaces); roles it launches resolve helpers
-+  through their own client's root above. Hooks run only inside Claude Code and Codex.
++  through their own client's root above. Loom's hooks stay inside Claude Code; Herdr
+  adds no hook binding, and this amendment changes no Codex hook wiring.
 @@ Versioned compatibility and capability mapping (append)
 +The matrix records `hc` as a host with a floor of `0.1.16` (the only observed
 +version) and does not floor herdr-app, which loom does not call. It carries no Herdr
@@ -143,3 +149,5 @@ the `hc` host text; `scripts/check` passes (docs, links, instruction invariants)
 ## Revision Log
 
 - 2026-11-01 — initial draft.
+- 2026-11-01 — Round 1 FAIL fixes: spec 08 line 221 amended; hook text no longer
+  mentions Codex wiring; `hc` guard is deny-by-default; herdr-app wording neutral.
