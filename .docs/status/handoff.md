@@ -5,7 +5,7 @@ Status: Living
 Restart instructions and compact current context. `progress.md` is the status
 source of truth; `roadmap.md` is milestone order.
 
-Current milestone: M6
+Current milestone: M7
 
 ## Start here each session
 

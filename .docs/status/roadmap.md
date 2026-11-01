@@ -5,7 +5,7 @@ Status: Living
 Milestone order for building loom. "What's next and why"; detailed status in
 `progress.md`, restart context in `handoff.md`.
 
-Current milestone: M6
+Current milestone: M7
 
 ## Repository improvement program (2026)
 
@@ -32,9 +32,9 @@ Current milestone: M6
 - [x] **M5 — Make the evaluation trust model accurate** (complete):
   `[x] evaluation-trust-model` (ADR 0022 accepted claim "independent cold-agent evaluation with controlled inputs");
   `[x] sanitized-evaluation-workspace`; `[x] evaluation-gate-runner`; `[x] evaluation-output-recorder`.
-- [ ] **M6 — Turn prose invariants into executable checks** (in progress):
+- [x] **M6 — Turn prose invariants into executable checks** (complete):
   `[x] loom-doctor-foundation`; `[x] docs-state-validator`; `[x] living-doc-shape`.
-- [ ] **M7 — Reconcile packaging and publish a release**:
+- [ ] **M7 — Reconcile packaging and publish a release** (in progress):
   `packaging-conformance`, `readme-refresh`.
 - [ ] **M8 — Control process cost and repository noise**:
   `workflow-benchmark`, `workflow-profiles`, `landing-history-policy`.

@@ -4,7 +4,7 @@ Status: Living
 
 The status source of truth and decision index for building loom.
 
-Current milestone: M6
+Current milestone: M7
 
 ## Action history
 

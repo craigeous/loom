@@ -32,9 +32,9 @@ or human checkpoint you declare.
 
 ## Status
 
-Current milestone: M6
+Current milestone: M7
 
-**Milestones M0 through M5 complete; M6 in progress.**
+**Milestones M0 through M6 complete; M7 in progress.**
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),
   four-cell hosted CI, static Claude Code / Codex packaging contracts, and verified
@@ -48,17 +48,13 @@ Current milestone: M6
 - **M3 — Identity Guards & PreCompact Backstop**: Raw-command identity scanning
   (`git-identity-guard.sh`), post-command verification (`loom-verify-identity`), and
   per-session write-ahead PreCompact backstops (`precompact-write-ahead-backstop.sh`).
-- **M4 — Loom-Owned Local Review Protocol**: Loom-owned 3-finder review protocol
-  (`plugins/loom/bin/loom-review`, ADR 0021) with versioned immutable finders
-  (`review-correctness`, `review-tests`, `review-security`), removing external review
-  tool dependencies.
-- **M5 — Controlled Independent Evaluation**: Sanitized object-derived evaluation
-  workspaces (`plugins/loom/bin/loom-eval-workspace prepare/verify`), bounded isolated
-  gate reruns (`gate-rerun`), and schema-valid verdict recording (`record`, ADR 0022).
-- **M6 — Executable Diagnostics & Invariants (In Progress)**: Foundation diagnostics
-  helper `plugins/loom/bin/loom-doctor` and top-level CLI `plugins/loom/bin/loom` landed
-  with comprehensive host, toolchain, git identity, repository layout, init-mode,
-  and coordination state checks.
+- **M4 — Local Review Orchestration**: Loom-owned review finders, deterministic findings
+  assembly (`loom-review`), and complete local review loop without external plugins.
+- **M5 — Evaluation Trust Model**: Sanitized evaluation workspaces, bounded gate reruns in
+  isolated scratch workspaces, and schema-valid evaluation recording (`loom-eval-workspace`).
+- **M6 — Executable Checks & Living Document Shape**: Foundation diagnostics (`loom doctor`),
+  mechanical documentation state validation (`validate-repository.mjs --all`), and living
+  document shape and milestone synchronization rules.
 
 Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); architecture decisions are in
