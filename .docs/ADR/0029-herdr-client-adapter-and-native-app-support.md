@@ -63,20 +63,6 @@ Herdr uses the `herdr-plugin-root/v1` schema specified in
   with `delegation: false`, permissions `one-level`, `LOOM_ROLE=<role>`, and ambient
   model inheritance.
 
-### 6. Native App Lifecycle and Event Hooks Contract
-
-Herdr loads Loom's shared hook configuration through `plugins/loom/.herdr-plugin/plugin.json`
-declaring `"hooks": "hooks/hooks.json"`. The hook process receives `HERDR_PLUGIN_ROOT` in its
-environment, enabling the three shared hook scripts (`git-identity-guard.sh`,
-`role-governance-guard.sh`, and `precompact-write-ahead-backstop.sh`) to resolve and validate
-the root via `_loom_hook_select_client`.
-
-Herdr uses standard POSIX process execution conventions for tool and compaction lifecycle hooks:
-- Supported events: `PreToolUse` (evaluating `tool_input.command` on tool `Bash`) and `PreCompact`
-  (evaluating `trigger` and `session_id`).
-- Policy allows: exit code `0`, empty stdout and stderr.
-- Policy blocks: exit code `2`, empty stdout, single-line message `<reason>\n` on stderr.
-
 ## Consequences
 
 - Herdr users can run Loom workflows and roles natively within Herdr spaces and tabs.
