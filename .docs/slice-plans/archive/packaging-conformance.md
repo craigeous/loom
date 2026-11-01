@@ -1,6 +1,6 @@
 # Packaging Conformance
 
-Status: Implemented
+Status: Landed
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 10-packaging.md
 Target size: <= 150 LOC net code change, plus standalone assets and bounded metadata/docs edits
 

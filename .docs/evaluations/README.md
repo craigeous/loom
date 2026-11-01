@@ -100,3 +100,4 @@ rewritten when a later decision supersedes their subject.
 - [`living-doc-shape-plan-eval.md`](living-doc-shape-plan-eval.md) — `living-doc-shape` slice-plan evaluation (Round 0: PASS)
 - [`living-doc-shape-eval.md`](living-doc-shape-eval.md) — `living-doc-shape` code evaluation (Round 0: PASS)
 - [`packaging-conformance-plan-eval.md`](packaging-conformance-plan-eval.md) — `packaging-conformance` slice-plan evaluation (Round 0: PASS)
+- [`packaging-conformance-eval.md`](packaging-conformance-eval.md) — `packaging-conformance` code evaluation (Round 0: PASS)

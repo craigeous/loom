@@ -17,9 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [packaging-conformance.md](packaging-conformance.md) — `Implemented` — M7 packaging, versioning, and documentation conformance.
+None active.
 
 ## Archived plans
+
+- [archive/packaging-conformance.md](archive/packaging-conformance.md) — `Landed` —
+  M7 slice 1: packaging, versioning, and repository conformance checks in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,
+  enforcing MIT license canonical text with 'Copyright (c) 2026 Craig Pfeiffer', CHANGELOG.md version [0.2.0] heading and release item requirement,
+  CommonMark code-fence delimiter char and length matching, README supported platforms and prerequisites documentation, and 11 packaging Bats tests (886 total repository Bats tests passing).
 
 - [archive/living-doc-shape.md](archive/living-doc-shape.md) — `Landed` —
   M6 slice 3: living document shape and ownership rules in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,

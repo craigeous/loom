@@ -35,7 +35,7 @@ Current milestone: M7
 - [x] **M6 — Turn prose invariants into executable checks** (complete):
   `[x] loom-doctor-foundation`; `[x] docs-state-validator`; `[x] living-doc-shape`.
 - [ ] **M7 — Reconcile packaging and publish a release** (in progress):
-  `packaging-conformance`, `readme-refresh`.
+  `[x] packaging-conformance`; `[ ] readme-refresh`.
 - [ ] **M8 — Control process cost and repository noise**:
   `workflow-benchmark`, `workflow-profiles`, `landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration**:

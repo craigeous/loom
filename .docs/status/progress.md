@@ -8,6 +8,7 @@ Current milestone: M7
 
 ## Action history
 
+- 2026-10-31 — M7 slice 1 `packaging-conformance` landed.
 - 2026-10-31 — M6 completed with `living-doc-shape` landed.
 - 2026-10-31 — M6 `docs-state-validator` landed (see Current state for detail).
 - 2026-10-31 — M6 `loom-doctor-foundation` landed (see Current state for detail).
@@ -16,7 +17,13 @@ Current milestone: M7
 
 ## Current state
 
-- **Last action (2026-10-31) — M6 slice 3 (`living-doc-shape`) Landed (Milestone M6 Complete):**
+- **Last action (2026-10-31) — M7 slice 1 (`packaging-conformance`) Landed:**
+  Landed packaging, versioning, and repository conformance checks in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
+  Enforces MIT license canonical text with 'Copyright (c) 2026 Craig Pfeiffer', CHANGELOG.md version [0.2.0] heading and release item requirement,
+  CommonMark code-fence delimiter char and length matching, and README supported platforms and prerequisites documentation.
+  Added 11 new Bats tests (886 total repository Bats tests passing). Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_f98dae490f9f` with Verdict: PASS (Round: 0). Milestone M7 is now in progress.
+
+- **Prior action (2026-10-31) — M6 slice 3 (`living-doc-shape`) Landed (Milestone M6 Complete):**
   Landed living document shape and ownership rules in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
   Enforces line budget (<= 150 lines) on `handoff.md`, required living doc headings uniqueness, `## Action history` with standard dated entries in `progress.md`,
   roadmap milestone structure, and synchronized `Current milestone: M6` markers across `README.md`, `handoff.md`, `progress.md`, and `roadmap.md`.

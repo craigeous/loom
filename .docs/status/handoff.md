@@ -20,6 +20,6 @@ Current milestone: M7
 
 ## Where things stand
 
-- **Current state:** Milestone M6 COMPLETE (`loom-doctor-foundation`, `docs-state-validator`, `living-doc-shape` all landed).
-- **Next action:** Advance to Milestone M7 (`packaging-conformance`).
+- **Current state:** Milestone M7 in progress (`packaging-conformance` landed).
+- **Next action:** Advance to Milestone M7 Slice 2 (`readme-refresh`).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.
