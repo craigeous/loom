@@ -32,17 +32,17 @@ protection against local tampering.
 
 ## Files to touch
 
-- `.docs/ADR/0026-landing-history-policy.md` — proposed decision and consequences.
-- `.docs/ADR/README.md` — register ADR 0026 with its lifecycle status.
-- `.docs/spec/00-overview.md` — add ADR 0026 to authority and clarify that the
+- `.docs/ADR/0028-landing-history-policy.md` — proposed decision and consequences.
+- `.docs/ADR/README.md` — register ADR 0028 with its lifecycle status.
+- `.docs/spec/00-overview.md` — add ADR 0028 to authority and clarify that the
   non-goal permits a provisional default to test while prohibiting a frozen choice
   before benchmark evidence.
-- `.docs/spec/04-orchestrator.md` — add ADR 0026 to authority and specify the
+- `.docs/spec/04-orchestrator.md` — add ADR 0028 to authority and specify the
   provisional landing history contract.
 
 ## Steps
 
-1. Draft ADR 0026 at `Status: Plan Review`, register it in the ADR index, and compare
+1. Draft ADR 0028 at `Status: Plan Review`, register it in the ADR index, and compare
    granular target commits, squash, and retained refs in Context, including audit,
    noise, and operational costs. Propose squash as a default to test after the M8
    harness, not as a settled benchmark conclusion. Preserve tracked plan,
@@ -83,7 +83,7 @@ protection against local tampering.
 - The authored ADR and spec 04 must each use the exact phrases below in affirmative
   contract prose. Each command must return at least one match (exit 0):
   ```sh
-  for f in .docs/ADR/0026-landing-history-policy.md .docs/spec/04-orchestrator.md; do
+  for f in .docs/ADR/0028-landing-history-policy.md .docs/spec/04-orchestrator.md; do
     rg -i 'provisional default to test' "$f"
     rg -i 'sole parent' "$f"
     rg -i 'tracked evidence' "$f"
@@ -92,7 +92,7 @@ protection against local tampering.
     rg -i 'tree equivalence' "$f"
   done
   rg -i 'benchmark evidence' .docs/spec/00-overview.md
-  rg '0026-landing-history-policy' .docs/ADR/README.md .docs/spec/00-overview.md .docs/spec/04-orchestrator.md
+  rg '0028-landing-history-policy' .docs/ADR/README.md .docs/spec/00-overview.md .docs/spec/04-orchestrator.md
   rg 'remote-direct' .docs/spec/04-orchestrator.md
   rg 'pr-per-slice' .docs/spec/04-orchestrator.md
   rg 'merge-queue' .docs/spec/04-orchestrator.md
@@ -100,7 +100,7 @@ protection against local tampering.
 - Check added lines only for forbidden command or attribution text; the following
   must produce no matches (exit 1), with any other error treated as failure:
   ```sh
-  git diff --unified=0 -- .docs/ADR/0026-landing-history-policy.md .docs/ADR/README.md .docs/spec/00-overview.md .docs/spec/04-orchestrator.md |
+  git diff --unified=0 -- .docs/ADR/0028-landing-history-policy.md .docs/ADR/README.md .docs/spec/00-overview.md .docs/spec/04-orchestrator.md |
     rg '^\+[^+]' | rg -i -- '--force|co-authored-by|^(\+)(researcher|planner|developer|plan evaluator|code evaluator):'
   ```
   Include the new ADR in this diff by staging it first. Inspect matches for the
@@ -108,9 +108,8 @@ protection against local tampering.
 
 ## Notes
 
-ADR number 0026 is already assigned to `.docs/ADR/0026-docs-governance-plugin-prompt-doc-scope.md`.
-Resolve the numbering collision with the orchestrator before drafting the decision;
-this plan retains the requested paths pending that resolution.
+ADR numbers 0026 and 0027 are already assigned in `.docs/ADR/`. ADR 0028 is the
+assigned sequence number for this landing history policy decision.
 
 ## Revision Log
 
