@@ -32,10 +32,9 @@ or human checkpoint you declare.
 
 ## Status
 
-Current milestone: M7
+Current milestone: M8
 
-**Milestones M0 through M6 complete; M7 in progress.** M7's packaging-conformance
-slice is complete; the `readme-refresh` slice (this README) is in progress.
+**Milestones M0 through M7 complete; M8 in progress.**
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),
   four-cell hosted CI, static Claude Code / Codex packaging contracts, and verified
@@ -56,6 +55,9 @@ slice is complete; the `readme-refresh` slice (this README) is in progress.
 - **M6 — Executable Checks & Living Document Shape**: Foundation diagnostics (`loom doctor`),
   mechanical documentation state validation (`validate-repository.mjs --all`), and living
   document shape and milestone synchronization rules.
+- **M7 — Packaging Conformance & README Refresh**: Canonical MIT license, version [0.2.0] CHANGELOG,
+  CommonMark code fence tracking, supported platforms/prerequisites, multi-client installation/upgrade
+  guides, end-to-end example, tier expectations table, and 886 Bats tests snapshot.
 
 Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); architecture decisions are in

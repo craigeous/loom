@@ -4,10 +4,11 @@ Status: Living
 
 The status source of truth and decision index for building loom.
 
-Current milestone: M7
+Current milestone: M8
 
 ## Action history
 
+- 2026-10-31 — M7 completed with `readme-refresh` landed.
 - 2026-10-31 — M7 slice 1 `packaging-conformance` landed.
 - 2026-10-31 — M6 completed with `living-doc-shape` landed.
 - 2026-10-31 — M6 `docs-state-validator` landed (see Current state for detail).
@@ -17,7 +18,12 @@ Current milestone: M7
 
 ## Current state
 
-- **Last action (2026-10-31) — M7 slice 1 (`packaging-conformance`) Landed:**
+- **Last action (2026-10-31) — M7 slice 2 (`readme-refresh`) Landed (Milestone M7 Complete):**
+  Landed README refresh for multi-client installation and upgrade across Claude Code, Codex CLI, and Antigravity,
+  an end-to-end usage walkthrough, managed repository artifacts guide, role tier expectations table, and snapshot test count updates (886 total repository Bats tests passing).
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_f98dae490f9f` with Verdict: PASS (Round: 0). Milestone M7 is now complete; advancing to M8.
+
+- **Prior action (2026-10-31) — M7 slice 1 (`packaging-conformance`) Landed:**
   Landed packaging, versioning, and repository conformance checks in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
   Enforces MIT license canonical text with 'Copyright (c) 2026 Craig Pfeiffer', CHANGELOG.md version [0.2.0] heading and release item requirement,
   CommonMark code-fence delimiter char and length matching, and README supported platforms and prerequisites documentation.

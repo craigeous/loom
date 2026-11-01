@@ -1,6 +1,6 @@
 # README Refresh
 
-Status: Implemented
+Status: Landed
 Target specs: 00-overview.md, 10-packaging.md
 Target size: <= 120 LOC net change (keep this plan <= 200 lines)
 
@@ -11,7 +11,7 @@ Loom. The current README describes M0–M6 and prerequisites, but omits practica
 upgrade and non-Claude setup guidance, a complete example, managed-project
 artifacts, and time/cost expectations; it still says 833 tests. The requirements
 are in `.docs/repository-improvement-plan.md` (slice `readme-refresh`); specs
-[00](../spec/00-overview.md) and [10](../spec/10-packaging.md) govern claims.
+[00](../../spec/00-overview.md) and [10](../../spec/10-packaging.md) govern claims.
 
 ## Out of Scope & Threat-Model Boundary
 

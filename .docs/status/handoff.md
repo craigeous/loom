@@ -5,7 +5,7 @@ Status: Living
 Restart instructions and compact current context. `progress.md` is the status
 source of truth; `roadmap.md` is milestone order.
 
-Current milestone: M7
+Current milestone: M8
 
 ## Start here each session
 
@@ -20,6 +20,6 @@ Current milestone: M7
 
 ## Where things stand
 
-- **Current state:** Milestone M7 in progress (`packaging-conformance` landed).
-- **Next action:** Advance to Milestone M7 Slice 2 (`readme-refresh`).
+- **Current state:** Milestone M7 COMPLETE; Milestone M8 in progress.
+- **Next action:** Advance to Milestone M8 Slice 1 (`workflow-benchmark`).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

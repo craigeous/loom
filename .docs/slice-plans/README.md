@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [readme-refresh.md](readme-refresh.md) — `Implemented` — M7 slice 2: refresh the README for installation, usage, and accurate project status.
+None active.
 
 ## Archived plans
+
+- [archive/readme-refresh.md](archive/readme-refresh.md) — `Landed` —
+  M7 slice 2: README refresh for installation and upgrade across Claude Code, Codex CLI, and Antigravity, end-to-end example, managed repository artifacts, role tier expectations table, and snapshot test count updates (886 total repository Bats tests passing).
 
 - [archive/packaging-conformance.md](archive/packaging-conformance.md) — `Landed` —
   M7 slice 1: packaging, versioning, and repository conformance checks in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,
