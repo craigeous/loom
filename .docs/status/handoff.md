@@ -20,6 +20,6 @@ Current milestone: M9
 
 ## Where things stand
 
-- **Current state:** Milestone M9 Slice 2 (`herdr-native-app-hooks`) Landed; 936 Bats tests passing.
-- **Next action:** Advance to Milestone M9 Slice 3 (`herdr-verification`).
+- **Current state:** Milestone M9 slices 1–3 (`herdr-client-adapter`, `herdr-native-app-hooks`, `herdr-verification`) Landed; 952 Bats tests passing. Verification is offline fixtures only.
+- **Next action:** Owner decision: run live Herdr/native-app evidence to close M9 (no further planned slice), or plan a follow-up slice via planner. No slice is active.
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

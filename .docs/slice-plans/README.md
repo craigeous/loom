@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-verification.md](herdr-verification.md) — `Ready to Publish` — M9 slice 3: offline Herdr installation, role, and hook verification.
+None.
 
 ## Archived plans
+
+- [archive/herdr-verification.md](archive/herdr-verification.md) — `Landed` —
+  M9 slice 3: offline Herdr installation, role launch, and hook verification (`scripts/tests/herdr-verification.bats`, 16 tests; 952 total repository Bats tests passing).
 
 - [archive/herdr-native-app-hooks.md](archive/herdr-native-app-hooks.md) — `Landed` —
   M9 slice 2: Herdr hook root selection, wire fixtures, and execution coverage (manifest hooks field, validator coverage, three-client root detection with fail-closed mutual exclusion, exit 2 provisional block wire, 24 new wire fixtures across Claude, Codex, Herdr, and 936 total repository Bats tests passing).
