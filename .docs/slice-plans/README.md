@@ -17,7 +17,8 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None active.
+- [workflow-benchmark.md](workflow-benchmark.md) — `Plan Review` —
+  M8 slice 1: benchmark harness and paired measurement protocol for Loom and a single-agent baseline.
 
 ## Archived plans
 
