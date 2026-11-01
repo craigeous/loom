@@ -1,6 +1,6 @@
 # Living Document Shape
 
-Status: Plan Review
+Status: Approved
 Target specs: 03-artifact-lifecycle.md, 08-playbook.md
 Target size: <= 250 LOC net change (keep this plan document <= 250 lines)
 

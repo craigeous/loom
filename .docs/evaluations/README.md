@@ -97,3 +97,4 @@ rewritten when a later decision supersedes their subject.
 - [`loom-doctor-foundation-review-findings.md`](loom-doctor-foundation-review-findings.md) — `loom-doctor-foundation` local review findings (adjudicated)
 - [`docs-state-validator-plan-eval.md`](docs-state-validator-plan-eval.md) — `docs-state-validator` slice-plan evaluation (Round 0: PASS)
 - [`docs-state-validator-eval.md`](docs-state-validator-eval.md) — `docs-state-validator` code evaluation (Round 2: PASS)
+- [`living-doc-shape-plan-eval.md`](living-doc-shape-plan-eval.md) — `living-doc-shape` slice-plan evaluation (Round 0: PASS)
