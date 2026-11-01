@@ -3,17 +3,19 @@
 Artifact: [Living Document Shape](../slice-plans/living-doc-shape.md)
 Reviewed against: [slice plan](../slice-plans/living-doc-shape.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
 Round: 0
-Commit: 02b7d73
-Verdict: FAIL
+Commit: d04a52f
+Verdict: PASS
 
 ## Summary
 
-The diff adds the milestone markers, line cap, action-history checks, roadmap checks, and focused fixture coverage; the required gate passed. The heading uniqueness requirement and handoff ownership boundary remain unmet. The constrained input did not include the advisory review-findings artifact, so its findings could not be adjudicated here.
+The re-review is limited to the two Round 0 MAJOR findings and the mandatory gate. Both findings are resolved by the revision diff, and the gate passed. The constrained input did not include the advisory review-findings artifact, so its findings could not be adjudicated here.
 
 ## Findings
 
-- [MAJOR] `scripts/validate-repository.mjs:885` uses `requireHeading`, which only checks whether any matching heading exists. The new calls at lines 861, 866, and 873 therefore accept duplicate required handoff, progress, and roadmap headings, although plan step 4 explicitly requires duplicate headings to fail closed. The tests at `scripts/tests/repository-validation.bats:2413` cover missing headings but not duplicates. Count the required headings using the Markdown parser and reject duplicates, with path-specific regression cases.
-- [MAJOR] `.docs/status/handoff.md:21` retains detailed landing summaries for both completed M6 slices, and line 36 retains a separate notes section. Plan step 1 requires only actionable restart instructions, current state, blockers, and next action under the two specified headings, with obsolete summaries moved without loss into the archive. Move the historical summaries to the archive and place any still-actionable restart instructions under the specified headings.
+No outstanding findings in the permitted re-review scope.
+
+- Resolved: `requireHeading` now counts matching parsed headings and rejects duplicates in living documents; the added regression case checks both handoff headings, progress, and roadmap with path-specific diagnostics.
+- Resolved: the detailed M6 landing summaries and former notes were moved to the handoff archive; the handoff retains concise current state and actionable instructions under its two required headings.
 
 ## Gate
 
@@ -37,9 +39,9 @@ Repository metadata validation passed
 ==> Bash syntax
 
 ==> Bats tests
-Discovered 874 Bats tests
+Discovered 875 Bats tests
 Selected Bash: /opt/homebrew/Cellar/bash/5.3.9/bin/bash (5.3.9(1)-release)
-1..874
+1..875
 bats-process BASH_VERSION=5.3.9(1)-release
 executable-child BASH_VERSION=5.3.9(1)-release
 ok 1 Bats and an env-bash executable child use the selected Bash
@@ -914,8 +916,9 @@ ok 869 docs state: handoff passes at 150 lines and fails at 151, with or without
 ok 870 docs state: missing living documents fail naming the path
 ok 871 docs state: milestone markers must be single, well formed and matching in all four documents
 ok 872 docs state: handoff, progress and roadmap required headings are enforced
-ok 873 docs state: action history needs standard dated entries
-ok 874 docs state: roadmap needs exactly one in-progress unchecked milestone matching the marker
+ok 873 docs state: duplicate required living headings fail naming the path
+ok 874 docs state: action history needs standard dated entries
+ok 875 docs state: roadmap needs exactly one in-progress unchecked milestone matching the marker
 
 ==> relative links
 Repository links validation passed
