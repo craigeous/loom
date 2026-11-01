@@ -8,6 +8,7 @@ Current milestone: M9
 
 ## Action history
 
+- 2026-11-01 — M9 slice 2 `herdr-native-app-hooks` landed.
 - 2026-11-01 — M9 slice 1 `herdr-client-adapter` landed.
 - 2026-11-01 — M8 completed with `landing-history-policy` landed.
 - 2026-11-01 — M8 slice 2 `workflow-profiles` landed.
@@ -22,7 +23,10 @@ Current milestone: M9
 
 ## Current state
 
-- **Last action (2026-11-01) — M9 slice 1 (`herdr-client-adapter`) Landed:**
+- **Last action (2026-11-01) — M9 slice 2 (`herdr-native-app-hooks`) Landed:**
+  Landed Herdr native app hooks support: manifest hooks field, validator coverage, three-client root detection with fail-closed mutual exclusion, exit 2 provisional block wire, 24 new wire fixtures (18 cases / 72 files across Claude, Codex, Herdr), and 936 passing Bats tests across the entire repository. Completed local review under `loom-local-review/v1` (`ran-clean`). Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_a734a0e4caf1` with Verdict: PASS (Round: 0). Milestone M9 remains active.
+
+- **Prior action (2026-11-01) — M9 slice 1 (`herdr-client-adapter`) Landed:**
   Landed Herdr client adapter support: manifests (`.herdr-plugin/marketplace.json`, `plugins/loom/.herdr-plugin/plugin.json`),
   root binding `plugins/loom/adapters/roots/herdr-plugin-root-v1.json`, v0.3.0 compatibility matrix updates, `loom-resolve-helper`
   resolution case, `loom-launch-role` launcher descriptors, schema updates, discovery metadata validation in `scripts/validate-repository.mjs`,

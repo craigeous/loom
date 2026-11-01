@@ -39,7 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
-  `[x] herdr-client-adapter`, `[ ] herdr-native-app-hooks`, and `[ ] herdr-verification` (add support
+  `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[ ] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification).
 

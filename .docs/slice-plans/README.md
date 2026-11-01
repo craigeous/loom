@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-native-app-hooks.md](herdr-native-app-hooks.md) — `Landed` — M9 slice 2: Herdr hook root selection, wire fixtures, and execution coverage.
+None active.
 
 ## Archived plans
+
+- [archive/herdr-native-app-hooks.md](archive/herdr-native-app-hooks.md) — `Landed` —
+  M9 slice 2: Herdr hook root selection, wire fixtures, and execution coverage (manifest hooks field, validator coverage, three-client root detection with fail-closed mutual exclusion, exit 2 provisional block wire, 24 new wire fixtures across Claude, Codex, Herdr, and 936 total repository Bats tests passing).
 
 - [archive/herdr-client-adapter.md](archive/herdr-client-adapter.md) — `Landed` —
   M9 slice 1: client adapter contract and implementation for Herdr (`.herdr-plugin/marketplace.json`, `plugins/loom/.herdr-plugin/plugin.json`, `plugins/loom/adapters/roots/herdr-plugin-root-v1.json`, v0.3.0 compatibility matrix, resolver and role-launcher support, schemas, and 140 targeted Bats tests; 923 total repository Bats tests passing).
