@@ -10,6 +10,10 @@ Verdict: PASS
 
 Re-reviewed `git diff af36a6f..1f43ba7` under the non-expansion rule. The prior MAJOR finding is resolved: the validator records the opening fence character and length and only closes on the same character with at least that length and no trailing content. The regression tests exercise mismatched characters, a shorter closing marker, and matching and longer closing markers, including fenced list items and headings. The mandatory gate rerun passed, including all 886 Bats tests.
 
+## Findings
+
+None. The Round 0 MAJOR finding was resolved by the fence-matching remediation and regression tests in commit 1f43ba7.
+
 ## Gate
 
 `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` — exit 0:
