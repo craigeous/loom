@@ -1,6 +1,6 @@
 # Landing History Policy
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 200 LOC net code/doc changes (plan <= 250 lines)
 
@@ -105,6 +105,17 @@ protection against local tampering.
   ```
   Include the new ADR in this diff by staging it first. Inspect matches for the
   positive checks in context for semantics; cold evaluation assesses consistency.
+
+### Verification evidence (2026-11-01)
+
+- ADR 0028, ADR index, spec 00, and spec 04 authored per the steps above.
+- Positive `rg` checks: all six phrases match in both the ADR and spec 04;
+  `benchmark evidence` matches in spec 00; ADR 0028 is linked from the ADR index,
+  spec 00, and spec 04; `remote-direct`, `pr-per-slice`, `merge-queue` match in spec 04.
+- Negative check on staged added lines (`--force`, `co-authored-by`, role-prefixed
+  lines): no matches (exit 1).
+- `node scripts/validate-repository.mjs --root . --all`: passed.
+- `scripts/check`: passed ("All checks passed").
 
 ## Notes
 

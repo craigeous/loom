@@ -9,7 +9,8 @@ ADRs [0001](../ADR/0001-plugin-architecture-and-orchestrator.md),
 [0012](../ADR/0012-thin-orchestrator-sonnet-default-bounded-return.md) through
 [0018](../ADR/0018-shared-core-and-client-adapters.md), and
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md) through
-[0025](../ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md).
+[0025](../ADR/0025-reconciliation-authority-plugin-root-no-bypass-landing.md), and
+[0028](../ADR/0028-landing-history-policy.md).
 
 ## Identity and adapter boundary
 
@@ -438,6 +439,37 @@ helper/protocol/product versions, and publication/verification outcome.
 A successful command response is not proof. `Landed` exists only after remote
 verification and a matching receipt. Local `main` may be fast-forwarded afterward when
 clean; failure to do so has no lifecycle effect. Loom never force-pushes.
+
+### Provisional landing history contract
+
+Per ADR [0028](../ADR/0028-landing-history-policy.md), squash is a
+provisional default to test, not a frozen choice; it is subject to reassessment on
+benchmark evidence.
+
+- The candidate is one commit whose sole parent is the freshly fetched target base.
+  It contains the integrated slice, deterministic finalization, and tracked evidence,
+  with an author-neutral message. Tracked evidence cannot reproduce every
+  intermediate commit; retained audit refs are optional.
+- The gate and affected reviews check the exact candidate tree and the
+  candidate/result SHA. Target movement rebuilds the candidate and reruns affected
+  checks.
+- Non-force publication, fresh independent remote verification, receipt binding
+  (slice head, bases, candidate and result), claim recovery, configured identity, and
+  the `Landed` rule are unchanged.
+- The slice head is not an ancestor of the result. Integration and idempotent cleanup
+  are proven by the receipt-bound slice head and verified checked-tree equivalence
+  (tree equivalence), never by slice-head ancestry; if proof is unavailable, fail
+  closed.
+
+| Mode | Conformance to the contract |
+|---|---|
+| `remote-direct` | publishes the checked candidate directly |
+| `pr-per-slice` | conforms only if the provider result proves the same sole-parent commit and checked tree, with receipt binding |
+| `merge-queue` | conforms only if the queue result proves the same sole-parent commit and checked tree, with receipt binding |
+
+A provider-created squash with a different SHA or base requires a rebuilt and
+rechecked candidate. A mode that cannot prove the contract fails closed without
+switching modes.
 
 ## Human checkpoints and recovery
 

@@ -7,7 +7,8 @@ Status: Approved
 ADRs [0001](../ADR/0001-plugin-architecture-and-orchestrator.md) through
 [0017](../ADR/0017-infrastructure-blocked-escalation.md), as superseded or extended
 by accepted ADRs [0018](../ADR/0018-shared-core-and-client-adapters.md) through
-[0022](../ADR/0022-controlled-input-independent-evaluation.md).
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), and
+[0028](../ADR/0028-landing-history-policy.md).
 
 ## What Loom is
 
@@ -78,7 +79,8 @@ cannot delegate, cannot edit product code, and cannot decide PASS/FAIL.
 - Cross-clone claim exclusion without a configured remote-claim or provider-queue
   adapter. Remote publication CAS prevents overwrite, not duplicated work.
 - A frozen workflow-profile policy or target-branch squash/granular-history choice
-  before benchmark evidence exists.
+  before benchmark evidence exists. This permits a provisional default to test (ADR
+  0028) while prohibiting a frozen choice before benchmark evidence exists.
 - Replacing owner judgment over intent, scope, claimed approval gates, or escalation.
 
 ## Glossary
