@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None active.
+- [readme-refresh.md](readme-refresh.md) — `Plan Review` — M7 slice 2: refresh the README for installation, usage, and accurate project status.
 
 ## Archived plans
 
