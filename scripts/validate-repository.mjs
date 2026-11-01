@@ -244,7 +244,9 @@ const CLIENT_VISIBLE_CLAIM_SURFACES = [
   ".claude-plugin/marketplace.json",
   ".agents/plugins/marketplace.json",
   "plugins/loom/.claude-plugin/plugin.json",
-  "plugins/loom/.codex-plugin/plugin.json"
+  "plugins/loom/.codex-plugin/plugin.json",
+  ".herdr-plugin/marketplace.json",
+  "plugins/loom/.herdr-plugin/plugin.json"
 ];
 const RELEASE_METADATA_FIXTURE_ROOT = "plugins/loom/adapters/fixtures/v0.2.0/metadata/";
 const PROHIBITED_EVALUATION_CLAIM = /\b(?:self-favoring\s+is\s+impossible|blind(?:-reviewed)?(?:\s+evaluation)?|impartial(?:ity)?(?:\s+by\s+construction)?|anonymous(?:ly)?(?:\s+evaluator)?|impossible)\b/giu;
@@ -321,6 +323,37 @@ function validateThinAdapters() {
   return valid;
 }
 
+function validateHerdrMetadata(fail) {
+  const checks = [
+    ["plugins/loom/.herdr-plugin/plugin.json", {
+      name: (v) => v === "loom",
+      version: (v) => v === "0.2.0",
+      description: (v) => typeof v === "string" && v.length > 0,
+      main: (v) => v === undefined || v === "bin/loom-doctor"
+    }],
+    [".herdr-plugin/marketplace.json", {
+      name: (v) => v === "loom",
+      version: (v) => v === "0.2.0",
+      source: (v) => v === "./plugins/loom"
+    }]
+  ];
+  for (const [relative, fields] of checks) {
+    const value = readJson(relative);
+    if (value === JSON_READ_FAILURE) { fail(); continue; }
+    if (!isObject(value)) {
+      report(relative, `invalid Herdr metadata: expected object, got ${jsonType(value)}`);
+      fail();
+      continue;
+    }
+    for (const [key, ok] of Object.entries(fields)) {
+      if (!ok(value[key])) {
+        report(relative, `invalid Herdr metadata: unexpected '${key}' (${JSON.stringify(value[key])})`);
+        fail();
+      }
+    }
+  }
+}
+
 async function validateMetadata() {
   let structurallyValid = true;
   for (const relative of files.filter((file) => file.endsWith(".json"))) {
@@ -332,6 +365,7 @@ async function validateMetadata() {
   const authorizedCatalogs = new Set([
     ".claude-plugin/marketplace.json",
     ".agents/plugins/marketplace.json",
+    ".herdr-plugin/marketplace.json",
     "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json",
     "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json"
   ]);
@@ -374,6 +408,8 @@ async function validateMetadata() {
     schemaResults.set(target, valid);
     if (!valid) structurallyValid = false;
   }
+
+  validateHerdrMetadata(() => { structurallyValid = false; });
 
   const readme = readText("README.md");
   if (readme !== null) {
