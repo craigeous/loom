@@ -1207,10 +1207,18 @@ function validatePackaging() {
   if (changelog === null) return;
   const lines = changelog.split(/\r?\n/);
   const outsideFence = [];
-  let fenced = false;
+  let fence = null;
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; outsideFence.push(false); continue; }
-    outsideFence.push(!fenced);
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence === null) {
+      if (marker && !(marker[1][0] === "`" && marker[2].includes("`"))) {
+        fence = { char: marker[1][0], length: marker[1].length };
+        outsideFence.push(false);
+      } else outsideFence.push(true);
+      continue;
+    }
+    outsideFence.push(false);
+    if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && marker[2].trim() === "") fence = null;
   }
   const headings = lines.map((line, index) => (outsideFence[index] && line === "## [0.2.0]" ? index : -1)).filter((index) => index >= 0);
   if (headings.length !== 1) { report("CHANGELOG.md", `must contain exactly one '## [0.2.0]' heading (found ${headings.length})`); return; }
