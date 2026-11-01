@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None.
+- [herdr-hc-client.md](herdr-hc-client.md) — `Plan Review` — M9: `hc` host adapter, role-session `hc` deny, Herdr plugin retirement, stub-`hc` tests and one live probe (ADR 0031).
 
 ## Archived plans
 
