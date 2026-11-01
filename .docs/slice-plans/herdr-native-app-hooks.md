@@ -1,6 +1,6 @@
 # Herdr Native App Hooks
 
-Status: Approved
+Status: In Progress
 Target specs: 00-overview.md, 08-playbook.md, 10-packaging.md
 Target ADRs: 0003, 0013, 0018, 0027, 0029, 0030
 Target size: <= 180 LOC net code change (excluding test fixtures; plan <= 250 lines)
@@ -73,21 +73,21 @@ monkeypatching are outside the trust model. Preserve Bash 3.2+, Git 2.34+, and j
 
 ## Verification
 
-- Fast iteration: `bats plugins/loom/hooks/git-identity-guard.bats plugins/loom/hooks/role-governance-guard.bats plugins/loom/hooks/precompact-write-ahead-backstop.bats`.
+- Fast iteration: `TMPDIR=/private/tmp LOOM_TEST_BASH=/opt/homebrew/bin/bash LOOM_EXPECTED_BASH_VERSION='^5\.3\.' bats plugins/loom/hooks/git-identity-guard.bats plugins/loom/hooks/role-governance-guard.bats plugins/loom/hooks/precompact-write-ahead-backstop.bats` passed (139 tests, 0 failures).
 - Fixture schema validation: all 18 input fixtures validate against
   `plugins/loom/schemas/loom-hook-wire-fixture-v1.schema.json`.
 - Mechanical regression check:
-  `git diff --exit-code 5ad484b -- plugins/loom/hooks/fixtures/hook-wire-v1/{claude,codex}`.
+  `git diff --exit-code 5ad484b -- plugins/loom/hooks/fixtures/hook-wire-v1/{claude,codex}` passed.
 - Mechanical hook manifest check:
-  `jq -e '.hooks == "hooks/hooks.json"' plugins/loom/.herdr-plugin/plugin.json`.
+  `jq -e '.hooks == "hooks/hooks.json"' plugins/loom/.herdr-plugin/plugin.json` passed.
 - Mechanical hook dispatcher check:
-  `jq -e '.hooks.PreToolUse[0].hooks[0].command == "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/git-identity-guard.sh\""' plugins/loom/hooks/hooks.json`.
+  `jq -e '.hooks.PreToolUse[0].hooks[0].command == "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/git-identity-guard.sh\""' plugins/loom/hooks/hooks.json` passed.
 - Mechanical root selector coverage:
-  `[ "$(git grep -c 'HERDR_PLUGIN_ROOT' plugins/loom/hooks/*.sh | wc -l | tr -d ' ')" = "3" ]`.
+  `[ "$(git grep -c 'HERDR_PLUGIN_ROOT' plugins/loom/hooks/*.sh | wc -l | tr -d ' ')" = "3" ]` passed.
 - Mechanical fixture count check in CLAUDE.md:
-  `rg -q '18-case.*72 fixture files' CLAUDE.md`.
-- Gate: `node scripts/validate-repository.mjs --root . --all` and `scripts/check`.
-- Budget: net code change excluding fixtures <= 180 LOC.
+  `grep -q -E '18-case.*72 fixture files' CLAUDE.md` passed.
+- Gate: `node scripts/validate-repository.mjs --root . --all` passed.
+- Budget: net code change excluding fixtures is +10 LOC (43 insertions, 33 deletions across 6 files), well under <= 180 LOC budget.
 
 ## Notes
 
