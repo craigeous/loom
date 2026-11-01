@@ -17,10 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [workflow-benchmark.md](workflow-benchmark.md) — `Implemented` —
-  M8 slice 1: benchmark harness and paired measurement protocol for Loom and a single-agent baseline.
+None active.
 
 ## Archived plans
+
+- [archive/workflow-benchmark.md](archive/workflow-benchmark.md) — `Landed` —
+  M8 slice 1: benchmark harness and paired measurement protocol for Loom and a single-agent baseline (`scripts/workflow-benchmark.sh`, `docs/workflow-benchmark.md`, `scripts/tests/workflow-benchmark.bats`, 13 tests, 899 total repository Bats tests passing).
 
 - [archive/readme-refresh.md](archive/readme-refresh.md) — `Landed` —
   M7 slice 2: README refresh for installation and upgrade across Claude Code, Codex CLI, and Antigravity, end-to-end example, managed repository artifacts, role tier expectations table, and snapshot test count updates (886 total repository Bats tests passing).

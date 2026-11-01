@@ -8,6 +8,7 @@ Current milestone: M8
 
 ## Action history
 
+- 2026-11-01 — M8 slice 1 `workflow-benchmark` landed.
 - 2026-10-31 — M7 completed with `readme-refresh` landed.
 - 2026-10-31 — M7 slice 1 `packaging-conformance` landed.
 - 2026-10-31 — M6 completed with `living-doc-shape` landed.
@@ -18,7 +19,14 @@ Current milestone: M8
 
 ## Current state
 
-- **Last action (2026-10-31) — M7 slice 2 (`readme-refresh`) Landed (Milestone M7 Complete):**
+- **Last action (2026-11-01) — M8 slice 1 (`workflow-benchmark`) Landed:**
+  Landed benchmark harness and paired measurement protocol for Loom and single-agent baselines in `scripts/workflow-benchmark.sh`,
+  operator documentation in `docs/workflow-benchmark.md`, and 13 automated tests in `scripts/tests/workflow-benchmark.bats`
+  (899 total repository Bats tests passing). Implemented in Bash 3.2+ with jq 1.6+ (161 lines of code, well under the 250 LOC budget)
+  providing `init`, `validate`, and `summarize` subcommands with strict ISO 8601 calendar round-trip validation. Evaluated blind
+  cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_99a404744d3d` with Verdict: PASS (Round: 0). Milestone M8 is now in progress.
+
+- **Prior action (2026-10-31) — M7 slice 2 (`readme-refresh`) Landed (Milestone M7 Complete):**
   Landed README refresh for multi-client installation and upgrade across Claude Code, Codex CLI, and Antigravity,
   an end-to-end usage walkthrough, managed repository artifacts guide, role tier expectations table, and snapshot test count updates (886 total repository Bats tests passing).
   Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_f98dae490f9f` with Verdict: PASS (Round: 0). Milestone M7 is now complete; advancing to M8.

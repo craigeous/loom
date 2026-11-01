@@ -20,6 +20,6 @@ Current milestone: M8
 
 ## Where things stand
 
-- **Current state:** Milestone M7 COMPLETE; Milestone M8 in progress.
-- **Next action:** Advance to Milestone M8 Slice 1 (`workflow-benchmark`).
+- **Current state:** Milestone M8 in progress (`workflow-benchmark` landed; 899 Bats tests passing).
+- **Next action:** Advance to Milestone M8 Slice 2 (`workflow-profiles`).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.
