@@ -10,8 +10,9 @@ ADRs [0003](../ADR/0003-cold-handoffs-commit-per-handoff.md),
 [0018](../ADR/0018-shared-core-and-client-adapters.md),
 [0019](../ADR/0019-supported-runtime-and-release-contract.md),
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
-[0021](../ADR/0021-loom-owned-local-review-protocol.md), and
-[0022](../ADR/0022-controlled-input-independent-evaluation.md).
+[0021](../ADR/0021-loom-owned-local-review-protocol.md),
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), and
+[0030](../ADR/0030-herdr-native-app-hooks.md).
 
 ## Portable core
 
@@ -120,7 +121,7 @@ best-effort reinterpret it.
 
 ## Hook normalization and output adapters
 
-Hook policy receives a normalized internal event. Both clients' current `PreCompact`
+Hook policy receives a normalized internal event. All three clients' current `PreCompact`
 adapters read `trigger` with the only accepted values `manual` and `auto`; the obsolete
 `compaction_trigger` field is not recognized as current input. Client-only supplemental
 fields may be recorded in adapter fixtures but cannot alter shared state transitions.
@@ -136,6 +137,8 @@ results; `<reason-json>` means that same reason encoded as a JSON string value:
 | Claude `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 | Codex `PreToolUse` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":<reason-json>}}\n` |
 | Codex `PreCompact` | exit 0; empty stdout and stderr | exit 0; stderr empty; stdout `{"continue":false,"stopReason":<reason-json>}\n` |
+| Herdr `PreToolUse` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
+| Herdr `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 
 No adapter may substitute another documented encoding. In particular, Claude does not
 emit block JSON, Codex `PreToolUse` does not use the older top-level
@@ -151,9 +154,10 @@ and validate against
 `plugins/loom/schemas/loom-hook-wire-fixture-v1.schema.json`. The `.stdout` and
 `.stderr` files are exact bytes, including the one required trailing LF for nonempty
 output; `.exit` contains the decimal status plus LF. The only path values are clients
-`claude` and `codex`, events `pre-tool-use` and `pre-compact`, and cases `allow`,
-`block`, and `malformed`. Conformance runs the same policy outcome through both
-adapters and byte-compares all three outputs.
+`claude`, `codex`, and `herdr`, events `pre-tool-use` and `pre-compact`, and cases
+`allow`, `block`, and `malformed`: 18 cases and 72 files across three clients.
+Conformance runs the same policy outcome through all three adapters and byte-compares
+all three outputs.
 
 Identity policy fails closed on recognized mutation tokens and a post-command verifier
 detects any advanced HEAD with wrong author/committer identity. This is defense in

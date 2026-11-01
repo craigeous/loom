@@ -9,8 +9,9 @@ ADRs [0006](../ADR/0006-distribution-self-marketplace.md),
 [0018](../ADR/0018-shared-core-and-client-adapters.md),
 [0019](../ADR/0019-supported-runtime-and-release-contract.md),
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
-[0021](../ADR/0021-loom-owned-local-review-protocol.md), and
-[0022](../ADR/0022-controlled-input-independent-evaluation.md), informed by the
+[0021](../ADR/0021-loom-owned-local-review-protocol.md),
+[0022](../ADR/0022-controlled-input-independent-evaluation.md), and
+[0030](../ADR/0030-herdr-native-app-hooks.md), informed by the
 [approved dual-platform research](../research/2026-07-21-dual-platform-plugin-architecture.md).
 
 ## One distribution, two catalogs
@@ -163,6 +164,9 @@ The matrix binds Claude to `claude-plugin-root/v1`, defined at
 - **Codex hooks.** The manifest uses a root-relative `./hooks/hooks.json`; hook commands
   may use Codex's hook-process-only `PLUGIN_ROOT` to invoke the shared hook dispatcher
   absolutely. That environment binding is not reused by skills or workflow helpers.
+- **Herdr hooks.** The manifest declares root-relative `hooks/hooks.json`; hook commands
+  may use Herdr's hook-process `HERDR_PLUGIN_ROOT` to invoke the shared hook dispatcher
+  absolutely.
 
 There is one physical `bin/`, one set of shared skills, and one helper implementation.
 Adapters may contain only binding metadata/bootstrap logic; copying helpers or workflow
