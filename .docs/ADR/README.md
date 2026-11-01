@@ -41,10 +41,11 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 - [0026 — Broaden `docs-governance/v1` to Cover Plugin Prompt/Documentation Markdown](0026-docs-governance-plugin-prompt-doc-scope.md) — **narrowly supersedes ADR 0025 §B.2's path allowlist only** (everything else in 0025 stands): broadens the `docs-governance/v1` class's path capability to admit non-executable prompt/doc Markdown under `plugins/loom/` (`plugins/loom/**/*.md` — skills/roles/agents/commands/references), preserving all hard exclusions (no `*.sh`/`bin/*`/hooks/`*.bats`/`*.json`/`scripts/**`/behavior). Strengthens the docs code-eval to confirm no behavior/executable change and that `scripts/validate-repository.mjs` passes; self-bootstraps via cold plan-eval + owner acceptance + one §6 successor recording a **capability** amendment (`allowed_slices` UNCHANGED — no new token).
 - [0027 — Ambient Model Inheritance, Model Matrix Modernization, and Dogfood Antigravity Adapter](0027-client-model-matrix-modernization-and-ambient-inheritance.md) — **partially supersedes ADR 0002 and ADR 0018 §3**: authorizes ambient model inheritance as default with optional pinning; role-profile reasoning effort policy; ratifies Antigravity as private dogfood runtime adapter; schedules spec 02/10 amendments.
 - [0028 — Landing History Policy](0028-landing-history-policy.md) — `Accepted`; extends ADR 0020: squash on the target with granular slice commits and tracked `.docs/` evidence as a provisional default to test; integration and cleanup by checked-tree equivalence and receipt binding, not slice-head ancestry.
+- [0029 — Herdr Client Adapter and Native App Support](0029-herdr-client-adapter-and-native-app-support.md) — `Accepted`; extends ADR 0018 and ADR 0027: authorizes Herdr as supported client adapter, defining manifest, root binding, matrix, and launch integration.
 
 ## In Review
 
-- [0029 — Herdr Client Adapter and Native App Support](0029-herdr-client-adapter-and-native-app-support.md) — `Plan Review`: authorizes Herdr as supported client adapter alongside Claude, Codex, and Antigravity, specifying manifest, root binding, matrix, and launch integration.
+None.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 

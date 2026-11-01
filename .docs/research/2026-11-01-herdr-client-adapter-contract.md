@@ -1,6 +1,6 @@
 # Research: Herdr client adapter and execution contract
 
-Status: Research Review
+Status: Approved
 Date: 2026-11-01
 Topic: Herdr desktop application (v0.1.10) architecture, discovery, metadata, installed-root binding, and execution contracts for Loom client adapter support.
 

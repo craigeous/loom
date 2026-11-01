@@ -113,3 +113,7 @@ rewritten when a later decision supersedes their subject.
 - [`landing-history-policy-plan-eval.md`](landing-history-policy-plan-eval.md) — `landing-history-policy` slice-plan evaluation (Round 0: PASS)
 - [`landing-history-policy-review-findings.md`](landing-history-policy-review-findings.md) — `landing-history-policy` automated review findings (`skipped: docs-only`)
 - [`landing-history-policy-eval.md`](landing-history-policy-eval.md) — `landing-history-policy` code evaluation (Round 0: PASS)
+- [`2026-11-01-herdr-client-adapter-contract-eval.md`](2026-11-01-herdr-client-adapter-contract-eval.md) — Herdr contract research evaluation (Round 0: PASS)
+- [`0029-herdr-client-adapter-and-native-app-support-eval.md`](0029-herdr-client-adapter-and-native-app-support-eval.md) — ADR 0029 plan evaluation (Round 0: PASS)
+- [`0029-herdr-client-adapter-and-native-app-support-acceptance.md`](0029-herdr-client-adapter-and-native-app-support-acceptance.md) — ADR 0029 owner acceptance
+- [`herdr-client-adapter-plan-eval.md`](herdr-client-adapter-plan-eval.md) — `herdr-client-adapter` slice-plan evaluation (Round 1: FAIL)

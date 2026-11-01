@@ -1,6 +1,6 @@
 # 0029 — Herdr Client Adapter and Native App Support
 
-Status: Proposed
+Status: Accepted
 Extends: ADR 0018, ADR 0027
 Date: 2026-11-01
 
