@@ -122,3 +122,4 @@ Implemented as planned in `scripts/workflow-benchmark.sh` (161 lines), `docs/wor
 |---|---|
 | 0 | Initial draft |
 | 1 | Use portable Bash/jq, scope the code budget, specify records, paths, stop rules and automated test oracles. |
+| 2 | Address Round 0 code-eval: reject impossible calendar dates via timestamp round-trip with regression test; revert out-of-scope `.docs/slice-plans/README.md` edit. |

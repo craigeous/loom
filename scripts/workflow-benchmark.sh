@@ -54,7 +54,7 @@ RECORD_CHECK='
 def nstr: type == "string" and length > 0;
 def ts: type == "string"
     and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
-    and (try (fromdateiso8601 | true) catch false);
+    and (. as $s | try ($s | fromdateiso8601 | todateiso8601 == $s) catch false);
 def exact($k): type == "object" and ((keys | sort) == ($k | sort));
 def complete: .status == "success" or .status == "failure";
 def checks:

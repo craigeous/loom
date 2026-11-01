@@ -195,6 +195,16 @@ edit_wrong_keys() {
     rejects invalid timestamps
 }
 
+@test "impossible calendar dates are rejected" {
+    "$BENCH" init "$OUT"
+    complete_all
+    edit feature--loom '.timestamps.start = "2026-02-30T12:00:00Z"'
+    rejects invalid timestamps
+    complete_record "$OUT/records/feature--loom.json" 100
+    edit feature--loom '.timestamps.end = "2026-02-30T12:00:00Z"'
+    rejects invalid timestamps
+}
+
 @test "missing provenance, evidence, and unknown reason" {
     "$BENCH" init "$OUT"
     complete_all
