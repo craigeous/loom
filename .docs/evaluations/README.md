@@ -104,3 +104,4 @@ rewritten when a later decision supersedes their subject.
 - [`readme-refresh-plan-eval.md`](readme-refresh-plan-eval.md) — `readme-refresh` slice-plan evaluation (Round 0: PASS)
 - [`readme-refresh-review-findings.md`](readme-refresh-review-findings.md) — `readme-refresh` automated review findings (`skipped: docs-only`)
 - [`readme-refresh-eval.md`](readme-refresh-eval.md) — `readme-refresh` code evaluation (Round 0: PASS)
+- [`workflow-benchmark-plan-eval.md`](workflow-benchmark-plan-eval.md) — `workflow-benchmark` slice-plan evaluation (Round 0: PASS)

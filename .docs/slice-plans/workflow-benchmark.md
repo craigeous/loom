@@ -1,6 +1,6 @@
 # Workflow Benchmark
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 250 LOC net script code; tests and protocol documentation separate
 
