@@ -34,7 +34,8 @@ or human checkpoint you declare.
 
 Current milestone: M7
 
-**Milestones M0 through M6 complete; M7 in progress.**
+**Milestones M0 through M6 complete; M7 in progress.** M7's packaging-conformance
+slice is complete; the `readme-refresh` slice (this README) is in progress.
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),
   four-cell hosted CI, static Claude Code / Codex packaging contracts, and verified
@@ -104,7 +105,7 @@ loom/                                    # this repo = loom core + client bindin
 │   ├── hooks/                           # git-identity-guard.sh, precompact-write-ahead-backstop.sh
 │   ├── schemas/                         # JSON Schemas for manifests, reviews, outputs
 │   └── skills/loom-playbook/            # templates, rubrics, conventions, gates
-├── scripts/check                        # pinned, reproducible local gate (833 Bats tests)
+├── scripts/check                        # pinned, reproducible local gate (886 Bats tests, a snapshot count)
 └── .docs/                               # loom's own design memory (dogfooding)
 ```
 
@@ -134,16 +135,43 @@ loom eval-workspace gate-rerun --manifest <manifest.json>
 loom eval-workspace record --output <eval-output.json>
 ```
 
-## Client Integration
+## Installation & Upgrade
 
-Inside Claude Code, install from local or remote marketplace:
+### Claude Code
 
 ```sh
-/plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local)
+/plugin marketplace add craigeous/loom     # or: /plugin marketplace add ./loom (local checkout)
 /plugin install loom@loom
 ```
 
-Available slash commands:
+To upgrade, refresh the marketplace from the matching checkout or remote and
+reinstall: `/plugin uninstall loom@loom` then `/plugin install loom@loom`.
+Tracked project state under `.docs/` is untouched by upgrades.
+
+### Codex CLI
+
+Run these from a shell, pointing at a local checkout (or the remote repo):
+
+```sh
+codex plugin marketplace add /absolute/path/to/loom
+codex plugin add loom@loom
+```
+
+To upgrade, `codex plugin remove loom@loom` and add it again from the updated
+checkout. Invoke workflows as `$loom-<name>` (for example `$loom-init`,
+`$loom-run`). Syntax follows the checked-in compatibility fixtures
+(`plugins/loom/adapters/fixtures/v0.2.0/dogfood/`); migration and
+unsupported-surface limits are in [spec 10](.docs/spec/10-packaging.md).
+
+### Antigravity (unverified)
+
+Antigravity discovers the repository's `.agents/skills/` adapters (Gemini CLI uses
+`.gemini/skills/`); see [ADR 0027](.docs/ADR/0027-client-model-matrix-modernization-and-ambient-inheritance.md).
+Refresh by updating the checkout so the adapters match the canonical files under
+`plugins/loom/`, which they depend on. This integration is **unverified**: there is
+no public release evidence for it, and it is not release conformance.
+
+Slash commands (Claude Code):
 
 | Command | What it does |
 |---|---|
@@ -157,8 +185,40 @@ Available slash commands:
 | `/loom:status` | print `.docs/` state |
 | `/loom:init` | initialize/align this repo to loom |
 
-Inside Codex CLI and Antigravity, equivalent skills are registered and mapped to
-the same underlying role contracts and helpers.
+## Example
+
+In a Git repository:
+
+```text
+/loom:init                      # classify repo, scaffold .docs/, confirm the gate
+/loom:run add-login-form        # scope = slice "add-login-form"; confirm gate (format → lint → test)
+```
+
+In Codex the same flow is `$loom-init` then `$loom-run add-login-form`. The
+orchestrator asks for scope and gate, then drives planning, independent plan
+evaluation, development, the gate, independent code evaluation, and remote
+publication. Checkpoints and failures can pause the sequence; resume by running
+`/loom:run` (or `$loom-run`) again.
+
+## Artifacts
+
+Tracked, durable project history lives in `.docs/`: `spec/`, `ADR/`, `research/`,
+`slice-plans/`, `evaluations/`, and `status/`, plus generated instruction adapters.
+Transient local coordination state (claims, checkpoints, locks) lives under
+`<git-common-dir>/loom/` (normally `.git/loom/`) and is never committed.
+
+## Expectations
+
+| Tier | Roles | Relative capability and cost |
+|---|---|---|
+| Economy | researcher | smallest/cheapest model |
+| Standard | developer, orchestrator | mid-tier model |
+| Deep review | planner, plan evaluator, code evaluator | strongest model, highest cost |
+
+Models vary by client and are resolved in your environment (ADR 0002, 0027). No
+reliable time or cost estimate is established: elapsed time and tokens depend on the
+slice size, client and model, gate duration, and retries and review rounds, which
+each add time and tokens.
 
 ## Development Check
 
@@ -172,7 +232,7 @@ The check pins shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0, Node 22.17.0,
 Claude Code 2.1.216, Ajv 8.17.1, YAML 2.8.0, markdown-it 14.1.0, and
 github-slugger 2.0.0. Bootstrap prerequisites are `curl` and `tar`; production
 requires Bash 3.2+, Git 2.34+, and jq 1.6+. The exact supported client floors are
-Claude Code 2.1.216 and Codex CLI 0.144.6. Over 833 tests verify end-to-end
+Claude Code 2.1.216 and Codex CLI 0.144.6. Over 886 Bats tests (a snapshot count, not a permanent guarantee) verify end-to-end
 coordination, evaluation workspaces, review finders, identity guards, and role
 routing.
 

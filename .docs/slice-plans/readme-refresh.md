@@ -1,6 +1,6 @@
 # README Refresh
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 10-packaging.md
 Target size: <= 120 LOC net change (keep this plan <= 200 lines)
 
@@ -84,3 +84,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft. |
+| 1 | Implemented; status set to Implemented. |
