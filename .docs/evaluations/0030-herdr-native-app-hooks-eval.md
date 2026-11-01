@@ -1,6 +1,6 @@
-# Evaluation: ADR 0030 spec amendment (spec 08 + spec 10)
+# Evaluation: ADR 0030 Herdr native app hooks and spec amendment (spec 08 + spec 10)
 
-Artifact: .docs/spec/08-playbook.md, .docs/spec/10-packaging.md
+Artifact: .docs/ADR/0030-herdr-native-app-hooks.md
 Reviewed against: plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md
 Commit: 229a10b
 Round: 0
