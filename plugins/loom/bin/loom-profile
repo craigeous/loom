@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# loom-profile — owner-selected workflow profile resolution and recommendation.
+#
+# Usage:
+#   loom-profile resolve REPO [--profile light|standard|strict] [--risk low|normal|high]
+#
+# Precedence: --profile flag > REPO/.loom/profile.json > default (standard).
+# A present REPO/.loom/profile.json is always validated, even when overridden:
+# a regular, non-symlink file holding a JSON object whose only key is "profile"
+# with value light|standard|strict (duplicate keys follow jq last-key-wins).
+# The risk only drives the recommendation; it never changes the selection.
+#
+# Output: {"selected":...,"source":"cli|file|default","recommended":...,"reason":...}
+#
+# Exit codes: 0 success; 1 invalid configuration or other error; 2 usage error.
+set -u
+
+_usage() {
+    printf 'usage: loom-profile resolve REPO [--profile light|standard|strict] [--risk low|normal|high]\n' >&2
+    exit 2
+}
+
+_fail() {
+    printf 'loom-profile: %s\n' "$1" >&2
+    exit 1
+}
+
+_valid_profile() {
+    case "$1" in light | standard | strict) return 0 ;; esac
+    return 1
+}
+
+[ "$#" -ge 2 ] || _usage
+[ "$1" = "resolve" ] || _usage
+repo="$2"
+shift 2
+
+cli_profile=""
+risk=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --profile)
+        [ -z "$cli_profile" ] || _usage
+        [ "$#" -ge 2 ] || _usage
+        cli_profile="$2"
+        _valid_profile "$cli_profile" || _usage
+        shift 2
+        ;;
+    --risk)
+        [ -z "$risk" ] || _usage
+        [ "$#" -ge 2 ] || _usage
+        risk="$2"
+        case "$risk" in low | normal | high) ;; *) _usage ;; esac
+        shift 2
+        ;;
+    *) _usage ;;
+    esac
+done
+
+command -v jq >/dev/null 2>&1 || _fail "jq is required"
+[ -d "$repo" ] || _fail "REPO is not a directory: $repo"
+
+file_profile=""
+cfg="$repo/.loom/profile.json"
+if [ -e "$cfg" ] || [ -L "$cfg" ]; then
+    if ! { [ -f "$cfg" ] && [ ! -L "$cfg" ]; }; then
+        _fail "$cfg must be a regular file, not a symlink or other type"
+    fi
+    file_profile=$(jq -s -r '
+        if length == 1 and (.[0] | type) == "object"
+           and ((.[0] | keys) == ["profile"])
+           and ((.[0].profile | type) == "string")
+           and (.[0].profile | IN("light", "standard", "strict"))
+        then .[0].profile else empty end' "$cfg" 2>/dev/null) || file_profile=""
+    [ -n "$file_profile" ] || _fail "invalid configuration in $cfg: expected {\"profile\": \"light|standard|strict\"}"
+fi
+
+if [ -n "$cli_profile" ]; then
+    selected="$cli_profile"
+    source="cli"
+elif [ -n "$file_profile" ]; then
+    selected="$file_profile"
+    source="file"
+else
+    selected="standard"
+    source="default"
+fi
+
+case "$risk" in
+low) recommended="light" reason="low risk" ;;
+high) recommended="strict" reason="high risk" ;;
+normal) recommended="standard" reason="normal risk" ;;
+*) recommended="standard" reason="risk unspecified" ;;
+esac
+
+jq -n -c --arg s "$selected" --arg src "$source" --arg r "$recommended" --arg why "$reason" \
+    '{selected: $s, source: $src, recommended: $r, reason: $why}'

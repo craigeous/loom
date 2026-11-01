@@ -1,6 +1,6 @@
 # Workflow profiles
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 250 LOC net script/code change; tests and docs separate (plan <= 250 lines)
 
@@ -99,9 +99,17 @@ This plan does not authorize a reduced Light or Standard lifecycle. If actual
 profile-specific omission of required stages is desired, obtain an approved spec
 amendment and revise this plan in place before implementation.
 
+Implementation evidence: added `loom-profile` (executable, Bash 3.2, jq 1.6) and
+`scripts/tests/loom-profile.bats` (12 tests, passing). Added `## Workflow Profiles`
+to `orchestration.md` and `loom-run/SKILL.md`. Packaging: `loom-profile` joined the
+installed-root helper allowlist (resolver, both root bindings, binding schema,
+metadata fixtures, `validate-repository.mjs`) and the pinned digests in
+`scripts/check-toolchain.json` were refreshed for the three changed pinned files.
+
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
 | 1 | Clarified jq behavior, resume state, mechanical documentation oracles, packaging, limits, and stop rules. |
+| 2 | Implemented; evidence recorded in Notes. |

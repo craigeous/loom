@@ -4,7 +4,7 @@
   "$defs": {
     "allowedHelpers": {
       "type": "array",
-      "const": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor"]
+      "const": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"]
     }
   },
   "oneOf": [

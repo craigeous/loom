@@ -244,6 +244,31 @@ At kickoff, confirm with the owner (AskUserQuestion if not already given):
   lands"), or none. Unclaimed gates advance on evaluator approval alone; at a
   claimed gate, pause and show the artifact + verdict before proceeding.
 
+## Workflow Profiles
+
+The owner selects a workflow profile; loom recommends but never chooses. Light
+(developer → gate → code evaluator), Standard (plan → developer → local reviewers →
+evaluator), and Strict (research → plan review → developer → all reviewers →
+evaluator → owner gates) describe intended emphasis only: all required lifecycle
+stages remain mandatory under every profile, including approved plans, all three local
+finders, independent evaluation, gates, and the landing protocol. Relaxing any stage
+needs an approved spec amendment first.
+
+- **Invocation.** At start and at resume run the helper by its resolved absolute
+  installed path: `loom-profile resolve REPO [--profile light|standard|strict]
+  [--risk low|normal|high]`. Precedence is CLI flag over `REPO/.loom/profile.json`
+  over the default (`standard`). The risk is owner-supplied; never infer it.
+- **Show before dispatch.** Show the owner the selected profile, its source, the
+  recommendation and its reason. The owner may explicitly choose a different profile.
+  An invalid configuration stops dispatch (helper exit 1); fix it, do not fall back.
+- **Record.** Keep `profile` (selected value) and `risk` (low, normal, high, or null)
+  in orchestrator run metadata (`.git/loom/session-<id>/checkpoint` or
+  `.git/loom/run.json`) or pass them via orchestrator options. On restart, resume reads
+  the recorded profile and risk; a changed selection needs explicit owner instruction
+  and re-resolution before further dispatch.
+- **Strict** adds advisory human pauses before developer dispatch and publication.
+  These are not spec gates and imply no owner approval; claimed gates are unchanged.
+
 ## Round limit
 
 Count **FAIL cycles** per artifact via the `Round:` line in its single eval file — a

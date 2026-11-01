@@ -532,7 +532,7 @@ function semanticMetadata() {
       inputMustBeAbsolute: true, invocationMustBeAbsolute: true, canonicalizeInput: true,
       canonicalRootRequired: true, manifest: ".claude-plugin/plugin.json", manifestMustBeCanonical: true,
       manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
-      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor"],
+      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
       helperMustBeRegularFile: true, helperMustBeExecutable: true
     },
     {
@@ -541,7 +541,7 @@ function semanticMetadata() {
       skillMustBeRegularFile: true, skillIdentitySource: "frontmatter.name", skillIdentityMustMatchDirectory: true,
       pluginRootAscent: "../..", pluginRootMustBeCanonical: true, ascendToManifest: ".codex-plugin/plugin.json",
       manifestMustBeCanonical: true, manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
-      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor"],
+      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
       helperMustBeRegularFile: true, helperMustBeExecutable: true,
       forbiddenWorkflowRootGuesses: ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"],
       hookBinding: "PLUGIN_ROOT", hookManifest: "./hooks/hooks.json"
