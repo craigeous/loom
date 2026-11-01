@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-verification.md](herdr-verification.md) — `Approved` — M9 slice 3: offline Herdr installation, role, and hook verification.
+- [herdr-verification.md](herdr-verification.md) — `In Progress` — M9 slice 3: offline Herdr installation, role, and hook verification.
 
 ## Archived plans
 
