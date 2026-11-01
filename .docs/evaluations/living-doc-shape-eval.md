@@ -1,17 +1,19 @@
 # Living Document Shape Code Evaluation
 
+Artifact: [Living Document Shape](../slice-plans/living-doc-shape.md)
+Reviewed against: [slice plan](../slice-plans/living-doc-shape.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
 Round: 0
 Commit: 02b7d73
 Verdict: FAIL
+
+## Summary
+
+The diff adds the milestone markers, line cap, action-history checks, roadmap checks, and focused fixture coverage; the required gate passed. The heading uniqueness requirement and handoff ownership boundary remain unmet. The constrained input did not include the advisory review-findings artifact, so its findings could not be adjudicated here.
 
 ## Findings
 
 - [MAJOR] `scripts/validate-repository.mjs:885` uses `requireHeading`, which only checks whether any matching heading exists. The new calls at lines 861, 866, and 873 therefore accept duplicate required handoff, progress, and roadmap headings, although plan step 4 explicitly requires duplicate headings to fail closed. The tests at `scripts/tests/repository-validation.bats:2413` cover missing headings but not duplicates. Count the required headings using the Markdown parser and reject duplicates, with path-specific regression cases.
 - [MAJOR] `.docs/status/handoff.md:21` retains detailed landing summaries for both completed M6 slices, and line 36 retains a separate notes section. Plan step 1 requires only actionable restart instructions, current state, blockers, and next action under the two specified headings, with obsolete summaries moved without loss into the archive. Move the historical summaries to the archive and place any still-actionable restart instructions under the specified headings.
-
-## Assessment
-
-The diff adds the milestone markers, line cap, action-history checks, roadmap checks, and focused fixture coverage; the required gate passed. The heading uniqueness requirement and handoff ownership boundary remain unmet. The constrained input did not include the advisory review-findings artifact, so its findings could not be adjudicated here.
 
 ## Gate
 
