@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [packaging-conformance.md](packaging-conformance.md) — `Approved` — M7 packaging, versioning, and documentation conformance.
+- [packaging-conformance.md](packaging-conformance.md) — `Implemented` — M7 packaging, versioning, and documentation conformance.
 
 ## Archived plans
 

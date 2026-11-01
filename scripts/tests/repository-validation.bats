@@ -60,6 +60,8 @@ populate_metadata_root() {
     cp "$REPOSITORY_ROOT/.claude-plugin/marketplace.json" "$TEST_ROOT/.claude-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/.agents/plugins/marketplace.json" "$TEST_ROOT/.agents/plugins/marketplace.json"
     cp "$REPOSITORY_ROOT/README.md" "$TEST_ROOT/README.md"
+    cp "$REPOSITORY_ROOT/LICENSE" "$TEST_ROOT/LICENSE"
+    printf '# Changelog\n\n## [0.2.0]\n\n- Fixture change.\n' >"$TEST_ROOT/CHANGELOG.md"
     cp -R "$REPOSITORY_ROOT/scripts/schemas" "$TEST_ROOT/scripts/schemas"
     mkdir -p "$TEST_ROOT/scripts/validation"
     cp "$REPOSITORY_ROOT/scripts/validation/relative-link-allowlist.txt" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
@@ -1603,6 +1605,80 @@ run_signal_case() {
     [ ! -e "$marker" ]
 }
 
+# ---- packaging validation (--all) ----
+
+packaging_all() {
+    docs_all
+}
+
+@test "packaging: conforming LICENSE and CHANGELOG pass" {
+    make_docs_root
+    packaging_all
+    [ "$status" -eq 0 ]
+}
+
+@test "packaging: missing LICENSE and CHANGELOG are reported" {
+    make_docs_root
+    rm "$TEST_ROOT/LICENSE"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"LICENSE:"* ]]
+    cp "$REPOSITORY_ROOT/LICENSE" "$TEST_ROOT/LICENSE"
+    printf "# Changelog\n\n## [0.2.0]\n\n- Fixture change.\n" >"$TEST_ROOT/CHANGELOG.md"
+    rm "$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"CHANGELOG.md:"* ]]
+}
+
+@test "packaging: altered MIT text or copyright is reported" {
+    make_docs_root
+    sed -i.bak 's/Craig Pfeiffer/Someone Else/' "$TEST_ROOT/LICENSE"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"LICENSE: must exactly match"* ]]
+    cp "$REPOSITORY_ROOT/LICENSE" "$TEST_ROOT/LICENSE"
+    printf "# Changelog\n\n## [0.2.0]\n\n- Fixture change.\n" >"$TEST_ROOT/CHANGELOG.md"
+    sed -i.bak 's/WITHOUT WARRANTY/WITH WARRANTY/' "$TEST_ROOT/LICENSE"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"LICENSE: must exactly match"* ]]
+}
+
+@test "packaging: absent or duplicate version heading is reported" {
+    make_docs_root
+    printf '# Changelog\n\n## [0.1.0]\n\n- Old.\n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"CHANGELOG.md: must contain exactly one '## [0.2.0]' heading (found 0)"* ]]
+    printf '## [0.2.0]\n\n- A.\n\n## [0.2.0]\n\n- B.\n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"(found 2)"* ]]
+}
+
+@test "packaging: empty or whitespace-only version section is reported" {
+    make_docs_root
+    printf '## [0.2.0]\n\nProse only.\n\n## [0.1.0]\n\n- Old item.\n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"at least one nonblank Markdown list item"* ]]
+    printf '## [0.2.0]\n\n-   \n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"at least one nonblank Markdown list item"* ]]
+}
+
+@test "packaging: metadata and links modes do not require LICENSE or CHANGELOG" {
+    make_docs_root
+    fixture_git rm -q LICENSE CHANGELOG.md
+    fixture_commit "drop packaging files"
+    metadata
+    [ "$status" -eq 0 ]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --links
+    [ "$status" -eq 0 ]
+}
+
 # ---- documentation-state validation (--all) ----
 
 fixture_git() {
@@ -1634,6 +1710,8 @@ inventory_plugin_links() {
 
 make_docs_root() {
     make_metadata_root
+    # The fixture's living docs fix the milestone marker; align the copied README with it.
+    sed -i.bak 's/^Current milestone: M[0-9]*$/Current milestone: M6/' "$TEST_ROOT/README.md" && rm "$TEST_ROOT/README.md.bak"
     put .docs/status/handoff.md <<'DOC'
 # Session Handoff
 Status: Living

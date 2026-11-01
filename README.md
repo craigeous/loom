@@ -62,6 +62,18 @@ Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start wi
 [`.docs/status/progress.md`](.docs/status/progress.md) and
 [`.docs/status/roadmap.md`](.docs/status/roadmap.md).
 
+## Supported Platforms & Prerequisites
+
+- **Hosts:** Ubuntu 22.04 and 24.04 (x86-64); macOS 14+ (arm64 and x86-64), where the
+  selected client is supported. Native Windows, PowerShell, Git Bash/MSYS2, Cygwin, and
+  WSL are unsupported.
+- **Runtime tools:** Bash 3.2+, Git 2.34+, jq 1.6+.
+- **Clients:** Claude Code >= 2.1.216; Codex CLI >= 0.144.6. Newer client versions
+  require release evidence per spec 10.
+- **Plugin dependencies:** none. loom declares no external plugin dependencies in its
+  manifests or catalogs; Bash, Git, and jq are system tools, and Claude Code and Codex
+  CLI are the host clients.
+
 ## Repository layout
 
 ```

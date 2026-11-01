@@ -1175,10 +1175,54 @@ function checkTransitions(before, artifact) {
   return null;
 }
 
+// ---- Packaging (--all): root LICENSE and CHANGELOG ----
+const MIT_LICENSE = `MIT License
+
+Copyright (c) 2026 Craig Pfeiffer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
+function validatePackaging() {
+  const license = readText("LICENSE");
+  if (license !== null && license.replace(/\n$/, "") !== MIT_LICENSE.replace(/\n$/, "")) {
+    report("LICENSE", "must exactly match the canonical MIT license text with 'Copyright (c) 2026 Craig Pfeiffer'");
+  }
+  const changelog = readText("CHANGELOG.md");
+  if (changelog === null) return;
+  const lines = changelog.split(/\r?\n/);
+  const headings = lines.map((line, index) => (line === "## [0.2.0]" ? index : -1)).filter((index) => index >= 0);
+  if (headings.length !== 1) { report("CHANGELOG.md", `must contain exactly one '## [0.2.0]' heading (found ${headings.length})`); return; }
+  const section = [];
+  for (const line of lines.slice(headings[0] + 1)) {
+    if (/^##\s/.test(line)) break;
+    section.push(line);
+  }
+  if (!section.some((line) => /^\s*(?:[-*+]|\d+[.)])\s+\S/.test(line))) {
+    report("CHANGELOG.md", "'## [0.2.0]' section must contain at least one nonblank Markdown list item");
+  }
+}
+
 if (mode === "links" || mode === "all") loadAllowlist();
 if (mode === "metadata" || mode === "all") await validateMetadata();
 if (mode === "links" || mode === "all") await validateLinks();
 if (mode === "all") validateDocsState();
+if (mode === "all") validatePackaging();
 diagnostics.sort().forEach((line) => console.error(line));
 if (diagnostics.length) process.exit(1);
 console.log(`Repository ${mode} validation passed`);

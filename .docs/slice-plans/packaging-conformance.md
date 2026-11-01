@@ -1,6 +1,6 @@
 # Packaging Conformance
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 03-artifact-lifecycle.md, 10-packaging.md
 Target size: <= 150 LOC net code change, plus standalone assets and bounded metadata/docs edits
 
@@ -114,7 +114,27 @@ Release matrix evidence remains a separate release prerequisite.
 
 ## Notes
 
-Implementation inventory and retained-match evidence will be recorded here.
+### Implementation evidence
+
+- **Version/metadata:** all four `jq` version checks and the dependency check return `true`;
+  both plugin manifests and both catalogs carry `0.2.0` (Codex catalog carries no version
+  and points at `./plugins/loom`) with zero dependency declarations. No manifest/catalog
+  edit was needed; no discrepancy required the stop rule.
+- **Helper `--version`:** no helper under `plugins/loom/bin/` implements `--version`
+  (`loom`, `loom-doctor`, `loom-eval-workspace`, `loom-review`, `loom-coord` print usage or
+  "unknown subcommand"; `loom-land` requires an absolute path). Nothing to compare with `0.2.0`.
+- **Task sweep (rg exit 0, all retained):** `Task` tool / `subagent_type` spawn references
+  in `commands/{plan,run,research,eval-plan,eval-code,develop}.md` and
+  `references/orchestration.md:18` (Claude Code tool names, compatibility-required);
+  `Taskfile.yml`/"task runners" in `references/gate-learning.md:38,41` and
+  `references/tooling.md:26,28,81` (ordinary uses); "your task" in
+  `finders/review-{tests,security,correctness}-v1.md` (ordinary uses). None are Orca identifiers
+  needing change; no actionable match.
+- **Plugin-dependency sweep:** single match, `README.md:73`, the new section's own statement
+  that there are no plugin dependencies.
+- **Pre-existing fixture drift:** README already read `Current milestone: M7` while the
+  Bats docs fixture's living docs say M6, failing every `make_docs_root` test at HEAD;
+  `make_docs_root` now aligns its copied README marker with the fixture.
 
 ## Revision Log
 
