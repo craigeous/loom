@@ -324,6 +324,7 @@ function validateThinAdapters() {
 }
 
 function validateHerdrMetadata(fail) {
+  const hasHerdrRoot = files.includes("plugins/loom/adapters/roots/herdr-plugin-root-v1.json");
   const checks = [
     ["plugins/loom/.herdr-plugin/plugin.json", {
       name: (v) => v === "loom",
@@ -338,6 +339,13 @@ function validateHerdrMetadata(fail) {
     }]
   ];
   for (const [relative, fields] of checks) {
+    if (!files.includes(relative)) {
+      if (hasHerdrRoot) {
+        report(relative, "required Herdr metadata file is missing");
+        fail();
+      }
+      continue;
+    }
     const value = readJson(relative);
     if (value === JSON_READ_FAILURE) { fail(); continue; }
     if (!isObject(value)) {

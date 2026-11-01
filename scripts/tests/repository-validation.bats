@@ -55,10 +55,11 @@ make_metadata_root() {
 }
 
 populate_metadata_root() {
-    mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
+    mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/.herdr-plugin" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
     cp -R "$REPOSITORY_ROOT/plugins/loom" "$TEST_ROOT/plugins/loom"
     cp "$REPOSITORY_ROOT/.claude-plugin/marketplace.json" "$TEST_ROOT/.claude-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/.agents/plugins/marketplace.json" "$TEST_ROOT/.agents/plugins/marketplace.json"
+    cp "$REPOSITORY_ROOT/.herdr-plugin/marketplace.json" "$TEST_ROOT/.herdr-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/README.md" "$TEST_ROOT/README.md"
     cp "$REPOSITORY_ROOT/LICENSE" "$TEST_ROOT/LICENSE"
     printf '# Changelog\n\n## [0.2.0]\n\n- Fixture change.\n' >"$TEST_ROOT/CHANGELOG.md"
