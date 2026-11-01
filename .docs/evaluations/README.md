@@ -123,4 +123,4 @@ rewritten when a later decision supersedes their subject.
 - [`herdr-native-app-hooks-plan-eval.md`](herdr-native-app-hooks-plan-eval.md) — `herdr-native-app-hooks` slice-plan evaluation (Round 0: PASS)
 - [`0030-herdr-native-app-hooks-eval.md`](0030-herdr-native-app-hooks-eval.md) — ADR 0030 plan evaluation and spec amendment (Round 0: PASS)
 - [`herdr-native-app-hooks-review-findings.md`](herdr-native-app-hooks-review-findings.md) — `herdr-native-app-hooks` local review findings (aggregate: ran-clean)
-- [`herdr-native-app-hooks-eval.md`](herdr-native-app-hooks-eval.md) — `herdr-native-app-hooks` code evaluation (Round 0: FAIL)
+- [`herdr-native-app-hooks-eval.md`](herdr-native-app-hooks-eval.md) — `herdr-native-app-hooks` code evaluation (Round 0: PASS)
