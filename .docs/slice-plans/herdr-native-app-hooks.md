@@ -1,6 +1,6 @@
 # Herdr Native App Hooks
 
-Status: In Progress
+Status: Implemented
 Target specs: 00-overview.md, 08-playbook.md, 10-packaging.md
 Target ADRs: 0003, 0013, 0018, 0027, 0029, 0030
 Target size: <= 180 LOC net code change (excluding test fixtures; plan <= 250 lines)
