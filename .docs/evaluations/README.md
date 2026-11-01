@@ -107,3 +107,4 @@ rewritten when a later decision supersedes their subject.
 - [`workflow-benchmark-plan-eval.md`](workflow-benchmark-plan-eval.md) — `workflow-benchmark` slice-plan evaluation (Round 0: PASS)
 - [`workflow-benchmark-review-findings.md`](workflow-benchmark-review-findings.md) — `workflow-benchmark` local review findings (adjudicated)
 - [`workflow-benchmark-eval.md`](workflow-benchmark-eval.md) — `workflow-benchmark` code evaluation (Round 0: PASS)
+- [`workflow-profiles-plan-eval.md`](workflow-profiles-plan-eval.md) — `workflow-profiles` slice-plan evaluation (Round 0: PASS)
