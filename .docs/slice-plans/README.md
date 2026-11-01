@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [workflow-profiles.md](workflow-profiles.md) — `Implemented` — M8 slice 2: owner-selected workflow profiles and recommendations.
+None active.
 
 ## Archived plans
+
+- [archive/workflow-profiles.md](archive/workflow-profiles.md) — `Landed` —
+  M8 slice 2: owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`, documentation in `orchestration.md` and `loom-run/SKILL.md`, `scripts/tests/loom-profile.bats`, 12 tests, 911 total repository Bats tests passing).
 
 - [archive/workflow-benchmark.md](archive/workflow-benchmark.md) — `Landed` —
   M8 slice 1: benchmark harness and paired measurement protocol for Loom and a single-agent baseline (`scripts/workflow-benchmark.sh`, `docs/workflow-benchmark.md`, `scripts/tests/workflow-benchmark.bats`, 13 tests, 899 total repository Bats tests passing).

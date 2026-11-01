@@ -8,6 +8,7 @@ Current milestone: M8
 
 ## Action history
 
+- 2026-11-01 — M8 slice 2 `workflow-profiles` landed.
 - 2026-11-01 — M8 slice 1 `workflow-benchmark` landed.
 - 2026-10-31 — M7 completed with `readme-refresh` landed.
 - 2026-10-31 — M7 slice 1 `packaging-conformance` landed.
@@ -19,7 +20,15 @@ Current milestone: M8
 
 ## Current state
 
-- **Last action (2026-11-01) — M8 slice 1 (`workflow-benchmark`) Landed:**
+- **Last action (2026-11-01) — M8 slice 2 (`workflow-profiles`) Landed:**
+  Landed owner-selected workflow profiles and recommendation helper `plugins/loom/bin/loom-profile`,
+  documentation in `plugins/loom/skills/loom-playbook/references/orchestration.md` and `plugins/loom/skills/loom-run/SKILL.md`,
+  and 12 automated integration tests in `scripts/tests/loom-profile.bats` (911 total repository Bats tests passing).
+  Provides `resolve` subcommand with CLI-over-file-over-default precedence, risk recommendations (low, normal, high),
+  JSON output, and strict preservation of spec-required lifecycle stages. Evaluated blind cross-family by Codex (`gpt-6.1-terra`)
+  on Orca run `run_597335f40df5` with Verdict: PASS (Round: 0). Milestone M8 is now in progress.
+
+- **Prior action (2026-11-01) — M8 slice 1 (`workflow-benchmark`) Landed:**
   Landed benchmark harness and paired measurement protocol for Loom and single-agent baselines in `scripts/workflow-benchmark.sh`,
   operator documentation in `docs/workflow-benchmark.md`, and 13 automated tests in `scripts/tests/workflow-benchmark.bats`
   (899 total repository Bats tests passing). Implemented in Bash 3.2+ with jq 1.6+ (161 lines of code, well under the 250 LOC budget)

@@ -1,6 +1,6 @@
 # Workflow profiles
 
-Status: Implemented
+Status: Landed
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 250 LOC net script/code change; tests and docs separate (plan <= 250 lines)
 

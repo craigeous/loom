@@ -37,7 +37,7 @@ Current milestone: M8
 - [x] **M7 — Reconcile packaging and publish a release** (complete):
   `[x] packaging-conformance`; `[x] readme-refresh`.
 - [ ] **M8 — Control process cost and repository noise** (in progress):
-  `[x] workflow-benchmark`; `workflow-profiles`, `landing-history-policy`.
+  `[x] workflow-benchmark`; `[x] workflow-profiles`; `landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration**:
   `herdr-client-adapter`, `herdr-native-app-hooks`, and `herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
