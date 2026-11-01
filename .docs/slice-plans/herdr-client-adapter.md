@@ -1,6 +1,6 @@
 # Herdr client adapter
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 10-packaging.md; ADRs 0018, 0027, 0029
 Target size: <= 180 LOC net code change (excluding tests and metadata)
 

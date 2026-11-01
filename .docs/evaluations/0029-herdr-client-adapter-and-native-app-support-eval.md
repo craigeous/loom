@@ -1,7 +1,7 @@
 # Evaluation — ADR 0029 Herdr Client Adapter and Native App Support
 
-Artifact: `.docs/ADR/0029-herdr-client-adapter-and-native-app-support.md`
-Authority: spec 00-overview, spec 10-packaging, ADR 0018, ADR 0027, plan-eval-rubric.md
+Artifact: .docs/ADR/0029-herdr-client-adapter-and-native-app-support.md
+Reviewed against: spec 00, spec 10, ADR 0018, ADR 0027, plan-eval-rubric.md
 Round: 0
 Verdict: PASS
 

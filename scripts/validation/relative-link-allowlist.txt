@@ -53,6 +53,7 @@
 .docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/2026-07-21-dual-platform-plugin-architecture-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/2026-11-01-herdr-client-adapter-contract-eval.md	rule:authority	Contract research evaluation identity matches research note basename without date prefix.
 .docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
 .docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/adr-0007-namespaced-command-surface-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
