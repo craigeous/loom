@@ -2,7 +2,7 @@
 
 Status: Plan Review
 Target specs: 00-overview.md, 04-orchestrator.md
-Target size: <= 200 LOC net code change (plan <= 250 lines)
+Target size: <= 250 LOC net script/code change; tests and docs separate (plan <= 250 lines)
 
 ## Context
 
@@ -17,7 +17,8 @@ code-bearing slices, independent evaluation, and the applicable gates and landin
 protocol. Consequently these flows describe intended emphasis, not permission to skip
 mandatory stages. In particular, Light cannot execute its reduced flow under current
 authority. An approved spec amendment through the planner and cold plan evaluation is
-a prerequisite to any future relaxation; this slice does not make that amendment.
+a prerequisite to any future relaxation; this slice does not make that amendment. The configuration records an owner choice,
+not a frozen policy prescribing reduced workflows before benchmark evidence exists.
 
 ## Out of Scope & Threat-Model Boundary
 
@@ -26,6 +27,8 @@ gate, owner-claimed approvals, or remote landing protocol. No automatic profile
 selection, cost accounting, historical benchmark, or new client-specific policy.
 The private-directory and trusted-local-process boundary in spec 00 Non-goals applies;
 this slice does not defend against hostile local inode swapping or helper tampering.
+Stop and escalate to the orchestrator if any required behavior needs a spec change
+or cannot be implemented within these boundaries; do not improvise a protocol.
 
 ## Files to touch
 
@@ -40,9 +43,11 @@ this slice does not defend against hostile local inode swapping or helper tamper
    `loom-profile resolve REPO [--profile light|standard|strict] [--risk low|normal|high]`.
    It reads optional `REPO/.loom/profile.json`, exactly a JSON object with one required
    string property `profile` whose value is `light`, `standard`, or `strict`; reject
-   unknown or duplicate keys, invalid JSON, wrong types, non-regular files, and
-   invalid arguments with a nonzero status and a diagnostic on stderr. Missing file
-   is allowed. Use jq 1.6 or later; do not silently fall back on malformed input.
+   unknown keys, invalid JSON, wrong types, non-regular files, and symlinks. For a
+   present file require `[ -f "$file" ] && [ ! -L "$file" ]`. Use standard jq
+   1.6+ object validation; duplicate keys follow jq last-key-wins behavior. Missing
+   file is allowed. Exit 0 on success, 1 on invalid configuration or other error,
+   and 2 on usage errors; diagnose failures on stderr. Do not silently fall back.
    A CLI profile overrides a valid file; absent both, select `standard`. Validate a
    present file even when the CLI overrides it. No environment-variable override.
 2. Emit one JSON object on stdout: `{"selected":"...","source":"cli|file|default",
@@ -57,26 +62,35 @@ this slice does not defend against hostile local inode swapping or helper tamper
    start and resume, CLI-over-file-over-default precedence, the recommendation and
    the three intended flows. Show selected profile, source, recommendation and reason
    to the owner before dispatch; invalid configuration stops dispatch. The owner may
-   explicitly choose a different profile. Record the selection and risk in the run's
-   checkpoint and restore them on resume; a changed selection requires explicit owner
-   instruction and is re-resolved before further dispatch. Preserve all existing
-   spec-required stages and claimed owner gates regardless of profile. Strict adds an
-   owner checkpoint before implementation and before publication; it does not imply
-   owner approval. Invoke the shared helper through the existing installed-helper
-   resolution path; adapters pass arguments and do not implement their own policy.
+   explicitly choose a different profile. Record `profile` (selected value) and `risk` (low, normal, high, or null) in
+   orchestrator run metadata/session state at `.git/loom/session-<id>/checkpoint`
+   or `.git/loom/run.json`, or pass them via orchestrator options. Resume reads the
+   recorded values without inventing protocol transforms; a changed selection requires
+   explicit owner instruction and re-resolution before further dispatch. Preserve all existing
+   spec-required stages and claimed owner gates regardless of profile. Strict adds advisory human pauses before developer dispatch and publication, not
+   new spec gates or implied owner approval. Make the helper executable (`chmod +x`)
+   and invoke it by its resolved absolute installed path, matching existing helpers;
+   verify packaging, resolution and inventories against the tree and update any
+   required metadata/fixtures. Adapters pass arguments without their own policy.
 4. Add Bats tests for all three profiles and risks, default and precedence, valid
-   override, malformed/duplicate/unknown properties, wrong types, invalid and duplicate
+   override, malformed/unknown properties and jq duplicate-key behavior, wrong types, invalid and duplicate
    flags, missing file, non-regular file, deterministic output, and unchanged selection
-   when recommendation differs. Test the documented start/resume integration and
-   mandatory-gate language mechanically, including strict checkpoints and invalid
-   config stopping dispatch. Keep existing review and evaluation tests unchanged.
+   when recommendation differs. Use table-driven cases where practical. In each
+   documentation file add heading `## Workflow Profiles` and require with `grep -Fq`
+   the exact literals `Light`, `Standard`, `Strict`, `resume reads the recorded profile`,
+   `invalid configuration stops dispatch`, `all required lifecycle stages remain mandatory`,
+   and `advisory human pauses before developer dispatch and publication`; require the
+   heading with `grep -Fxq '## Workflow Profiles'`. In that section reject matches of
+   `(^|[^[:alpha:]])(skip|skips|skippable)[[:space:]]+(any |required )?(lifecycle |stage|gate|review|evaluation)`
+   using `grep -Eiq`. Keep existing review and evaluation tests unchanged.
 
 ## Verification
 
 - Fast iteration: `bats scripts/tests/loom-profile.bats`.
 - Full gate: `scripts/check`.
 - `node scripts/validate-repository.mjs --root . --all` checks repository integrity.
-- The Bats suite checks resolution, failure cases, and documented routing obligations;
+- The Bats suite runs those exact positive and negative documentation oracles against
+  both files and checks resolution, failure cases, and documented routing obligations;
   the full gate retains existing local review, evaluator, and landing regression tests.
 
 ## Notes
@@ -90,3 +104,4 @@ amendment and revise this plan in place before implementation.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Clarified jq behavior, resume state, mechanical documentation oracles, packaging, limits, and stop rules. |
