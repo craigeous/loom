@@ -1,6 +1,6 @@
 # Herdr Verification
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 08-playbook.md, 10-packaging.md
 Target size: <= 180 LOC net code change (excluding test fixtures)
 
