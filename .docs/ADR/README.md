@@ -44,7 +44,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 
 ## In Review
 
-None.
+- [0029 — Herdr Client Adapter and Native App Support](0029-herdr-client-adapter-and-native-app-support.md) — `Plan Review`: authorizes Herdr as supported client adapter alongside Claude, Codex, and Antigravity, specifying manifest, root binding, matrix, and launch integration.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 
