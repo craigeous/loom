@@ -86,3 +86,4 @@ None.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Code-eval Round 0 fixes: required living headings must appear exactly once (duplicate regression tests added); handoff M6 landing summaries and 'Notes for the next agent' moved without loss to the archive, with actionable rules folded into the two required headings. |

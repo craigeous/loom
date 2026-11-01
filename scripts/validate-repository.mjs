@@ -884,8 +884,9 @@ function validateLivingDocs(markdownParser) {
 
 function requireHeading(relative, text, heading, markdownParser, label = heading) {
   const wanted = heading.toLowerCase();
-  const found = headingTexts(text, markdownParser).some((entry) => entry === wanted || entry.startsWith(`${wanted} `) || entry.startsWith(`${wanted}:`) || entry.startsWith(`${wanted} (`));
-  if (!found) ruleReport(relative, `heading-${slugRule(heading)}`, `missing required heading '${label}'`);
+  const count = headingTexts(text, markdownParser).filter((entry) => entry === wanted || entry.startsWith(`${wanted} `) || entry.startsWith(`${wanted}:`) || entry.startsWith(`${wanted} (`)).length;
+  if (!count) ruleReport(relative, `heading-${slugRule(heading)}`, `missing required heading '${label}'`);
+  else if (count > 1 && Object.values(LIVING_DOCS).includes(relative)) ruleReport(relative, `heading-${slugRule(heading)}`, `duplicate required heading '${label}' (${count} occurrences; expected exactly one)`);
 }
 
 const statusOf = (relative) => statusField(readText(relative) || "")[0];

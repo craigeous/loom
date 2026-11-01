@@ -2428,6 +2428,20 @@ living_fail() {
     [[ "$output" == *"roadmap.md: missing required heading 'Repository improvement program (2026)'"* ]]
 }
 
+@test "docs state: duplicate required living headings fail naming the path" {
+    make_docs_root
+    printf '\n## Start here each session\n' >>"$TEST_ROOT/.docs/status/handoff.md"
+    printf '\n## Where things stand\n' >>"$TEST_ROOT/.docs/status/handoff.md"
+    printf '\n## Action history\n' >>"$TEST_ROOT/.docs/status/progress.md"
+    printf '\n## Repository improvement program (2026)\n' >>"$TEST_ROOT/.docs/status/roadmap.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"handoff.md: duplicate required heading 'Start here each session'"* ]]
+    [[ "$output" == *"handoff.md: duplicate required heading 'Where things stand'"* ]]
+    [[ "$output" == *"progress.md: duplicate required heading 'Action history'"* ]]
+    [[ "$output" == *"roadmap.md: duplicate required heading 'Repository improvement program (2026)'"* ]]
+}
+
 @test "docs state: action history needs standard dated entries" {
     make_docs_root
     edit_file .docs/status/progress.md '/^- 2026-10-31/d'
