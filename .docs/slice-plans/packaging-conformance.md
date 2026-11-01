@@ -142,3 +142,4 @@ Release matrix evidence remains a separate release prerequisite.
 |---|---|
 | 0 | Initial draft |
 | 1 | Scoped files and stop rules; specified mechanical checks, validator contract, copyright, budget, and complete gate commands. |
+| Round 0 code-eval remediation | `validatePackaging()` now tracks fenced code blocks so fenced headings and list markers neither end nor satisfy the `## [0.2.0]` section; regression tests added. |

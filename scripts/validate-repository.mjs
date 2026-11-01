@@ -1206,12 +1206,19 @@ function validatePackaging() {
   const changelog = readText("CHANGELOG.md");
   if (changelog === null) return;
   const lines = changelog.split(/\r?\n/);
-  const headings = lines.map((line, index) => (line === "## [0.2.0]" ? index : -1)).filter((index) => index >= 0);
+  const outsideFence = [];
+  let fenced = false;
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; outsideFence.push(false); continue; }
+    outsideFence.push(!fenced);
+  }
+  const headings = lines.map((line, index) => (outsideFence[index] && line === "## [0.2.0]" ? index : -1)).filter((index) => index >= 0);
   if (headings.length !== 1) { report("CHANGELOG.md", `must contain exactly one '## [0.2.0]' heading (found ${headings.length})`); return; }
   const section = [];
-  for (const line of lines.slice(headings[0] + 1)) {
-    if (/^##\s/.test(line)) break;
-    section.push(line);
+  for (let index = headings[0] + 1; index < lines.length; index++) {
+    if (!outsideFence[index]) continue;
+    if (/^##\s/.test(lines[index])) break;
+    section.push(lines[index]);
   }
   if (!section.some((line) => /^\s*(?:[-*+]|\d+[.)])\s+\S/.test(line))) {
     report("CHANGELOG.md", "'## [0.2.0]' section must contain at least one nonblank Markdown list item");

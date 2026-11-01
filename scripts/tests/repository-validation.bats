@@ -1669,6 +1669,21 @@ packaging_all() {
     [[ "$output" == *"at least one nonblank Markdown list item"* ]]
 }
 
+@test "packaging: fenced list markers do not satisfy the release list requirement" {
+    make_docs_root
+    printf '## [0.2.0]\n\n```\n- example\n```\n\n## [0.1.0]\n\n- Old.\n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"at least one nonblank Markdown list item"* ]]
+}
+
+@test "packaging: fenced level-two heading does not end the version section" {
+    make_docs_root
+    printf '## [0.2.0]\n\n~~~\n## Example\n~~~\n\n- Real item.\n\n## [0.1.0]\n\n- Old.\n' >"$TEST_ROOT/CHANGELOG.md"
+    packaging_all
+    [ "$status" -eq 0 ]
+}
+
 @test "packaging: metadata and links modes do not require LICENSE or CHANGELOG" {
     make_docs_root
     fixture_git rm -q LICENSE CHANGELOG.md
