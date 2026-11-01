@@ -1,6 +1,6 @@
 # README Refresh
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 10-packaging.md
 Target size: <= 120 LOC net change (keep this plan <= 200 lines)
 
