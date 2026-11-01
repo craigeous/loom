@@ -20,9 +20,6 @@ Current milestone: M6
 
 ## Where things stand
 
-- **Next action:** M6 slice 3 `living-doc-shape` (plan Approved) — implement, code-eval, land.
-- **M6 progress:** slices 1 `loom-doctor-foundation` and 2 `docs-state-validator` are landed; their
-  landing summaries are archived in [`archive/handoff-history.md`](archive/handoff-history.md).
-- **Earlier M1–M4 and post-M4 session history:** archived in
-  [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays
-  within the 150-line cold-start budget (older M1–M5 landing summaries moved there too).
+- **Current state:** Milestone M6 COMPLETE (`loom-doctor-foundation`, `docs-state-validator`, `living-doc-shape` all landed).
+- **Next action:** Advance to Milestone M7 (`packaging-conformance`).
+- **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

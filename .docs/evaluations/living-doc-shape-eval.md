@@ -1,7 +1,7 @@
 # Living Document Shape Code Evaluation
 
-Artifact: [Living Document Shape](../slice-plans/living-doc-shape.md)
-Reviewed against: [slice plan](../slice-plans/living-doc-shape.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
+Artifact: [Living Document Shape](../slice-plans/archive/living-doc-shape.md)
+Reviewed against: [slice plan](../slice-plans/archive/living-doc-shape.md) and [code evaluation rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md)
 Round: 0
 Commit: d04a52f
 Verdict: PASS

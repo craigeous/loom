@@ -8,6 +8,7 @@ Current milestone: M6
 
 ## Action history
 
+- 2026-10-31 — M6 completed with `living-doc-shape` landed.
 - 2026-10-31 — M6 `docs-state-validator` landed (see Current state for detail).
 - 2026-10-31 — M6 `loom-doctor-foundation` landed (see Current state for detail).
 - 2026-10-31 — M5 completed with `evaluation-output-recorder`.
@@ -15,7 +16,13 @@ Current milestone: M6
 
 ## Current state
 
-- **Last action (2026-10-31) — M6 slice 2 (`docs-state-validator`) Landed:**
+- **Last action (2026-10-31) — M6 slice 3 (`living-doc-shape`) Landed (Milestone M6 Complete):**
+  Landed living document shape and ownership rules in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
+  Enforces line budget (<= 150 lines) on `handoff.md`, required living doc headings uniqueness, `## Action history` with standard dated entries in `progress.md`,
+  roadmap milestone structure, and synchronized `Current milestone: M6` markers across `README.md`, `handoff.md`, `progress.md`, and `roadmap.md`.
+  Added 8 new Bats tests (875 total repository Bats tests passing). Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_0067ed9dc16c` with Verdict: PASS (Round: 0). Milestone M6 is now complete.
+
+- **Prior action (2026-10-31) — M6 slice 2 (`docs-state-validator`) Landed:**
   Landed mechanical documentation state validation in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`.
   Enforces active slice plan uniqueness, documentation lifecycle status transitions with baseline verification,
   clean owner reset validation, interval-bounded FAIL return evidence, authority reference resolution to applicable files,

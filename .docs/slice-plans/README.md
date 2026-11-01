@@ -17,9 +17,14 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [living-doc-shape.md](living-doc-shape.md) — `Implemented` — M6 living document shape and consistency checks.
+None active.
 
 ## Archived plans
+
+- [archive/living-doc-shape.md](archive/living-doc-shape.md) — `Landed` —
+  M6 slice 3: living document shape and ownership rules in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,
+  enforcing line budget (<= 150 lines) on `handoff.md`, required living doc headings uniqueness, `## Action history` with standard dated entries in `progress.md`,
+  roadmap milestone structure, and synchronized `Current milestone: M6` markers across `README.md`, `handoff.md`, `progress.md`, and `roadmap.md` (875 total repository Bats tests passing).
 
 - [archive/docs-state-validator.md](archive/docs-state-validator.md) — `Landed` —
   M6 slice 2: mechanical documentation state validation in `scripts/validate-repository.mjs` and `scripts/tests/repository-validation.bats`,
