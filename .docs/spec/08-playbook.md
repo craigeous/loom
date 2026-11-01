@@ -218,7 +218,7 @@ The local `scripts/check` entry point and CI validate at least:
 - canonical-digest schema/hash and both instruction renderings;
 - Bash syntax at the floor, shfmt, ShellCheck, Bats, and Git diff whitespace;
 - every `hook-wire-v1` allow/block/malformed fixture with byte-exact exit, stdout,
-  and stderr results for both clients and both supported events;
+  and stderr results for all three clients and both supported events;
 - local-review/evaluation/recorder protocol fixtures and failure cases; and
 - active client adapter install, invocation, role hierarchy, helper resolution, and
   uninstall/upgrade matrix where applicable.
