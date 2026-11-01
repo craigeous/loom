@@ -2,38 +2,29 @@
 
 Artifact: .docs/slice-plans/herdr-native-app-hooks.md
 Reviewed against: plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md
-Commit: 6d35db1
+Commit: 6cec837
 Round: 0
-Verdict: FAIL
+Verdict: PASS
 
 ## Summary
 
-Round 0 findings 2, 3 and 4 are resolved by the revision. Step 2 adds the `plugin.json` `hooks` field and validator check. Steps 1 and 3 to 5 name the spec 10, `hooks.json`, validator comment and `CLAUDE.md` touch points. The Verification section now has `jq`/`git grep`/`git diff` checks, and the test matrix is trimmed to fit the budget. The revision log and in-place structure are fine, and the plan is 93 lines.
+All four findings from the Round 0 FAIL are resolved in `git diff 6d35db1..6cec837`. There are no open BLOCKER or MAJOR findings. Two MINOR observations remain. They do not block approval.
 
-Round 0 finding 1 (MAJOR) is not resolved. The "authority" the revision cites for the Herdr hook wire was written in the same revision, is circular, and is not sourced. It also edits an Accepted ADR in place. The verdict stays FAIL.
+- **Finding 1 (MAJOR, unsourced wire contract):** Resolved under the fix's option (b). ADR 0030 §5 and the new research note both mark the wire contract as provisional. They name `herdr-verification` (M9 slice 3) as the owner of live verification. The plan Context now says "provisional POSIX process execution contract" and no longer says Herdr "follows" it. The research note's cited sources are still internal Loom files and Herdr's `Info.plist` and CLI output, so the contract is not independently sourced. That is acceptable only because it is declared provisional with a named validating slice.
+- **Finding 2 (MAJOR, Accepted ADR rewritten in place):** Resolved. The diff removes the ADR 0029 §6 addition (-14 lines) and the research-note bullet (-1 line), so both are back to their accepted state. The new authority is ADR 0030, which is `Extends: 0003, 0013, 0018, 0029` and has an owner-acceptance record. It is a separate, traceable ADR with a dedicated research note, and it supersedes nothing silently.
+- **Finding 3 (MINOR, spec-amendment gate):** Resolved. Step 1 again requires the planner to submit the spec 08 and spec 10 amendments to cold plan evaluation and get approval before implementation. It states that this slice-plan review does not approve a frozen-spec change.
+- **Finding 4 (MINOR, fragile checks):** Resolved.
+  - The fixture regression check is anchored to fixed SHA `5ad484b`.
+  - The hooks.json check compares the full command string with `jq -e`.
+  - A `jq -e '.hooks == "hooks/hooks.json"'` check on `plugin.json` was added.
+  - The selector coverage check greps for `HERDR_PLUGIN_ROOT` in the three scripts.
 
-Round numbering note: this is the re-review of the Round 0 FAIL, so it is recorded as Round 1 because the verdict is FAIL.
+The revision is in place. Context, Steps and Verification are updated, and the Revision Log is a compact table. The plan is 98 lines against the 250 limit, has a `Target size:` line, and has an Out of Scope & Threat-Model Boundary section. The fixture arithmetic is consistent: 6 cases × 4 files = 24 files, giving 18 cases and 72 files across three clients.
 
 ## Findings
 
-1. **[MAJOR] (carry-over of Round 0 #1) Herdr hook wire contract is still unsourced; the new authority is self-referential.**
-   - The revision adds ADR 0029 §6 and a research-note bullet asserting that Herdr loads `hooks/hooks.json`, injects `HERDR_PLUGIN_ROOT` into hook processes, emits `PreToolUse` (`tool_input.command`) and `PreCompact` (`trigger`, `session_id`), and honors exit 2 with stderr as a block.
-   - The research bullet cites `[1], [3]`. Per the Sources list, [1] is Herdr's `Info.plist` and `--skill/--version/--help` output (version, bundle id, CLI syntax, mod architecture), and [3] is Loom's own `10-packaging.md` and compatibility matrix. Neither shows hook events, payload shape, hook-process environment, or exit-code semantics. The wording "In Herdr's POSIX execution runtime ... follow the standard process contract" is an assumption, not a finding.
-   - Spec 08 requires exact current-event fixtures and forbids substituted encodings. A guessed wire is frozen into a spec amendment, 24 byte-exact fixtures, and an ADR.
-   - Failure scenario: Herdr does not emit `PreToolUse`/`PreCompact`, uses another payload, or treats exit 2 as an ordinary hook error. The fixtures and gate pass, the identity and write-ahead guards never block, and the docs claim conformance. `herdr-verification` would be the first place this surfaces.
-   - Fix: either (a) add a researcher-sourced note, with citations that actually contain Herdr hook semantics (events, payload, block encoding, hook env, version floor), or (b) mark the wire contract explicitly as a provisional assumption in the plan and ADR text, and name the mechanism and slice that validates it before the fixtures are treated as conformance evidence. The plan must not assert the contract as established fact without a supporting source.
+1. **[MINOR] Provisional status is not carried into the plan's Out of Scope section.**
+   The plan Context calls only the block envelope provisional. It states Herdr's manifest `hooks` discovery and `HERDR_PLUGIN_ROOT` injection as plain fact. ADR 0030 §5 and the research note treat the whole contract as provisional. Consider one sentence in `## Out of Scope & Threat-Model Boundary`. It should say that all Herdr hook behavior (discovery, environment, events, block encoding) is offline-fixture evidence only until `herdr-verification` confirms it. This keeps the fixtures from being read as conformance evidence. Not required for PASS.
 
-2. **[MAJOR] ADR 0029 (Status: Accepted) and the Approved research note were rewritten in place.**
-   - The diff adds §6 to ADR 0029 and a new bullet to the Approved research note. Project rules say ADRs are immutable after acceptance ("supersede, never rewrite"). The rubric requires no silent supersession and a traceable ADR.
-   - The slice plan then relies on the edited ADR as its authority, so the sourcing in finding 1 is also unreviewed by a cold evaluator. Adding a new decision means a new ADR, or an explicitly Extending ADR, that goes through its own plan evaluation.
-   - Fix: move §6 into a new ADR (for example 0030, `Extends: 0029`), and put the sourced material in a new or re-approved research note. Then cite those from the slice plan.
-
-3. **[MINOR] Step 1 dropped the spec-amendment approval gate.**
-   - The Round 0 draft said the spec amendment must go through planner authorship and independent cold plan evaluation before implementation. The revised Step 1 says only "Spec amendments (prerequisite)". Project rules say specs change only through planner and cold plan evaluation.
-   - Fix: restore the sentence that the amendments are approved by a cold evaluator before the developer starts, and that the slice review does not approve them.
-
-4. **[MINOR] Mechanical checks are fragile.**
-   - `git diff --exit-code HEAD~1 -- ...fixtures/{claude,codex}` depends on the commit layout. Use a named base (the slice's base commit or merge-base).
-   - The `herdr_ok` check greps for a symbol name that the plan never defines in Steps. Name the variable in Step 4, or grep for `HERDR_PLUGIN_ROOT` in the three scripts.
-   - The check does not prove the quoted root expression, only that it contains `HERDR_PLUGIN_ROOT`. Compare the full expected string with `jq -e`.
-   - Add a `jq -e '.hooks == "hooks/hooks.json"'` check for `.herdr-plugin/plugin.json` alongside the validator step.
+2. **[MINOR] Some asserted invariants have no mechanical check.**
+   The `CLAUDE.md` digest count change (12-case/48 files to 18-case/72 files) and the `validate-repository.mjs` `hooks` check have no named command. The gate (`validate-repository.mjs --all` and `scripts/check`) probably covers the validator. An `rg` check for the new count string would cover `CLAUDE.md`. Not required for PASS.

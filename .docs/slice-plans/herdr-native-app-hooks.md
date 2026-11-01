@@ -1,6 +1,6 @@
 # Herdr Native App Hooks
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 08-playbook.md, 10-packaging.md
 Target ADRs: 0003, 0013, 0018, 0027, 0029, 0030
 Target size: <= 180 LOC net code change (excluding test fixtures; plan <= 250 lines)
@@ -23,11 +23,13 @@ suite to support Herdr across `PreToolUse` and `PreCompact`.
 ## Out of Scope & Threat-Model Boundary
 
 Herdr installation and live native-app workflow verification belong to
-`herdr-verification`. Do not change identity token detection, role policy,
-checkpoint semantics, client launcher, or release support claims. Per spec 00
-Non-goals, hooks are defense in depth, not a hostile-code sandbox or complete
-shell parser; hostile local inode swapping and internal helper monkeypatching
-are outside the trust model. Preserve Bash 3.2+, Git 2.34+, and jq 1.6+.
+`herdr-verification`. All Herdr hook behavior (discovery, environment, events,
+block encoding) is offline-fixture evidence only until `herdr-verification`
+confirms it against a live application. Do not change identity token detection,
+role policy, checkpoint semantics, client launcher, or release support claims.
+Per spec 00 Non-goals, hooks are defense in depth, not a hostile-code sandbox or
+complete shell parser; hostile local inode swapping and internal helper
+monkeypatching are outside the trust model. Preserve Bash 3.2+, Git 2.34+, and jq 1.6+.
 
 ## Steps
 
@@ -82,6 +84,8 @@ are outside the trust model. Preserve Bash 3.2+, Git 2.34+, and jq 1.6+.
   `jq -e '.hooks.PreToolUse[0].hooks[0].command == "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/git-identity-guard.sh\""' plugins/loom/hooks/hooks.json`.
 - Mechanical root selector coverage:
   `[ "$(git grep -c 'HERDR_PLUGIN_ROOT' plugins/loom/hooks/*.sh | wc -l | tr -d ' ')" = "3" ]`.
+- Mechanical fixture count check in CLAUDE.md:
+  `rg -q '18-case.*72 fixture files' CLAUDE.md`.
 - Gate: `node scripts/validate-repository.mjs --root . --all` and `scripts/check`.
 - Budget: net code change excluding fixtures <= 180 LOC.
 

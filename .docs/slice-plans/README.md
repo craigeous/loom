@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-native-app-hooks.md](herdr-native-app-hooks.md) — `Plan Review` — M9 slice 2: Herdr hook root selection, wire fixtures, and execution coverage.
+- [herdr-native-app-hooks.md](herdr-native-app-hooks.md) — `Approved` — M9 slice 2: Herdr hook root selection, wire fixtures, and execution coverage.
 
 ## Archived plans
 
