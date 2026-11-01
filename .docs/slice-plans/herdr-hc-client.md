@@ -30,11 +30,14 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
   (account/socket isolation or recorded degraded blindness). This slice adds no
   isolation, tag-stripping or screen-hiding mechanism. The only evaluator-facing
   change is that the `hc` deny (below) covers evaluator roles too.
-- **Role support is not recorded.** The live probe verifies generic `hc` plus `claude`
-  mechanics only. It does not answer Q4 (agent definition and `Agent` tool exclusion),
-  Q5 (`HC_TERMINAL_ID`) or Q6 (parent lifetime). The adapter stays behind an explicit
-  `LOOM_HC_UNVERIFIED=1` acknowledgement, so nothing is "supported" until a later
-  owner-recorded slice flips it (ADR 0031 §6).
+- **No role launch is in scope.** ADR 0031 §6 and spec 07 require the live probes
+  (including non-delegation) before any role runs. This slice adds no path that starts a
+  role on `hc`: `loom-host-hc launch` refuses unconditionally, with no environment
+  override. The role `hc run` argv (agent definition, tool restriction, model) is
+  deferred to a later owner-recorded slice after the probes pass. The live probe below
+  uses a generic throwaway session, never a role, and answers only the generic items it
+  states; Q4 (role agent definition), Q5 (`HC_TERMINAL_ID`) and Q6 (parent lifetime)
+  stay open.
 - No `herdr-app do`, Herdr config writes, mod, Herdr-installed hooks, GUI control,
   `hc` templates, machines or remote runs.
 - `hc` does not enforce delegation limits; the deny is defense in depth, evadable via
@@ -45,21 +48,11 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
 
 ### A. Host adapter (new)
 
-1. **`plugins/loom/bin/loom-host-hc`** (new, mode 755). `loom-launch-role` is unchanged
-   as the descriptor source. Subcommands:
-   - `launch --cwd <abs worktree> --brief-file <abs file>`: reads one
-     `loom-role-launch/v1` descriptor line on stdin. Fails closed (exit 2) unless
-     `LOOM_HC_UNVERIFIED=1`, `.client == "claude"` (codex descriptors refused),
-     `.role` in `researcher|planner|developer`, `cold == true`, `delegation == false`,
-     `permissions == "one-level"`, `claude.agentCapability == false`, `--cwd` is an
-     existing absolute directory, and the brief is a regular file of 1..4096 bytes with
-     no NUL. Name is `<role>-<first 12 chars of coldId, lowercased, non-[a-z0-9_-]
-     removed>` and must match `^[a-z0-9_-]{1,32}$`. It runs, with the brief as its
-     own argv token and no shell string:
-     `hc run --bg --name <name> --cwd <cwd> env LOOM_ROLE=<role> claude --model <selector> <brief>`.
-     It never passes `--resume`, `--continue`, `--outlive-parent`, labels or a template.
-     Prints one JSON line (schema below) from `hc`'s `RunResult`. Model/effort ride in
-     the command string only; Claude has no effort flag (spec 10).
+1. **`plugins/loom/bin/loom-host-hc`** (new, mode 755), observation and cleanup only.
+   `loom-launch-role` is unchanged. Subcommands:
+   - `launch ...`: always exit 2 with `unsupported: role launch on hc requires the
+     owner-recorded probes (ADR 0031 section 6)`. It reads no input, has no override
+     variable, and never invokes `hc`. Any unknown subcommand is exit 1 usage.
    - `status <name>`: `hc get <name> --json`; prints compact
      `{"name","state","status","reported","exitCode"}` (absent fields `null`); read-only.
    - `wait <name> --timeout <1..3600>`: `hc wait <name> --timeout <S>`. `--timeout` is
@@ -71,12 +64,10 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
    - `end <name>`: `hc kill <name>` (hc exit 11 "finished" accepted) then `hc rm <name>`;
      then `hc ls --all --json` must not contain the name, else exit 2.
    - `hc` binary: `${LOOM_HC_BIN:-hc}` (PATH lookup; tests put a stub on PATH). Every
-     name argument is validated against the name regex before any `hc` call. Any
-     other verb or `hc` subcommand is not reachable. Exit codes: 0, 1 usage, 2
-     fail-closed, 4 degraded wait.
-2. **`plugins/loom/schemas/loom-host-hc-v1.schema.json`** (new): closed schema for the
-   `launch` output `{"schema":"loom-host-hc/v1","host":"hc","name","address","role","coldId","cwd"}`.
-   Register it wherever `validate-repository.mjs` enumerates schemas.
+     name argument is validated against `^[a-z0-9_-]{1,32}$` before any `hc` call. No
+     other verb or `hc` subcommand is reachable. Exit codes: 0, 1 usage, 2 fail-closed,
+     4 degraded wait.
+2. No new schema in this slice (the `launch` output schema ships with `launch`).
 3. **`plugins/loom/bin/loom-resolve-helper`**: add `loom-host-hc` to `ALLOWED_HELPERS`,
    and to the `allowedHelpers` arrays in `scripts/validate-repository.mjs` and in
    `plugins/loom/adapters/roots/{claude-plugin-root-v1,codex-skill-source-v1}.json`,
@@ -89,7 +80,9 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
 4. **`plugins/loom/hooks/role-governance-guard.sh`**: after the existing de-quote
    transform and before the `case "$LOOM_ROLE"`, when `LOOM_ROLE` is non-empty and not
    `orchestrator`, block if `STRIPPED` matches
-   `${START}((env|command|exec|nohup|time)[[:space:]]+)*${PATHPFX}hc([[:space:]]|$)`.
+   `${START}(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|-[^[:space:]]+|env|command|exec|nohup|time)[[:space:]]+)*${PATHPFX}hc([[:space:]]|$)`
+   (wrapper words, option words and `NAME=value` assignments in any order and count,
+   so `env A=1 hc get t1`, `A=1 env B=2 hc ls` and `env -i hc ls` are all blocked).
    No allowlist, no verb parsing (covers `run send kill rm keys interrupt attach file
    machine server update exec label keep put connect` and read verbs and later verbs).
    Reason (<= 512 bytes, one line): `Loom policy: hc is orchestrator-only; role sessions cannot call hc.`
@@ -134,22 +127,18 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
 11. **`plugins/loom/bin/loom-host-hc.bats`** (new): each test builds
     `$BATS_TEST_TMPDIR/bin/hc`, a stub that appends `"$@"` one arg per line to a log,
     prints canned JSON per verb, and exits per `STUB_*` variables; `PATH` is prefixed.
-    Tests: launch argv is exactly the line sequence above (brief a single token, even
-    with spaces, quotes and `$()`); `LOOM_ROLE` equals the role; no `--resume`,
-    `--continue`, `--outlive-parent` or `--label`; refuses without
-    `LOOM_HC_UNVERIFIED`; refuses codex descriptor, `plan-evaluator`,
-    `code-evaluator`, `delegation:true`, `agentCapability:true`, relative cwd, empty,
-    NUL, oversize brief, bad name; name length <= 32 and charset; `status` JSON
-    shape and read-only argv (only `get --json`); `wait` requires `--timeout`, exit 0
-    prints "returned", nonzero hc maps to exit 4 "degraded" and never prints
-    "complete"; `events` truncates; `end` order is `kill` then `rm`, accepts kill
-    exit 11, fails closed when the name remains in `ls --all`; only `run get wait
-    events kill rm ls` ever appear in any stub log; `launch` output validates against
-    the new schema.
+    Tests: `launch` exits 2 with every input shape, with `LOOM_HC_UNVERIFIED=1` set,
+    and the stub log stays empty; unknown subcommand is exit 1; bad name refused before
+    any `hc` call; `status` JSON shape and read-only argv (only `get --json`); `wait`
+    requires `--timeout`, exit 0 prints "returned", nonzero hc maps to exit 4
+    "degraded" and never prints "complete"; `events` truncates; `end` order is `kill`
+    then `rm`, accepts kill exit 11, fails closed when the name remains in `ls --all`;
+    only `get wait events kill rm ls` ever appear in any stub log.
 12. **`plugins/loom/hooks/role-governance-guard.bats`**: add cases for each of the
     five roles plus an unknown role `foo`, Claude wire (exit 2, reason) and Codex wire
     (deny JSON): `hc ls`, `hc run --bg x claude`, `/usr/local/bin/hc kill t1`,
-    `env A=1 hc get t1`, `command hc read t1`, `ls && hc send t1 x`, `nohup hc wait`.
+    `env A=1 hc get t1` (assignment after `env`), `A=1 env B=2 hc ls`, `env -i hc ls`,
+    `command hc read t1`, `ls && hc send t1 x`, `nohup hc wait`.
     Allowed: `orchestrator` running `hc run ...`; unset `LOOM_ROLE`; `echo hc`,
     `git commit -m "hc run"`, `which-hc`.
 13. **Retired-surface tests**: update `loom-launch-role.bats` (delete the `herdr`
@@ -164,19 +153,23 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
 14. **`scripts/hc-live-probe`** (new, Bash 3.2, not run by `scripts/check`): refuses
     unless `LOOM_HC_LIVE_PROBE=1`; takes `--evidence-file <abs path>`; performs only the
     commands below and writes each command, exit code and output to the evidence
-    file. It always cleans up (trap) once it launched a terminal.
+    file. It always cleans up (trap) once it launched a terminal. It is a generic
+    probe: no role, no `LOOM_ROLE`, no agent file of loom's. Probe model selector is
+    the fixed constant `claude-haiku-5-5`, passed as `--model` in both runs.
     **`scripts/tests/hc-live-probe.bats`** (new) drives it with a stub `hc` through
-    PASS, FAIL (no OSC status, wrong state, missing reply, kill failure, leftover name)
-    and BLOCKED, checking the exact command sequence and cleanup.
+    PASS, FAIL (no OSC status, wrong state, missing reply, tool present, kill failure,
+    leftover name) and BLOCKED, checking the exact command sequence (including the
+    model) and cleanup.
 15. **Probe run** (owner or an owner-authorized orchestrator step, after the offline
-    gate is green; no GUI). Let `<id>` be 8 random lowercase hex digits; run from an
-    empty scratch directory under `/private/tmp`:
-    1. `hc --version` prints `0.1.16`; `hc ls --all` shows no `probe-<id>`.
-    2. `hc run --bg --name probe-<id> claude "What is 37+5? Reply with only the number, then stop. Use no tools."`
-    3. `hc wait probe-<id> --timeout 120`
-    4. `hc get probe-<id> --json`
-    5. `hc read probe-<id> --lines 60`
-    6. `hc kill probe-<id>`, then `hc rm probe-<id>`, then `hc ls --all`.
+    gate is green; no GUI; precedes any possible role launch). `<id>` is 8 random
+    lowercase hex digits; run in an empty scratch dir under `/private/tmp`. Run A
+    (liveness) then run B (non-delegation):
+    1. `hc --version` prints `0.1.16`; `hc ls --all` shows no `probe-<id>` or `probe-nd-<id>`.
+    2. A: `hc run --bg --name probe-<id> claude --model claude-haiku-5-5 "What is 37+5? Reply with only the number, then stop. Use no tools."`
+    3. `hc wait probe-<id> --timeout 120`, `hc get probe-<id> --json`, `hc read probe-<id> --lines 60`.
+    4. B: `hc run --bg --name probe-nd-<id> claude --model claude-haiku-5-5 --disallowedTools Agent "If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop."`
+    5. `hc wait probe-nd-<id> --timeout 120`, `hc get probe-nd-<id> --json`, `hc read probe-nd-<id> --lines 60`.
+    6. For each name: `hc kill <name>`, then `hc rm <name>`; finally `hc ls --all`.
 16. **Docs (finalize pass)**: `CLAUDE.md` Map: fixture line becomes "12-case (2 clients
     × 2 events × 3 outcomes; 48 fixture files at 4/case)", add `loom-host-hc` to the
     `bin/` list, stay <= ~100 lines. `.docs/status/` (roadmap M9, progress, handoff):
@@ -185,44 +178,55 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
 
 ## Acceptance Criteria
 
-1. `loom-host-hc launch` produces exactly the `hc run` argv in Step 1 for researcher,
-   planner and developer on Claude, and refuses everything else listed in Step 1
-   without invoking `hc`.
+1. `loom-host-hc launch` exits 2 for every input, with and without `LOOM_HC_UNVERIFIED`,
+   without invoking `hc`; no code path in this slice starts a role on `hc`.
 2. Observation calls only `hc get|wait|events`; a wait that does not return is
    `degraded` (exit 4), never completion.
 3. Every `hc` command is blocked by the role-governance guard for every non-orchestrator
    `LOOM_ROLE` on both wires and allowed for `orchestrator`.
-4. `rg -n -i "herdr" plugins scripts .claude-plugin .agents` finds nothing; no retired
-   path exists; `HERDR_PLUGIN_ROOT` appears nowhere outside `.docs/`.
+4. `rg -n -i herdr plugins scripts .claude-plugin .agents -g '!*.bats' -g '!scripts/validation/relative-link-allowlist.txt'`
+   finds nothing. The two exclusions are deliberate: `*.bats` files assert retirement
+   and so name the retired surface, and `relative-link-allowlist.txt` line 56 is the
+   one retained history link (Step 10); `rg -c -i herdr scripts/validation/relative-link-allowlist.txt`
+   prints exactly `1`. No retired path exists; `HERDR_PLUGIN_ROOT` appears nowhere
+   outside `.docs/` and `*.bats`.
 5. `hook-wire-v1` has exactly 12 cases, 48 files; Claude/Codex fixtures are byte-identical.
 6. `v0.2.0.json` and `adapters/fixtures/v0.2.0/` are unchanged; `v0.3.0.json` has
    `hostFloors.hc == "0.1.16"` and no Herdr key.
 7. `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passes on the candidate
    commit, including format, lint, syntax, metadata, links and client validation.
-8. The live probe result is recorded as PASS per the criteria below.
+8. Both live probe runs are recorded as PASS per the criteria below.
 
 ### Probe pass and fail criteria
 
 All must hold for **PASS**; the evidence file records each:
 
-- P1 `hc --version` is `0.1.16` and `probe-<id>` was absent before launch.
-- P2 `hc run` exits 0, returns an address, and the run result has no `first_message`
-  (Q3: positional prompt, tracking unset).
-- P3 `hc wait` exits 0 within 120 s (Q1: the session reported OSC 7501 and left
-  `working`).
-- P4 `hc get --json`: `name == "probe-<id>"`, `reported == true`, status state is `done`
-  or `idle`, `foreground.argv` contains no `--resume` or `--continue` and contains the
-  prompt as one token.
-- P5 `hc read` output has a line, not containing `37+5`, with `42` as a standalone token.
-- P6 `hc kill` and `hc rm` each exit 0 (kill may exit 11 if already finished) and the
-  final `hc ls --all` has no `probe-<id>`.
+- P1 `hc --version` is `0.1.16`; both probe names were absent before launch.
+- P2 Both `hc run` calls exit 0, return an address, and have no `first_message`
+  (Q3: positional prompt, delivery untracked).
+- P3 Run A `hc wait` exits 0 within 120 s. This proves only that a status report
+  arrived by then; it does not establish status at launch.
+- P4 Run A `hc get --json`: `name == "probe-<id>"`, `reported == true`, state is `done`
+  or `idle`, `foreground.argv` contains `--model` followed by `claude-haiku-5-5`, no
+  `--resume` or `--continue`, and the prompt as one token.
+- P5 Run A `hc read` has a line, not containing `37+5`, with `42` as a standalone token.
+- P6 Run B `hc get --json` matches P4 for `probe-nd-<id>` (argv also contains
+  `--disallowedTools` and `Agent`), and `hc read` has a line equal to `TOOL_ABSENT`
+  and no sub-agent launch or result line. This is generic tool-restriction evidence
+  for the Claude CLI flag only; it does not validate any role's agent definition (Q4).
+- P7 Each `hc kill` and `hc rm` exits 0 (kill may exit 11 if already finished) and the
+  final `hc ls --all` has neither name.
 
-**FAIL**: any of P1–P6 unmet (except BLOCKED). A wait timeout or `reported == false`
-records Q1 = no (no OSC status at launch). **BLOCKED (inconclusive, not PASS)**: `hc get`
-shows `blocked` (for example a folder-trust or auth prompt); the owner pre-trusts the
-scratch directory and reruns; the probe never sends keys or `--force` past a prompt.
-Cleanup (P6) runs for every outcome. A PASS covers only generic `hc` + Claude
-mechanics (Q1, Q3, launch/read/kill); it records no role as supported.
+**FAIL**: any of P1–P7 unmet (except BLOCKED). A wait timeout or `reported == false`
+is recorded as "no report observed within 120 s", cause undetermined (no OSC status,
+slow turn, or unrelated); no conclusion about status at launch (Q1) is drawn from it
+or from a PASS, and a pre-turn observation is a separate later probe. **BLOCKED
+(inconclusive, not PASS)**: `hc get` shows `blocked` (for example a folder-trust or
+auth prompt); the owner pre-trusts the scratch directory and reruns; the probe never
+sends keys or `--force` past a prompt. Cleanup (P7) runs for every outcome. A PASS
+covers only generic `hc` + Claude mechanics (Q3, launch/read/kill, a report after a
+turn, the `--disallowedTools` flag); it records no role as supported and does not
+itself enable role launch.
 
 ## Verification
 
@@ -236,16 +240,13 @@ mechanics (Q1, Q3, launch/read/kill); it records no role as supported.
 
 ## Notes
 
-- Evaluator question: is `LOOM_HC_UNVERIFIED=1` an acceptable fail-closed form of
-  "unsupported until probes are recorded" (ADR 0031 §6)? The ADR names no mechanism;
-  the flip is left to a later owner-recorded slice.
 - The `hc wait` timeout exit code is undocumented; every nonzero exit is degraded.
-- Flags to load `agents/<role>.md` or drop the `Agent` tool in an interactive session
-  are unresolved (Q4); the adapter passes `--model` only, so ADR §6 non-delegation stays
-  open. That is why launch is gated.
+- Probe B (model report plus `hc read`) is generic, not a role-definition proof; Q4
+  gates the later launch slice.
 
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Plan-eval R1: `hc` guard regex covers assignments/options after `env` (+tests); no role launch in scope (`launch` refuses, probes generic and first); AC4 excludes `*.bats` and the retained allowlist link; probe model `claude-haiku-5-5`; Q1 claim removed |
