@@ -121,3 +121,4 @@ rewritten when a later decision supersedes their subject.
 - [`herdr-client-adapter-review-findings.md`](herdr-client-adapter-review-findings.md) — `herdr-client-adapter` local review findings (adjudicated)
 - [`herdr-client-adapter-eval.md`](herdr-client-adapter-eval.md) — `herdr-client-adapter` code evaluation (Round 0: PASS)
 - [`herdr-native-app-hooks-plan-eval.md`](herdr-native-app-hooks-plan-eval.md) — `herdr-native-app-hooks` slice-plan evaluation (Round 0: PASS)
+- [`adr-0030-spec-amendment-eval.md`](adr-0030-spec-amendment-eval.md) — ADR 0030 spec amendment evaluation (Round 0: PASS)
