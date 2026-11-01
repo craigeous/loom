@@ -1,6 +1,6 @@
 # Proposed spec amendments — Herdr as an hc-driven client
 
-Status: Applied (A, C, D to specs 07, 08, 10; B not applied: spec 05 outside owner scope)
+Status: Landed
 Authority: ADR [0031](../ADR/0031-herdr-as-an-hc-driven-client.md) (Accepted)
 Date: 2026-11-01
 
@@ -149,6 +149,7 @@ the `hc` host text; `scripts/check` passes (docs, links, instruction invariants)
 
 ## Revision Log
 
+- 2026-11-01 — Applied A, C, D to specs 07, 08, 10 (eaf1374). B (spec 05) not applied: outside owner scope.
 - 2026-11-01 — initial draft.
 - 2026-11-01 — Round 1 FAIL fixes: spec 08 line 221 amended; hook text no longer
   mentions Codex wiring; `hc` guard is deny-by-default; herdr-app wording neutral.
