@@ -58,7 +58,8 @@ place**; `v0.2.0.json` and its fixtures stay byte-identical.
    - `wait <name> --timeout <1..3600>`: `hc wait <name> --timeout <S>`. `--timeout` is
      mandatory. hc exit 0 prints `returned: read the committed artifact` and exits 0;
      any nonzero hc exit prints `degraded: wait did not return (hc exit <n>); not completion`
-     and exits 4. Neither result is completion; the artifact `Status:` is.
+     and exits 4 (the timeout exit code is undocumented, so every nonzero exit is
+     degraded). Neither result is completion; the artifact `Status:` is.
    - `events <name> --lines <1..500>`: `hc events --terminal <name>` truncated after N
      lines (pipe closed); read-only.
    - `end <name>`: `hc kill <name>` (hc exit 11 "finished" accepted) then `hc rm <name>`;
@@ -237,12 +238,6 @@ itself enable role launch.
   the Claude/Codex halves of `loom-launch-role.bats` and `loom-resolve-helper.bats`.
 - Full gate once on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
 - Then the live probe (Step 15) and its evidence summary in `progress.md`.
-
-## Notes
-
-- The `hc wait` timeout exit code is undocumented; every nonzero exit is degraded.
-- Probe B (model report plus `hc read`) is generic, not a role-definition proof; Q4
-  gates the later launch slice.
 
 ## Revision Log
 
