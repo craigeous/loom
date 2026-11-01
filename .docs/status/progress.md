@@ -4,10 +4,11 @@ Status: Living
 
 The status source of truth and decision index for building loom.
 
-Current milestone: M8
+Current milestone: M9
 
 ## Action history
 
+- 2026-11-01 — M8 completed with `landing-history-policy` landed.
 - 2026-11-01 — M8 slice 2 `workflow-profiles` landed.
 - 2026-11-01 — M8 slice 1 `workflow-benchmark` landed.
 - 2026-10-31 — M7 completed with `readme-refresh` landed.
@@ -20,7 +21,16 @@ Current milestone: M8
 
 ## Current state
 
-- **Last action (2026-11-01) — M8 slice 2 (`workflow-profiles`) Landed:**
+- **Last action (2026-11-01) — M8 slice 3 (`landing-history-policy`) Landed (Milestone M8 Complete):**
+  Landed decision and specification of the authoritative landing history policy in `.docs/ADR/0028-landing-history-policy.md` (Accepted),
+  registered in `.docs/ADR/README.md`, and amended `.docs/spec/00-overview.md` (authority, non-goal clarification) and
+  `.docs/spec/04-orchestrator.md` (authority, provisional landing history contract, fetched base as sole parent,
+  receipt-bound candidate, target-movement rebuild, verified checked-tree equivalence for integration and idempotent cleanup,
+  and mode conformance table for `remote-direct`, `pr-per-slice`, and `merge-queue`). Pure-docs slice with review findings recorded as
+  `skipped: docs-only` (advisory, non-blocking). Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_aa90ff0566ff`
+  with Verdict: PASS (Round: 0). Milestone M8 is now complete; advancing to Milestone M9.
+
+- **Prior action (2026-11-01) — M8 slice 2 (`workflow-profiles`) Landed:**
   Landed owner-selected workflow profiles and recommendation helper `plugins/loom/bin/loom-profile`,
   documentation in `plugins/loom/skills/loom-playbook/references/orchestration.md` and `plugins/loom/skills/loom-run/SKILL.md`,
   and 12 automated integration tests in `scripts/tests/loom-profile.bats` (911 total repository Bats tests passing).

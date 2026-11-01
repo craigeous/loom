@@ -5,7 +5,7 @@ Status: Living
 Milestone order for building loom. "What's next and why"; detailed status in
 `progress.md`, restart context in `handoff.md`.
 
-Current milestone: M8
+Current milestone: M9
 
 ## Repository improvement program (2026)
 
@@ -36,9 +36,9 @@ Current milestone: M8
   `[x] loom-doctor-foundation`; `[x] docs-state-validator`; `[x] living-doc-shape`.
 - [x] **M7 — Reconcile packaging and publish a release** (complete):
   `[x] packaging-conformance`; `[x] readme-refresh`.
-- [ ] **M8 — Control process cost and repository noise** (in progress):
-  `[x] workflow-benchmark`; `[x] workflow-profiles`; `landing-history-policy`.
-- [ ] **M9 — Client compatibility: Herdr and native app integration**:
+- [x] **M8 — Control process cost and repository noise** (complete):
+  `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
+- [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
   `herdr-client-adapter`, `herdr-native-app-hooks`, and `herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification).

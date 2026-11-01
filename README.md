@@ -32,9 +32,9 @@ or human checkpoint you declare.
 
 ## Status
 
-Current milestone: M8
+Current milestone: M9
 
-**Milestones M0 through M7 complete; M8 in progress.**
+**Milestones M0 through M8 complete; M9 in progress.**
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),
   four-cell hosted CI, static Claude Code / Codex packaging contracts, and verified
@@ -58,6 +58,9 @@ Current milestone: M8
 - **M7 — Packaging Conformance & README Refresh**: Canonical MIT license, version [0.2.0] CHANGELOG,
   CommonMark code fence tracking, supported platforms/prerequisites, multi-client installation/upgrade
   guides, end-to-end example, tier expectations table, and 886 Bats tests snapshot.
+- **M8 — Process Cost & Repository Noise**: Paired workflow benchmark harness (`scripts/workflow-benchmark.sh`),
+  owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`), and provisional
+  landing history policy with squash publication and durable tracked evidence (ADR 0028).
 
 Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); architecture decisions are in

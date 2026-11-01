@@ -111,3 +111,5 @@ rewritten when a later decision supersedes their subject.
 - [`workflow-profiles-review-findings.md`](workflow-profiles-review-findings.md) — `workflow-profiles` local review findings (adjudicated)
 - [`workflow-profiles-eval.md`](workflow-profiles-eval.md) — `workflow-profiles` code evaluation (Round 0: PASS)
 - [`landing-history-policy-plan-eval.md`](landing-history-policy-plan-eval.md) — `landing-history-policy` slice-plan evaluation (Round 0: PASS)
+- [`landing-history-policy-review-findings.md`](landing-history-policy-review-findings.md) — `landing-history-policy` automated review findings (`skipped: docs-only`)
+- [`landing-history-policy-eval.md`](landing-history-policy-eval.md) — `landing-history-policy` code evaluation (Round 0: PASS)

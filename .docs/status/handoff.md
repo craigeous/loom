@@ -5,7 +5,7 @@ Status: Living
 Restart instructions and compact current context. `progress.md` is the status
 source of truth; `roadmap.md` is milestone order.
 
-Current milestone: M8
+Current milestone: M9
 
 ## Start here each session
 
@@ -20,6 +20,6 @@ Current milestone: M8
 
 ## Where things stand
 
-- **Current state:** Milestone M8 in progress (`workflow-profiles` landed; 911 Bats tests passing).
-- **Next action:** Advance to Milestone M8 Slice 3 (`landing-history-policy`).
+- **Current state:** Milestone M8 complete (`landing-history-policy` landed; 911 Bats tests passing).
+- **Next action:** Advance to Milestone M9 Slice 1 (`herdr-client-adapter`).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

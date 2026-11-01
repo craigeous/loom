@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [landing-history-policy.md](landing-history-policy.md) — `Implemented` — M8 slice 3: decide and specify the authoritative landing history policy.
+(none)
 
 ## Archived plans
+
+- [archive/landing-history-policy.md](archive/landing-history-policy.md) — `Landed` —
+  M8 slice 3: decide and specify the authoritative landing history policy (`.docs/ADR/0028-landing-history-policy.md`, amendments to `00-overview.md` and `04-orchestrator.md`, 911 total repository Bats tests passing).
 
 - [archive/workflow-profiles.md](archive/workflow-profiles.md) — `Landed` —
   M8 slice 2: owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`, documentation in `orchestration.md` and `loom-run/SKILL.md`, `scripts/tests/loom-profile.bats`, 12 tests, 911 total repository Bats tests passing).
