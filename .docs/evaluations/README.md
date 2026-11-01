@@ -119,3 +119,4 @@ rewritten when a later decision supersedes their subject.
 - [`herdr-client-adapter-plan-eval.md`](herdr-client-adapter-plan-eval.md) — `herdr-client-adapter` slice-plan evaluation (Round 0: PASS)
 - [`herdr-client-adapter-review-findings.md`](herdr-client-adapter-review-findings.md) — `herdr-client-adapter` local review findings (adjudicated)
 - [`herdr-client-adapter-eval.md`](herdr-client-adapter-eval.md) — `herdr-client-adapter` code evaluation (Round 0: PASS)
+- [`herdr-native-app-hooks-plan-eval.md`](herdr-native-app-hooks-plan-eval.md) — `herdr-native-app-hooks` slice-plan evaluation (Round 0: FAIL)
