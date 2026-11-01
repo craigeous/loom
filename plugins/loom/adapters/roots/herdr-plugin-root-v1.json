@@ -1,0 +1,20 @@
+{
+  "schema": "loom-installed-root-binding-v1",
+  "id": "herdr-plugin-root/v1",
+  "client": "herdr",
+  "binding": "HERDR_PLUGIN_ROOT",
+  "inputMustBeAbsolute": true,
+  "invocationMustBeAbsolute": true,
+  "canonicalizeInput": true,
+  "canonicalRootRequired": true,
+  "manifest": ".herdr-plugin/plugin.json",
+  "manifestMustBeCanonical": true,
+  "manifestMustBeRegularFile": true,
+  "expectedName": "loom",
+  "expectedVersion": "0.2.0",
+  "helperDirectory": "bin",
+  "helperDirectoryMustBeDirectChild": true,
+  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
+  "helperMustBeRegularFile": true,
+  "helperMustBeExecutable": true
+}

@@ -45,11 +45,11 @@
 set -u
 
 ROLES=(researcher planner plan-evaluator developer code-evaluator)
-CLIENTS=(claude codex antigravity)
+CLIENTS=(claude codex antigravity herdr)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity|herdr|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity|herdr] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
     exit 1
 }
 
@@ -201,6 +201,7 @@ _valid_model() {
     claude) [ "$2" = haiku ] || [ "$2" = sonnet ] || [ "$2" = opus ] ;;
     codex) [[ "$2" =~ $CODEX_MODEL_RE ]] ;;
     antigravity) [[ "$2" =~ $AGY_MODEL_RE ]] ;;
+    herdr) return 1 ;;
     *) return 1 ;;
     esac
 }
@@ -360,6 +361,16 @@ _launch_antigravity() {
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
     printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s","environment":{"LOOM_ROLE":"%s"}}}\n' \
         "$role" "$profile" "$cold_id" "$cross_json" "$role" "$(_json_escape "$ag_model")" "$(_json_escape "$role_path")" "$role_sha" "$role"
+}
+
+# _launch_herdr — emits the normalized descriptor only; Herdr inherits the
+# ambient model, so no model/effort is chosen here and no window is spawned.
+_launch_herdr() {
+    local role="$1" profile="$2" cross_json="${3:-}" cold_id
+    cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
+    export LOOM_ROLE="$role"
+    printf '{"schema":"loom-role-launch/v1","client":"herdr","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"herdr":{"profile":"%s"}}\n' \
+        "$role" "$profile" "$cold_id" "$cross_json" "$profile"
 }
 
 main() {
@@ -533,6 +544,11 @@ main() {
         ;;
     antigravity)
         _launch_antigravity "$root" "$role" "$profile" "$cross_json" "$model_in" "$effort_in"
+        ;;
+    herdr)
+        [ "$flag_model_set" -eq 0 ] && [ "$flag_effort_set" -eq 0 ] || _fail "herdr inherits the ambient model: --model/--effort are not supported"
+        [ -n "$(_matrix_field "$matrix_json" "$profile" ".herdr.profile")" ] || _fail "no Herdr profile mapped for profile: $profile"
+        _launch_herdr "$role" "$profile" "$cross_json"
         ;;
     esac
 }

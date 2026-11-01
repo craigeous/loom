@@ -3,7 +3,7 @@
 Artifact: .docs/slice-plans/herdr-client-adapter.md
 Reviewed against: plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md
 Commit: f298478
-Round: 1
+Round: 0
 Verdict: PASS
 
 ## Summary

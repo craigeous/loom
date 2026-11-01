@@ -15,7 +15,7 @@
         "cold": { "const": true },
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
-        "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorClient": { "enum": ["claude", "codex", "antigravity", "herdr"] },
         "crossFamilyVerified": { "type": "boolean" },
         "claude": {
           "type": "object",
@@ -41,7 +41,7 @@
         "cold": { "const": true },
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
-        "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorClient": { "enum": ["claude", "codex", "antigravity", "herdr"] },
         "crossFamilyVerified": { "type": "boolean" },
         "codex": {
           "type": "object",
@@ -70,7 +70,7 @@
         "cold": { "const": true },
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
-        "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorClient": { "enum": ["claude", "codex", "antigravity", "herdr"] },
         "crossFamilyVerified": { "type": "boolean" },
         "antigravity": {
           "type": "object",
@@ -90,6 +90,29 @@
               "properties": { "LOOM_ROLE": { "type": "string", "minLength": 1 } }
             }
           }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "client", "role", "profile", "coldId", "cold", "delegation", "permissions", "herdr"],
+      "properties": {
+        "schema": { "const": "loom-role-launch/v1" },
+        "client": { "const": "herdr" },
+        "role": { "enum": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"] },
+        "profile": { "enum": ["Economy", "Standard", "Deep review"] },
+        "coldId": { "type": "string", "minLength": 1 },
+        "cold": { "const": true },
+        "delegation": { "const": false },
+        "permissions": { "const": "one-level" },
+        "authorClient": { "enum": ["claude", "codex", "antigravity", "herdr"] },
+        "crossFamilyVerified": { "type": "boolean" },
+        "herdr": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile"],
+          "properties": { "profile": { "enum": ["Economy", "Standard", "Deep review"] } }
         }
       }
     }

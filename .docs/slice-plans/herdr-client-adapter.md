@@ -1,6 +1,6 @@
 # Herdr client adapter
 
-Status: Approved
+Status: Implemented
 Target specs: 00-overview.md, 10-packaging.md; ADRs 0018, 0027, 0029
 Target size: <= 180 LOC net code change (excluding tests and metadata)
 
@@ -148,6 +148,14 @@ temporary workspaces are not defended by this slice.
 All Herdr contract values and schemas are grounded in approved research note
 `.docs/research/2026-11-01-herdr-client-adapter-contract.md` and authorized in
 accepted `.docs/ADR/0029-herdr-client-adapter-and-native-app-support.md`.
+
+## Implementation Evidence
+
+- Targeted Bats (`loom-resolve-helper.bats`, `loom-launch-role.bats`): 140/140 pass, including 8 new herdr resolver tests and 4 new herdr launcher tests.
+- `node scripts/validate-repository.mjs --root . --all`: herdr descriptor validates; the only remaining report is the pre-existing `[eval-sequence]` note on `herdr-client-adapter-plan-eval.md` (Round 1 as first evaluation).
+- Affirmative contract checks (floor, root binding, researcher/developer/planner profiles) pass; negative check `HERDR_PLUGIN_ROOT=/invalid/path ... herdr loom-doctor` prints `HERDR_PLUGIN_ROOT is not a directory` and exits 2.
+- Deviations required by existing gates: added a `loom-installed-root-binding-v1` branch to `loom-installed-root-binding-v1.schema.json` and a `herdr` branch to `loom-role-launch-v1.schema.json` (the descriptor id/schema in Step 2 and the Step 5 payload were otherwise rejected); refreshed its pinned digest in `scripts/check-toolchain.json`; added the herdr descriptor to `expectedRoots` in `validate-repository.mjs` (the v0.2.0 matrix binding list is unchanged). `--model/--effort` are rejected for herdr (ambient model inheritance); herdr is not in the auto cross-family cycle.
+- `scripts/check`: see final result in the handoff message.
 
 ## Revision Log
 

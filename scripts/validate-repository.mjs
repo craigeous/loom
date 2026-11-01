@@ -365,7 +365,8 @@ async function validateMetadata() {
     [".agents/plugins/marketplace.json", "scripts/schemas/codex-marketplace-0.144.6.schema.json"],
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
-    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
+    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
+    ["plugins/loom/adapters/roots/herdr-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
   ];
   const schemaResults = new Map();
   for (const [target, schemaPath] of schemaBindings) {
@@ -482,7 +483,8 @@ function semanticMetadata() {
   const matrix = readJson(matrixPath);
   const rootPaths = [
     "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
-    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json",
+    "plugins/loom/adapters/roots/herdr-plugin-root-v1.json"
   ];
   const roots = rootPaths.map(readJson);
   for (const [relative, value] of [["plugins/loom/.claude-plugin/plugin.json", claudeManifest], ["plugins/loom/.codex-plugin/plugin.json", codexManifest]]) {
@@ -545,6 +547,14 @@ function semanticMetadata() {
       helperMustBeRegularFile: true, helperMustBeExecutable: true,
       forbiddenWorkflowRootGuesses: ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"],
       hookBinding: "PLUGIN_ROOT", hookManifest: "./hooks/hooks.json"
+    },
+    {
+      schema: "loom-installed-root-binding-v1", id: "herdr-plugin-root/v1", client: "herdr", binding: "HERDR_PLUGIN_ROOT",
+      inputMustBeAbsolute: true, invocationMustBeAbsolute: true, canonicalizeInput: true,
+      canonicalRootRequired: true, manifest: ".herdr-plugin/plugin.json", manifestMustBeCanonical: true,
+      manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
+      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
+      helperMustBeRegularFile: true, helperMustBeExecutable: true
     }
   ];
   for (const [index, binding] of roots.entries()) {

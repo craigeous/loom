@@ -597,6 +597,43 @@ launch_env() {
 }
 
 # ---------------------------------------------------------------------------
+# Herdr positive & negative paths
+# ---------------------------------------------------------------------------
+
+@test "herdr: all five roles launch with matrix profiles and no delegation" {
+    local role profile
+    for role in researcher developer planner plan-evaluator code-evaluator; do
+        case "$role" in
+        researcher) profile=Economy ;;
+        developer) profile=Standard ;;
+        *) profile="Deep review" ;;
+        esac
+        launch herdr "$role"
+        [ "$status" -eq 0 ]
+        printf '%s' "$output" | jq -e --arg r "$role" --arg p "$profile" \
+            '.schema == "loom-role-launch/v1" and .client == "herdr" and .role == $r and .profile == $p and .cold == true and .delegation == false and .permissions == "one-level" and .herdr.profile == $p'
+    done
+}
+
+@test "herdr: cold ids are fresh per launch" {
+    launch herdr researcher
+    first=$(printf '%s' "$output" | jq -r .coldId)
+    launch herdr researcher
+    second=$(printf '%s' "$output" | jq -r .coldId)
+    [ -n "$first" ] && [ "$first" != "$second" ]
+}
+
+@test "herdr: --model is rejected because the ambient model is inherited" {
+    launch herdr researcher --model foo
+    [ "$status" -eq 2 ]
+}
+
+@test "herdr: same-client cross-family evaluation is rejected" {
+    launch herdr plan-evaluator --author-client herdr
+    [ "$status" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
 # Cross-family evaluation guards & multi-client routing
 # ---------------------------------------------------------------------------
 

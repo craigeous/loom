@@ -1,0 +1,6 @@
+{
+  "name": "loom",
+  "version": "0.2.0",
+  "description": "Dual-client spec-driven development system",
+  "source": "./plugins/loom"
+}

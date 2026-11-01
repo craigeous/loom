@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-client-adapter.md](herdr-client-adapter.md) — `Approved` — M9 Herdr adapter contract and implementation plan.
+- [herdr-client-adapter.md](herdr-client-adapter.md) — `Implemented` — M9 Herdr adapter contract and implementation (awaiting code review).
 
 ## Archived plans
 
