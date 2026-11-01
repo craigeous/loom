@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [landing-history-policy.md](landing-history-policy.md) — `Plan Review` — M8 slice 3: decide and specify the authoritative landing history policy.
+- [landing-history-policy.md](landing-history-policy.md) — `Approved` — M8 slice 3: decide and specify the authoritative landing history policy.
 
 ## Archived plans
 

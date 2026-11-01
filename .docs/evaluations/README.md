@@ -110,3 +110,4 @@ rewritten when a later decision supersedes their subject.
 - [`workflow-profiles-plan-eval.md`](workflow-profiles-plan-eval.md) — `workflow-profiles` slice-plan evaluation (Round 0: PASS)
 - [`workflow-profiles-review-findings.md`](workflow-profiles-review-findings.md) — `workflow-profiles` local review findings (adjudicated)
 - [`workflow-profiles-eval.md`](workflow-profiles-eval.md) — `workflow-profiles` code evaluation (Round 0: PASS)
+- [`landing-history-policy-plan-eval.md`](landing-history-policy-plan-eval.md) — `landing-history-policy` slice-plan evaluation (Round 0: PASS)

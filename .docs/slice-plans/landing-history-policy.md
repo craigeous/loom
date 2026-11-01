@@ -1,6 +1,6 @@
 # Landing History Policy
 
-Status: Plan Review
+Status: Approved
 Target specs: 00-overview.md, 04-orchestrator.md
 Target size: <= 200 LOC net code/doc changes (plan <= 250 lines)
 
