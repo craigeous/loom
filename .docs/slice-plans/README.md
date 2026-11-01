@@ -17,9 +17,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [herdr-client-adapter.md](herdr-client-adapter.md) — `Implemented` — M9 Herdr adapter contract and implementation (awaiting code review).
+None active.
 
 ## Archived plans
+
+- [archive/herdr-client-adapter.md](archive/herdr-client-adapter.md) — `Landed` —
+  M9 slice 1: client adapter contract and implementation for Herdr (`.herdr-plugin/marketplace.json`, `plugins/loom/.herdr-plugin/plugin.json`, `plugins/loom/adapters/roots/herdr-plugin-root-v1.json`, v0.3.0 compatibility matrix, resolver and role-launcher support, schemas, and 140 targeted Bats tests; 923 total repository Bats tests passing).
 
 - [archive/landing-history-policy.md](archive/landing-history-policy.md) — `Landed` —
   M8 slice 3: decide and specify the authoritative landing history policy (`.docs/ADR/0028-landing-history-policy.md`, amendments to `00-overview.md` and `04-orchestrator.md`, 911 total repository Bats tests passing).

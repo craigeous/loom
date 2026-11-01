@@ -8,6 +8,7 @@ Current milestone: M9
 
 ## Action history
 
+- 2026-11-01 — M9 slice 1 `herdr-client-adapter` landed.
 - 2026-11-01 — M8 completed with `landing-history-policy` landed.
 - 2026-11-01 — M8 slice 2 `workflow-profiles` landed.
 - 2026-11-01 — M8 slice 1 `workflow-benchmark` landed.
@@ -21,7 +22,15 @@ Current milestone: M9
 
 ## Current state
 
-- **Last action (2026-11-01) — M8 slice 3 (`landing-history-policy`) Landed (Milestone M8 Complete):**
+- **Last action (2026-11-01) — M9 slice 1 (`herdr-client-adapter`) Landed:**
+  Landed Herdr client adapter support: manifests (`.herdr-plugin/marketplace.json`, `plugins/loom/.herdr-plugin/plugin.json`),
+  root binding `plugins/loom/adapters/roots/herdr-plugin-root-v1.json`, v0.3.0 compatibility matrix updates, `loom-resolve-helper`
+  resolution case, `loom-launch-role` launcher descriptors, schema updates, discovery metadata validation in `scripts/validate-repository.mjs`,
+  and 140 targeted Bats tests (923 total repository Bats tests passing). Completed local review under `loom-local-review/v1` (`ran-clean`).
+  Evaluated blind cross-family by Codex (`gpt-6.1-terra`) on Orca run `run_95d038fdc54e` with Verdict: PASS (Round: 0).
+  Milestone M9 is now active and in progress.
+
+- **Prior action (2026-11-01) — M8 slice 3 (`landing-history-policy`) Landed (Milestone M8 Complete):**
   Landed decision and specification of the authoritative landing history policy in `.docs/ADR/0028-landing-history-policy.md` (Accepted),
   registered in `.docs/ADR/README.md`, and amended `.docs/spec/00-overview.md` (authority, non-goal clarification) and
   `.docs/spec/04-orchestrator.md` (authority, provisional landing history contract, fetched base as sole parent,

@@ -20,6 +20,6 @@ Current milestone: M9
 
 ## Where things stand
 
-- **Current state:** Milestone M8 complete (`landing-history-policy` landed; 911 Bats tests passing).
-- **Next action:** Advance to Milestone M9 Slice 1 (`herdr-client-adapter`).
+- **Current state:** Milestone M9 Slice 1 (`herdr-client-adapter`) Landed; 923 Bats tests passing.
+- **Next action:** Advance to Milestone M9 Slice 2 (`herdr-native-app-hooks`).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

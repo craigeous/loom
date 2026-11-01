@@ -117,4 +117,5 @@ rewritten when a later decision supersedes their subject.
 - [`0029-herdr-client-adapter-and-native-app-support-eval.md`](0029-herdr-client-adapter-and-native-app-support-eval.md) — ADR 0029 plan evaluation (Round 0: PASS)
 - [`0029-herdr-client-adapter-and-native-app-support-acceptance.md`](0029-herdr-client-adapter-and-native-app-support-acceptance.md) — ADR 0029 owner acceptance
 - [`herdr-client-adapter-plan-eval.md`](herdr-client-adapter-plan-eval.md) — `herdr-client-adapter` slice-plan evaluation (Round 0: PASS)
-- [`herdr-client-adapter-eval.md`](herdr-client-adapter-eval.md) — `herdr-client-adapter` code evaluation (Round 0: FAIL)
+- [`herdr-client-adapter-review-findings.md`](herdr-client-adapter-review-findings.md) — `herdr-client-adapter` local review findings (adjudicated)
+- [`herdr-client-adapter-eval.md`](herdr-client-adapter-eval.md) — `herdr-client-adapter` code evaluation (Round 0: PASS)
