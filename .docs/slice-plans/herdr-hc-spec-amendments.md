@@ -85,13 +85,13 @@ Add a new section after `## Role launch mapping`:
 +[0031](../ADR/0031-herdr-as-an-hc-driven-client.md).
 @@ Hook normalization and output adapters
 -Hook policy receives a normalized internal event. All three clients' current `PreCompact`
-+Hook policy receives a normalized internal event. Both clients' current `PreCompact`
++Hook policy receives a normalized internal event. Claude's and Codex's current `PreCompact`
 @@ wire table
 -| Herdr `PreToolUse` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 -| Herdr `PreCompact` | exit 0; empty stdout and stderr | exit 2; empty stdout; stderr `<reason>\n` |
 @@ conformance gate list (line 221)
 -  and stderr results for all three clients and both supported events;
-+  and stderr results for the two remaining clients and both supported events;
++  and stderr results for the `claude` and `codex` clients and both supported events;
 @@ fixtures paragraph
 -`claude`, `codex`, and `herdr`, events `pre-tool-use` and `pre-compact`, and cases
 -`allow`, `block`, and `malformed`: 18 cases and 72 files across three clients.
@@ -123,8 +123,9 @@ evadable, not a boundary."
 -  absolutely.
 +- **Herdr.** Herdr has no installed root, manifest, marketplace or hook binding. It is a
 +  host driven through `hc` (spec 07 §Host surfaces); roles it launches resolve helpers
-+  through their own client's root above. Loom's hooks stay inside Claude Code; Herdr
-  adds no hook binding, and this amendment changes no Codex hook wiring.
++  through their own client's root above. Herdr does not install, host or intercept hooks;
+  Claude Code and Codex hooks keep running in their own plugin systems under the
+  existing wires of spec 08.
 @@ Versioned compatibility and capability mapping (append)
 +The matrix records `hc` as a host with a floor of `0.1.16` (the only observed
 +version) and does not floor herdr-app, which loom does not call. It carries no Herdr
@@ -151,3 +152,6 @@ the `hc` host text; `scripts/check` passes (docs, links, instruction invariants)
 - 2026-11-01 — initial draft.
 - 2026-11-01 — Round 1 FAIL fixes: spec 08 line 221 amended; hook text no longer
   mentions Codex wiring; `hc` guard is deny-by-default; herdr-app wording neutral.
+- 2026-11-01 — Round 2 FAIL fix (owner reading A): Herdr takes no part in hooks;
+  Claude and Codex hook wires stay governed by spec 08. The two-client fixture set
+  (12 cases / 48 files) only drops the retired Herdr fixtures.

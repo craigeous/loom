@@ -35,8 +35,10 @@ Two research notes show that framing has no support in the installed product:
 **Owner decision (binding).** Herdr is its own client, the way Orca is a client
 within loom. Loom is made Herdr-aware. The plugin framing is dropped: loom ships no
 Herdr plugin, marketplace or `.herdr-plugin` manifest as its integration. Herdr is
-driven through `hc`. Loom's hooks stay inside Claude Code and are not
-installed through Herdr. This ADR adds, changes or removes no Codex hook wiring.
+driven through `hc`. Herdr does not install, host or intercept hooks: it is only a
+client that launches agents through `hc` and observes their status. Loom's hooks keep
+running inside each client's own plugin system, and the Claude Code and Codex hook wires
+remain governed by spec 08 as they are today.
 
 **Versions.** `hc` 0.1.16 and herdr-app 0.1.11. The owner's earlier brief, ADR 0029,
 ADR 0030 and `clientFloors.herdr` said 0.1.10; the installed app is 0.1.11
@@ -58,7 +60,7 @@ worktree placement, readiness and wait, not a model, a plugin root or a hook run
 Consequently:
 
 - Claude Code and Codex keep their own installed roots (`claude-plugin-root/v1`,
-  `codex-skill-source/v1`). Hooks stay inside Claude Code. A role launched under `hc`
+  `codex-skill-source/v1`). Each client's hooks run in its own plugin system. A role launched under `hc`
   resolves helpers exactly as it does elsewhere. There is no Herdr root.
 - Loom drives only the `hc` CLI. It does not call `herdr-app do`, write
   `~/.config/herdr-app` or `~/.config/herdr-core`, or ship a mod. Read-only
@@ -135,7 +137,7 @@ remains the dispatcher** (spec 03). `hc wait` always carries a timeout; a timeou
 reported as degraded, never as completion.
 
 "Only root delegates" is not enforced by `hc` (any process with Bash may call
-`hc run`). The enforcement stays in Claude Code: the role-governance PreToolUse guard
+`hc run`). The enforcement stays in the client's own hook system (spec 08): the role-governance PreToolUse guard
 gains a **deny-by-default `hc` policy**: when `LOOM_ROLE` is a non-orchestrator role,
 every `hc` invocation is refused. There is no allowlist for role sessions; the
 orchestrator is the only caller of `hc`. This covers every verb in the research note's
@@ -210,7 +212,7 @@ mutual-exclusion logic and 24 fixtures to defend a path that is never exercised.
 | `plugins/loom/.herdr-plugin/plugin.json` | Retire (delete). |
 | `plugins/loom/adapters/roots/herdr-plugin-root-v1.json` and the `herdr-plugin-root/v1` branch of `loom-installed-root-binding-v1.schema.json` | Retire. |
 | `herdr` entries in `v0.3.0.json` (`clientFloors.herdr`, root binding, per-profile `herdr` keys) | Retire. The matrix is release-owned: if `v0.3.0` is released, the change lands in the next matrix version with an `hc` floor of `0.1.16`; otherwise in place. The code slice decides from release state. |
-| `herdr` hook fixtures (24 files) and the `HERDR_PLUGIN_ROOT` branches in the three hook scripts and `hooks.json` | Retire; `hook-wire-v1` becomes 2 clients × 2 events × 3 outcomes = 12 cases / 48 files. |
+| `herdr` hook fixtures (24 files) and the `HERDR_PLUGIN_ROOT` branches in the three hook scripts and `hooks.json` | Retire; `hook-wire-v1` becomes 2 clients × 2 events × 3 outcomes = 12 cases / 48 files. The Claude and Codex hook wires themselves are unchanged; only the retired Herdr fixtures go. |
 | `herdr` branches in `loom-resolve-helper`, `loom-launch-role` (client enum, schema), `validate-repository.mjs` | Retire; replaced by the host adapter (§3). |
 | `scripts/tests/herdr-verification.bats` | Retire or rewrite against a stub `hc` (code slice decides). |
 | `.docs/research/…herdr-client-adapter-contract.md`, `…native-app-hooks-contract.md`, archived 0029/0030 slice plans and evaluations | Keep as history; they are superseded, not deleted. |
@@ -234,8 +236,9 @@ recorded.
   and a three-way root-selection complexity from the hooks.
 - Blind evaluation stays on its current host until the owner resolves §5; the `hc`
   path cannot weaken ADR 0022 by default.
-- Loom's hooks live only in Claude Code. Herdr is shown no hook surface, so anything
-  depending on interception stays there.
+- Loom's hooks live in each client's own plugin system (Claude Code and Codex). Herdr is
+  shown no hook surface and takes no part in hook installation or interception, so
+  anything depending on interception stays in those clients.
 - **Open blocker:** blind review through `hc` is unresolved (§5). Items 1–4 are
   necessary, not sufficient (`hc <hc from=…>` tags, names, cwd and argv can reveal
   authorship). No evaluator role runs on `hc` until a follow-up ADR records the
