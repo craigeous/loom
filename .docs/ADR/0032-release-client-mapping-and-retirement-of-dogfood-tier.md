@@ -48,7 +48,9 @@ matrix or code changes, and the Herdr work already decided by ADR 0031.
 | v0.3.0 | Antigravity, Orca, Herdr (`hc`) | this ADR |
 
 v0.3.0 is additive: it also carries the v0.2.0 clients, which must keep passing their
-own evidence. A client appearing in no row is unsupported in every release, whatever
+own evidence. v0.3.0 is atomic: it is published as v0.3.0 only when Antigravity, Orca
+and Herdr each satisfy §3. If one cannot, the release is not shipped under that
+label; moving that client to a later release requires a superseding ADR (below). A client appearing in no row is unsupported in every release, whatever
 code exists for it. The release at which a client is first supported is fixed by this
 table; moving a client needs a superseding ADR.
 
@@ -67,10 +69,10 @@ matrix lists it with complete conformance evidence; there is no private or parti
 support tier. Evidence from one platform is not release conformance."** (Listed in §8;
 this ADR does not edit `CLAUDE.md`.)
 
-### 3. Definition of "supported client" (proposal — plan evaluator must check each element)
+### 3. Definition of "supported client"
 
-A client is supported in release R only if all of the following are recorded and
-checkable from the tagged commit:
+A client is supported in release R only if E1–E3 hold in the tagged commit and E4–E5
+are recorded in an external evidence record (below) bound to that commit:
 
 - **E1 — Matrix entry.** `plugins/loom/adapters/compatibility/vR.json` lists the client
   with a pinned floor version and its profile mapping.
@@ -78,7 +80,7 @@ checkable from the tagged commit:
   `adapters/roots/` plus manifest/catalog loading. For a host (Orca, Herdr), a host
   adapter descriptor that maps the launcher's inner-client descriptor to host
   commands (spec 07 host table) with no policy of its own. Which form applies is a
-  planner decision per client (open question 3).
+  planner decision per client (open question 2).
 - **E3 — Offline Bats conformance.** Offline tests for launch descriptor, role
   contract parity, hook/guard behavior where the client has a hook surface, and
   refusal of unknown or below-floor versions, run in the repository gate
@@ -86,10 +88,24 @@ checkable from the tagged commit:
 - **E4 — Live runs on every mandatory platform.** At least one recorded live run of the
   client on **each** platform ADR 0019 requires for release R (currently Ubuntu
   22.04/24.04 x86-64 and macOS 14+ on Apple silicon and Intel), at the pinned floor,
-  against the matrix, with evidence bound to the candidate commit. A run on one
-  platform does not substitute for another.
-- **E5 — Owner sign-off.** A recorded owner acknowledgement, naming the client, the
-  evidence set and the candidate commit.
+  against the matrix, with each run recorded in the evidence record. This applies to
+  every client in the release, hosts and Antigravity included. A run on one platform
+  does not substitute for another.
+- **E5 — Owner sign-off.** An owner acknowledgement in the evidence record, naming the
+  client, the evidence set and the commit.
+
+**Evidence record.** E4 and E5 are recorded in an immutable file, one per release, at
+`.docs/evaluations/release-evidence/vR.json`, written **after** the candidate commit
+is chosen and tagged `vR`. It names the full candidate commit hash, and per client the
+platform runs (floor version, platform, result, log or journal reference) and the owner
+acknowledgement. The candidate commit therefore never contains its own hash or its
+post-test acknowledgement. It is checkable with git: the record lives in a commit that
+descends from the tag (`git merge-base --is-ancestor vR <record-commit>`), the hash it
+names equals `git rev-parse vR^{commit}`, and the record is append-only after
+publication (corrections are new files, not edits). A release is not published until
+the record exists on `main` and verifies. Candidate-commit content (E1–E3) is
+unaffected; a later change to the candidate requires a new tag and a new record.
+This changes where evidence is recorded, not how much ADR 0019 requires.
 
 Not invented here: the exact evidence file format, where E4 runs are stored, and
 whether existing ADR 0024 journals can be reused for any E4 cell. Those are for the
@@ -122,14 +138,16 @@ v0.3.0 supported status:
 - Pin an Antigravity (`agy`) floor version; record it in the v0.3.0 matrix.
 - Add the E1 matrix entry and profile mapping (the launcher already derives models
   from `agy models`; matrix and launcher must agree).
-- Decide and add the E2 binding form (open question 3); no manifest or root binding exists.
+- Decide and add the E2 binding form (open question 2); no manifest or root binding exists.
 - Specify and test Antigravity's role-isolation properties against ADR 0022 (blind
   review), spec 02 and role governance; the launcher alone proves none of this.
 - Offline Bats for the launcher path (stubbed `agy`), unknown/below-floor refusal and
   rotation behavior.
-- Decide whether `claude -> codex -> antigravity -> claude` evaluator rotation stays the
-  default; before v0.3.0 it SHALL NOT route to Antigravity by default in a v0.2.x
-  build (code slice; open question 4).
+- Default evaluator rotation excludes Antigravity until v0.3.0 meets §3: the
+  `claude -> codex -> antigravity -> claude` rotation SHALL NOT route to Antigravity
+  by default in any v0.2.x build (code slice). Antigravity is reachable only by
+  explicit opt-in, undocumented as supported. Restoring it to default rotation needs
+  the v0.3.0 evidence record to verify first.
 - Live runs per E4 and owner sign-off per E5.
 - Spec 02/07/10 text carrying the ADR 0027 §5 amendments to a supported rather than
   dogfood footing.
@@ -201,14 +219,14 @@ release mapping around it and does not alter its decisions).
 
 ## Open Questions (owner, before acceptance)
 
-1. Is E1–E5 the right evidence set, in particular must every client pass E4 on all
-   three ADR 0019 platforms, including for hosts and Antigravity?
-2. May ADR 0024's Apple-silicon journals count toward E4 for v0.2.0, or must all cells
-   be re-run on the final candidate?
-3. Binding form per client: plugin-style (manifest/root) or host-adapter descriptor, for
+Resolved normatively above and no longer open: the E1–E5 set with E4 on every ADR 0019
+platform for every client (§3); Antigravity excluded from default rotation until v0.3.0
+(§6); v0.3.0 atomic (§1). The questions below do not reopen those decisions.
+
+1. May ADR 0024's Apple-silicon journals count toward E4 for v0.2.0? Default per §4:
+   no, unless shown to be at the pinned floors against the final candidate. Trigger:
+   decided in the spec 10 amendment.
+2. Binding form per client: plugin-style (manifest/root) or host-adapter descriptor, for
    Antigravity and Orca?
-4. Should Antigravity be removed from default evaluator rotation until 0.3.0?
-5. Does v0.3.0 ship if one of Antigravity, Orca, Herdr misses its evidence, or are all
-   three atomic?
-6. Herdr evaluators on `hc`: still blocked by ADR 0031 §5; which isolation choice?
-7. What replaces the `herdr` entries in `v0.3.0.json`, and who pins the Orca and `agy` floors?
+3. Herdr evaluators on `hc`: still blocked by ADR 0031 §5; which isolation choice?
+4. What replaces the `herdr` entries in `v0.3.0.json`, and who pins the Orca and `agy` floors?
