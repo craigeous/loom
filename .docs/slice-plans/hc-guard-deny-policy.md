@@ -125,7 +125,8 @@ slices: 900 LOC added; budgets do not transfer between slices.
   - Mutation A (block removed): 13 deny tests fail; allow tests pass.
   - Mutation B (`tr -d` quote strip removed): `sh -c`, `bash -c`, `eval`, chained/quote-obfuscated tests fail. The documented false-positive test also fails, because `"hc run"` only matches after quotes are stripped.
   - Mutation C (second `tr` removed): backtick, `$(hc ls)`, chained (`echo $(hc)`, `ls;hc ls`, `find -exec hc\;`) tests fail.
-  - Full gate on `8c6868a`: RED. shfmt, ShellCheck and syntax pass. Bats: 965 ok, 2 not ok: `loom-review.bats:962` and `repository-validation.bats:121`, both from `validate-repository --all` exiting 1 on `.docs/` evaluation and ADR naming/frontmatter errors inherited from `main` (`e6248b2`; `.docs/` and `scripts/` identical to it). The dogfood INT test passed. Not a dogfood-flake case, so this blocks `Implemented`.
+  - Full gate on `8c6868a`: RED (superseded). Those two failures were `validate-repository --all` exiting 1 on `.docs/` evaluation and ADR naming/frontmatter errors inherited from `main` (`e6248b2`).
+  - Full gate after rebasing on `main` `a1431ed`, at `5fdc971`: GREEN. Exit code 0; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` ends with "All checks passed"; Bats: 967 ok, 0 not ok.
 
 ## Revision Log
 
