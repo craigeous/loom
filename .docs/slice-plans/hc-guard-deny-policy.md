@@ -120,7 +120,7 @@ slices: 900 LOC added; budgets do not transfer between slices.
   `INT during a mutation yields exit 130` race in `macos-dual-client-dogfood.bats`
   (owner-declared out of scope); any other failure blocks `Implemented`. `rg -n -i herdr`
   in the diff must find nothing new.
-- Developer evidence (commit `8c6868a`, guard + Bats; LOC 127 added, 0 deleted; target <= 140):
+- Developer evidence (commit `8c6868a`, guard + Bats; LOC 127 added at that commit, 0 deleted; target <= 140). This LOC figure is stale for HEAD; the current measurement is in the round 1 bullet below.
   - Targeted: `shfmt`, `shellcheck`, `bash -n` clean; `bats role-governance-guard.bats` 35/35 ok (20 existing + 15 new `hc:` tests).
   - Mutation A (block removed): 13 deny tests fail; allow tests pass.
   - Mutation B (`tr -d` quote strip removed): `sh -c`, `bash -c`, `eval`, chained/quote-obfuscated tests fail. The documented false-positive test also fails, because `"hc run"` only matches after quotes are stripped.
@@ -128,6 +128,11 @@ slices: 900 LOC added; budgets do not transfer between slices.
   - Full gate on `8c6868a`: RED (superseded). Those two failures were `validate-repository --all` exiting 1 on `.docs/` evaluation and ADR naming/frontmatter errors inherited from `main` (`e6248b2`).
   - Full gate after rebasing on `main` `a1431ed`, at `5fdc971`: GREEN. Exit code 0; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` ends with "All checks passed"; Bats: 967 ok, 0 not ok.
   - Code-eval round 0 fix (commit `64c15c3`, line continuations joined before the hc scan): Bats `hc: a line continuation inside the executable name`, `... inside a path executable name`, and `... inside a sh -c or bash -c string` failed on the pre-fix guard (`h\<newline>c ls` exited 0) and pass after the fix. `hc: an escaped backslash before a newline does not hide a later hc` passes before and after. Full gate on `64c15c3`: exit 0, "All checks passed", Bats 971 ok, 0 not ok (967 + 4 new).
+  - Code-eval round 1 advisories (commit `310dd3e`, TST-1 and COR-1; guard unchanged):
+    - Test: `hc: unspaced pipe and background separators are denied` (`ls|hc ls`, `ls&hc ls`, both roles and both wires).
+    - Mutation proof (guard `tr` set `` `$();&|<>{} `` with `|` and `&` removed, `role-governance-guard.sh:125`): the new test is `not ok`; the other 19 `hc:` tests stay `ok`. Guard restored byte-identical to HEAD; the new test and the full guard suite (40 ok, 0 not ok) pass.
+    - LOC (corrected): `git diff --numstat a1431ed HEAD -- plugins/loom/hooks/role-governance-guard.sh plugins/loom/hooks/role-governance-guard.bats` gives `19 0` (guard) and `146 0` (Bats). Total 165 added, 0 deleted. **This exceeds the <= 140 target by 25 lines.** The target is unchanged (owner decision). Before round 1 the same command gave 19 + 139 = 158; the new test adds 7 lines.
+    - Full gate on `310dd3e`: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0, "All checks passed"; Bats 972 ok, 0 not ok (971 + 1 new).
 
 ## Revision Log
 
