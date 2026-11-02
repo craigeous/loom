@@ -17,9 +17,9 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [hc-host-adapter.md](hc-host-adapter.md) — `Approved` — M9 (2 of 4): `loom-host-hc` observation helper and v0.3.0-only registration.
+- [hc-host-adapter.md](hc-host-adapter.md) — `Approved` — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` — M9 (3 of 4): generic live `hc` probe script and offline tests.
-- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, lands last): retire the Herdr plugin surfaces.
+- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, **runs first**, before `hc-host-adapter`): retire the Herdr plugin surfaces.
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
