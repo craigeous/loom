@@ -120,6 +120,12 @@ slices: 900 LOC added; budgets do not transfer between slices.
   `INT during a mutation yields exit 130` race in `macos-dual-client-dogfood.bats`
   (owner-declared out of scope); any other failure blocks `Implemented`. `rg -n -i herdr`
   in the diff must find nothing new.
+- Developer evidence (commit `8c6868a`, guard + Bats; LOC 127 added, 0 deleted; target <= 140):
+  - Targeted: `shfmt`, `shellcheck`, `bash -n` clean; `bats role-governance-guard.bats` 35/35 ok (20 existing + 15 new `hc:` tests).
+  - Mutation A (block removed): 13 deny tests fail; allow tests pass.
+  - Mutation B (`tr -d` quote strip removed): `sh -c`, `bash -c`, `eval`, chained/quote-obfuscated tests fail. The documented false-positive test also fails, because `"hc run"` only matches after quotes are stripped.
+  - Mutation C (second `tr` removed): backtick, `$(hc ls)`, chained (`echo $(hc)`, `ls;hc ls`, `find -exec hc\;`) tests fail.
+  - Full gate on `8c6868a`: RED. shfmt, ShellCheck and syntax pass. Bats: 965 ok, 2 not ok: `loom-review.bats:962` and `repository-validation.bats:121`, both from `validate-repository --all` exiting 1 on `.docs/` evaluation and ADR naming/frontmatter errors inherited from `main` (`e6248b2`; `.docs/` and `scripts/` identical to it). The dogfood INT test passed. Not a dogfood-flake case, so this blocks `Implemented`.
 
 ## Revision Log
 
