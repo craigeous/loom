@@ -1,6 +1,6 @@
 # Herdr `hc` Client (1 of 4): Role-Session `hc` Deny Policy
 
-Status: Approved
+Status: Ready to Publish
 Target specs: 08-playbook.md (hook wire, `hc` deny), 07-command-surface.md (Host surfaces)
 Authority: ADR 0031 §4 (Accepted); program ceiling and split: ADR 0031 §8 items 1–4 become four slices
 Target size: <= 140 LOC added (guard + Bats; deletions not counted); keep this plan <= 250 lines
@@ -134,6 +134,7 @@ slices: 900 LOC added; budgets do not transfer between slices.
     - LOC (corrected): `git diff --numstat a1431ed HEAD -- plugins/loom/hooks/role-governance-guard.sh plugins/loom/hooks/role-governance-guard.bats` gives `19 0` (guard) and `146 0` (Bats). Total 165 added, 0 deleted. **This exceeds the <= 140 target by 25 lines.** The target is unchanged (owner decision). Before round 1 the same command gave 19 + 139 = 158; the new test adds 7 lines.
     - Owner accepted the overage: 165 added vs target <= 140 (the excess is the bypass regression tests required by code-eval rounds 0 and 1); target unchanged.
     - Full gate on `310dd3e`: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0, "All checks passed"; Bats 972 ok, 0 not ok (971 + 1 new).
+- Code-eval: Round 0 FAIL (bypass, fixed 64c15c3); Round 1 PASS (r2); delta PASS (r3, b32ba31-era HEAD).
 
 ## Revision Log
 
