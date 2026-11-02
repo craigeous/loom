@@ -127,6 +127,7 @@ slices: 900 LOC added; budgets do not transfer between slices.
   - Mutation C (second `tr` removed): backtick, `$(hc ls)`, chained (`echo $(hc)`, `ls;hc ls`, `find -exec hc\;`) tests fail.
   - Full gate on `8c6868a`: RED (superseded). Those two failures were `validate-repository --all` exiting 1 on `.docs/` evaluation and ADR naming/frontmatter errors inherited from `main` (`e6248b2`).
   - Full gate after rebasing on `main` `a1431ed`, at `5fdc971`: GREEN. Exit code 0; `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` ends with "All checks passed"; Bats: 967 ok, 0 not ok.
+  - Code-eval round 0 fix (commit `64c15c3`, line continuations joined before the hc scan): Bats `hc: a line continuation inside the executable name`, `... inside a path executable name`, and `... inside a sh -c or bash -c string` failed on the pre-fix guard (`h\<newline>c ls` exited 0) and pass after the fix. `hc: an escaped backslash before a newline does not hide a later hc` passes before and after. Full gate on `64c15c3`: exit 0, "All checks passed", Bats 971 ok, 0 not ok (967 + 4 new).
 
 ## Revision Log
 
