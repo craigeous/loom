@@ -1,5 +1,12 @@
 Verdict: PASS
-Round: 1
+Round: 3
+Artifact: .docs/slice-plans/hc-guard-deny-policy.md
+Reviewed against: approved slice plan (Artifact); ADR 0031; ADR 0032; spec 07; spec 08
+Reviewed commit: 616ac3e
+
+## Summary
+
+PASS at reviewed commit 616ac3e. BLOCKER: 0; MAJOR: 0; MINOR: 2 (COR-1 and TST-1, both confirmed and advisory). Required changes: none. Round is the validator's cumulative count for this artifact (the plan-evaluation rounds precede it); the record previously read `Round: 1`.
 
 ## Required changes
 
