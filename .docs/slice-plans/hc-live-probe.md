@@ -24,6 +24,7 @@ mechanics work (Q3, launch/read/kill, a status report after a turn, the
 
 - **No role launch, no role definition (Q4), no `HC_TERMINAL_ID` (Q5), no parent
   lifetime (Q6).** Those stay open and gate any later role slice.
+- **Open gates (retained, unresolved):** blind review through `hc` is an owner decision pending a follow-up ADR (ADR 0031 §5 and Consequences); the probe does not enforce blind review, and no evaluator role runs on `hc` until that ADR records isolation or explicit degraded blindness. A PASS here never lifts either gate.
 - **Q1 (status at launch) is not answered.** A wait that returns after a prompt was
   sent proves only that a report arrived by then. A timeout or `reported == false`
   is recorded as "no report observed within 120 s", cause undetermined; a pre-turn
@@ -65,7 +66,7 @@ mechanics work (Q3, launch/read/kill, a status report after a turn, the
 4. **`scripts/tests/hc-live-probe.bats`** (new). A stub `hc` on `PATH` (call log, canned
    JSON, `STUB_*` exits) drives: refusal without `LOOM_HC_LIVE_PROBE=1` or without an
    absolute evidence path (log empty); PASS; FAIL for each of: no report (`reported
-   false`), wrong state, missing `42`, `37+5` echoed only, `--resume` in argv, missing
+   false`), wrong `status.state`, missing `42`, `37+5` echoed only, `--resume` in argv, missing
    `--model claude-haiku-5-5`, Agent tool present (a sub-agent line in the read),
    `kill` failure, name still present after cleanup (`hc get` exit 0); BLOCKED when
    `hc get` shows `blocked` (and no keys or `--force` appear in any log); cleanup runs
@@ -90,8 +91,9 @@ All must hold for **PASS**; the evidence file records each:
   (Q3: positional prompt, delivery untracked).
 - P3 Run A `hc wait` exits 0 within 120 s (a report arrived by then; nothing about
   launch status).
-- P4 Run A `hc get --json`: `name == "probe-<id>"`, `reported == true`, state `done`
-  or `idle`, `foreground.argv` has `--model` followed by `claude-haiku-5-5`, no
+- P4 Run A `hc get --json`: `name == "probe-<id>"`, `reported == true`, `status.state` is `done`
+  or `idle` (the reported-status object, research §4; the top-level terminal `state` is a
+  different field and stays live for an interactive session, so it is not judged), `foreground.argv` has `--model` followed by `claude-haiku-5-5`, no
   `--resume` or `--continue`, the prompt as one token.
 - P5 Run A `hc read` has a line, not containing `37+5`, with `42` as a standalone token.
 - P6 Run B `hc get --json` matches P4 for `probe-nd-<id>` (argv also contains
@@ -120,4 +122,5 @@ runs for every outcome.
 
 | Round | Summary of in-place changes |
 |---|---|
+| 1 | Plan-eval round 1: P4/P6 judge `status.state` (research §4), not terminal `state`; blind-review and evaluator-exclusion listed as open gates |
 | 0 | Split from `herdr-hc-client` (owner decision): probe only; absence/cleanup checked with `hc get` not_found (not `hc ls --all`); evidence path named; model constant kept; Q1 not claimed |

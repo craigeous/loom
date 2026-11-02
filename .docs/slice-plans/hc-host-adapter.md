@@ -46,6 +46,12 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
   beside the existing Herdr keys and edits no Herdr file.
 - `hc` does not enforce blind review or delegation limits (spec 08; `00-overview.md`
   Non-goals). The helper is an observation convenience, not a boundary.
+- **Open blocker (retained, not resolved here):** Blind review through `hc` is an **unresolved owner decision** (ADR 0031 §5 and Consequences): hc evaluator use is blocked pending a follow-up ADR (isolation or explicit degraded blindness); this helper does not enforce blind review and no evaluator role runs on `hc`.
+- **No matrix or schema change.** The host binding lives only at `adapters/hosts/hc-host-v1.json`
+  (own schema, step 3). `v0.3.0.json`, `v0.2.0.json`, `loom-compatibility-matrix-v1` and
+  `loom-installed-root-binding-v1` are not edited, so there is no `hostFloors`/`hostBindings`
+  matrix key (the matrix schema is `additionalProperties:false`). The binding carries its own
+  `floor`. Slice 4 edits `v0.3.0.json` only to remove Herdr keys.
 - Validator scope: v0.3.0 checks read only v0.3.0 files. They never compare the v0.2.0
   frozen fixtures or the three installed roots with v0.3.0 content.
 
@@ -81,17 +87,14 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
    `"unsupported"`, `reachableVerbs` const the five verbs. The existing
    `loom-installed-root-binding-v1.schema.json` and `loom-compatibility-matrix-v1`
    schemas are **not modified** (their pinned digests stay valid).
-4. **`plugins/loom/adapters/compatibility/v0.3.0.json`**: add
-   `"hostFloors": { "hc": "0.1.16" }` and
-   `"hostBindings": [{ "id":"hc-host/v1","path":"plugins/loom/adapters/hosts/hc-host-v1.json" }]`.
-   Add nothing else (the `herdr` keys stay for slice 4).
+4. **Registration is the binding file itself**: the validator (step 6) loads it from the
+   fixed path `plugins/loom/adapters/hosts/hc-host-v1.json`. No compatibility-matrix edit.
 5. **`plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json`** (new): a byte-for-byte
    copy of step 2's file.
 6. **`scripts/validate-repository.mjs`**: add `validateHostBinding()` called beside the
    metadata checks: (a) validate the live binding against its schema through the
    existing Ajv path (add the schema to the loaded set and `schemaBindings`);
-   (b) `v0.3.0.json` `hostBindings` is exactly the one id/path pair and `hostFloors.hc`
-   equals the binding `floor`; (c) the live binding and the v0.3.0 fixture are
+   (b) the `hosts/` directory holds exactly that one binding file and `floor` is `0.1.16`; (c) the live binding and the v0.3.0 fixture are
    deep-equal; (d) `bin/loom-host-hc` exists as a regular, executable file; (e)
    `loom-host-hc` appears in neither `ALLOWED_HELPERS` of `loom-resolve-helper` nor any
    root `allowedHelpers`. Report each failure with the existing `report()` helper. It
@@ -128,7 +131,8 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
   plugins/loom/adapters/roots plugins/loom/schemas/loom-installed-root-binding-v1.schema.json
   plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json plugins/loom/bin/loom-resolve-helper`
   is empty; (4) `scripts/check-toolchain.json` is unchanged; (5) validator reports
-  `hostBindings` drift when the binding or its fixture is edited.
+  binding drift when the binding or its fixture is edited, and `git diff --stat HEAD --
+  plugins/loom/adapters/compatibility` is empty.
 - Full gate once on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
   Only the known unrelated `INT during a mutation yields exit 130` dogfood race may
   be recorded and rerun once (owner-declared out of scope); any other failure blocks.
@@ -137,4 +141,5 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
 
 | Round | Summary of in-place changes |
 |---|---|
+| 1 | Plan-eval round 1: dropped matrix `hostFloors`/`hostBindings` (schema forbids them); binding stands alone, no schema change; blind-review open blocker retained |
 | 0 | Split from `herdr-hc-client` (owner decision): host adapter and v0.3.0-only registration; v0.2.0 fixtures, roots and `ALLOWED_HELPERS` untouched; v0.3.0 fixture layout defined; name grammar, `exit_code`, not_found cleanup check from the developer pass |

@@ -40,6 +40,7 @@ slices: 900 LOC added; budgets do not transfer between slices.
 - The retired Herdr branches in this file (`HERDR_PLUGIN_ROOT`, `herdr` client select)
   stay untouched; slice 4 removes them.
 - No `hc` use by roles is enabled; no role runs on `hc` (ADR 0031 §5, §6).
+- **Open blocker (retained, not resolved here):** Blind review through `hc` is an **unresolved owner decision** (ADR 0031 §5 and Consequences): the deny guard is necessary, not sufficient, and does not enforce blind review. Until a follow-up ADR records isolation or explicit degraded blindness, hc evaluator use is blocked and no evaluator role runs on `hc`.
 
 ## Steps
 
@@ -84,8 +85,8 @@ slices: 900 LOC added; budgets do not transfer between slices.
    - `timeout`: `timeout 5 hc wait t1`, `timeout -k 1 5 hc ls`
    - `xargs`: `echo t1 | xargs hc get`, `printf 't1\n' | xargs -I{} hc kill {}`
    - absolute/relative path: `/usr/local/bin/hc ls`, `/opt/homebrew/bin/hc kill t1`, `./hc ls`
-   - chained/other: `ls && hc send t1 x`, `nohup hc wait t1`, `find . -exec hc ls ;`,
-     `h"c" ls`, `h\c ls`
+   - chained/other: `ls && hc send t1 x`, `nohup hc wait t1`, `find . -exec hc\;`,
+     `ls;hc ls`, `echo $(hc)`, `h"c" ls`, `h\c ls`
    - unbalanced quote does not bypass: `hc ls # '`
    Also in the same file:
    - allowed (both wires, every role): `echo abc`, `which-hc`, `./hc.sh`, `git status`,
@@ -108,7 +109,10 @@ slices: 900 LOC added; budgets do not transfer between slices.
 - Mutation check (developer records the result): with the guard block removed, every
   new deny test fails; with only the `tr -d` quote removal removed, the `sh -c`,
   `bash -c`, `eval`, `h"c"` tests fail; with only the second `tr` removed, the backtick,
-  `$()`, `find -exec` tests fail.
+  `$(hc ls)`, `echo $(hc)`, `ls;hc ls` and `find . -exec hc\;` tests fail (each puts `hc`
+  next to a punctuation character, so the bare-word match exists only after that
+  character becomes a space; `find . -exec hc ls ;` is not used for this mutation because
+  it matches without the second `tr`).
 - Regression proof (unchanged, passing): the other hook Bats files and the Claude/Codex
   hook wire fixtures.
 - Full gate once on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
@@ -121,4 +125,5 @@ slices: 900 LOC added; budgets do not transfer between slices.
 
 | Round | Summary of in-place changes |
 |---|---|
+| 1 | Plan-eval round 1: `find -exec` mutation test rewritten to forms whose match depends on the second `tr`; unresolved blind-review blocker stated explicitly |
 | 0 | Split from `herdr-hc-client` (owner decision): guard only; every wrapper form denied by scanning the raw command, a test per form |
