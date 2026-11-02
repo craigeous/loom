@@ -244,9 +244,7 @@ const CLIENT_VISIBLE_CLAIM_SURFACES = [
   ".claude-plugin/marketplace.json",
   ".agents/plugins/marketplace.json",
   "plugins/loom/.claude-plugin/plugin.json",
-  "plugins/loom/.codex-plugin/plugin.json",
-  ".herdr-plugin/marketplace.json",
-  "plugins/loom/.herdr-plugin/plugin.json"
+  "plugins/loom/.codex-plugin/plugin.json"
 ];
 const RELEASE_METADATA_FIXTURE_ROOT = "plugins/loom/adapters/fixtures/v0.2.0/metadata/";
 const PROHIBITED_EVALUATION_CLAIM = /\b(?:self-favoring\s+is\s+impossible|blind(?:-reviewed)?(?:\s+evaluation)?|impartial(?:ity)?(?:\s+by\s+construction)?|anonymous(?:ly)?(?:\s+evaluator)?|impossible)\b/giu;
@@ -323,46 +321,6 @@ function validateThinAdapters() {
   return valid;
 }
 
-function validateHerdrMetadata(fail) {
-  const hasHerdrRoot = files.includes("plugins/loom/adapters/roots/herdr-plugin-root-v1.json");
-  const checks = [
-    ["plugins/loom/.herdr-plugin/plugin.json", {
-      name: (v) => v === "loom",
-      version: (v) => v === "0.2.0",
-      description: (v) => typeof v === "string" && v.length > 0,
-      main: (v) => v === undefined || v === "bin/loom-doctor",
-      hooks: (v) => v === "hooks/hooks.json"
-    }],
-    [".herdr-plugin/marketplace.json", {
-      name: (v) => v === "loom",
-      version: (v) => v === "0.2.0",
-      source: (v) => v === "./plugins/loom"
-    }]
-  ];
-  for (const [relative, fields] of checks) {
-    if (!files.includes(relative)) {
-      if (hasHerdrRoot) {
-        report(relative, "required Herdr metadata file is missing");
-        fail();
-      }
-      continue;
-    }
-    const value = readJson(relative);
-    if (value === JSON_READ_FAILURE) { fail(); continue; }
-    if (!isObject(value)) {
-      report(relative, `invalid Herdr metadata: expected object, got ${jsonType(value)}`);
-      fail();
-      continue;
-    }
-    for (const [key, ok] of Object.entries(fields)) {
-      if (!ok(value[key])) {
-        report(relative, `invalid Herdr metadata: unexpected '${key}' (${JSON.stringify(value[key])})`);
-        fail();
-      }
-    }
-  }
-}
-
 async function validateMetadata() {
   let structurallyValid = true;
   for (const relative of files.filter((file) => file.endsWith(".json"))) {
@@ -374,7 +332,6 @@ async function validateMetadata() {
   const authorizedCatalogs = new Set([
     ".claude-plugin/marketplace.json",
     ".agents/plugins/marketplace.json",
-    ".herdr-plugin/marketplace.json",
     "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json",
     "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json"
   ]);
@@ -408,8 +365,7 @@ async function validateMetadata() {
     [".agents/plugins/marketplace.json", "scripts/schemas/codex-marketplace-0.144.6.schema.json"],
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
-    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
-    ["plugins/loom/adapters/roots/herdr-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
+    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
   ];
   const schemaResults = new Map();
   for (const [target, schemaPath] of schemaBindings) {
@@ -417,8 +373,6 @@ async function validateMetadata() {
     schemaResults.set(target, valid);
     if (!valid) structurallyValid = false;
   }
-
-  validateHerdrMetadata(() => { structurallyValid = false; });
 
   const readme = readText("README.md");
   if (readme !== null) {
@@ -528,8 +482,7 @@ function semanticMetadata() {
   const matrix = readJson(matrixPath);
   const rootPaths = [
     "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
-    "plugins/loom/adapters/roots/codex-skill-source-v1.json",
-    "plugins/loom/adapters/roots/herdr-plugin-root-v1.json"
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
   ];
   const roots = rootPaths.map(readJson);
   for (const [relative, value] of [["plugins/loom/.claude-plugin/plugin.json", claudeManifest], ["plugins/loom/.codex-plugin/plugin.json", codexManifest]]) {
@@ -592,14 +545,6 @@ function semanticMetadata() {
       helperMustBeRegularFile: true, helperMustBeExecutable: true,
       forbiddenWorkflowRootGuesses: ["CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT", "CODEX_HOME", "PATH"],
       hookBinding: "PLUGIN_ROOT", hookManifest: "./hooks/hooks.json"
-    },
-    {
-      schema: "loom-installed-root-binding-v1", id: "herdr-plugin-root/v1", client: "herdr", binding: "HERDR_PLUGIN_ROOT",
-      inputMustBeAbsolute: true, invocationMustBeAbsolute: true, canonicalizeInput: true,
-      canonicalRootRequired: true, manifest: ".herdr-plugin/plugin.json", manifestMustBeCanonical: true,
-      manifestMustBeRegularFile: true, expectedName: "loom", expectedVersion: "0.2.0",
-      helperDirectory: "bin", helperDirectoryMustBeDirectChild: true, allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
-      helperMustBeRegularFile: true, helperMustBeExecutable: true
     }
   ];
   for (const [index, binding] of roots.entries()) {

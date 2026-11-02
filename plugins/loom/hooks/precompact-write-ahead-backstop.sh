@@ -21,7 +21,7 @@
 # WIRE (spec 08 -> Hook normalization and output adapters): this single
 # physical hook, reached through the one shared plugins/loom/hooks/hooks.json
 # manifest, selects its client wire adapter at runtime from whichever of
-# PLUGIN_ROOT (Codex), CLAUDE_PLUGIN_ROOT (Claude), or HERDR_PLUGIN_ROOT (Herdr) resolves to a validated
+# PLUGIN_ROOT (Codex) or CLAUDE_PLUGIN_ROOT (Claude) resolves to a validated
 # physical loom plugin root. The only accepted `trigger` values are `manual`
 # and `auto`; the obsolete `compaction_trigger` field is not read. Invalid
 # JSON, a missing/wrong-typed/unknown trigger, or a missing/invalid
@@ -53,21 +53,18 @@ _loom_hook_validate_root() {
     [ "$name" = "loom" ] && [ "$version" = "0.2.0" ] || return 1
 }
 
-# _loom_hook_select_client — prints "codex", "claude", or "herdr" and
+# _loom_hook_select_client — prints "codex" or "claude" and
 # returns 0 only when exactly one valid root validates. Ambiguous (multiple valid)
 # or zero valid roots fail closed with return 1 (ADR 0030 decision 3).
 _loom_hook_select_client() {
-    local codex_ok=1 claude_ok=1 n=0
+    local codex_ok=1 n=0
     _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0 && n=$((n + 1))
-    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0 && n=$((n + 1))
-    _loom_hook_validate_root "${HERDR_PLUGIN_ROOT:-}" ".herdr-plugin/plugin.json" && n=$((n + 1))
+    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && n=$((n + 1))
     [ "$n" -eq 1 ] || return 1
     if [ "$codex_ok" -eq 0 ]; then
         printf 'codex'
-    elif [ "$claude_ok" -eq 0 ]; then
-        printf 'claude'
     else
-        printf 'herdr'
+        printf 'claude'
     fi
 }
 
@@ -108,7 +105,7 @@ _loom_hook_block() {
         printf '{"continue":false,"stopReason":%s}\n' "$reason_json"
         exit 0
         ;;
-    claude | herdr | *)
+    claude | *)
         printf '%s\n' "$reason" >&2
         exit 2
         ;;
