@@ -47,7 +47,11 @@ changes, and the Herdr work already decided by ADR 0031.
 
 ## Decision
 
-ADR 0032 supersedes ADR 0019 §2 for v0.2.0 and v0.3.0: the Ubuntu and macOS-Intel release-matrix requirement is replaced by the Apple-silicon-only macOS requirement in this ADR; macOS Intel is not a supported platform. ADR 0019 is otherwise unchanged.
+ADR 0032 supersedes ADR 0019 §2 for v0.2.0 and v0.3.0: the Ubuntu and macOS-Intel release-matrix requirement is replaced by the Apple-silicon-only macOS requirement in this ADR; macOS Intel is not a supported platform.
+
+ADR 0032 supersedes ADR 0019 §5 (the Ubuntu and macOS CI requirement) for v0.2.0 and v0.3.0: CI runs macOS Apple silicon only; Ubuntu CI is required from v0.4.0.
+
+ADR 0019 is otherwise unchanged.
 
 Replacement macOS requirement for v0.2.0 and v0.3.0: macOS 14 or newer on Apple silicon
 (arm64), one required pair per harness in the release row (§1), each with the §3
@@ -138,8 +142,9 @@ evidence record (below) bound to that commit:
   parity, hook/guard behavior where the harness has a hook surface, and refusal of
   unknown or below-floor versions, run in the repository gate (`scripts/check`) on every
   platform of the release.
-- **E4 — Live conformance per pair.** For **each** (platform, harness) pair in the
-  release's row, at the pinned floor and against the matrix, recorded runs showing:
+- **E4 — Live conformance per pair.** For **each REQUIRED** (platform, harness) pair in the
+  release's row (a NOT APPLICABLE pair is excluded: it needs its recorded applicability
+  check, not live conformance), at the pinned floor and against the matrix, recorded runs showing:
   (a) each of the five roles launched and returning through the harness; (b) one full
   loop from research through landing, with blind review (no author identity, no
   author reasoning); and (c) the gate passing on that platform. Each run is recorded
@@ -170,7 +175,7 @@ spec 10 amendment; no existing journal is declared to satisfy any element.
 ADR 0019 is Accepted and immutable; this ADR supersedes only the clauses below and
 edits nothing in it.
 
-**Superseded, for v0.2.0 and v0.3.0 (ADR 0019 §2 only; Ubuntu deferred to v0.4.0; Intel unsupported).** The first two bullets are the §2 supersession; the remaining items state how §2's replacement applies to ADR 0019 text that cites the declared matrix, and are not further supersessions:
+**Superseded, for v0.2.0 and v0.3.0 (ADR 0019 §2 and §5 CI clause; Ubuntu deferred to v0.4.0; Intel unsupported).** The first two bullets are the §2 supersession and the third is the §5 supersession; the remaining items state how the replacements apply to ADR 0019 text that cites the declared matrix, and are not further supersessions:
 
 - §2, second bullet, "macOS 14 or newer on Apple silicon and x86-64 where the selected
   client itself is supported" (the macOS-Intel release-matrix clause). **Exact
@@ -181,8 +186,10 @@ edits nothing in it.
 - §2, first bullet, "Ubuntu 22.04 LTS and 24.04 LTS on x86-64" as a platform the
   "v0.2 line supports". Ubuntu is not part of v0.2.0 or v0.3.0 support, and is not a
   release requirement for either. It becomes a v0.4.0 platform.
-- §5 (applied reading, not superseded), the requirement of "Ubuntu and macOS CI; both adapter matrices": for v0.2.0 and
-  v0.3.0 it means macOS CI and the per-pair adapter matrix of §1, not Ubuntu CI.
+- §5, the requirement of "Ubuntu and macOS CI" (the CI clause only). ADR 0032
+  supersedes ADR 0019 §5 (the Ubuntu and macOS CI requirement) for v0.2.0 and v0.3.0:
+  CI runs macOS Apple silicon only; Ubuntu CI is required from v0.4.0. "Both adapter
+  matrices" in §5 is read as the per-pair adapter matrix of §1.
 - §4 (applied reading, not superseded), the reading of "M0 through M7 are green on the declared matrix" that makes the
   declared matrix include Ubuntu: the declared matrix for v0.2.0 is the two pairs
   in §1 and for v0.3.0 the five pairs.
@@ -294,7 +301,7 @@ mapping around it and does not alter its decisions).
   harness) table and the macOS-only v0.2.0 matrix; Antigravity/Orca/Herdr packaging
   forms; v0.3.0 matrix correction; Ubuntu moved to v0.4.0.
 - **ADR 0024 / ADR 0027 supersession notes:** note ADR 0024 §1 and ADR 0027 §4 partly
-  superseded by 0032, and ADR 0019 §2/§5 Ubuntu clauses superseded, in the ADR
+  superseded by 0032, and ADR 0019 §2 and §5 (CI clause) superseded for v0.2.0/v0.3.0, in the ADR
   README register on acceptance (ADR bodies stay immutable).
 - **Release matrix workflow (`.github/workflows/check.yml`):** drop Ubuntu from the
   v0.2.0/v0.3.0 release matrix (macOS Apple silicon only; remove the macOS Intel lane and the Ubuntu lane); Ubuntu returns for v0.4.0.
