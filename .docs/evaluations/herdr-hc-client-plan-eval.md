@@ -1,8 +1,15 @@
 # Evaluation: herdr-hc-client
 
 Verdict: FAIL
-Round: 1
+Round: 0
+Commit: 8d33cfb946d7f7cb7963e326ae08ec5d0294eb4c
 Reviewed against: ADR 0031; amended specs 07, 08, 10; named research notes; plan-evaluation rubric.
+
+## Summary
+
+FAIL. The `hc` guard missed assignments after `env`, role launches were not gated on
+the probes, one acceptance criterion contradicted a retained link, and the probe left
+its model and a Q1 claim unsupported.
 
 ## Findings
 

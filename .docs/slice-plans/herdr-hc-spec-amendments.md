@@ -8,6 +8,12 @@ This is a **drafted diff for the plan evaluator**. Nothing here is applied. Spec
 08 and 10 are frozen (ADR 0005) and change only after this draft and ADR 0031 pass
 cold plan evaluation. If ADR 0031 is not accepted, discard this file.
 
+## Context
+
+ADR 0031 drops the plugin framing for Herdr and makes it an `hc`-driven client. Specs
+07, 08 and 10 mention Herdr as a plugin host and need amending; this drafted diff was
+evaluated cold and then applied (`Landed`).
+
 Target size: <= 90 changed spec lines. Scope: only text that mentions Herdr or must
 change because Herdr is a host client rather than a plugin client.
 

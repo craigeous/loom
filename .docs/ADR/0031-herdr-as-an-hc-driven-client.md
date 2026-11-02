@@ -14,7 +14,10 @@ binding, and Herdr-installed hooks with an exit-2 wire. Milestone M9 is in progr
 (`roadmap.md`): its three slices landed on offline fixtures only, and `progress.md`
 keeps live Herdr and native-app evidence as outstanding owner-run work.
 
-Two research notes show that framing has no support in the installed product:
+The plugin-host framing originated in the approved
+[Herdr client adapter research](../research/2026-11-01-herdr-client-adapter-contract.md)
+(Status: Approved), which assumed a plugin contract it could not confirm against the
+installed product. Two later research notes show that framing has no support in the installed product:
 
 - [Extension loading](../research/2026-11-01-herdr-extension-loading.md): the app's
   extension unit is a "mod" (`~/.config/herdr-app/mods/<name>/main.js`). The search of

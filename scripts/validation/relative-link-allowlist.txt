@@ -35,6 +35,7 @@
 .docs/evaluations/0022-controlled-input-independent-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0031-herdr-as-an-hc-driven-client-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 and the intermediate FAIL was overwritten in place; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0025-reconciliation-authority-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.

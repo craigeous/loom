@@ -2,7 +2,14 @@
 
 Verdict: PASS
 Round: 2
+Commit: 8a0077ed910e8225f37ada4105ff59308173edac
 Reviewed against: ADRs 0004, 0005, 0023, 0025, 0026, 0029 and 0030; frozen specs; named research; owner decision and Round 2 clarification; plan evaluation rubric.
+
+## Summary
+
+PASS. The Round 1 and Round 2 findings are resolved (spec 08 coverage, hook scope,
+deny-by-default guard, factual claims, milestone state, register entry); no open BLOCKER
+or MAJOR remains.
 
 ## Required changes
 

@@ -2,7 +2,14 @@
 
 Verdict: FAIL
 Round: 1
+Commit: 18dbb41570b3809a953ea2018e5e36297ebf3fdc
 Reviewed against: ADRs 0004, 0005, 0023, 0025, 0026, 0029, 0030; spec index and frozen specs; named research; owner decision; plan evaluation rubric.
+
+## Summary
+
+The ADR and drafted amendments do not yet hold together: spec 08 keeps a three-client
+requirement, hook scope contradicts the owner decision, the `hc` guard enumerates verbs
+instead of denying by default, and several factual claims overreach the research.
 
 ## Required changes
 
