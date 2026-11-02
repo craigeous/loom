@@ -55,11 +55,10 @@ make_metadata_root() {
 }
 
 populate_metadata_root() {
-    mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/.herdr-plugin" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
+    mkdir -p "$TEST_ROOT/.claude-plugin" "$TEST_ROOT/.agents/plugins" "$TEST_ROOT/plugins" "$TEST_ROOT/scripts"
     cp -R "$REPOSITORY_ROOT/plugins/loom" "$TEST_ROOT/plugins/loom"
     cp "$REPOSITORY_ROOT/.claude-plugin/marketplace.json" "$TEST_ROOT/.claude-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/.agents/plugins/marketplace.json" "$TEST_ROOT/.agents/plugins/marketplace.json"
-    cp "$REPOSITORY_ROOT/.herdr-plugin/marketplace.json" "$TEST_ROOT/.herdr-plugin/marketplace.json"
     cp "$REPOSITORY_ROOT/README.md" "$TEST_ROOT/README.md"
     cp "$REPOSITORY_ROOT/LICENSE" "$TEST_ROOT/LICENSE"
     printf '# Changelog\n\n## [0.2.0]\n\n- Fixture change.\n' >"$TEST_ROOT/CHANGELOG.md"
@@ -2590,4 +2589,55 @@ living_fail() {
     make_docs_root
     edit_file .docs/status/roadmap.md 's/^- \[ \] \*\*M6 — Current\*\* (in progress)/- [x] **M6 — Current** (in progress)/'
     living_fail "roadmap.md: expected exactly one unchecked '(in progress)' milestone, found 0"
+}
+
+# ---------------------------------------------------------------------------
+# Herdr surface retired (ADR 0031 §7): retired paths stay absent, hook-wire-v1
+# is 2 clients x 2 events x 3 outcomes, and the invariants the retired
+# herdr-verification suite covered for every client are asserted directly.
+# ---------------------------------------------------------------------------
+
+@test "herdr retirement: retired plugin root, marketplace, binding, fixtures and suite are absent" {
+    local retired
+    for retired in .herdr-plugin plugins/loom/.herdr-plugin plugins/loom/adapters/roots/herdr-plugin-root-v1.json plugins/loom/hooks/fixtures/hook-wire-v1/herdr scripts/tests/herdr-verification.bats; do
+        [ ! -e "$REPOSITORY_ROOT/$retired" ]
+    done
+}
+
+@test "herdr retirement: no loom source names HERDR_PLUGIN_ROOT or a Herdr plugin manifest" {
+    run grep -rIlE --exclude='*.bats' 'HERDR_PLUGIN_ROOT|herdr-plugin' "$REPOSITORY_ROOT/plugins" "$REPOSITORY_ROOT/.claude-plugin" "$REPOSITORY_ROOT/.agents" "$VALIDATOR"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "hook-wire-v1 is 2 clients x 2 events x 3 outcomes: 12 cases, 48 files" {
+    local fixtures="$REPOSITORY_ROOT/plugins/loom/hooks/fixtures/hook-wire-v1" client event outcome
+    [ "$(find "$fixtures" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" -eq 2 ]
+    [ "$(find "$fixtures" -mindepth 2 -maxdepth 2 -type d | wc -l | tr -d ' ')" -eq 4 ]
+    [ "$(find "$fixtures" -type f -name '*.exit' | wc -l | tr -d ' ')" -eq 12 ]
+    [ "$(find "$fixtures" -type f | wc -l | tr -d ' ')" -eq 48 ]
+    for client in claude codex; do
+        for event in pre-tool-use pre-compact; do
+            for outcome in allow block malformed; do
+                [ -s "$fixtures/$client/$event/$outcome.exit" ]
+            done
+        done
+    done
+}
+
+@test "packaged skills: loom-run and the five role skills are present as non-empty SKILL.md" {
+    local skill
+    for skill in loom-run loom-researcher loom-planner loom-plan-evaluator loom-developer loom-code-evaluator; do
+        [ -s "$REPOSITORY_ROOT/plugins/loom/skills/$skill/SKILL.md" ]
+    done
+}
+
+@test "hooks.json wires the identity, role-governance and precompact commands in order" {
+    local hooks="$REPOSITORY_ROOT/plugins/loom/hooks/hooks.json"
+    [ "$(jq '[.hooks.PreToolUse[].hooks[]] | length' "$hooks")" -eq 2 ]
+    [ "$(jq '[.hooks.PreCompact[].hooks[]] | length' "$hooks")" -eq 1 ]
+    [[ "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$hooks")" == *git-identity-guard.sh* ]]
+    [[ "$(jq -r '.hooks.PreToolUse[0].hooks[1].command' "$hooks")" == *role-governance-guard.sh* ]]
+    [[ "$(jq -r '.hooks.PreCompact[0].hooks[0].command' "$hooks")" == *precompact-write-ahead-backstop.sh* ]]
+    ! grep -qi herdr "$hooks"
 }
