@@ -297,6 +297,13 @@ hc_wire_allowed() {
     hc_guard_denied "hc ls # '"
 }
 
+@test "hc: unspaced pipe and background separators are denied" {
+    # the hc scan maps | and & to spaces; spaced forms are covered above, unspaced ones must match too
+    for c in "ls|hc ls" "ls&hc ls"; do
+        hc_guard_denied "$c"
+    done
+}
+
 @test "hc: a line continuation inside the executable name is denied" {
     # bash joins h\<newline>c into hc, so the scan must join it too
     for c in $'h\\\nc ls' $'h\\\nc get t1' $'ls && h\\\nc send t1 x'; do
