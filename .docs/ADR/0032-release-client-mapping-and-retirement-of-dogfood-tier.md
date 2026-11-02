@@ -50,21 +50,29 @@ changes, and the Herdr work already decided by ADR 0031.
 
 A *platform* is an operating system plus CPU architecture. A *harness* is a Claude Code
 CLI, Codex CLI, Antigravity, Orca or Herdr (`hc`) as defined in the compatibility
-matrix. The platform statement for macOS is ADR 0019 §2's, unchanged: macOS 14 or newer
-on Apple silicon and x86-64, where the selected harness itself is supported there.
+matrix. The macOS platform for v0.2.0 and v0.3.0 is **macOS 14 or newer on Apple silicon
+(arm64) only**. macOS on Intel (x86-64) is neither required nor claimed for either
+release; §4 supersedes ADR 0019 §2 for it, and open question 5 asks the owner to confirm.
 
 | Release | Platforms | Harnesses | Pairs required |
 |---|---|---|---|
-| v0.2.0 | macOS 14+ (Apple silicon, Intel) | Claude Code CLI, Codex CLI | 4 |
-| v0.3.0 | macOS 14+ (Apple silicon, Intel) | v0.2.0 harnesses, plus Antigravity, Orca, Herdr (`hc`) | 10 |
+| v0.2.0 | macOS 14+ Apple silicon | Claude Code CLI, Codex CLI | 2 |
+| v0.3.0 | macOS 14+ Apple silicon | v0.2.0 harnesses, plus Antigravity, Orca, Herdr (`hc`) | 5 |
 | v0.4.0 | macOS, plus Ubuntu 22.04 and 24.04 x86-64 first | to be fixed by the v0.4.0 planning ADR | n/a |
 
-A harness that does not itself run on a listed architecture is absent for that pair and
-the evidence record says so explicitly; it is never silently skipped.
+**One rule for every pair in a row:** a pair is either *required* or *not applicable*.
+A required pair must satisfy §3 or the release is not published. A pair is *not
+applicable* only if the evidence record states the reason and records the check that
+proves the harness is unavailable on that platform (the harness vendor's published
+platform support at the pinned floor, plus a failed install or launch attempt on that
+platform with a log reference). Absent that stated reason and check, the pair is
+required. A not-applicable pair is not counted in "Pairs required" and is not claimed as
+supported. As written, every pair in the v0.2.0 and v0.3.0 rows is required (2 and 5);
+none is declared not applicable.
 
 Each later release is additive: it also carries every earlier pair, which must keep
 passing its own evidence. Each release is atomic: it is published under its label only
-when every pair in its row satisfies §3. If a pair cannot, the release is not shipped
+when every required pair in its row satisfies §3. If a pair cannot, the release is not shipped
 under that label; moving a pair to a later release requires a superseding ADR. A
 (platform, harness) pair in no row is unsupported, whatever code exists for it. The
 release at which a pair is first supported is fixed by this table.
@@ -142,16 +150,23 @@ spec 10 amendment; no existing journal is declared to satisfy any element.
 ADR 0019 is Accepted and immutable; this ADR supersedes only the clauses below and
 edits nothing in it.
 
-**Superseded, for v0.2.0 and v0.3.0 (Ubuntu deferred to v0.4.0):**
+**Superseded, for v0.2.0 and v0.3.0 (Ubuntu deferred to v0.4.0; Intel not required):**
 
+- §2, second bullet, "macOS 14 or newer on Apple silicon and x86-64 where the selected
+  client itself is supported" (the macOS-Intel release-matrix clause). **Exact
+  replacement for macOS:** "macOS 14 or newer on Apple silicon (arm64), where the
+  selected harness itself is supported." macOS on Intel (x86-64) is outside the v0.2.0
+  and v0.3.0 matrix: no Intel evidence is required, and Intel is not a supported
+  platform in either release. The condition "where the selected client itself is
+  supported" is retained.
 - §2, first bullet, "Ubuntu 22.04 LTS and 24.04 LTS on x86-64" as a platform the
   "v0.2 line supports". Ubuntu is not part of v0.2.0 or v0.3.0 support, and is not a
   release requirement for either. It becomes a v0.4.0 platform.
 - §5, the requirement of "Ubuntu and macOS CI; both adapter matrices": for v0.2.0 and
   v0.3.0 it means macOS CI and the per-pair adapter matrix of §1, not Ubuntu CI.
 - The reading of §4's "M0 through M7 are green on the declared matrix" that makes the
-  declared matrix include Ubuntu: the declared matrix for v0.2.0 is the four pairs
-  in §1.
+  declared matrix include Ubuntu: the declared matrix for v0.2.0 is the two pairs
+  in §1 and for v0.3.0 the five pairs.
 - Consequence text "Ubuntu/macOS only" as a description of v0.2 scope (informative,
   not normative).
 
@@ -160,8 +175,8 @@ edits nothing in it.
 - Release evidence itself is required, and **no release is published without it**
   (§4 last sentence, §5): "failure of any required cell blocks publication".
 - §1 (Bash 3.2+/Git 2.34+/jq 1.6+ runtime, syntax migration) in full.
-- §2 macOS bullet (macOS 14+, Apple silicon and x86-64, where the harness itself is
-  supported), the non-support of native Windows, PowerShell, Git Bash/MSYS2, Cygwin
+- §2 macOS bullet's "macOS 14 or newer" floor and its "where the selected client itself
+  is supported" condition (architecture replaced as above), the non-support of native Windows, PowerShell, Git Bash/MSYS2, Cygwin
   and WSL, and the tool-dependency paragraph.
 - §3 pinned floors (Claude Code 2.1.216, Codex CLI 0.144.6), the matrix scope (clean
   install, loading, explicit invocation, cold-role launch, hooks, helper resolution,
@@ -172,9 +187,8 @@ edits nothing in it.
   agreement of manifests/catalogs/docs/helpers, tag-resolves-to-tested-commit,
   artifacts not edited after testing.
 
-The macOS Apple-silicon evidence from ADR 0024 is a possible input to v0.2.0 E4 for
-the Apple-silicon pairs only if shown to be at the pinned floors against the final
-candidate (open question 1). Intel pairs have no existing evidence.
+The macOS Apple-silicon evidence from ADR 0024 is a possible input to v0.2.0 E4 only
+if shown to be at the pinned floors against the final candidate (open question 1).
 
 ### 5. Applies to hosts as well as clients
 
@@ -264,7 +278,7 @@ mapping around it and does not alter its decisions).
   superseded by 0032, and ADR 0019 §2/§5 Ubuntu clauses superseded, in the ADR
   README register on acceptance (ADR bodies stay immutable).
 - **Release matrix workflow (`.github/workflows/check.yml`):** drop Ubuntu from the
-  v0.2.0/v0.3.0 release matrix (macOS arm64 and Intel only); Ubuntu returns for v0.4.0.
+  v0.2.0/v0.3.0 release matrix (macOS arm64 only; drop macOS Intel and Ubuntu); Ubuntu returns for v0.4.0.
 - **Spec 07:** "Private dogfood workflow and role mapping" (line ~94) retired or
   recast as v0.2.0 conformance; "Host surfaces" gains the Orca mapping once specified
   and the per-release status table; line ~120 "dogfood evaluation passes" reworded.
@@ -277,9 +291,9 @@ mapping around it and does not alter its decisions).
 - Public claims become simple: macOS with two harnesses in 0.2.0, three more harnesses
   on macOS in 0.3.0, other operating systems from 0.4.0, nothing in between.
   Antigravity code already in the tree is unsupported until 0.3.0.
-- v0.2.0 no longer waits on Ubuntu; it still waits on macOS Apple-silicon and Intel
-  live evidence for both harnesses. ADR 0024 evidence cannot be cited as support; at
-  best it feeds E4 for the Apple-silicon pairs.
+- v0.2.0 no longer waits on Ubuntu; it still waits on macOS Apple-silicon live
+  evidence for both harnesses (no Intel evidence is required). ADR 0024 evidence cannot be cited as support; at
+  best it feeds E4 for the v0.2.0 pairs.
 - Ubuntu users have no supported path until v0.4.0; documentation may not imply one.
 - Orca and Antigravity each need specification and evidence work, and Herdr's
   M9 depends on the unresolved ADR 0031 §5 blind-review choice, so v0.3.0 timing is
@@ -301,3 +315,8 @@ decisions.
    Antigravity and Orca?
 3. Herdr evaluators on `hc`: still blocked by ADR 0031 §5; which isolation choice?
 4. What replaces the `herdr` entries in `v0.3.0.json`, and who pins the Orca and `agy` floors?
+5. Owner confirmation: is Apple silicon (arm64) the only macOS architecture for v0.2.0 and
+   v0.3.0, with macOS Intel (x86-64) unsupported until a later superseding ADR? This ADR
+   assumes yes, from the owner's "v0.2.0 = macOS" decision and because the only existing
+   macOS evidence is Apple-silicon. If the owner wants Intel, §1 gains Intel rows (4 and
+   10 pairs, all required) and §4's replacement reverts to ADR 0019 §2's architectures.
