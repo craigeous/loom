@@ -271,7 +271,7 @@ floor `0.1.10`) are stale under ADR 0031 and need correction in that work.
 
 ### 7. What this supersedes and what stands
 
-Supersedes **ADR 0019** §2 only, as stated at the head of the Decision and detailed in §4.
+Supersedes **ADR 0019** §2 and §5 (the Ubuntu and macOS CI clause only), for v0.2.0 and v0.3.0, as stated at the head of the Decision and detailed in §4.
 
 Supersedes **ADR 0024** only in: (a) the "private development checkpoint" /
 "dogfood-ready" status vocabulary in §1 as a lasting classification; (b) any reading
