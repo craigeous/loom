@@ -46,13 +46,19 @@ changes, and the Herdr work already decided by ADR 0031.
 
 ## Decision
 
+ADR 0032 supersedes ADR 0019 §2 (the Ubuntu and macOS-Intel release-matrix requirement) for v0.2.0 and v0.3.0; ADR 0019 is otherwise unchanged.
+
+Replacement macOS evidence requirement for v0.2.0 and v0.3.0: macOS 14 or newer on Apple
+silicon (arm64), one required pair per harness in the release row (§1), each with the §3
+evidence. No macOS Intel (x86-64) and no Ubuntu evidence is required for either release.
+
 ### 1. Release sequence
 
 A *platform* is an operating system plus CPU architecture. A *harness* is a Claude Code
 CLI, Codex CLI, Antigravity, Orca or Herdr (`hc`) as defined in the compatibility
 matrix. The macOS platform for v0.2.0 and v0.3.0 is **macOS 14 or newer on Apple silicon
 (arm64) only**. macOS on Intel (x86-64) is neither required nor claimed for either
-release; §4 supersedes ADR 0019 §2 for it, and open question 5 asks the owner to confirm.
+release (the lead supersession of ADR 0019 §2); open question 5 asks the owner to confirm.
 
 | Release | Platforms | Harnesses | Pairs required |
 |---|---|---|---|
@@ -61,7 +67,8 @@ release; §4 supersedes ADR 0019 §2 for it, and open question 5 asks the owner 
 | v0.4.0 | macOS, plus Ubuntu 22.04 and 24.04 x86-64 first | to be fixed by the v0.4.0 planning ADR | n/a |
 
 **One rule for every pair in a row:** a pair is either *required* or *not applicable*.
-A required pair must satisfy §3 or the release is not published. A pair is *not
+All required pairs of a row, together and atomically, must satisfy §3 or the release is
+not published. A pair is *not
 applicable* only if the evidence record states the reason and records the check that
 proves the harness is unavailable on that platform (the harness vendor's published
 platform support at the pinned floor, plus a failed install or launch attempt on that
@@ -71,8 +78,7 @@ supported. As written, every pair in the v0.2.0 and v0.3.0 rows is required (2 a
 none is declared not applicable.
 
 Each later release is additive: it also carries every earlier pair, which must keep
-passing its own evidence. Each release is atomic: it is published under its label only
-when every required pair in its row satisfies §3. If a pair cannot, the release is not shipped
+passing its own evidence. If a required pair cannot satisfy §3, the release is not shipped
 under that label; moving a pair to a later release requires a superseding ADR. A
 (platform, harness) pair in no row is unsupported, whatever code exists for it. The
 release at which a pair is first supported is fixed by this table.
@@ -150,7 +156,7 @@ spec 10 amendment; no existing journal is declared to satisfy any element.
 ADR 0019 is Accepted and immutable; this ADR supersedes only the clauses below and
 edits nothing in it.
 
-**Superseded, for v0.2.0 and v0.3.0 (Ubuntu deferred to v0.4.0; Intel not required):**
+**Superseded, for v0.2.0 and v0.3.0 (ADR 0019 §2 only; Ubuntu deferred to v0.4.0; Intel not required).** The first two bullets are the §2 supersession; the remaining items state how §2's replacement applies to ADR 0019 text that cites the declared matrix, and are not further supersessions:
 
 - §2, second bullet, "macOS 14 or newer on Apple silicon and x86-64 where the selected
   client itself is supported" (the macOS-Intel release-matrix clause). **Exact
@@ -162,13 +168,13 @@ edits nothing in it.
 - §2, first bullet, "Ubuntu 22.04 LTS and 24.04 LTS on x86-64" as a platform the
   "v0.2 line supports". Ubuntu is not part of v0.2.0 or v0.3.0 support, and is not a
   release requirement for either. It becomes a v0.4.0 platform.
-- §5, the requirement of "Ubuntu and macOS CI; both adapter matrices": for v0.2.0 and
+- §5 (applied reading, not superseded), the requirement of "Ubuntu and macOS CI; both adapter matrices": for v0.2.0 and
   v0.3.0 it means macOS CI and the per-pair adapter matrix of §1, not Ubuntu CI.
-- The reading of §4's "M0 through M7 are green on the declared matrix" that makes the
+- §4 (applied reading, not superseded), the reading of "M0 through M7 are green on the declared matrix" that makes the
   declared matrix include Ubuntu: the declared matrix for v0.2.0 is the two pairs
   in §1 and for v0.3.0 the five pairs.
 - Consequence text "Ubuntu/macOS only" as a description of v0.2 scope (informative,
-  not normative).
+  not normative; read as macOS only).
 
 **Kept (unchanged):**
 
@@ -245,7 +251,7 @@ floor `0.1.10`) are stale under ADR 0031 and need correction in that work.
 
 ### 7. What this supersedes and what stands
 
-Supersedes **ADR 0019** only as listed in §4.
+Supersedes **ADR 0019** §2 only, as stated at the head of the Decision and detailed in §4.
 
 Supersedes **ADR 0024** only in: (a) the "private development checkpoint" /
 "dogfood-ready" status vocabulary in §1 as a lasting classification; (b) any reading
