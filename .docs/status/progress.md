@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-02 — M9 hc-driven client slice 1 `hc-guard-deny-policy` (deny-by-default hc guard for role sessions) landed via remote-direct; plan archived.
 
 - 2026-11-01 — M9 slice 3 `herdr-verification` landed.
 - 2026-11-01 — M9 slice 2 `herdr-native-app-hooks` landed.

@@ -17,7 +17,7 @@ over to the new plans.
 
 | # | Plan | Target size | Depends on |
 |---|---|---|---|
-| 1 | [hc-guard-deny-policy.md](hc-guard-deny-policy.md) | <= 140 LOC | none |
+| 1 | [hc-guard-deny-policy.md](archive/hc-guard-deny-policy.md) | <= 140 LOC | none |
 | 2 | [hc-host-adapter.md](hc-host-adapter.md) | <= 380 LOC | none |
 | 3 | [hc-live-probe.md](hc-live-probe.md) | <= 260 LOC | none |
 | 4 | [herdr-surface-retirement.md](herdr-surface-retirement.md) | <= 120 LOC | lands after 1 and 2 |

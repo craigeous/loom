@@ -1,16 +1,16 @@
 # Herdr `hc` Client (1 of 4): Role-Session `hc` Deny Policy
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 08-playbook.md (hook wire, `hc` deny), 07-command-surface.md (Host surfaces)
 Authority: ADR 0031 §4 (Accepted); program ceiling and split: ADR 0031 §8 items 1–4 become four slices
 Target size: <= 140 LOC added (guard + Bats; deletions not counted); keep this plan <= 250 lines
 
 ## Context
 
-ADR [0031](../ADR/0031-herdr-as-an-hc-driven-client.md) and amended spec 08 require
+ADR [0031](../../ADR/0031-herdr-as-an-hc-driven-client.md) and amended spec 08 require
 that no role session can call `hc`: a deny-by-default `PreToolUse` guard, with no
 allowlist and no verb parsing. The research note
-[hc runtime reference](../research/2026-11-01-hc-agent-runtime-reference.md) lists
+[hc runtime reference](../../research/2026-11-01-hc-agent-runtime-reference.md) lists
 the verbs that start programs or mutate state (`run exec send kill rm keys interrupt
 attach file machine server update label keep put connect`); a verb list is therefore
 not a policy. `plugins/loom/hooks/role-governance-guard.sh` today blocks only test

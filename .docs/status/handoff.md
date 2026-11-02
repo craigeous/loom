@@ -19,6 +19,7 @@ Current milestone: M9
    override `user.*`. The command surface is `/loom:run` plus one-off `/loom:<role>`.
 
 ## Where things stand
+- **Landed (2026-11-02):** `hc-guard-deny-policy` (M9 1 of 4) via remote-direct. Next: `hc-host-adapter` (plan Approved; developer not started).
 
 - **Current state:** Milestone M9 slices 1–3 (`herdr-client-adapter`, `herdr-native-app-hooks`, `herdr-verification`) Landed; 952 Bats tests passing. Verification is offline fixtures only.
 - **Next action:** Owner decision: run live Herdr/native-app evidence to close M9 (no further planned slice), or plan a follow-up slice via planner. No slice is active.
