@@ -1,6 +1,6 @@
 # 0032 — Release Client Mapping and Retirement of the Dogfood Support Tier
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-11-01
 
 ## Context
