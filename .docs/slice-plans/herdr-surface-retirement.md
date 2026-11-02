@@ -82,9 +82,12 @@ so deleting the Herdr root cannot alter it).
 9. **Docs (finalize pass)**: `CLAUDE.md` Map: the hook fixture line becomes "12-case
    (2 clients × 2 events × 3 outcomes; 48 fixture files at 4/case)"; stay <= ~100
    lines. `.docs/slice-plans/README.md` index. Orchestrator on `main`: `.docs/status/`
-   (roadmap M9, progress, handoff): ADR 0031 items landed, `hc` roles still "designed,
-   unverified", Codex roles on `hc` remain unsupported (ADR 0031 §5), the probe result recorded as evidence, not role support, and the explicit
-   open blocker kept: blind review via `hc` unresolved, hc evaluator use blocked pending a
+   (roadmap M9, progress, handoff): record only what this slice lands (the Herdr
+   plugin-surface retirement, ADR 0031 §7). State that slice 2 (`hc-host-adapter`) and
+   slice 3 (`hc-live-probe`) and the live probe evidence remain future work; claim no
+   slice 2 or 3 item as landed and record no probe result. `hc` roles stay "designed,
+   unverified", Codex roles on `hc` remain unsupported (ADR 0031 §5), and the explicit
+   open blocker is kept: blind review via `hc` unresolved, hc evaluator use blocked pending a
    follow-up ADR (ADR 0031 §5 and Consequences).
 
 ## Verification
@@ -97,7 +100,7 @@ so deleting the Herdr root cannot alter it).
   2. `rg -n 'HERDR_PLUGIN_ROOT|herdr-plugin' plugins scripts .claude-plugin .agents -g '!*.bats' -g '!scripts/validation/relative-link-allowlist.txt'` finds nothing; none of the Step 1 paths exists.
   3. `plugins/loom/hooks/fixtures/hook-wire-v1` has exactly 12 cases and 48 files and the Claude and Codex fixtures are byte-identical to `HEAD`.
   4. `git diff --stat HEAD -- plugins/loom/adapters/compatibility/v0.2.0.json plugins/loom/adapters/fixtures/v0.2.0 plugins/loom/adapters/roots/claude-plugin-root-v1.json plugins/loom/adapters/roots/codex-skill-source-v1.json` is empty.
-  5. `jq -e '(.clientFloors | has("herdr") | not) and (has("hostFloors") | not) and (.rootBindings | map(.id) | index("herdr-plugin-root/v1") | not)' plugins/loom/adapters/compatibility/v0.3.0.json` prints `true`, and `node scripts/validate-repository.mjs --all` passes with no slice 2 file present.
+  5. `jq -e '(.clientFloors | has("herdr") | not) and (has("hostFloors") | not) and (.rootBindings | map(.id) | index("herdr-plugin-root/v1") | not) and (.profiles | all(has("herdr") | not))' plugins/loom/adapters/compatibility/v0.3.0.json` prints `true` (exit 0; the three per-profile objects have no `herdr` key), and `node scripts/validate-repository.mjs --all` passes with no slice 2 file present.
 - Regression proof (unchanged, passing): Claude/Codex hook fixtures, `loom-profile.bats`,
   the Claude/Codex halves of `loom-launch-role.bats` and `loom-resolve-helper.bats`,
   and the already-landed guard-policy Bats files.
@@ -109,6 +112,7 @@ so deleting the Herdr root cannot alter it).
 
 | Round | Summary of in-place changes |
 |---|---|
+| 4 | Plan-eval retire-first r1: finalize records only this slice's landing (slices 2/3 and probe evidence stay future work); matrix jq criterion also asserts no per-profile `herdr` key |
 | 3 | Owner order decision: slice 4 runs before slice 2; all slice 2 dependencies (host floor, host binding, validator function) removed; matrix ends with no herdr and no host keys; slice 2 rebases onto this slice; status back to Plan Review |
 | 2 | Plan-eval round 2 + owner decision: keeps slice 2's `hostFloors.hc` in the v0.3.0 matrix and verifies it; final status states Codex roles on `hc` unsupported |
 | 1 | Plan-eval round 1: retirement scoped to plugin root/marketplace schemas and matrix rootBindings, host binding kept; blind-review open blocker retained in final status updates |
