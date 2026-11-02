@@ -112,10 +112,17 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 # hc is orchestrator-only (ADR 0031 §4). Deny-by-default: scan the raw command,
 # never STRIPPED, so quoting, sh -c, eval and wrappers cannot hide the word.
+# Line continuations are joined first so h\<newline>c scans as hc. Escaped
+# backslash pairs are removed before the join, so x\\<newline>hc keeps its
+# command separator.
 HC_REASON="Loom policy: hc is orchestrator-only; role sessions cannot call hc."
 if [ "$LOOM_ROLE" != "orchestrator" ]; then
+    HC_BS2=$'\\\\'
+    HC_BSNL=$'\\\n'
+    HCJOIN=${CMD//"$HC_BS2"/}
+    HCJOIN=${HCJOIN//"$HC_BSNL"/}
     # shellcheck disable=SC2016  # the tr set holds $ and backtick literally by design
-    HCSCAN=$(printf '%s' "$CMD" | tr -d "\"'\\\\" | tr '`$();&|<>{}' ' ')
+    HCSCAN=$(printf '%s' "$HCJOIN" | tr -d "\"'\\\\" | tr '`$();&|<>{}' ' ')
     if printf '%s\n' "$HCSCAN" | grep -qE '(^|[[:space:]])([^[:space:]]*/)?hc([[:space:]]|$)'; then
         _loom_hook_block "$CLIENT" "$HC_REASON"
     fi

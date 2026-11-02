@@ -297,6 +297,30 @@ hc_wire_allowed() {
     hc_guard_denied "hc ls # '"
 }
 
+@test "hc: a line continuation inside the executable name is denied" {
+    # bash joins h\<newline>c into hc, so the scan must join it too
+    for c in $'h\\\nc ls' $'h\\\nc get t1' $'ls && h\\\nc send t1 x'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: a line continuation inside a path executable name is denied" {
+    for c in $'/usr/local/bin/h\\\nc ls' $'./h\\\nc kill t1'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: a line continuation inside a sh -c or bash -c string is denied" {
+    for c in $'sh -c "h\\\nc ls"' $'sh -c \'h\\\nc ls\'' $'bash -c "h\\\nc ls"' $'bash -lc \'h\\\nc get t1\''; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: an escaped backslash before a newline does not hide a later hc" {
+    # x\\ ends a word; the newline after it is a real separator, so hc still starts a command
+    hc_guard_denied $'x\\\\\nhc ls'
+}
+
 @test "hc: words that merely contain hc are allowed for every role" {
     for r in "" orchestrator $HC_ROLES; do
         for c in "echo abc" "which-hc" "./hc.sh" "git status" "rg -n chc plugins"; do
