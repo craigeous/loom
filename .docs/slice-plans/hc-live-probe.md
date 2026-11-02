@@ -14,6 +14,9 @@ delivery), Q4 (role agent definition), Q5 (`HC_TERMINAL_ID`), Q6 (parent lifetim
 (status at launch). This slice adds one cheap, **generic** probe script and its offline
 tests, and records one real run as evidence. It needs no code from slices 1, 2 or 4;
 the run itself happens only after this slice's own offline gate is green.
+The v0.3.0 matrix registration (`hostFloors.hc`, floor `0.1.16`) is owned by slice 2
+(`hc-host-adapter`); this slice does not read or edit the matrix. Codex roles and
+evaluator roles on `hc` stay unsupported.
 
 The probe is not a role launch: it uses a throwaway Claude session with no role, no
 `LOOM_ROLE`, no loom agent file. A PASS says only that generic `hc` + Claude
@@ -122,5 +125,6 @@ runs for every outcome.
 
 | Round | Summary of in-place changes |
 |---|---|
+| 2 | Plan-eval round 2 (MINOR): matrix ownership stated (slice 2 owns v0.3.0 `hostFloors`); Codex/evaluator roles unsupported |
 | 1 | Plan-eval round 1: P4/P6 judge `status.state` (research §4), not terminal `state`; blind-review and evaluator-exclusion listed as open gates |
 | 0 | Split from `herdr-hc-client` (owner decision): probe only; absence/cleanup checked with `hc get` not_found (not `hc ls --all`); evidence path named; model constant kept; Q1 not claimed |

@@ -43,15 +43,19 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
 - No `herdr-app do`, config writes, mods, GUI control, templates, machines, remote runs.
 - The probe script is slice 3; Herdr plugin retirement (manifests, `herdr` branches,
   the v0.3.0 `herdr` keys, 24 hook fixtures) is slice 4. This slice adds registration
-  beside the existing Herdr keys and edits no Herdr file.
+  beside the existing Herdr keys and edits no Herdr key.
 - `hc` does not enforce blind review or delegation limits (spec 08; `00-overview.md`
   Non-goals). The helper is an observation convenience, not a boundary.
 - **Open blocker (retained, not resolved here):** Blind review through `hc` is an **unresolved owner decision** (ADR 0031 §5 and Consequences): hc evaluator use is blocked pending a follow-up ADR (isolation or explicit degraded blindness); this helper does not enforce blind review and no evaluator role runs on `hc`.
-- **No matrix or schema change.** The host binding lives only at `adapters/hosts/hc-host-v1.json`
-  (own schema, step 3). `v0.3.0.json`, `v0.2.0.json`, `loom-compatibility-matrix-v1` and
-  `loom-installed-root-binding-v1` are not edited, so there is no `hostFloors`/`hostBindings`
-  matrix key (the matrix schema is `additionalProperties:false`). The binding carries its own
-  `floor`. Slice 4 edits `v0.3.0.json` only to remove Herdr keys.
+- **Matrix registration (owner decision; this slice owns it for all four plans).** One
+  minimal, backward-compatible schema change: `loom-compatibility-matrix-v1.schema.json`
+  gains an **optional** `hostFloors` property (`additionalProperties:false`; sole key
+  `hc`, an object `{floor: const "0.1.16", helper: const "loom-host-hc"}`); it is not
+  added to `required`, so the frozen `v0.2.0.json` still validates unchanged. `v0.3.0.json`
+  gains `"hostFloors":{"hc":{"floor":"0.1.16","helper":"loom-host-hc"}}` (spec 10: the matrix
+  records `hc` as a host with floor `0.1.16`; herdr-app is not floored). There is no
+  `hostBindings` key. The schema's `sha256` in `scripts/check-toolchain.json` is re-pinned.
+  Slice 4 later edits `v0.3.0.json` only to remove Herdr keys and keeps `hostFloors`.
 - Validator scope: v0.3.0 checks read only v0.3.0 files. They never compare the v0.2.0
   frozen fixtures or the three installed roots with v0.3.0 content.
 
@@ -84,21 +88,26 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
    "reachableVerbs":["get","wait","events","kill","rm"],"launch":"unsupported" }`.
 3. **`plugins/loom/schemas/loom-host-binding-v1.schema.json`** (new): draft 2020-12,
    `additionalProperties:false`, every key above required, `launch` const
-   `"unsupported"`, `reachableVerbs` const the five verbs. The existing
-   `loom-installed-root-binding-v1.schema.json` and `loom-compatibility-matrix-v1`
-   schemas are **not modified** (their pinned digests stay valid).
-4. **Registration is the binding file itself**: the validator (step 6) loads it from the
-   fixed path `plugins/loom/adapters/hosts/hc-host-v1.json`. No compatibility-matrix edit.
+   `"unsupported"`, `reachableVerbs` const the five verbs. The installed-root binding
+   schema is **not modified** (its pinned digest stays valid).
+4. **Matrix registration**: add the optional `hostFloors` property to
+   `plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json`, add the `hostFloors`
+   entry to `plugins/loom/adapters/compatibility/v0.3.0.json` (see the Registration
+   bullet), and re-pin the schema `sha256` in `scripts/check-toolchain.json` (change
+   nothing else there).
 5. **`plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json`** (new): a byte-for-byte
    copy of step 2's file.
-6. **`scripts/validate-repository.mjs`**: add `validateHostBinding()` called beside the
+6. **`scripts/validate-repository.mjs`** (touched): add `validateHostBinding()` called beside the
    metadata checks: (a) validate the live binding against its schema through the
-   existing Ajv path (add the schema to the loaded set and `schemaBindings`);
+   existing Ajv path (add the schema to the loaded set and `schemaBindings`), and
+   validate `v0.3.0.json` against the matrix schema, requiring `hostFloors.hc.floor`
+   to equal the binding's `floor` and `helper` to equal its `helper`;
    (b) the `hosts/` directory holds exactly that one binding file and `floor` is `0.1.16`; (c) the live binding and the v0.3.0 fixture are
    deep-equal; (d) `bin/loom-host-hc` exists as a regular, executable file; (e)
    `loom-host-hc` appears in neither `ALLOWED_HELPERS` of `loom-resolve-helper` nor any
    root `allowedHelpers`. Report each failure with the existing `report()` helper. It
-   reads no `v0.2.0` path and does not touch `expectedRoots`.
+   reads `v0.3.0.json` and does not touch `expectedRoots`; the existing v0.2.0
+   matrix check is unchanged.
 7. **`plugins/loom/bin/loom-host-hc.bats`** (new). Each test builds
    `$BATS_TEST_TMPDIR/bin/hc`, a stub appending `"$@"` one arg per line to a log,
    printing canned JSON per verb and exiting per `STUB_*`; `PATH` is prefixed. Tests:
@@ -112,7 +121,7 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
    `get`, accepts kill exit 11, exits 2 if `get` still succeeds; across all tests only
    `get wait events kill rm` ever appear in a stub log.
 8. **`scripts/tests/repository-validation.bats`**: add cases for step 6 (a)–(e): a
-   mutated copy of the repo fixture fails each check; the real tree passes; v0.2.0
+   mutated copy of the repo fixture (including a wrong or missing `hostFloors`) fails each check; the real tree passes; v0.2.0
    fixtures and root bindings are asserted byte-unchanged against `git show HEAD:`
    in the same test (regression proof that registration touched none of them).
 9. **Docs (finalize pass)**: `CLAUDE.md` Map `bin/` list gains `loom-host-hc` (one
@@ -129,10 +138,10 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
   that does not return is exit 4 `degraded`, never completion; (3) `git diff --stat
   HEAD -- plugins/loom/adapters/fixtures/v0.2.0 plugins/loom/adapters/compatibility/v0.2.0.json
   plugins/loom/adapters/roots plugins/loom/schemas/loom-installed-root-binding-v1.schema.json
-  plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json plugins/loom/bin/loom-resolve-helper`
-  is empty; (4) `scripts/check-toolchain.json` is unchanged; (5) validator reports
-  binding drift when the binding or its fixture is edited, and `git diff --stat HEAD --
-  plugins/loom/adapters/compatibility` is empty.
+  plugins/loom/bin/loom-resolve-helper` is empty, and `jq -e '.hostFloors|not' plugins/loom/adapters/compatibility/v0.2.0.json`
+  prints `true`; (4) `scripts/check-toolchain.json` differs only in the matrix schema's `sha256`; (5) validator reports
+  binding drift when the binding or its fixture is edited, and `jq -e '.hostFloors.hc.floor=="0.1.16"'
+  plugins/loom/adapters/compatibility/v0.3.0.json` prints `true`.
 - Full gate once on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
   Only the known unrelated `INT during a mutation yields exit 130` dogfood race may
   be recorded and rerun once (owner-declared out of scope); any other failure blocks.
@@ -141,5 +150,6 @@ carry no `name`, so cleanup is verified by `hc get <name>` returning not_found.
 
 | Round | Summary of in-place changes |
 |---|---|
+| 2 | Plan-eval round 2 + owner decision: restored v0.3.0 matrix registration via one optional `hostFloors` schema key (no `hostBindings`), sha re-pinned, v0.2.0 untouched; this slice owns it |
 | 1 | Plan-eval round 1: dropped matrix `hostFloors`/`hostBindings` (schema forbids them); binding stands alone, no schema change; blind-review open blocker retained |
 | 0 | Split from `herdr-hc-client` (owner decision): host adapter and v0.3.0-only registration; v0.2.0 fixtures, roots and `ALLOWED_HELPERS` untouched; v0.3.0 fixture layout defined; name grammar, `exit_code`, not_found cleanup check from the developer pass |

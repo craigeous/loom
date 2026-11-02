@@ -19,7 +19,7 @@ before matching, so `sh -c "hc ls"` would never reach a command-word match.
 
 This is slice 1 of 4. The program split (owner decision, replaces the single plan
 `herdr-hc-client`, now `Abandoned`): **1** this guard, **2** `hc-host-adapter`
-(`loom-host-hc` + v0.3.0 registration), **3** `hc-live-probe`, **4**
+(`loom-host-hc`; owns the v0.3.0 matrix `hostFloors` registration), **3** `hc-live-probe`, **4**
 `herdr-surface-retirement`. Order: 1 and 2 are independent; 3 needs no code from
 1–2; 4 lands last (it edits files 1 and 2 touch). Program ceiling across all four
 slices: 900 LOC added; budgets do not transfer between slices.
