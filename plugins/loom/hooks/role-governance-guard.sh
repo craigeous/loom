@@ -6,6 +6,7 @@
 #                              npm test, pytest) unless LOOM_ALLOW_ORCHESTRATOR_GATE=1
 #                              (which permits scripts/check only)
 #   plan-/code-evaluator    -> git history/checkout mutation
+#   any non-orchestrator role -> any bare word hc
 # LOOM_ROLE unset or empty fails open. Defense in depth against agent drift, not
 # a security boundary. Command words are inspected after the same Stage A/B/C
 # de-quote transform as git-identity-guard.sh, so arguments never match.
@@ -108,6 +109,17 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 # Unset/empty role: fail open.
 [ -n "${LOOM_ROLE:-}" ] || _loom_hook_allow
+
+# hc is orchestrator-only (ADR 0031 §4). Deny-by-default: scan the raw command,
+# never STRIPPED, so quoting, sh -c, eval and wrappers cannot hide the word.
+HC_REASON="Loom policy: hc is orchestrator-only; role sessions cannot call hc."
+if [ "$LOOM_ROLE" != "orchestrator" ]; then
+    # shellcheck disable=SC2016  # the tr set holds $ and backtick literally by design
+    HCSCAN=$(printf '%s' "$CMD" | tr -d "\"'\\\\" | tr '`$();&|<>{}' ' ')
+    if printf '%s\n' "$HCSCAN" | grep -qE '(^|[[:space:]])([^[:space:]]*/)?hc([[:space:]]|$)'; then
+        _loom_hook_block "$CLIENT" "$HC_REASON"
+    fi
+fi
 
 # Stage A/B/C de-quote (as git-identity-guard.sh)
 DEESC=$(printf '%s' "$CMD" | sed -e 's/\\"//g' -e "s/\\\\'//g")

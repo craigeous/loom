@@ -30,6 +30,31 @@ guard_codex() {
 
 ORCH="Loom policy: Orchestrators cannot run test suites directly; delegate to an external worker."
 EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or checkout."
+HC="Loom policy: hc is orchestrator-only; role sessions cannot call hc."
+HC_ROLES="researcher planner plan-evaluator developer code-evaluator foo"
+
+# hc_guard_denied <command> -- every non-orchestrator role, both wires
+hc_guard_denied() {
+    local r
+    for r in $HC_ROLES; do
+        guard "$r" "$1"
+        [ "$status" -eq 2 ]
+        [ "$output" = "$HC" ]
+        guard_codex "$r" "$1"
+        [ "$status" -eq 0 ]
+        jq -e --arg r "$HC" '.hookSpecificOutput == {hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}' <<<"$output"
+    done
+}
+
+# hc_wire_allowed <role> <command> -- silent exit 0 on both wires ("" = LOOM_ROLE unset)
+hc_wire_allowed() {
+    guard "$1" "$2"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    guard_codex "$1" "$2"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
 
 @test "unset LOOM_ROLE fails open for test runners and git mutation" {
     guard "" "scripts/check"
@@ -200,4 +225,94 @@ EVAL="Loom policy: Evaluators are read-only and cannot mutate git history or che
     run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT LOOM_ROLE=code-evaluator HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
     [ "$status" -eq 2 ]
     [ "$output" = "$EVAL" ]
+}
+
+@test "hc: direct invocation is denied" {
+    hc_guard_denied "hc ls"
+    hc_guard_denied "hc run --bg x claude"
+    hc_guard_denied "hc get t1 --json"
+}
+
+@test "hc: assignment and env prefixes are denied" {
+    for c in "A=1 hc ls" "env A=1 hc get t1" "A=1 env B=2 hc ls" "env -i hc ls" "command hc read t1" "exec hc ls" "time hc ls"; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: sh -c strings are denied" {
+    for c in 'sh -c "hc ls"' "sh -c 'hc kill t1'" 'sh -c "echo a; hc ls"'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: bash -c strings are denied" {
+    for c in 'bash -c "hc ls"' "bash -lc 'hc send t1 x'" 'env -i bash -c "hc ls"'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: eval strings are denied" {
+    for c in 'eval "hc ls"' "eval 'hc rm t1'"; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: backtick substitution is denied" {
+    for c in 'echo `hc ls`' 'x=`hc get t1`'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: command substitution is denied" {
+    for c in 'echo $(hc ls)' 'x=$(hc get t1); echo $x'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: timeout wrapper is denied" {
+    for c in "timeout 5 hc wait t1" "timeout -k 1 5 hc ls"; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: xargs is denied" {
+    for c in "echo t1 | xargs hc get" "printf 't1\n' | xargs -I{} hc kill {}"; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: absolute and relative paths are denied" {
+    for c in "/usr/local/bin/hc ls" "/opt/homebrew/bin/hc kill t1" "./hc ls"; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: chained, nohup, exec-terminated and quote-obfuscated forms are denied" {
+    for c in "ls && hc send t1 x" "nohup hc wait t1" 'find . -exec hc\;' "ls;hc ls" 'echo $(hc)' 'h"c" ls' 'h\c ls'; do
+        hc_guard_denied "$c"
+    done
+}
+
+@test "hc: an unbalanced quote does not bypass the hc deny" {
+    hc_guard_denied "hc ls # '"
+}
+
+@test "hc: words that merely contain hc are allowed for every role" {
+    for r in "" orchestrator $HC_ROLES; do
+        for c in "echo abc" "which-hc" "./hc.sh" "git status" "rg -n chc plugins"; do
+            hc_wire_allowed "$r" "$c"
+        done
+    done
+}
+
+@test "hc: documented false positives are denied for non-orchestrator roles" {
+    hc_guard_denied 'git commit -m "hc run"'
+    hc_guard_denied "echo hc"
+}
+
+@test "hc: orchestrator and unset LOOM_ROLE are not affected" {
+    for c in "hc ls" "/usr/local/bin/hc run --bg x claude" 'sh -c "hc ls"'; do
+        hc_wire_allowed orchestrator "$c"
+        hc_wire_allowed "" "$c"
+    done
 }
