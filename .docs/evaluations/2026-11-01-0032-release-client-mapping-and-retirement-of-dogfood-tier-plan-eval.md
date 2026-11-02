@@ -2,7 +2,13 @@
 
 Verdict: FAIL
 Round: 4
+Commit: 4fc30af
+Reviewed against: owner decisions and named authorities (ADR 0019, ADR 0024, ADR 0027 and ADR 0031; see the round 3 and round 5 records for the full list).
 Reviewed artifact: commit 4fc30af; owner decisions and named authorities.
+
+## Summary
+
+FAIL (round 4; BLOCKER: 1, MAJOR: 1, MINOR: 0). Evaluated at commit 4fc30af again; the Intel supersession and pair-rule findings remain in that commit. The remaining sections are the original record, unchanged.
 
 ## Required changes
 

@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 2
+Commit: b52467b
 Reviewed against: ADR 0031, specs 07/08/10, split plans, named research and playbook rubric.
+
+## Summary
+
+FAIL (round 2; BLOCKER: 2, MAJOR: 0, MINOR: 0). The no-matrix-key design conflicted with spec 10, and unsupported Codex roles were not stated. The remaining sections are the original record, unchanged.
 
 ## Required changes
 

@@ -2,7 +2,12 @@
 
 Verdict: PASS
 Round: 7
+Commit: 1f1fcde
 Reviewed against: owner decisions, ADRs 0019, 0024, 0027, 0031, specs 07 and 10, README, CLAUDE.md, workflow, and plan-evaluation rubric.
+
+## Summary
+
+PASS (round 7; BLOCKER: 0, MAJOR: 0, MINOR: 0). The section 7 supersession summary now names ADR 0019 sections 2 and 5, and no open findings remain. The remaining sections are the original record, unchanged.
 
 ## Findings
 

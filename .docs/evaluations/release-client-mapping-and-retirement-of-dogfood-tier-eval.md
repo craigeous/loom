@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 5
+Commit: 1088fc5
 Reviewed against: owner decisions, ADR 0019, 0024, 0027, 0031, specs 07 and 10, README, CLAUDE.md, check.yml, and the plan-evaluation rubric.
+
+## Summary
+
+FAIL (round 5; BLOCKER: 1, MAJOR: 1, MINOR: 0). The ADR 0019 section 5 Ubuntu CI requirement was replaced without an explicit supersession, and E4 conflicted with the NOT APPLICABLE pair rule. The remaining sections are the original record, unchanged.
 
 ## Required changes
 

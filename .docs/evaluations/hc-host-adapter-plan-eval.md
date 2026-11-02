@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 1
+Commit: 3e04b23
 Reviewed against: ADR 0031, specs 07, 08, 10, the three split plans, both named research notes, and the playbook rubric and template.
+
+## Summary
+
+FAIL (round 1; BLOCKER: 1, MAJOR: 0, MINOR: 1). The proposed matrix keys could not pass the closed schema, and the blind-review requirement was not recorded as an open item. The remaining sections are the original record, unchanged.
 
 ## Findings
 

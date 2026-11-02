@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 3
+Commit: 4fc30af
 Reviewed against: owner decisions, ADRs 0019, 0024, 0027, 0031, specs 07 and 10, README, CLAUDE.md, and check.yml. Artifact: explicitly requested commit 4fc30af.
+
+## Summary
+
+FAIL (round 3; BLOCKER: 1, MAJOR: 1, MINOR: 0). Evaluated at the explicitly requested commit 4fc30af, the same revision as round 2, so the same two findings remain. The remaining sections are the original record, unchanged.
 
 ## Findings
 

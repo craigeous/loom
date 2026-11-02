@@ -2,6 +2,12 @@
 
 Verdict: FAIL
 Round: 6
+Commit: cecd63b
+Reviewed against: ADR 0019 sections 2 and 5, and ADR 0032's Decision and section 4 (the remaining authorities are those named in the round 5 and round 7 records).
+
+## Summary
+
+FAIL (round 6; BLOCKER: 1, MAJOR: 0, MINOR: 0). The supersession summary named ADR 0019 section 2 only, contradicting the Decision, which also supersedes section 5. The remaining sections are the original record, unchanged.
 
 ## Required changes
 

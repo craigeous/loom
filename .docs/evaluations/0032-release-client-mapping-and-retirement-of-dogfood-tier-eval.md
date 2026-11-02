@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 1
+Commit: 07b7da4
 Reviewed against: owner decision, ADRs 0019, 0024, 0027, 0031, specs 07 and 10, README and CLAUDE.md.
+
+## Summary
+
+FAIL (round 1; BLOCKER: 1, MAJOR: 1, MINOR: 0). Evidence binding was circular, and the open questions contradicted the binding release and routing decisions. The remaining sections are the original record, unchanged.
 
 ## Findings
 

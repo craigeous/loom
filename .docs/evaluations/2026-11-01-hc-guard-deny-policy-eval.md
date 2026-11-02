@@ -1,5 +1,15 @@
 Verdict: PASS
 Round: 3
+Commit: 1c7b0ef
+Reviewed against: ADR 0031, specs 07, 08 and 10, the split slice plans, the named research notes, and the plan-evaluation rubric.
+
+## Summary
+
+PASS (round 3; BLOCKER: 0, MAJOR: 0, MINOR: 0). Matrix ownership is resolved in hc-host-adapter and the other split plans agree. The remaining sections are the original record, unchanged.
+
+## Findings
+
+This round's findings are recorded under "Required changes" below (BLOCKER: 0; MAJOR: 0; MINOR: 0).
 
 ## Required changes
 

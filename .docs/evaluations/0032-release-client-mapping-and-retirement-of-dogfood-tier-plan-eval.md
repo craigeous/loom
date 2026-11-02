@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 2
+Commit: 4fc30af
 Reviewed against: binding owner decisions and requested checks; ADR 0019, 0024, 0027, 0031; specs 07 and 10; README, CLAUDE.md and check.yml.
+
+## Summary
+
+FAIL (round 2; BLOCKER: 1, MAJOR: 1, MINOR: 0). The macOS-Intel supersession of ADR 0019 was missing, and the pair counts, availability exception and atomic publication rule were inconsistent. The remaining sections are the original record, unchanged.
 
 ## Findings
 

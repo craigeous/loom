@@ -15,6 +15,20 @@ ADR 0031 made Herdr a launch host driven by `hc` and left the Orca mapping unspe
 (§4); spec 07 "Host surfaces (Orca, Herdr `hc`)" names Orca, but no Orca host adapter
 exists.
 
+### Problem statement
+
+The release contract and the support vocabulary disagree. The approved
+[repository improvement plan](../repository-improvement-plan.md) (see "Ordering and
+release policy" and Checkpoint D0) keeps the v0.2 release rule unchanged, with Ubuntu and
+macOS-Intel obligations, while the same plan and [ADR 0024](0024-macos-first-dual-client-dogfood-bootstrap-amendment.md)
+describe a private Apple-silicon dogfood checkpoint that is "not a release". Accepted
+authority already in force is [ADR 0019](0019-supported-runtime-and-release-contract.md)
+(the v0.2 release matrix), [ADR 0027](0027-client-model-matrix-modernization-and-ambient-inheritance.md)
+(Antigravity as a dogfood adapter) and [ADR 0031](0031-herdr-as-an-hc-driven-client.md)
+(Herdr via `hc`). No existing research note covers release mapping, so the problem is
+stated here: the repository has no single definition of "supported", no release in which
+each client is claimed, and a "dogfood" tier that sits between supported and unsupported.
+
 State verified in the tree while drafting:
 
 - `plugins/loom/adapters/compatibility/v0.2.0.json` covers `claude` and `codex` with

@@ -2,7 +2,12 @@
 
 Verdict: FAIL
 Round: 1
+Reviewed against: ADR 0031, specs 07, 08 and 10, the split slice plans, the named research notes, and the plan-evaluation rubric.
 Commit: 3e04b23
+
+## Summary
+
+FAIL (round 1; BLOCKER: 2, MAJOR: 0, MINOR: 0). The no-herdr schema search contradicted the retained host binding, and the final status instructions omitted the open blind-review blocker. The remaining sections are the original record, unchanged.
 
 ## Required changes
 

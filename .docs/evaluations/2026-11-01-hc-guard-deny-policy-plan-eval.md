@@ -1,5 +1,15 @@
 Verdict: FAIL
 Round: 2
+Commit: b52467b
+Reviewed against: ADR 0031, specs 07, 08 and 10, the split slice plans, the named research notes, and the plan-evaluation rubric.
+
+## Summary
+
+FAIL (round 2; BLOCKER: 1, MAJOR: 0, MINOR: 0). The slice dependency conflicted with the owner decision to register the helper under the v0.3.0 matrix. The remaining sections are the original record, unchanged.
+
+## Findings
+
+This round's findings are recorded under "Required changes" below (BLOCKER: 1; MAJOR: 0; MINOR: 0).
 
 ## Required changes
 
