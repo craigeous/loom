@@ -132,6 +132,7 @@ slices: 900 LOC added; budgets do not transfer between slices.
     - Test: `hc: unspaced pipe and background separators are denied` (`ls|hc ls`, `ls&hc ls`, both roles and both wires).
     - Mutation proof (guard `tr` set `` `$();&|<>{} `` with `|` and `&` removed, `role-governance-guard.sh:125`): the new test is `not ok`; the other 19 `hc:` tests stay `ok`. Guard restored byte-identical to HEAD; the new test and the full guard suite (40 ok, 0 not ok) pass.
     - LOC (corrected): `git diff --numstat a1431ed HEAD -- plugins/loom/hooks/role-governance-guard.sh plugins/loom/hooks/role-governance-guard.bats` gives `19 0` (guard) and `146 0` (Bats). Total 165 added, 0 deleted. **This exceeds the <= 140 target by 25 lines.** The target is unchanged (owner decision). Before round 1 the same command gave 19 + 139 = 158; the new test adds 7 lines.
+    - Owner accepted the overage: 165 added vs target <= 140 (the excess is the bypass regression tests required by code-eval rounds 0 and 1); target unchanged.
     - Full gate on `310dd3e`: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0, "All checks passed"; Bats 972 ok, 0 not ok (971 + 1 new).
 
 ## Revision Log
