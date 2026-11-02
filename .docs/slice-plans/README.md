@@ -17,7 +17,11 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-None.
+- [hc-guard-deny-policy.md](hc-guard-deny-policy.md) — `Approved` — M9 (1 of 4): deny every `hc` form, including wrappers, to role sessions (ADR 0031).
+- [hc-host-adapter.md](hc-host-adapter.md) — `Approved` — M9 (2 of 4): `loom-host-hc` observation helper and v0.3.0-only registration.
+- [hc-live-probe.md](hc-live-probe.md) — `Approved` — M9 (3 of 4): generic live `hc` probe script and offline tests.
+- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, lands last): retire the Herdr plugin surfaces.
+- [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
 

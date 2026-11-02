@@ -35,6 +35,7 @@
 .docs/evaluations/0022-controlled-input-independent-evaluation-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:eval-sequence	Historical evaluation records cumulative rounds and lacks a reviewed Commit field; record is not rewritten.
 .docs/evaluations/0023-repository-self-hosting-bootstrap-transition-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
+.docs/evaluations/0031-herdr-as-an-hc-driven-client-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 and the intermediate FAIL was overwritten in place; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:authority	Historical artifact predates the authority-reference convention; record is not rewritten.
 .docs/evaluations/0024-macos-first-dual-client-dogfood-bootstrap-amendment-eval.md	rule:heading-summary	Historical artifact predates the required template heading; record is not rewritten.
 .docs/evaluations/0025-reconciliation-authority-eval.md	rule:authority	Historical artifact predates the stricter authority and evaluation-identification checks; record is not rewritten.
@@ -459,3 +460,12 @@
 .docs/evaluations/sanitized-evaluation-workspace-eval.md	rule:authority	Historical evaluation names its re-review scope without an authority reference; record is not rewritten.
 .docs/evaluations/adr-0011-playbook-conformance-eval.md	rule:authority	Historical record cites a wrapped, plan-named authority line; record is not rewritten.
 .docs/evaluations/author-identity-enforcement-guard-eval.md	rule:authority	Historical record cites a wrapped, path-named research authority line; record is not rewritten.
+.docs/evaluations/0032-release-client-mapping-and-retirement-of-dogfood-tier-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 (the evaluator numbered the first review 1); the record is not renumbered.
+.docs/evaluations/hc-guard-deny-policy-plan-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 (the evaluator numbered the first review 1); the record is not renumbered.
+.docs/evaluations/hc-host-adapter-plan-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 (the evaluator numbered the first review 1); the record is not renumbered.
+.docs/evaluations/hc-live-probe-plan-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 (the evaluator numbered the first review 1); the record is not renumbered.
+.docs/evaluations/herdr-surface-retirement-plan-eval.md	rule:eval-sequence	Historical evaluation sequence began at Round 1 (the evaluator numbered the first review 1); the record is not renumbered.
+.docs/evaluations/release-client-mapping-and-retirement-of-dogfood-tier-eval.md	rule:eval-sequence	Rounds 5-7 of ADR 0032 continue rounds 1-4 recorded under the long artifact name; the validator's per-day filename slots for that identity (<artifact>-eval, <artifact>-plan-eval and their dated forms) were exhausted, so rounds 5-7 sit under the stripped identity. Round numbers are not renumbered.
+.docs/evaluations/2026-11-01-0032-release-client-mapping-and-retirement-of-dogfood-tier-eval.md	rule:eval-sequence	Rounds 2, 3 and 4 all reviewed the same explicitly requested commit 4fc30af, so the validator cannot order them by reviewed commit; the true reviewed commit is recorded and not altered.
+.docs/evaluations/2026-11-01-0032-release-client-mapping-and-retirement-of-dogfood-tier-plan-eval.md	rule:eval-sequence	Rounds 2, 3 and 4 all reviewed the same explicitly requested commit 4fc30af, so the validator cannot order them by reviewed commit; the true reviewed commit is recorded and not altered.
+.docs/evaluations/2026-11-01-hc-live-probe-eval.md	rule:eval-sequence	Round 3 was a second PASS in the program-wide third plan-eval pass after round 2 PASS; the evaluator's round number is kept rather than rewritten to 2.

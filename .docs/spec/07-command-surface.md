@@ -49,6 +49,39 @@ Claude launches one of five namespaced native role adapters:
 shared role contract. Neither surface exposes auxiliary finder workers as lifecycle
 commands; the orchestrator launches them only within `loom-local-review/v1`.
 
+## Host surfaces (Orca, Herdr `hc`)
+
+A **host** runs a role's inner client (`claude` or `codex`) in a persistent terminal;
+it is not a model client, plugin root or hook runtime. `loom-launch-role` emits the
+inner-client descriptor; a host adapter turns descriptor, worktree and brief into host
+commands. Host adapters are thin and add no policy.
+
+Herdr is driven only through the `hc` CLI (herdr-core; observed 0.1.16, with herdr-app
+0.1.11, not called by loom). Loom does not call `herdr-app do`, write Herdr config, ship a
+Herdr manifest, marketplace or mod, or install hooks through Herdr. The mapping is:
+
+| Loom input | `hc` form |
+|---|---|
+| role | `--name <role>-<opaque id>` (1–32 chars `a-z 0-9 - _`) |
+| inner client, model, effort | the program and flags in the command string; `codex` needs `--no-daemon` |
+| worktree | `--cwd <worktree>` |
+| `LOOM_ROLE` | `env LOOM_ROLE=<role> <program> …` |
+| brief | its own argv token, or `hc wait` then `hc send` |
+| readiness / completion | `hc wait` with a timeout, then read the committed artifact |
+| end of role | `hc kill` then `hc rm` |
+
+Behaviors identical on every host: cold fresh session (never `--resume`/`--continue`),
+only root delegates, no delegation capability, `LOOM_ROLE` set, handoff only through
+committed artifacts, bounded return, uniform commit identity. The artifact `Status:`
+is the dispatcher; terminal status (OSC 7501) and `hc wait` results are hints, and a
+wait timeout is reported as degraded, never as completion.
+
+Role support on `hc` is gated per role and client on owner-run live probes (ADR 0031
+§6) and is unsupported until recorded. Codex roles are not supported on `hc`: the
+current Codex launch is one-shot and read-only. Evaluator roles are not supported on
+`hc` until the blind-review requirement in spec 05 §Host isolation is resolved.
+
+
 ## Supported surfaces
 
 - Claude Code plugin support is release-tested at the declared CLI floor.
