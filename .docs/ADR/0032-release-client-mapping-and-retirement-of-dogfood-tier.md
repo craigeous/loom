@@ -26,78 +26,104 @@ State verified in the tree while drafting:
   Antigravity matrix entry, root binding or manifest exists in `adapters/`.
 - No file under `plugins/loom/adapters/` names Orca.
 
-**Owner decision (binding).**
+**Owner decisions (binding).**
 
-1. v0.2.0 is Claude Code CLI and Codex CLI. v0.3.0 is Antigravity, Orca and Herdr (`hc`).
-2. "Dogfood" is retired as a support tier. A client is supported in a release with
-   conformance evidence, or it is not in that release. There is no private middle tier
-   for a client a release claims. ADR 0024's macOS evidence stays a historical record,
-   not a support claim.
+1. **"Supported"** means loom fully functions within the harness on the platform: every
+   role, the full loop, and the gate, on that OS with that client. Support is judged per
+   (platform, harness) pair.
+2. **Release sequence.** v0.2.0 = macOS only, with Claude Code CLI and Codex CLI.
+   v0.3.0 = the other harnesses (Antigravity, Orca, Herdr `hc`) on macOS. v0.4.0 = the
+   other operating systems, starting with Ubuntu 22.04 and 24.04 on x86-64.
+3. **"Dogfood" is retired as a support tier.** A (platform, harness) pair is supported
+   in a release with conformance evidence, or it is not in that release. There is no
+   private middle tier for a pair a release claims. ADR 0024's macOS evidence stays a
+   historical record, not a support claim.
 
-In scope: the mapping, the definition of "supported", the disposition of Antigravity and
-Orca, and what earlier ADRs this supersedes. Out of scope: spec text, `CLAUDE.md`,
-matrix or code changes, and the Herdr work already decided by ADR 0031.
+In scope: the release sequence, the definition of "supported", the per-pair evidence,
+the disposition of Antigravity and Orca, and exactly which parts of earlier ADRs this
+supersedes. Out of scope: spec text, `CLAUDE.md`, README, workflow, matrix or code
+changes, and the Herdr work already decided by ADR 0031.
 
 ## Decision
 
-### 1. Release mapping
+### 1. Release sequence
 
-| Release | Supported clients | Basis |
-|---|---|---|
-| v0.2.0 | Claude Code CLI, Codex CLI | ADR 0019, unchanged |
-| v0.3.0 | Antigravity, Orca, Herdr (`hc`) | this ADR |
+A *platform* is an operating system plus CPU architecture. A *harness* is a Claude Code
+CLI, Codex CLI, Antigravity, Orca or Herdr (`hc`) as defined in the compatibility
+matrix. The platform statement for macOS is ADR 0019 §2's, unchanged: macOS 14 or newer
+on Apple silicon and x86-64, where the selected harness itself is supported there.
 
-v0.3.0 is additive: it also carries the v0.2.0 clients, which must keep passing their
-own evidence. v0.3.0 is atomic: it is published as v0.3.0 only when Antigravity, Orca
-and Herdr each satisfy §3. If one cannot, the release is not shipped under that
-label; moving that client to a later release requires a superseding ADR (below). A client appearing in no row is unsupported in every release, whatever
-code exists for it. The release at which a client is first supported is fixed by this
-table; moving a client needs a superseding ADR.
+| Release | Platforms | Harnesses | Pairs required |
+|---|---|---|---|
+| v0.2.0 | macOS 14+ (Apple silicon, Intel) | Claude Code CLI, Codex CLI | 4 |
+| v0.3.0 | macOS 14+ (Apple silicon, Intel) | v0.2.0 harnesses, plus Antigravity, Orca, Herdr (`hc`) | 10 |
+| v0.4.0 | macOS, plus Ubuntu 22.04 and 24.04 x86-64 first | to be fixed by the v0.4.0 planning ADR | n/a |
+
+A harness that does not itself run on a listed architecture is absent for that pair and
+the evidence record says so explicitly; it is never silently skipped.
+
+Each later release is additive: it also carries every earlier pair, which must keep
+passing its own evidence. Each release is atomic: it is published under its label only
+when every pair in its row satisfies §3. If a pair cannot, the release is not shipped
+under that label; moving a pair to a later release requires a superseding ADR. A
+(platform, harness) pair in no row is unsupported, whatever code exists for it. The
+release at which a pair is first supported is fixed by this table.
+
+**Ubuntu is not required for v0.2.0 or v0.3.0.** It moves to v0.4.0. v0.4.0 scope beyond
+Ubuntu (other operating systems, which harnesses) is not decided here.
 
 ### 2. Retirement of the dogfood tier
 
 "Dogfood", "private dogfood" and "development runtime adapter" cease to be support
-statuses. For a release, a client is *supported* (§3 evidence complete) or *absent*.
-Pre-release evidence gathered on one platform remains valid input to §3 but confers
-no status. Code for a client outside the current release's row may exist in the tree
-but SHALL NOT be documented, matrixed or described as supported, and SHALL NOT be
-reachable by default routing (see §6, Antigravity).
+statuses. For a release, a pair is *supported* (§3 evidence complete) or *absent*.
+Pre-release evidence gathered on one platform remains valid input to §3 for that
+platform but confers no status. Code for a harness outside the current release's row
+may exist in the tree but SHALL NOT be documented, matrixed or described as supported,
+and SHALL NOT be reachable by default routing (see §6, Antigravity).
 
 Replacement for the `CLAUDE.md` invariant "Private macOS dogfood is not public support
-or release conformance": **"A client is supported only in a release whose compatibility
-matrix lists it with complete conformance evidence; there is no private or partial
-support tier. Evidence from one platform is not release conformance."** (Listed in §8;
-this ADR does not edit `CLAUDE.md`.)
+or release conformance": **"A (platform, harness) pair is supported only in a release
+whose compatibility matrix lists it with complete conformance evidence; there is no
+private or partial support tier. Evidence from one platform or harness is not
+conformance for another."** (Listed in §8; this ADR does not edit `CLAUDE.md`.)
 
-### 3. Definition of "supported client"
+### 3. Definition of "supported" and per-pair evidence
 
-A client is supported in release R only if E1–E3 hold in the tagged commit and E4–E5
-are recorded in an external evidence record (below) bound to that commit:
+A (platform, harness) pair is **supported** in release R when loom fully functions in
+that harness on that platform: **every role** (researcher, planner, plan evaluator,
+developer, code evaluator), **the full loop** (research, plan, plan evaluation,
+develop, code evaluation, land, with every handoff committed) and **the gate**
+(`scripts/check`, or the managed project's gate) all work, with blind review intact
+(ADR 0022). A harness that passes on one platform has no claim on another.
 
-- **E1 — Matrix entry.** `plugins/loom/adapters/compatibility/vR.json` lists the client
-  with a pinned floor version and its profile mapping.
-- **E2 — Binding.** For a plugin-style client, a root binding under
-  `adapters/roots/` plus manifest/catalog loading. For a host (Orca, Herdr), a host
-  adapter descriptor that maps the launcher's inner-client descriptor to host
-  commands (spec 07 host table) with no policy of its own. Which form applies is a
-  planner decision per client (open question 2).
-- **E3 — Offline Bats conformance.** Offline tests for launch descriptor, role
-  contract parity, hook/guard behavior where the client has a hook surface, and
-  refusal of unknown or below-floor versions, run in the repository gate
-  (`scripts/check`).
-- **E4 — Live runs on every mandatory platform.** At least one recorded live run of the
-  client on **each** platform ADR 0019 requires for release R (currently Ubuntu
-  22.04/24.04 x86-64 and macOS 14+ on Apple silicon and Intel), at the pinned floor,
-  against the matrix, with each run recorded in the evidence record. This applies to
-  every client in the release, hosts and Antigravity included. A run on one platform
-  does not substitute for another.
-- **E5 — Owner sign-off.** An owner acknowledgement in the evidence record, naming the
-  client, the evidence set and the commit.
+For release R, E1–E3 hold in the tagged commit and E4–E5 are recorded in an external
+evidence record (below) bound to that commit:
+
+- **E1 — Matrix entry.** `plugins/loom/adapters/compatibility/vR.json` lists the harness
+  with a pinned floor version, its profile mapping and the platforms it is claimed on.
+- **E2 — Binding.** For a plugin-style harness, a root binding under `adapters/roots/`
+  plus manifest/catalog loading. For a host (Orca, Herdr), a host adapter descriptor
+  that maps the launcher's inner-client descriptor to host commands (spec 07 host
+  table) with no policy of its own. Which form applies is a planner decision per
+  harness (open question 2).
+- **E3 — Offline Bats conformance.** Offline tests for launch descriptor, role contract
+  parity, hook/guard behavior where the harness has a hook surface, and refusal of
+  unknown or below-floor versions, run in the repository gate (`scripts/check`) on every
+  platform of the release.
+- **E4 — Live conformance per pair.** For **each** (platform, harness) pair in the
+  release's row, at the pinned floor and against the matrix, recorded runs showing:
+  (a) each of the five roles launched and returning through the harness; (b) one full
+  loop from research through landing, with blind review (no author identity, no
+  author reasoning); and (c) the gate passing on that platform. Each run is recorded
+  with platform, harness floor, result and a log or journal reference. A run on one
+  pair does not substitute for another.
+- **E5 — Owner sign-off.** An owner acknowledgement in the evidence record, naming each
+  pair, the evidence set and the commit.
 
 **Evidence record.** E4 and E5 are recorded in an immutable file, one per release, at
 `.docs/evaluations/release-evidence/vR.json`, written **after** the candidate commit
-is chosen and tagged `vR`. It names the full candidate commit hash, and per client the
-platform runs (floor version, platform, result, log or journal reference) and the owner
+is chosen and tagged `vR`. It names the full candidate commit hash, and per pair the
+runs (a)–(c) (floor version, platform, result, log or journal reference) and the owner
 acknowledgement. The candidate commit therefore never contains its own hash or its
 post-test acknowledgement. It is checkable with git: the record lives in a commit that
 descends from the tag (`git merge-base --is-ancestor vR <record-commit>`), the hash it
@@ -105,31 +131,63 @@ names equals `git rev-parse vR^{commit}`, and the record is append-only after
 publication (corrections are new files, not edits). A release is not published until
 the record exists on `main` and verifies. Candidate-commit content (E1–E3) is
 unaffected; a later change to the candidate requires a new tag and a new record.
-This changes where evidence is recorded, not how much ADR 0019 requires.
+This changes where evidence is recorded, not whether evidence is required.
 
 Not invented here: the exact evidence file format, where E4 runs are stored, and
-whether existing ADR 0024 journals can be reused for any E4 cell. Those are for the
+whether existing ADR 0024 journals can be reused for any E4 pair. Those are for the
 spec 10 amendment; no existing journal is declared to satisfy any element.
 
-### 4. ADR 0019's matrix is still owed; not waived
+### 4. Relationship to ADR 0019 (superseded and kept)
 
-ADR 0019's requirement that Ubuntu and macOS (including Intel) CI and both adapter
-matrices pass before any release is published **stands unchanged**. As of this ADR the
-Ubuntu and macOS-Intel live evidence for Claude Code and Codex has not been produced
-(ADR 0024 §1 deferred it explicitly); it remains owed before v0.2.0 publishes. This ADR
-does not waive, narrow, defer or reorder it. The Apple-silicon evidence from ADR 0024
-is a partial input to E4 for v0.2.0 only if the planner/evaluator find it was run at
-the pinned floors against the final candidate, which this ADR does not assert.
+ADR 0019 is Accepted and immutable; this ADR supersedes only the clauses below and
+edits nothing in it.
+
+**Superseded, for v0.2.0 and v0.3.0 (Ubuntu deferred to v0.4.0):**
+
+- §2, first bullet, "Ubuntu 22.04 LTS and 24.04 LTS on x86-64" as a platform the
+  "v0.2 line supports". Ubuntu is not part of v0.2.0 or v0.3.0 support, and is not a
+  release requirement for either. It becomes a v0.4.0 platform.
+- §5, the requirement of "Ubuntu and macOS CI; both adapter matrices": for v0.2.0 and
+  v0.3.0 it means macOS CI and the per-pair adapter matrix of §1, not Ubuntu CI.
+- The reading of §4's "M0 through M7 are green on the declared matrix" that makes the
+  declared matrix include Ubuntu: the declared matrix for v0.2.0 is the four pairs
+  in §1.
+- Consequence text "Ubuntu/macOS only" as a description of v0.2 scope (informative,
+  not normative).
+
+**Kept (unchanged):**
+
+- Release evidence itself is required, and **no release is published without it**
+  (§4 last sentence, §5): "failure of any required cell blocks publication".
+- §1 (Bash 3.2+/Git 2.34+/jq 1.6+ runtime, syntax migration) in full.
+- §2 macOS bullet (macOS 14+, Apple silicon and x86-64, where the harness itself is
+  supported), the non-support of native Windows, PowerShell, Git Bash/MSYS2, Cygwin
+  and WSL, and the tool-dependency paragraph.
+- §3 pinned floors (Claude Code 2.1.216, Codex CLI 0.144.6), the matrix scope (clean
+  install, loading, explicit invocation, cold-role launch, hooks, helper resolution,
+  uninstall), and the unknown/below-floor refusal.
+- §4 SemVer, atomic release of all surfaces, and protocol versioning.
+- §5 other requirements: clean clone at the tag, full local check, clean install/
+  upgrade/uninstall and fresh-clone end-to-end, migration notes, license, changelog,
+  agreement of manifests/catalogs/docs/helpers, tag-resolves-to-tested-commit,
+  artifacts not edited after testing.
+
+The macOS Apple-silicon evidence from ADR 0024 is a possible input to v0.2.0 E4 for
+the Apple-silicon pairs only if shown to be at the pinned floors against the final
+candidate (open question 1). Intel pairs have no existing evidence.
 
 ### 5. Applies to hosts as well as clients
 
 Because ADR 0031 makes Herdr a host rather than a model client, E1–E5 are applied to
-Orca and Herdr as hosts: the "client" under test is the host adapter plus the inner
+Orca and Herdr as hosts: the harness under test is the host adapter plus the inner
 clients it launches. Per ADR 0031 §5–§6, Herdr's `hc` gates and the unresolved
 blind-review constraint remain preconditions; this ADR does not resolve them and no
-evaluator role runs on `hc` until a follow-up ADR does.
+evaluator role runs on `hc` until a follow-up ADR does. Since E4 requires every role,
+Herdr cannot be a supported pair until that is resolved.
 
 ### 6. Disposition for v0.3.0
+
+All v0.3.0 work is on macOS pairs; no Ubuntu evidence is required.
 
 **Antigravity.** Currently a dogfood adapter (ADR 0027 §4) with launcher code only.
 Until v0.3.0 it is not supported and is not described as such. Work to reach
@@ -173,45 +231,56 @@ floor `0.1.10`) are stale under ADR 0031 and need correction in that work.
 
 ### 7. What this supersedes and what stands
 
+Supersedes **ADR 0019** only as listed in §4.
+
 Supersedes **ADR 0024** only in: (a) the "private development checkpoint" /
 "dogfood-ready" status vocabulary in §1 as a lasting classification; (b) any reading
-that dogfood readiness is a state a client can hold between unsupported and supported.
+that dogfood readiness is a state a pair can hold between unsupported and supported.
 
 Supersedes **ADR 0027 §4** entirely (Antigravity is not a "private dogfood and
 development runtime adapter"; it is unsupported until v0.3.0 meets §3). The remainder
 of ADR 0027 (§1–§3 ambient inheritance, precedence, effort policy; §5 amendments)
 stands, as does its rotation text subject to §6.
 
-**Unchanged:** ADR 0019 in full, including §4 above; ADR 0024's bootstrap/transition
+**Unchanged:** the ADR 0019 clauses kept in §4; ADR 0024's bootstrap/transition
 mechanics (§§2–5: exact amendment, slice eligibility, publication prerequisites)
-and its recorded evidence as history; ADR 0031 in full (this ADR adds a
-release mapping around it and does not alter its decisions).
+and its recorded evidence as history; ADR 0031 in full (this ADR adds a release
+mapping around it and does not alter its decisions).
 
-### 8. Edits this decision requires later (listed, not drafted)
+### 8. Edits this decision requires later (listed, not drafted; finalize pass after acceptance)
 
-- **Spec 07:** "Private dogfood workflow and role mapping" (line ~94) retired or
-  recast as v0.2.0 conformance; "Host surfaces" gains the Orca mapping once specified
-  and the per-release status table; line ~120 "dogfood evaluation passes" reworded.
-- **Spec 10:** release-evidence section gains E1–E5 and the per-release client
-  table; Antigravity/Orca/Herdr packaging forms; v0.3.0 matrix correction.
-- **Spec 00/02/03/06:** "dogfood" status language in 00 (~104), 02 ("Private dual-client
-  dogfood role proof", ~217), 03 and 06 ("Isolated dogfood homes") reviewed; ADR 0024
-  eligibility subsections stay as history where they describe the transition.
+- **README "Supported Platforms & Prerequisites":** currently lists Ubuntu as the v0.2
+  baseline; restate as macOS-only for v0.2.0/v0.3.0 with Ubuntu planned for v0.4.0, and
+  state the per-pair support definition.
 - **`CLAUDE.md` (finalize pass):** replace the line "Private macOS dogfood is not
   public support or release conformance." with the §2 invariant; reword the Map entry
   for `scripts/macos-dual-client-dogfood` ("private evidence only, not public Codex
   support (ADR 0024)") to say it is historical evidence tooling and confers no
   support status.
-- **ADR README:** note ADR 0024 §1 and ADR 0027 §4 partly superseded by 0032 on
-  acceptance.
+- **Spec 10:** release-evidence section gains E1–E5, the per-release (platform,
+  harness) table and the macOS-only v0.2.0 matrix; Antigravity/Orca/Herdr packaging
+  forms; v0.3.0 matrix correction; Ubuntu moved to v0.4.0.
+- **ADR 0024 / ADR 0027 supersession notes:** note ADR 0024 §1 and ADR 0027 §4 partly
+  superseded by 0032, and ADR 0019 §2/§5 Ubuntu clauses superseded, in the ADR
+  README register on acceptance (ADR bodies stay immutable).
+- **Release matrix workflow (`.github/workflows/check.yml`):** drop Ubuntu from the
+  v0.2.0/v0.3.0 release matrix (macOS arm64 and Intel only); Ubuntu returns for v0.4.0.
+- **Spec 07:** "Private dogfood workflow and role mapping" (line ~94) retired or
+  recast as v0.2.0 conformance; "Host surfaces" gains the Orca mapping once specified
+  and the per-release status table; line ~120 "dogfood evaluation passes" reworded.
+- **Spec 00/02/03/06:** "dogfood" status language in 00 (~104), 02 ("Private dual-client
+  dogfood role proof", ~217), 03 and 06 ("Isolated dogfood homes") reviewed; ADR 0024
+  eligibility subsections stay as history where they describe the transition.
 
 ## Consequences
 
-- Public claims become simpler: two clients in 0.2.0, three more in 0.3.0, nothing
-  in between. Antigravity code already in the tree is unsupported until 0.3.0.
-- The macOS-only evidence from ADR 0024 cannot be cited as support; at best it
-  feeds E4 for Apple silicon.
-- v0.2.0 remains blocked on the full ADR 0019 matrix.
+- Public claims become simple: macOS with two harnesses in 0.2.0, three more harnesses
+  on macOS in 0.3.0, other operating systems from 0.4.0, nothing in between.
+  Antigravity code already in the tree is unsupported until 0.3.0.
+- v0.2.0 no longer waits on Ubuntu; it still waits on macOS Apple-silicon and Intel
+  live evidence for both harnesses. ADR 0024 evidence cannot be cited as support; at
+  best it feeds E4 for the Apple-silicon pairs.
+- Ubuntu users have no supported path until v0.4.0; documentation may not imply one.
 - Orca and Antigravity each need specification and evidence work, and Herdr's
   M9 depends on the unresolved ADR 0031 §5 blind-review choice, so v0.3.0 timing is
   gated on owner decisions below.
@@ -219,14 +288,16 @@ release mapping around it and does not alter its decisions).
 
 ## Open Questions (owner, before acceptance)
 
-Resolved normatively above and no longer open: the E1–E5 set with E4 on every ADR 0019
-platform for every client (§3); Antigravity excluded from default rotation until v0.3.0
-(§6); v0.3.0 atomic (§1). The questions below do not reopen those decisions.
+Resolved normatively above and no longer open: the release sequence and the macOS-only
+scope of v0.2.0 and v0.3.0 (§1); the per-pair definition and E1–E5 (§3); the ADR 0019
+clauses superseded and kept (§4); Antigravity excluded from default rotation until
+v0.3.0 (§6); each release atomic (§1). The questions below do not reopen those
+decisions.
 
-1. May ADR 0024's Apple-silicon journals count toward E4 for v0.2.0? Default per §4:
-   no, unless shown to be at the pinned floors against the final candidate. Trigger:
-   decided in the spec 10 amendment.
-2. Binding form per client: plugin-style (manifest/root) or host-adapter descriptor, for
+1. May ADR 0024's Apple-silicon journals count toward v0.2.0 E4 for the Apple-silicon
+   pairs? Default per §4: no, unless shown to be at the pinned floors against the final
+   candidate. Trigger: decided in the spec 10 amendment.
+2. Binding form per harness: plugin-style (manifest/root) or host-adapter descriptor, for
    Antigravity and Orca?
 3. Herdr evaluators on `hc`: still blocked by ADR 0031 §5; which isolation choice?
 4. What replaces the `herdr` entries in `v0.3.0.json`, and who pins the Orca and `agy` floors?

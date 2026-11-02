@@ -47,7 +47,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 
 ## In Review
 
-- [0032 — Release Client Mapping and Retirement of the Dogfood Support Tier](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) — `Plan Review`; v0.2.0 = Claude Code + Codex, v0.3.0 = Antigravity + Orca + Herdr (`hc`); retires dogfood as a support tier; defines supported-client evidence; ADR 0019 matrix not waived; on acceptance supersedes ADR 0027 §4 and ADR 0024 §1 status vocabulary.
+- [0032 — Release Client Mapping and Retirement of the Dogfood Support Tier](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) — `Plan Review`; v0.2.0 = macOS + Claude Code + Codex, v0.3.0 = Antigravity + Orca + Herdr (`hc`) on macOS, v0.4.0 = Ubuntu and other OSes; retires dogfood tier; per-(platform, harness) supported definition and evidence; supersedes ADR 0019 Ubuntu matrix clauses; on acceptance supersedes ADR 0027 §4 and ADR 0024 §1 status vocabulary.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 
