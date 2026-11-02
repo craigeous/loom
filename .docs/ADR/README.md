@@ -45,6 +45,10 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 - [0030 — Herdr Native App Lifecycle and Event Hooks](0030-herdr-native-app-hooks.md) — `Accepted`; extends ADR 0003, ADR 0013, ADR 0018, and ADR 0029: authorizes Herdr native app lifecycle and event hook contracts, manifest hook discovery, multi-client dispatcher resolution, and provisional block wire envelope.
 - [0031 — Herdr as an hc-Driven Client](0031-herdr-as-an-hc-driven-client.md) — `Accepted`; supersedes in part ADR 0029 and ADR 0030, extends ADR 0018 and ADR 0027: Herdr is a launch host driven through `hc` (no plugin, marketplace, root binding or Herdr-installed hooks); retires the Herdr files; blind-review requirement blocks `hc` evaluators; M9 reopened.
 
+## In Review
+
+- [0032 — Release Client Mapping and Retirement of the Dogfood Support Tier](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) — `Plan Review`; v0.2.0 = Claude Code + Codex, v0.3.0 = Antigravity + Orca + Herdr (`hc`); retires dogfood as a support tier; defines supported-client evidence; ADR 0019 matrix not waived; on acceptance supersedes ADR 0027 §4 and ADR 0024 §1 status vocabulary.
+
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 
 Living-index corrections to stale paths/quotes cited by accepted (immutable) ADR
