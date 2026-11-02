@@ -1,6 +1,6 @@
 # Herdr `hc` Client (1 of 4): Role-Session `hc` Deny Policy
 
-Status: Plan Review
+Status: Approved
 Target specs: 08-playbook.md (hook wire, `hc` deny), 07-command-surface.md (Host surfaces)
 Authority: ADR 0031 §4 (Accepted); program ceiling and split: ADR 0031 §8 items 1–4 become four slices
 Target size: <= 140 LOC added (guard + Bats; deletions not counted); keep this plan <= 250 lines

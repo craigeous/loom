@@ -1,6 +1,6 @@
 # Herdr `hc` Client (3 of 4): Generic Live Probe
 
-Status: Plan Review
+Status: Approved
 Target specs: 07-command-surface.md (Host surfaces, probes before role support), 08-playbook.md
 Authority: ADR 0031 §6 (Accepted)
 Target size: <= 260 LOC added (script + Bats; deletions not counted); keep this plan <= 250 lines
