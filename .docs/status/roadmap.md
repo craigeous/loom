@@ -39,10 +39,22 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
-  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `hc-host-adapter`, `hc-live-probe`, `herdr-surface-retirement`.
+  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `herdr-surface-retirement` (approved; runs first). `hc-host-adapter` and `hc-live-probe` are **shelved** (ADR 0033 D4, Plan Review): requirements and review history kept, not built.
+  - **Deferred (ADR 0033 D4):** the Herdr/`hc` evaluator question stays open until the v0.2.0 live proof (below) completes; `hc` evaluators remain prohibited (ADR 0031 §5). No new `hc`, Orca or Antigravity build starts.
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification). All three slices landed (offline fixture verification only); live Herdr and native-app execution evidence is separate owner-run work and remains outstanding.
+
+## Next: v0.2.0 live proof, then scope (ADR 0033, Plan Review — not yet Accepted)
+
+Order of work: (1) land `herdr-surface-retirement`; (2) `dogfood-retirement` (retires the
+macOS checkpoint harness; Plan Review); (3) **v0.2.0 live proof** for Claude Code CLI and
+Codex CLI on macOS 14+ Apple silicon — authenticated isolated runs of all five roles and
+the full loop, install/upgrade/uninstall, platform gate, bound to the final candidate
+under ADR 0032 E1–E5; the Codex 401 in the isolated home is an unmet proof to resolve
+first; (4) only then admit further harnesses one at a time by per-harness ADR. ADR 0033
+proposes replacing ADR 0032's five-pair v0.3.0 set with evidence-admitted pairs;
+Antigravity, Orca and Herdr are deferred.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition
