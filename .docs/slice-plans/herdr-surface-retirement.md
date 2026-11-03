@@ -112,6 +112,7 @@ so deleting the Herdr root cannot alter it).
 
 | Round | Summary of in-place changes |
 |---|---|
+| 5 | Plan-eval records relocated out of `.docs/evaluations` (owner decision; validator naming rule): Round 1 FAIL (two findings: finalize text claimed slices 2-3 landed; matrix check missed per-profile `herdr` keys) at `.docs/slice-plans/archive/evaluations-retire-first/herdr-surface-retirement-plan-eval-retire-first-r1.md`; Round 2 PASS at `.docs/slice-plans/archive/evaluations-retire-first/herdr-surface-retirement-plan-eval-retire-first-r2.md`. Acceptance check 5 already carries the per-profile `herdr` correction; no requirement, check, or count changed |
 | 4 | Plan-eval retire-first r1: finalize records only this slice's landing (slices 2/3 and probe evidence stay future work); matrix jq criterion also asserts no per-profile `herdr` key |
 | 3 | Owner order decision: slice 4 runs before slice 2; all slice 2 dependencies (host floor, host binding, validator function) removed; matrix ends with no herdr and no host keys; slice 2 rebases onto this slice; status back to Plan Review |
 | 2 | Plan-eval round 2 + owner decision: keeps slice 2's `hostFloors.hc` in the v0.3.0 matrix and verifies it; final status states Codex roles on `hc` unsupported |
