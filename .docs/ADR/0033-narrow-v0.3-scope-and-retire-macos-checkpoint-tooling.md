@@ -5,7 +5,8 @@ Date: 2026-11-03
 
 ## Context
 
-[ADR 0032](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted)
+[ADR 0032](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted),
+grounded in the approved [repository improvement plan](../repository-improvement-plan.md),
 fixed a release table whose v0.3.0 row requires five macOS pairs: Claude Code CLI,
 Codex CLI, Antigravity, Orca and Herdr (`hc`). A repository review (evidence, not
 authority) found that Antigravity and Orca have no matrix entry, binding, pinned floor
