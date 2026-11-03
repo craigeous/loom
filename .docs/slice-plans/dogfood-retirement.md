@@ -1,6 +1,6 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: Approved
+Status: Plan Review
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Plan Review; this slice may not start until it is Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
 Target size: <= 60 LOC added (one validator binding, one Bats test, doc/comment edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
@@ -57,9 +57,11 @@ Mechanical facts (verified with `rg` on `main` at 68d1dc8; re-run in Step 1):
 
 ## Steps
 
-Prerequisites: ADR 0033 Accepted; `herdr-surface-retirement` Landed (it edits
-`validate-repository.mjs` schema bindings; this slice appends after its result and does
-not renumber `schemaBindings[0..6]`, which `fixtureBindings` indexes).
+Prerequisites: ADR 0033 Accepted. Ordering (owner decision): this slice runs first;
+`herdr-surface-retirement` rebases onto it afterward, and its gate then no longer hits
+the `INT during a mutation yields exit 130` race, which lives in the suite this slice
+deletes. This slice appends to `schemaBindings` and does not renumber
+`schemaBindings[0..6]`, which `fixtureBindings` indexes.
 
 0. **Pin the baseline** before any edit: write `Baseline: <full 40-hex HEAD SHA>` as its
    own line under `## Notes` (committed with the slice's first change). Verification uses
@@ -121,8 +123,7 @@ not renumber `schemaBindings[0..6]`, which `fixtureBindings` indexes).
 Fast targeted (iteration; macOS needs `TMPDIR=/private/tmp`):
 
 ```sh
-# 0. Baseline: the full SHA of the commit BEFORE the slice's first change (the then-HEAD,
-#    after herdr-surface-retirement lands). Step 0 of the developer pass records it under
+# 0. Baseline: the full SHA of the commit BEFORE the slice's first change (the then-HEAD). Step 0 of the developer pass records it under
 #    `## Notes` ("Baseline: <40-hex>"); every check below reads it from there, never HEAD.
 BASE=$(sed -n 's/^Baseline: \([0-9a-f]\{40\}\)$/\1/p' .docs/slice-plans/dogfood-retirement.md)
 git cat-file -e "$BASE^{commit}" && git merge-base --is-ancestor "$BASE" HEAD
@@ -196,3 +197,4 @@ D=$(mktemp -d /private/tmp/loom-fresh.XXXXXX) && git clone -q . "$D/c" \
 | 0 | Initial draft for D1 (ADR 0033 §3); Plan Review |
 | 1 | Plan-eval r1: pinned explicit `Baseline:` SHA (Step 0) replacing `HEAD`/`HEAD~1` in checks 2-5; hash equality is an executable `test`; reference scan now `rg --hidden` with stated exclusions, a listing command and an empty-output assertion |
 | 2 | Plan-eval r2 PASS; owner approved. Added exact runnable count-comparison and fresh-clone commands and the `test` exit-0/no-output statement; no requirement changed |
+| 3 | Owner order decision: runs before `herdr-surface-retirement`; Prerequisites no longer depend on it; Status back to Plan Review for a fresh cold evaluation; no requirement changed |
