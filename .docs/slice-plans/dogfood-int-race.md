@@ -1,6 +1,6 @@
 # Deflake the Dogfood INT Test: Replace the Fixed Sleep with a Readiness Signal
 
-Status: Plan Review
+Status: Approved
 Target specs: none (test-only change); gate per 08-playbook.md
 Authority: ADR 0033 (Accepted order: `herdr-surface-retirement` lands first, then `dogfood-retirement`); owner decision to fix this race in its own slice before the Herdr retirement gate runs
 Target size: <= 15 LOC net change in one file (`scripts/tests/macos-dual-client-dogfood.bats`); keep this plan <= 250 lines
