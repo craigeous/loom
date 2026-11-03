@@ -48,7 +48,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 
 ## In Review
 
-None.
+- [0033 — Narrow the v0.3.0 Scope, Prioritize v0.2.0 Live Proof, and Retire the macOS Checkpoint Tooling](0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) — `Plan Review`; proposes superseding ADR 0032 §1 (five-pair v0.3.0 set) and §6 (rotation text only where it depends on it) and ADR 0024 §6/§7 ongoing obligations; v0.3.0 becomes evidence-admitted pairs only; Antigravity, Orca, Herdr deferred; retires the macOS checkpoint harness. Nothing is superseded until acceptance.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 
