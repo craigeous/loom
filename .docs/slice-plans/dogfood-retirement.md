@@ -1,6 +1,6 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: Plan Review
+Status: Approved
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Plan Review; this slice may not start until it is Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
 Target size: <= 60 LOC added (one validator binding, one Bats test, doc/comment edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
@@ -139,7 +139,8 @@ rg --hidden -l "$PAT" --glob '!.git/**' . | sort
     --glob '!.docs/slice-plans/archive/**' --glob '!.docs/status/archive/**' \
     --glob '!.docs/evaluations/**' --glob '!.docs/research/**' --glob '!.docs/ADR/**' \
     --glob '!.docs/status/progress.md' --glob '!.docs/slice-plans/dogfood-retirement.md' .
-# 2. Fixture relocated byte-identical (baseline content vs candidate file; must print equal).
+# 2. Fixture relocated byte-identical (baseline content vs candidate file). `test` succeeds
+#    with exit 0 and no output when the two hashes are equal; any output or nonzero exit fails.
 test "$(git show "$BASE":plugins/loom/adapters/fixtures/v0.2.0/dogfood/macos-arm64.json | shasum -a 256 | cut -d' ' -f1)" \
   = "$(shasum -a 256 plugins/loom/adapters/fixtures/v0.2.0/release-install/macos-arm64.json | cut -d' ' -f1)"
 # 3. Preserved record byte-identical to baseline (works after the candidate commit) and valid JSON.
@@ -166,7 +167,23 @@ TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check
 
 Regression proof: the full Bats count drops by exactly the 41 retired tests plus one added
 (record before/after counts); every other suite passes unchanged. A fresh-clone run of the
-gate shows no reference to the retired paths.
+gate shows no reference to the retired paths. Exact commands:
+
+```sh
+# Count comparison (expected: AFTER = BEFORE - 41 + 1). Run the same listing on both trees.
+count() { find scripts plugins -name '*.bats' | sort | xargs bats --count | awk '{s+=$1} END{print s}'; }
+git worktree add -q /private/tmp/loom-base "$BASE" \
+  && BEFORE=$(cd /private/tmp/loom-base && count); git worktree remove --force /private/tmp/loom-base
+AFTER=$(count); test "$AFTER" -eq $((BEFORE - 41 + 1)) && echo "bats count ok: $BEFORE -> $AFTER"
+# Fresh-clone proof (candidate commit; the retired-path assertion 1b must print nothing).
+D=$(mktemp -d /private/tmp/loom-fresh.XXXXXX) && git clone -q . "$D/c" \
+  && (cd "$D/c" && git checkout -q "$(git -C "$OLDPWD" rev-parse HEAD)" \
+  && ! rg --hidden -l "$PAT" --glob '!.git/**' --glob '!.docs/slice-plans/archive/**' \
+       --glob '!.docs/status/archive/**' --glob '!.docs/evaluations/**' --glob '!.docs/research/**' \
+       --glob '!.docs/ADR/**' --glob '!.docs/status/progress.md' \
+       --glob '!.docs/slice-plans/dogfood-retirement.md' . \
+  && TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check)
+```
 
 ## Notes
 
@@ -178,3 +195,4 @@ gate shows no reference to the retired paths.
 |---|---|
 | 0 | Initial draft for D1 (ADR 0033 §3); Plan Review |
 | 1 | Plan-eval r1: pinned explicit `Baseline:` SHA (Step 0) replacing `HEAD`/`HEAD~1` in checks 2-5; hash equality is an executable `test`; reference scan now `rg --hidden` with stated exclusions, a listing command and an empty-output assertion |
+| 2 | Plan-eval r2 PASS; owner approved. Added exact runnable count-comparison and fresh-clone commands and the `test` exit-0/no-output statement; no requirement changed |
