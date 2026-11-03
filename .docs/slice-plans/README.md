@@ -19,8 +19,8 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
-- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, **runs first**, before `hc-host-adapter`): retire the Herdr plugin surfaces.
-- [dogfood-retirement.md](dogfood-retirement.md) — `Approved` — ADR 0033 D1: retire the macOS dual-client checkpoint tooling (harness, tests, state schema; fixture relocated byte-identical; evidence record preserved).
+- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, runs after `dogfood-retirement` and rebases onto it; still before `hc-host-adapter`): retire the Herdr plugin surfaces.
+- [dogfood-retirement.md](dogfood-retirement.md) — `Plan Review` — **runs first**, before `herdr-surface-retirement` — ADR 0033 D1: retire the macOS dual-client checkpoint tooling (harness, tests, state schema; fixture relocated byte-identical; evidence record preserved).
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
