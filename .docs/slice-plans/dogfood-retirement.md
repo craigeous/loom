@@ -61,6 +61,10 @@ Prerequisites: ADR 0033 Accepted; `herdr-surface-retirement` Landed (it edits
 `validate-repository.mjs` schema bindings; this slice appends after its result and does
 not renumber `schemaBindings[0..6]`, which `fixtureBindings` indexes).
 
+0. **Pin the baseline** before any edit: write `Baseline: <full 40-hex HEAD SHA>` as its
+   own line under `## Notes` (committed with the slice's first change). Verification uses
+   that SHA, never `HEAD`, so it still works on the candidate commit.
+
 1. **Inventory (no edit).** Run the Verification greps; record counts in the slice's
    finalize note. If any hit appears outside the allowed set below, stop and add a
    `## Notes` clarification rather than guessing.
@@ -117,28 +121,37 @@ not renumber `schemaBindings[0..6]`, which `fixtureBindings` indexes).
 Fast targeted (iteration; macOS needs `TMPDIR=/private/tmp`):
 
 ```sh
+# 0. Baseline: the full SHA of the commit BEFORE the slice's first change (the then-HEAD,
+#    after herdr-surface-retirement lands). Step 0 of the developer pass records it under
+#    `## Notes` ("Baseline: <40-hex>"); every check below reads it from there, never HEAD.
+BASE=$(sed -n 's/^Baseline: \([0-9a-f]\{40\}\)$/\1/p' .docs/slice-plans/dogfood-retirement.md)
+git cat-file -e "$BASE^{commit}" && git merge-base --is-ancestor "$BASE" HEAD
 # 1. Retired files are gone; nothing live points at them.
 test ! -e scripts/macos-dual-client-dogfood
 test ! -e scripts/tests/macos-dual-client-dogfood.bats
 test ! -e plugins/loom/schemas/loom-dogfood-state-v1.schema.json
 test ! -e plugins/loom/adapters/fixtures/v0.2.0/dogfood
-! rg -n 'loom-dogfood-state|scripts/macos-dual-client-dogfood|fixtures/v0\.2\.0/dogfood' \
+PAT='loom-dogfood-state|scripts/macos-dual-client-dogfood|fixtures/v0\.2\.0/dogfood'
+# 1a. Historic hits, listed on purpose (expected: only history paths, nonempty):
+rg --hidden -l "$PAT" --glob '!.git/**' . | sort
+# 1b. Assertion (expected: no output, exit 0 = nothing outside the allowed history paths):
+! rg --hidden -l "$PAT" --glob '!.git/**' \
     --glob '!.docs/slice-plans/archive/**' --glob '!.docs/status/archive/**' \
     --glob '!.docs/evaluations/**' --glob '!.docs/research/**' --glob '!.docs/ADR/**' \
     --glob '!.docs/status/progress.md' --glob '!.docs/slice-plans/dogfood-retirement.md' .
-# 2. Fixture relocated byte-identical.
-git show HEAD:plugins/loom/adapters/fixtures/v0.2.0/dogfood/macos-arm64.json | shasum -a 256
-shasum -a 256 plugins/loom/adapters/fixtures/v0.2.0/release-install/macos-arm64.json  # equal
-# 3. Preserved record untouched and valid JSON.
-git diff --exit-code HEAD -- .docs/evaluations/macos-dual-client-dogfood-evidence.json \
+# 2. Fixture relocated byte-identical (baseline content vs candidate file; must print equal).
+test "$(git show "$BASE":plugins/loom/adapters/fixtures/v0.2.0/dogfood/macos-arm64.json | shasum -a 256 | cut -d' ' -f1)" \
+  = "$(shasum -a 256 plugins/loom/adapters/fixtures/v0.2.0/release-install/macos-arm64.json | cut -d' ' -f1)"
+# 3. Preserved record byte-identical to baseline (works after the candidate commit) and valid JSON.
+git diff --exit-code "$BASE" HEAD -- .docs/evaluations/macos-dual-client-dogfood-evidence.json \
     plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json
 jq -e '.state=="infrastructure-blocked" and .candidate=="a0bf31604cc760631ba48b8fee574f89ef120cc8"' \
     .docs/evaluations/macos-dual-client-dogfood-evidence.json
 # 4. No gate/CI/toolchain edit and no dogfood strings there.
-git diff --stat HEAD~1 -- scripts/check .github/workflows/check.yml scripts/check-toolchain.json  # empty
+test -z "$(git diff --stat "$BASE" HEAD -- scripts/check .github/workflows/check.yml scripts/check-toolchain.json)"
 ! rg -n 'dogfood' scripts/check .github/workflows/check.yml scripts/check-toolchain.json
 # 5. Link rows: none added; the 34 historic `dogfood` rows unchanged.
-git diff HEAD~1 -- scripts/validation/relative-link-allowlist.txt  # empty
+test -z "$(git diff "$BASE" HEAD -- scripts/validation/relative-link-allowlist.txt)"
 # 6. New validation test and the touched suites.
 TMPDIR=/private/tmp bats --filter 'preserved dogfood evidence' scripts/tests/repository-validation.bats
 TMPDIR=/private/tmp bats plugins/loom/bin/loom-launch-role.bats
@@ -164,3 +177,4 @@ gate shows no reference to the retired paths.
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft for D1 (ADR 0033 §3); Plan Review |
+| 1 | Plan-eval r1: pinned explicit `Baseline:` SHA (Step 0) replacing `HEAD`/`HEAD~1` in checks 2-5; hash equality is an executable `test`; reference scan now `rg --hidden` with stated exclusions, a listing command and an empty-output assertion |
