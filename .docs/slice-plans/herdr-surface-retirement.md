@@ -1,9 +1,8 @@
-# Herdr `hc` Client (slice 4, runs after `dogfood-retirement`): Retire the Herdr Plugin Surfaces
+# Herdr `hc` Client (slice 4, runs first): Retire the Herdr Plugin Surfaces
 
 Status: Approved
 Target specs: 07-command-surface.md (Host surfaces), 08-playbook.md (hook wire), 10-packaging.md (no Herdr root)
 Authority: ADR 0031 §7 (Accepted)
-Ordering (owner decision): runs AFTER `dogfood-retirement` and must rebase onto it (expected conflicts: the final `schemaBindings` entries in `scripts/validate-repository.mjs`; possibly the end of `scripts/tests/repository-validation.bats`). Its gate then no longer hits the dogfood INT race; no requirement below changes.
 Target size: <= 120 LOC added (Bats edits and re-pin; deletions of retired files and fixtures are not counted); keep this plan <= 250 lines
 
 ## Context
@@ -119,4 +118,3 @@ so deleting the Herdr root cannot alter it).
 | 2 | Plan-eval round 2 + owner decision: keeps slice 2's `hostFloors.hc` in the v0.3.0 matrix and verifies it; final status states Codex roles on `hc` unsupported |
 | 1 | Plan-eval round 1: retirement scoped to plugin root/marketplace schemas and matrix rootBindings, host binding kept; blind-review open blocker retained in final status updates |
 | 0 | Split from `herdr-hc-client` (owner decision): retirement only, lands last; v0.2.0 evidence untouched; acceptance greps scoped so the kept `hc` host binding and history link do not trip them; schema re-pin named |
-| 6 | Owner order decision: runs after `dogfood-retirement` and rebases onto it; no requirement changed |
