@@ -45,10 +45,7 @@ Naming: `NNNN-short-title.md`. Lifecycle: `Draft → Plan Review → Accepted` (
 - [0030 — Herdr Native App Lifecycle and Event Hooks](0030-herdr-native-app-hooks.md) — `Accepted`; extends ADR 0003, ADR 0013, ADR 0018, and ADR 0029: authorizes Herdr native app lifecycle and event hook contracts, manifest hook discovery, multi-client dispatcher resolution, and provisional block wire envelope.
 - [0031 — Herdr as an hc-Driven Client](0031-herdr-as-an-hc-driven-client.md) — `Accepted`; supersedes in part ADR 0029 and ADR 0030, extends ADR 0018 and ADR 0027: Herdr is a launch host driven through `hc` (no plugin, marketplace, root binding or Herdr-installed hooks); retires the Herdr files; blind-review requirement blocks `hc` evaluators; M9 reopened.
 - [0032 — Release Client Mapping and Retirement of the Dogfood Support Tier](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) — `Accepted`; v0.2.0 = macOS + Claude Code + Codex, v0.3.0 = Antigravity + Orca + Herdr (`hc`) on macOS, v0.4.0 = Ubuntu and other OSes; retires dogfood tier; per-(platform, harness) supported definition and evidence; supersedes ADR 0019 Ubuntu matrix clauses; supersedes ADR 0019 §2 and §5 (CI clause) for v0.2.0/v0.3.0, ADR 0027 §4, and ADR 0024 §1 status vocabulary (those ADR bodies are unchanged).
-
-## In Review
-
-- [0033 — Narrow the v0.3.0 Scope, Prioritize v0.2.0 Live Proof, and Retire the macOS Checkpoint Tooling](0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) — `Plan Review`; proposes superseding ADR 0032 §1 (five-pair v0.3.0 set) and §6 (rotation text only where it depends on it) and ADR 0024 §6/§7 ongoing obligations; v0.3.0 becomes evidence-admitted pairs only; Antigravity, Orca, Herdr deferred; retires the macOS checkpoint harness. Nothing is superseded until acceptance.
+- [0033 — Narrow the v0.3.0 Scope, Prioritize v0.2.0 Live Proof, and Retire the macOS Checkpoint Tooling](0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) — `Accepted`; supersedes ADR 0032 §1 (five-pair v0.3.0 set) and §6 (rotation text only where it depends on it) and ADR 0024 §6/§7 ongoing obligations; v0.3.0 becomes evidence-admitted pairs only; Antigravity, Orca, Herdr deferred; retires the macOS checkpoint harness.
 
 ## Path and cross-reference errata (ADR 0025 reconciliation)
 

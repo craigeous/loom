@@ -1,6 +1,6 @@
 # 0033 — Narrow the v0.3.0 Scope, Prioritize v0.2.0 Live Proof, and Retire the macOS Checkpoint Tooling
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-11-03
 
 ## Context
