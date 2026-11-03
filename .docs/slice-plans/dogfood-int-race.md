@@ -61,12 +61,21 @@ installed and a foreground mutation step is running: exactly the state the test 
    stub would wait its full 10 s.
 2. Delete the `sleep 0.5` in the INT test only. Leave the `set -m`/`set +m` job-control
    comment and block as is.
-3. Run `shfmt -i 4 -d` and `shellcheck -s bash` on the file; keep both clean.
+3. Formatting is enforced by `scripts/check`, not by this plan. Its shfmt and ShellCheck
+   stages cover only tracked `*.sh` files and executable extensionless bash scripts
+   (`scripts/check`, `script_files`); `*.bats` files are not in that list, and the file
+   already differs under `shfmt -i 4 -d` outside the INT test (e.g. lines 516, 529). This
+   slice does not reformat those lines and imposes no whole-file shfmt requirement; match
+   the surrounding 4-space style in the changed lines.
 
 ## Verification
 
+- Environment required by the suite's `setup_file` (and set by `scripts/check`): an
+  absolute `LOOM_TEST_BASH` and a `LOOM_EXPECTED_BASH_VERSION` regex matching its version.
+  All commands below use the macOS floor shell: `LOOM_TEST_BASH=/bin/bash` (3.2.57) with
+  `LOOM_EXPECTED_BASH_VERSION='^3\.2\.'`.
 - Targeted repeat (20 runs, all must pass):
-  `for i in $(seq 1 20); do TMPDIR=/private/tmp bats --filter 'INT during a mutation yields exit 130' scripts/tests/macos-dual-client-dogfood.bats || exit 1; done`
+  `for i in $(seq 1 20); do LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.' TMPDIR=/private/tmp bats --filter 'INT during a mutation yields exit 130' scripts/tests/macos-dual-client-dogfood.bats || exit 1; done`
 - Load check: repeat the 20-run loop once while a CPU-bound background load is running
   (e.g. `yes >/dev/null` x4, then kill); all 20 must pass.
 - Mutation check (developer runs, then reverts; record both outputs in the handoff):
@@ -74,7 +83,7 @@ installed and a foreground mutation step is running: exactly the state the test 
   and returns 0 (or the stub waits for the continue file and exits normally), so
   `[ "$status" -eq 130 ]` must FAIL. Confirm the filtered run fails with that
   assertion, restore the line, and confirm it passes again.
-- Neighbor regression: `TMPDIR=/private/tmp bats --filter 'TERM during a mutation' scripts/tests/macos-dual-client-dogfood.bats` still passes unchanged.
+- Neighbor regression: `LOOM_TEST_BASH=/bin/bash LOOM_EXPECTED_BASH_VERSION='^3\.2\.' TMPDIR=/private/tmp bats --filter 'TERM during a mutation' scripts/tests/macos-dual-client-dogfood.bats` still passes unchanged.
 - Gate on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
 
 ## Notes
@@ -86,3 +95,4 @@ installed and a foreground mutation step is running: exactly the state the test 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Added `LOOM_TEST_BASH`/`LOOM_EXPECTED_BASH_VERSION` to all Bats commands; dropped whole-file shfmt requirement (`scripts/check` does not shfmt `*.bats`) |
