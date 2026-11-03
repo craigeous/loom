@@ -8,8 +8,11 @@ Date: 2026-11-03
 [ADR 0032](0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted)
 fixed a release table whose v0.3.0 row requires five macOS pairs: Claude Code CLI,
 Codex CLI, Antigravity, Orca and Herdr (`hc`). A repository review (evidence, not
-authority) found that none of the three added harnesses has a matrix entry, binding,
-pinned floor or live run; Herdr evaluators on `hc` stay blocked by
+authority) found that Antigravity and Orca have no matrix entry, binding, pinned floor
+or live run, and that Herdr has only stale entries: `plugins/loom/adapters/compatibility/v0.3.0.json`
+pins `clientFloors.herdr` `0.1.10` and a `herdr-plugin-root/v1` binding, which ADR 0032
+§6 already calls stale under ADR 0031 and which are not valid evidence for any
+admission. Herdr evaluators on `hc` stay blocked by
 [ADR 0031](0031-herdr-as-an-hc-driven-client.md) §5; and the v0.2.0 pairs themselves
 still lack the live proof 0032 §3 E4 requires. The only live record for them,
 `.docs/evaluations/macos-dual-client-dogfood-evidence.json`, is
@@ -45,13 +48,23 @@ Antigravity | REQUIRED |`, `| v0.3.0 | macOS 14+ Apple silicon | Orca | REQUIRED
 sentence "Counts: v0.2.0 has 2 required pairs; v0.3.0 has 5 required pairs." (the
 five-pair v0.3.0 set), are replaced by §1 below.
 
+ADR 0033 supersedes, for v0.3.0 only, the ADR 0032 §1 clause "As written, every pair in
+the v0.2.0 and v0.3.0 rows is required; none is declared not applicable." It is replaced
+by: every pair in the v0.2.0 row is required and none is declared not applicable
+(unchanged); a v0.3.0 pair is required only if admitted under §1 below, and each admitted
+pair is required unless its admission ADR declares it NOT APPLICABLE through the ADR 0032
+§1 mechanism (named reason plus the proving check). The clause is retained unchanged for
+v0.2.0.
+
 ADR 0033 supersedes ADR 0032 §1 for v0.4.0: the row `| v0.4.0 | macOS 14+ Apple silicon
 | the five v0.3.0 harnesses | REQUIRED (carried) |` is read as "the v0.3.0 harnesses as
 admitted under §1 below" and no longer counts five.
 
 ADR 0033 supersedes ADR 0032 §6 (Disposition for v0.3.0) only where it depends on the
-five-pair v0.3.0 set: the lead sentence "All v0.3.0 work is on macOS pairs", the
-per-harness work lists for Antigravity, Orca and Herdr (`hc`) as v0.3.0 requirements,
+five-pair v0.3.0 set, and keeps its macOS-only platform restriction in force: the lead
+sentence "All v0.3.0 work is on macOS pairs; no Ubuntu evidence is required" stands as
+the platform restriction (macOS 14+ Apple silicon only) and is superseded only as an
+obligation to build five harnesses. Superseded: the per-harness work lists for Antigravity, Orca and Herdr (`hc`) as v0.3.0 requirements,
 and the rotation sentence "Default evaluator rotation excludes Antigravity until v0.3.0
 meets §3" together with "Restoring it to default rotation needs the v0.3.0 evidence
 record to verify first", which now read "until an admission under §1 below meets 0032
