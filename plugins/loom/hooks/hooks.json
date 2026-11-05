@@ -1,5 +1,5 @@
 {
-  "description": "Block commands containing recognized git identity-mutation tokens (ADR 0003; defense in depth, not a shell parser or sandbox; the developer workflow must also run loom-verify-identity after commits) and enforce the write-ahead compaction invariant (ADR 0013). One shared manifest for Claude, Codex, and Herdr (spec 10): the command resolves the hook executable from PLUGIN_ROOT (Codex) falling back to CLAUDE_PLUGIN_ROOT (Claude), then HERDR_PLUGIN_ROOT (Herdr), evaluated only inside the spawned hook process; each hook script then validates which of those three roots is a real installed loom plugin root and selects its client wire adapter accordingly (spec 08).",
+  "description": "Block commands containing recognized git identity-mutation tokens (ADR 0003; defense in depth, not a shell parser or sandbox; the developer workflow must also run loom-verify-identity after commits) and enforce the write-ahead compaction invariant (ADR 0013). One shared manifest for Claude and Codex (spec 10): the command resolves the hook executable from PLUGIN_ROOT (Codex) falling back to CLAUDE_PLUGIN_ROOT (Claude), evaluated only inside the spawned hook process; each hook script then validates which of those two roots is a real installed loom plugin root and selects its client wire adapter accordingly (spec 08).",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,11 +7,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/git-identity-guard.sh\""
+            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}/hooks/git-identity-guard.sh\""
           },
           {
             "type": "command",
-            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/role-governance-guard.sh\""
+            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}/hooks/role-governance-guard.sh\""
           }
         ]
       }
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${HERDR_PLUGIN_ROOT:-}}}/hooks/precompact-write-ahead-backstop.sh\""
+            "command": "\"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}/hooks/precompact-write-ahead-backstop.sh\""
           }
         ]
       }

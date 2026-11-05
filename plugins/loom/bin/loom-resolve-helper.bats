@@ -26,10 +26,9 @@ setup_file() {
 make_root() {
     ROOT="$(mktemp -d)"
     ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
-    mkdir -p "$ROOT/.claude-plugin" "$ROOT/.codex-plugin" "$ROOT/.herdr-plugin" "$ROOT/skills/loom-run" "$ROOT/bin"
+    mkdir -p "$ROOT/.claude-plugin" "$ROOT/.codex-plugin" "$ROOT/skills/loom-run" "$ROOT/bin"
     printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/.claude-plugin/plugin.json"
     printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/.codex-plugin/plugin.json"
-    printf '{"name":"loom","version":"0.2.0"}' >"$ROOT/.herdr-plugin/plugin.json"
     printf -- '---\nname: loom-run\ndescription: x\n---\nbody\n' >"$ROOT/skills/loom-run/SKILL.md"
     printf '#!/usr/bin/env bash\necho hi\n' >"$ROOT/bin/loom-coord"
     chmod +x "$ROOT/bin/loom-coord"
@@ -460,57 +459,11 @@ resolve_env() {
 }
 
 # ---------------------------------------------------------------------------
-# Herdr paths
+# Herdr retired (ADR 0031 §7): herdr is not a resolution mode, even with a valid root
 # ---------------------------------------------------------------------------
 
-@test "herdr: resolves loom-coord from a valid HERDR_PLUGIN_ROOT" {
+@test "herdr: retired mode is a usage error even with a valid HERDR_PLUGIN_ROOT" {
     make_root
     HERDR_PLUGIN_ROOT="$ROOT" resolve herdr loom-coord
-    [ "$status" -eq 0 ]
-    [ "$output" = "$ROOT/bin/loom-coord" ]
-}
-
-@test "herdr: unset HERDR_PLUGIN_ROOT fails closed" {
-    run env -u HERDR_PLUGIN_ROOT "$LOOM_TEST_BASH" "$RESOLVE" herdr loom-coord
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: relative HERDR_PLUGIN_ROOT fails closed" {
-    HERDR_PLUGIN_ROOT="relative/path" resolve herdr loom-coord
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: nonexistent HERDR_PLUGIN_ROOT fails closed" {
-    HERDR_PLUGIN_ROOT="/invalid/path" resolve herdr loom-doctor
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: wrong manifest name fails closed" {
-    make_root
-    printf '{"name":"not-loom","version":"0.2.0"}' >"$ROOT/.herdr-plugin/plugin.json"
-    HERDR_PLUGIN_ROOT="$ROOT" resolve herdr loom-coord
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: wrong manifest version fails closed" {
-    make_root
-    printf '{"name":"loom","version":"9.9.9"}' >"$ROOT/.herdr-plugin/plugin.json"
-    HERDR_PLUGIN_ROOT="$ROOT" resolve herdr loom-coord
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: manifest symlink escaping the root fails closed" {
-    make_root
-    OUTSIDE="$(mktemp -d)"
-    printf '{"name":"loom","version":"0.2.0"}' >"$OUTSIDE/plugin.json"
-    rm "$ROOT/.herdr-plugin/plugin.json"
-    ln -s "$OUTSIDE/plugin.json" "$ROOT/.herdr-plugin/plugin.json"
-    HERDR_PLUGIN_ROOT="$ROOT" resolve herdr loom-coord
-    [ "$status" -eq 2 ]
-}
-
-@test "herdr: helper not allowlisted fails closed" {
-    make_root
-    HERDR_PLUGIN_ROOT="$ROOT" resolve herdr some-other-tool
-    [ "$status" -eq 2 ]
+    [ "$status" -eq 1 ]
 }

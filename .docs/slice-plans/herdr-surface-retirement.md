@@ -1,6 +1,6 @@
 # Herdr `hc` Client (slice 4, runs first): Retire the Herdr Plugin Surfaces
 
-Status: Approved
+Status: Ready to Publish
 Target specs: 07-command-surface.md (Host surfaces), 08-playbook.md (hook wire), 10-packaging.md (no Herdr root)
 Authority: ADR 0031 §7 (Accepted)
 Target size: <= 120 LOC added (Bats edits and re-pin; deletions of retired files and fixtures are not counted); keep this plan <= 250 lines
@@ -107,6 +107,7 @@ so deleting the Herdr root cannot alter it).
 - Full gate once on the candidate commit: `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`.
   Only the known unrelated `INT during a mutation yields exit 130` dogfood race may
   be recorded and rerun once (owner-declared out of scope); any other failure blocks.
+- Gate evidence (candidate on top of 0048036): `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0, "All checks passed", 0 `not ok` (901 Bats tests; the macOS dogfood suite is excluded per `scripts/check-bats-exclusions.txt`; the plan states no Bats count). Acceptance 1-5 all pass: greps empty, retired paths absent, 2 clients / 12 cases / 48 files with Claude/Codex fixtures unchanged vs origin/main, v0.2.0 evidence and Claude/Codex bindings unchanged, jq prints `true`, `validate-repository.mjs --all` passes. New tests: `repository-validation.bats` retirement/12-case/skills/hooks.json cases; lone `HERDR_PLUGIN_ROOT` fails closed in each hook suite; `herdr` usage error in launcher/resolver suites.
 
 ## Revision Log
 

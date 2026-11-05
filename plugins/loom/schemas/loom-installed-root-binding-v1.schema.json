@@ -79,37 +79,6 @@
         "hookBinding": { "const": "PLUGIN_ROOT" },
         "hookManifest": { "const": "./hooks/hooks.json" }
       }
-    },
-    {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema", "id", "client", "binding", "inputMustBeAbsolute", "invocationMustBeAbsolute",
-        "canonicalizeInput", "canonicalRootRequired", "manifest", "manifestMustBeCanonical",
-        "manifestMustBeRegularFile", "expectedName", "expectedVersion", "helperDirectory",
-        "helperDirectoryMustBeDirectChild", "allowedHelpers", "helperMustBeRegularFile",
-        "helperMustBeExecutable"
-      ],
-      "properties": {
-        "schema": { "const": "loom-installed-root-binding-v1" },
-        "id": { "const": "herdr-plugin-root/v1" },
-        "client": { "const": "herdr" },
-        "binding": { "const": "HERDR_PLUGIN_ROOT" },
-        "inputMustBeAbsolute": { "const": true },
-        "invocationMustBeAbsolute": { "const": true },
-        "canonicalizeInput": { "const": true },
-        "canonicalRootRequired": { "const": true },
-        "manifest": { "const": ".herdr-plugin/plugin.json" },
-        "manifestMustBeCanonical": { "const": true },
-        "manifestMustBeRegularFile": { "const": true },
-        "expectedName": { "const": "loom" },
-        "expectedVersion": { "const": "0.2.0" },
-        "helperDirectory": { "const": "bin" },
-        "helperDirectoryMustBeDirectChild": { "const": true },
-        "allowedHelpers": { "$ref": "#/$defs/allowedHelpers" },
-        "helperMustBeRegularFile": { "const": true },
-        "helperMustBeExecutable": { "const": true }
-      }
     }
   ]
 }

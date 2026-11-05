@@ -14,9 +14,6 @@
 #       Resolves via the client-injected CLAUDE_PLUGIN_ROOT: must be absolute,
 #       canonicalize to a physical directory whose .claude-plugin/plugin.json
 #       names "loom" 0.2.0.
-#   loom-resolve-helper herdr <helper>
-#       Resolves via the client-injected HERDR_PLUGIN_ROOT with the same rules
-#       as claude, validating .herdr-plugin/plugin.json names "loom" 0.2.0.
 #   loom-resolve-helper codex <absolute-skill-source-path> <helper>
 #       Resolves via the absolute source path of a loaded skills/<skill>/SKILL.md
 #       file: resolves the physical skill directory, ascends "../.." to the
@@ -38,7 +35,6 @@ ALLOWED_HELPERS=(loom-coord loom-verify-identity loom-review loom-eval-workspace
 
 _usage() {
     printf 'usage: loom-resolve-helper claude <helper>\n' >&2
-    printf '       loom-resolve-helper herdr <helper>\n' >&2
     printf '       loom-resolve-helper codex <absolute-skill-source-path> <helper>\n' >&2
     printf '       loom-resolve-helper antigravity <absolute-skill-source-path> <helper>\n' >&2
     exit 1
@@ -169,20 +165,6 @@ _resolve_claude() {
     _resolve_helper_path "$root" "$helper"
 }
 
-_resolve_herdr() {
-    local helper="$1" input root
-    input="${HERDR_PLUGIN_ROOT:-}"
-    [ -n "$input" ] || _fail "HERDR_PLUGIN_ROOT is empty or unset"
-    case "$input" in
-    /*) ;;
-    *) _fail "HERDR_PLUGIN_ROOT is not absolute" ;;
-    esac
-    [ -d "$input" ] || _fail "HERDR_PLUGIN_ROOT is not a directory"
-    root=$(_canon_dir "$input") || _fail "HERDR_PLUGIN_ROOT cannot be canonicalized"
-    _validate_manifest "$root" ".herdr-plugin/plugin.json"
-    _resolve_helper_path "$root" "$helper"
-}
-
 _resolve_codex() {
     local source="$1" helper="$2"
     local after_skills skill_name canon_skill skill_dir canon_skill_dirname
@@ -270,10 +252,6 @@ main() {
     claude)
         [ "$#" -eq 2 ] || _usage
         _resolve_claude "$2"
-        ;;
-    herdr)
-        [ "$#" -eq 2 ] || _usage
-        _resolve_herdr "$2"
         ;;
     codex)
         [ "$#" -eq 3 ] || _usage

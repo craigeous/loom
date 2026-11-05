@@ -216,15 +216,18 @@ hc_wire_allowed() {
     [ "$status" -eq 0 ]
 }
 
-@test "herdr: valid root runs; policy allow is silent and block uses exit 2 stderr" {
-    json=$(jq -cn --arg c "scripts/check" '{tool_input:{command:$c}}')
-    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT -u LOOM_ALLOW_ORCHESTRATOR_GATE LOOM_ROLE=code-evaluator HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
+@test "herdr root retired: a lone HERDR_PLUGIN_ROOT fails closed" {
     json=$(jq -cn --arg c "git commit -m x" '{tool_input:{command:$c}}')
     run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT LOOM_ROLE=code-evaluator HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
     [ "$status" -eq 2 ]
-    [ "$output" = "$EVAL" ]
+    [ "$output" = "Loom hook input invalid for pre-tool-use." ]
+}
+
+@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT validate (ambiguous) fails closed" {
+    json=$(jq -cn --arg c "git status" '{tool_input:{command:$c}}')
+    run env LOOM_ROLE=code-evaluator PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    [ "$status" -eq 2 ]
+    [ "$output" = "Loom hook input invalid for pre-tool-use." ]
 }
 
 @test "hc: direct invocation is denied" {

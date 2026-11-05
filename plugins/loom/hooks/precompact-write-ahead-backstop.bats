@@ -590,7 +590,6 @@ FIXTURE_ROOT="${BATS_TEST_DIRNAME}/fixtures/hook-wire-v1"
 fixture_env_var() {
     case "$1" in
     codex) printf 'PLUGIN_ROOT' ;;
-    herdr) printf 'HERDR_PLUGIN_ROOT' ;;
     *) printf 'CLAUDE_PLUGIN_ROOT' ;;
     esac
 }
@@ -652,17 +651,8 @@ assert_fixture() {
     [ "$output" = "Loom hook input invalid for pre-compact." ]
 }
 
-@test "fixture herdr/pre-compact/allow" { assert_fixture herdr allow; }
-
-@test "fixture herdr/pre-compact/block" { assert_fixture herdr block; }
-
-@test "fixture herdr/pre-compact/malformed" { assert_fixture herdr malformed; }
-
-@test "herdr: sole valid root runs; ambiguous with another root fails closed" {
-    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json bogus s-herdr)"
-    [ "$status" -eq 2 ]
-    [ "$output" = "Loom hook input invalid for pre-compact." ]
-    run env -u PLUGIN_ROOT HERDR_PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual s-herdr2)"
+@test "herdr root retired: a lone HERDR_PLUGIN_ROOT fails closed" {
+    run env -u PLUGIN_ROOT -u CLAUDE_PLUGIN_ROOT HERDR_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual s-herdr)"
     [ "$status" -eq 2 ]
     [ "$output" = "Loom hook input invalid for pre-compact." ]
 }
