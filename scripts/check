@@ -522,7 +522,25 @@ stage "Bash syntax"
 
 stage "Bats tests"
 test_files=()
-while IFS= read -r -d '' tracked; do test_files+=("$REPOSITORY_ROOT/$tracked"); done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.bats')
+excluded_tests=()
+exclusion_plan=unspecified
+if [ -f "$SCRIPT_DIR/check-bats-exclusions.txt" ]; then
+    while IFS= read -r entry || [ -n "$entry" ]; do
+        case "$entry" in
+        '# plan: '*) exclusion_plan=${entry#'# plan: '} ;;
+        '' | '#'*) ;;
+        *) excluded_tests+=("$entry") ;;
+        esac
+    done <"$SCRIPT_DIR/check-bats-exclusions.txt"
+fi
+for entry in ${excluded_tests[@]+"${excluded_tests[@]}"}; do
+    printf 'Excluding %s: see %s plan\n' "$entry" "$exclusion_plan"
+done
+while IFS= read -r -d '' tracked; do
+    skip=false
+    for entry in ${excluded_tests[@]+"${excluded_tests[@]}"}; do [ "$tracked" = "$entry" ] && skip=true; done
+    $skip || test_files+=("$REPOSITORY_ROOT/$tracked")
+done < <(git -C "$REPOSITORY_ROOT" ls-files -z -- '*.bats')
 for required_test in "$SCRIPT_DIR/tests/shell-runtime.bats" "$SCRIPT_DIR/tests/repository-validation.bats"; do
     found=false
     for candidate in "${test_files[@]}"; do [ "$candidate" = "$required_test" ] && found=true; done
