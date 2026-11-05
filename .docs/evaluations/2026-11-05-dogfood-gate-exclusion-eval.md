@@ -10,7 +10,9 @@ code-eval rubric; shell gate per spec 08.
 
 ## Summary
 
-PASS (BLOCKER: 0, MAJOR: 0, MINOR: 3). The diff adds a name-agnostic exclusion-list reader
+PASS (BLOCKER: 0, MAJOR: 0, MINOR: 4, with m1 since resolved). The local review
+(`ran-with-findings`: correctness clean, security clean, tests TST-1) was adjudicated below.
+TST-1 is confirmed as a non-blocking MINOR. The diff adds a name-agnostic exclusion-list reader
 to the `scripts/check` "Bats tests" stage and a three-line `scripts/check-bats-exclusions.txt`
 naming only `scripts/tests/macos-dual-client-dogfood.bats`. The code matches plan Step 2
 exactly. No test is deleted, edited, or skip-annotated. The full gate reran green on dc71785,
@@ -18,12 +20,30 @@ and all of criteria a-h hold.
 
 ## Findings
 
-- [MINOR] m1. No review-findings artifact for this slice. `.docs/evaluations/dogfood-gate-exclusion-review-findings.md`
-  does not exist, and no `skipped: docs-only` status was recorded. This is a code change to
-  `scripts/check`, so the ADR 0021 local review applies. Per the rubric, a missing required
-  review is not permission to land. The orchestrator must run `loom-review` or record a
-  justified status before `Landed`. This verdict judges the diff on its merits and does not
-  depend on that review.
+- [MINOR] m1 (resolved). When this verdict was first recorded (a72cf9a), the slice had no
+  review-findings artifact. The ADR 0021 local review has since run:
+  `.docs/evaluations/dogfood-gate-exclusion-review-findings.md` (commit 3bf1172, base c2db416,
+  head a72cf9a, aggregate `ran-with-findings`). See the adjudication below.
+- [MINOR] TST-1 (confirmed from the local review). The new exclusion-list reader in
+  `scripts/check` has no automated regression test. Mechanical check: `rg -n 'exclusions|Excluding'
+  scripts/tests/*.bats` finds nothing (exit 1), and the diff c2db416..dc71785 touches no `*.bats`
+  file. It is MINOR, not MAJOR, for four reasons:
+  - The slice has no target spec. The plan's contract is acceptance criteria a-h, which are
+    runnable commands, all re-verified here. The plan also scopes out any edit to tests
+    (Out of Scope; Step 3 "No other edits anywhere").
+  - On the gate's own data, the reader fails open. A missing list, a non-matching entry, or a
+    malformed entry runs more tests, never fewer.
+  - The required-file loop independently re-adds `shell-runtime.bats` and
+    `repository-validation.bats`. The only way to drop other tests is a reviewed edit to a
+    tracked list.
+  - The reader is a stopgap whose only entry is deleted by the Approved `dogfood-retirement`
+    slice.
+
+  The finder's scenario of the dogfood suite silently re-entering the gate is real. However,
+  the result is a red or flaky gate that a human sees, not a hidden pass. Shipping as-is does
+  not produce incorrect behavior against any spec. Follow-up candidate: a small
+  `repository-validation.bats` case that runs the "Bats tests" discovery against a temp list
+  (comment, `# plan:` line, no trailing newline, missing file). It belongs in its own slice.
 - [MINOR] m2. Base..candidate (c2db416..dc71785) also includes d5ad794, which rewrites the plan-eval
   record `dogfood-gate-exclusion-eval.md`: `Round: 1` becomes `Round: 0`, and a `Commit:` field
   and a `## Summary` section are added. That edit is outside the developer's two-file scope.
@@ -43,6 +63,16 @@ and all of criteria a-h hold.
 None.
 
 ## Notes
+
+Review-findings adjudication (`loom-local-review/v1`, run dogfood-gate-exclusion-a72cf9afcd7a):
+
+| Finding | Finder | Adjudication | Severity | Reason |
+|---|---|---|---|---|
+| TST-1 | review-tests/v1 (conf 0.6) | Confirmed | MINOR | No automated test covers the exclusion reader. Plan-scoped, fails open, stopgap. See Findings. |
+| (none) | review-correctness/v1 | Clean | n/a | No findings. |
+| (none) | review-security/v1 | Clean | n/a | No findings. |
+
+No finding was discarded as a false positive. The verdict is unchanged: PASS.
 
 Gate rerun on candidate dc71785:
 `bash -c 'set -o pipefail; TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check 2>&1 | tee …'` → exit 0.
