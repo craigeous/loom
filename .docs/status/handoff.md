@@ -19,6 +19,7 @@ Current milestone: M9
    override `user.*`. The command surface is `/loom:run` plus one-off `/loom:<role>`.
 
 ## Where things stand
+- **Landed (2026-11-05):** `herdr-surface-retirement` (M9 4 of 4) via remote-direct: Herdr plugin surfaces retired; Claude and Codex are the only supported clients. `hc-host-adapter` and `hc-live-probe` stay shelved (ADR 0033 D4); no probe evidence recorded.
 - **Landed (2026-11-02):** `hc-guard-deny-policy` (M9 1 of 4) via remote-direct. M9 slices `herdr-client-adapter`, `herdr-native-app-hooks`, `herdr-verification` Landed; 952 Bats tests passing (offline fixtures only).
 - **Owner decisions (2026-11-03, binding; recorded in ADR 0033 at Plan Review):** D1 retire the macOS checkpoint tooling; D2 narrow 0032's five-harness v0.3.0 scope to evidence-admitted pairs after 0.2; D3 v0.2.0 live proof for Claude Code CLI + Codex CLI first; D4 defer the Herdr/`hc` evaluator question until that proof completes (`hc` evaluators stay prohibited).
 - **Planned, awaiting plan evaluation (nothing approved):** ADR 0033 and `dogfood-retirement` (both Plan Review). `dogfood-retirement` may not start until ADR 0033 is Accepted and `herdr-surface-retirement` has landed.

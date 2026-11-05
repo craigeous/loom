@@ -20,7 +20,7 @@ over to the new plans.
 | 1 | [hc-guard-deny-policy.md](archive/hc-guard-deny-policy.md) | <= 140 LOC | none |
 | 2 | [hc-host-adapter.md](hc-host-adapter.md) | <= 380 LOC | none |
 | 3 | [hc-live-probe.md](hc-live-probe.md) | <= 260 LOC | none |
-| 4 | [herdr-surface-retirement.md](herdr-surface-retirement.md) | <= 120 LOC | lands after 1 and 2 |
+| 4 | [herdr-surface-retirement.md](archive/herdr-surface-retirement.md) | <= 120 LOC | lands after 1 and 2 |
 
 Program ceiling: 900 LOC added across the four (the earlier single-plan target of 450 was
 measured infeasible by the developer pass at about 860 added lines including tests).

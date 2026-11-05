@@ -1,13 +1,13 @@
 # Herdr `hc` Client (slice 4, runs first): Retire the Herdr Plugin Surfaces
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 07-command-surface.md (Host surfaces), 08-playbook.md (hook wire), 10-packaging.md (no Herdr root)
 Authority: ADR 0031 §7 (Accepted)
 Target size: <= 120 LOC added (Bats edits and re-pin; deletions of retired files and fixtures are not counted); keep this plan <= 250 lines
 
 ## Context
 
-ADR [0031](../ADR/0031-herdr-as-an-hc-driven-client.md) §7 retires the plugin framing
+ADR [0031](../../ADR/0031-herdr-as-an-hc-driven-client.md) §7 retires the plugin framing
 that ADRs 0029 and 0030 built. The tree still carries it: two Herdr manifests, the
 `herdr-plugin-root/v1` binding, `herdr` branches in `loom-launch-role` and
 `loom-resolve-helper`, `HERDR_PLUGIN_ROOT` handling in the three hook scripts and

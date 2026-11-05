@@ -19,12 +19,12 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
-- [herdr-surface-retirement.md](herdr-surface-retirement.md) — `Approved` — M9 (4 of 4, **runs first**, before `hc-host-adapter`): retire the Herdr plugin surfaces.
 - [dogfood-int-race.md](dogfood-int-race.md) — `Approved` — fix the INT-race flake in the dogfood Bats test (readiness signal replaces `sleep 0.5`); lands before the `herdr-surface-retirement` gate runs.
 - [dogfood-retirement.md](dogfood-retirement.md) — `Approved` — ADR 0033 D1: retire the macOS dual-client checkpoint tooling (harness, tests, state schema; fixture relocated byte-identical; evidence record preserved).
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
+- [herdr-surface-retirement.md](archive/herdr-surface-retirement.md) — `Landed` — 2026-11-05 — M9 (4 of 4): retire the Herdr plugin surfaces (ADR 0031 §7); Claude and Codex are the only clients.
 - [hc-guard-deny-policy.md](archive/hc-guard-deny-policy.md) — `Landed` — 2026-11-02 — M9 (1 of 4): deny every `hc` form to role sessions (ADR 0031).
 
 - [archive/herdr-verification.md](archive/herdr-verification.md) — `Landed` —
