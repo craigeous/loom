@@ -1,6 +1,6 @@
 # Herdr `hc` Client (slice 4, runs first): Retire the Herdr Plugin Surfaces
 
-Status: Implemented
+Status: Ready to Publish
 Target specs: 07-command-surface.md (Host surfaces), 08-playbook.md (hook wire), 10-packaging.md (no Herdr root)
 Authority: ADR 0031 §7 (Accepted)
 Target size: <= 120 LOC added (Bats edits and re-pin; deletions of retired files and fixtures are not counted); keep this plan <= 250 lines
