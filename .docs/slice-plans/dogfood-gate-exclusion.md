@@ -1,6 +1,6 @@
 # Exclude the macOS Dogfood Bats Suite from the Publication Gate Until Its Removal
 
-Status: In Progress
+Status: Implemented
 Target specs: none (gate-script change); gate per 08-playbook.md
 Authority: ADR 0033 (Accepted) retires the macOS dogfood suite via `dogfood-retirement` (Approved); binding owner decision (option 2): exclude the suite from the gate until that slice lands. This plan supersedes nothing. No accepted ADR is changed: ADR 0024 §8 keeps the M0-M7 release gate (this edits a `scripts/check` stage's input list, not that gate), and ADR 0033 §3 and Consequences already move the suite out of the gate.
 Target size: <= 25 LOC net change across two files (`scripts/check` and new `scripts/check-bats-exclusions.txt`); keep this plan <= 250 lines
@@ -130,6 +130,12 @@ h. `node scripts/validate-repository.mjs --all` exits 0.
 
 Regression proof: `repository-validation.bats` and `shell-runtime.bats` pass unchanged inside
 criterion (a) (both still run and still copy/exercise `scripts/check`).
+
+## Gate Evidence
+
+Baseline (c2db416, gate exit 1 from suite flake): Discovered 972. Candidate: Discovered 931, one
+Excluding line, `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` exit 0 ("All checks passed").
+B=41, T0-T1=41. Criteria a-h pass; numstat `19 1` and `3 0`; validate-repository --all exit 0.
 
 ## Notes
 
