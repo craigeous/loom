@@ -1,6 +1,6 @@
 # Exclude the macOS Dogfood Bats Suite from the Publication Gate Until Its Removal
 
-Status: Implemented
+Status: Landed
 Target specs: none (gate-script change); gate per 08-playbook.md
 Authority: ADR 0033 (Accepted) retires the macOS dogfood suite via `dogfood-retirement` (Approved); binding owner decision (option 2): exclude the suite from the gate until that slice lands. This plan supersedes nothing. No accepted ADR is changed: ADR 0024 §8 keeps the M0-M7 release gate (this edits a `scripts/check` stage's input list, not that gate), and ADR 0033 §3 and Consequences already move the suite out of the gate.
 Target size: <= 25 LOC net change across two files (`scripts/check` and new `scripts/check-bats-exclusions.txt`); keep this plan <= 250 lines
