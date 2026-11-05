@@ -1,0 +1,3 @@
+# Bats files excluded from scripts/check; one repo-relative path per line.
+# plan: dogfood-gate-exclusion
+scripts/tests/macos-dual-client-dogfood.bats
