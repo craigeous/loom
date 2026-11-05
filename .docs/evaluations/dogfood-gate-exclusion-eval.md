@@ -1,13 +1,18 @@
 # Evaluation: dogfood-gate-exclusion (slice-plan)
 
 Verdict: PASS
-Round: 1
+Round: 0
+Commit: 4952494
 Artifact: .docs/slice-plans/dogfood-gate-exclusion.md @ 4952494
 Reviewed against: ADR 0033 (Accepted) §3 and Consequences; ADR 0024 §8; the Approved
 `dogfood-retirement` plan (Step 7, Verification #4, count comparison);
 `.docs/spec/08-playbook.md` gate list; `gates/shell.md`; plan-eval rubric; and the real tree
 (`scripts/check`, `scripts/validate-repository.mjs`, `scripts/run-bats-under`,
 `.github/workflows/check.yml`, `scripts/tests/repository-validation.bats`).
+
+## Summary
+
+PASS (BLOCKER: 0, MAJOR: 0, MINOR: 3). The previous FAIL (archived outside `.docs/evaluations/`, see Prior Rounds Summary) is resolved: `scripts/check` stays name-agnostic, so the retirement plan's checks still hold, and every acceptance criterion is runnable.
 
 ## Findings
 
@@ -72,4 +77,4 @@ Mechanical checks performed (HEAD 4952494):
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
-| 1 | plan | FAIL | B1: the carve-out conflicted with the Approved retirement plan's zero-diff / no-`dogfood` checks. Resolved by a name-agnostic list file read by `scripts/check`. M1: criteria were not runnable. Resolved by exact commands (a)-(h). m1/m2 resolved. Full record: `.docs/slice-plans/archive/evaluations-reset/dogfood-gate-exclusion-plan-eval-r1.md` |
+| (archived r1) | plan | FAIL | Recorded outside `.docs/evaluations/`, so this is the first evaluation here and is Round: 0 (validator eval-sequence). B1: the carve-out conflicted with the Approved retirement plan's zero-diff / no-`dogfood` checks. Resolved by a name-agnostic list file read by `scripts/check`. M1: criteria were not runnable. Resolved by exact commands (a)-(h). m1/m2 resolved. Full record: `.docs/slice-plans/archive/evaluations-reset/dogfood-gate-exclusion-plan-eval-r1.md` |
