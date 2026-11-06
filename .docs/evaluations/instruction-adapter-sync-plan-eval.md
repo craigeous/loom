@@ -6,6 +6,14 @@ Round: 0
 Verdict: FAIL
 Reviewed against: [spec 08](../spec/08-playbook.md) (*Canonical project instruction digest*, *`CLAUDE.md` and `AGENTS.md` adapters*, *Mechanical invariants*), [spec 03](../spec/03-artifact-lifecycle.md) (*Candidate finalization*), [spec 06](../spec/06-init-modes.md), [spec 09](../spec/09-open-questions.md) (*Instruction files*), [spec README](../spec/README.md), [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) §2 and §8, [plan-eval rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md), and [severity](../../plugins/loom/skills/loom-playbook/references/severity.md).
 
+## Summary
+
+FAIL (plan review, Round 0; BLOCKER: 0, MAJOR: 1, MINOR: 4). The plan's factual
+claims, authority, scope, size budget, validator rule, and Bats tests all check out
+mechanically against the tree and a scratch prototype. One verification step
+(Verification 8) states a lint result the current file cannot produce, and that
+blocks approval.
+
 ## Findings
 
 - [MAJOR] Verification 8 states a result the tree cannot produce. It says
