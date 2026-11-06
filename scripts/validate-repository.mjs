@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -1239,11 +1240,48 @@ function validatePackaging() {
   }
 }
 
+function validateInstructionAdapters() {
+  const DIGEST = ".docs/status/project-instructions.md";
+  const ADAPTERS = ["CLAUDE.md", "AGENTS.md", "GEMINI.md"];
+  const present = (p) => safeNode(p, { missing: false, regularFile: true }) !== null;
+  const active = present(DIGEST) || ADAPTERS.some((p) => present(p) && (readText(p) ?? "").includes("loom:project-instructions"));
+  if (!active) return;
+  const digest = readText(DIGEST);
+  if (digest === null) return;
+  const normalized = digest.replace(/\r\n?/g, "\n").replace(/\n*$/, "\n");
+  const expected = crypto.createHash("sha256").update(normalized, "utf8").digest("hex");
+  const begin = /^<!-- loom:project-instructions begin schema=loom-project-instructions\/v1 sha256=([0-9a-f]{64}) -->$/;
+  const end = "<!-- loom:project-instructions end -->";
+  let claudeShared = null;
+  for (const file of ADAPTERS) {
+    if (file === "GEMINI.md" && !present(file)) continue;
+    const text = readText(file);
+    if (text === null) continue;
+    const lines = text.split(/\r?\n/);
+    const begins = lines.map((l, i) => (begin.test(l) ? i : -1)).filter((i) => i >= 0);
+    const ends = lines.map((l, i) => (l === end ? i : -1)).filter((i) => i >= 0);
+    if (begins.length !== 1 || ends.length !== 1 || ends[0] < begins[0]) {
+      report(file, `expected exactly one loom:project-instructions begin marker followed by one end marker (found ${begins.length} begin, ${ends.length} end)`);
+      continue;
+    }
+    const actual = lines[begins[0]].match(begin)[1];
+    if (actual !== expected) report(file, `loom:project-instructions sha256 ${actual} does not match canonical digest sha256 ${expected}`);
+    const body = lines.slice(begins[0] + 1, ends[0]);
+    const lastBullet = body.map((l) => /^- /.test(l)).lastIndexOf(true);
+    const shared = body.slice(0, lastBullet < 0 ? body.length : lastBullet).join("\n");
+    if (file === "CLAUDE.md") claudeShared = shared;
+    else if (claudeShared !== null && shared !== claudeShared) {
+      report(file, "loom:project-instructions shared lines differ from CLAUDE.md (only the final client-specific bullet may differ)");
+    }
+  }
+}
+
 if (mode === "links" || mode === "all") loadAllowlist();
 if (mode === "metadata" || mode === "all") await validateMetadata();
 if (mode === "links" || mode === "all") await validateLinks();
 if (mode === "all") validateDocsState();
 if (mode === "all") validatePackaging();
+if (mode === "all") validateInstructionAdapters();
 diagnostics.sort().forEach((line) => console.error(line));
 if (diagnostics.length) process.exit(1);
 console.log(`Repository ${mode} validation passed`);

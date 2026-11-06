@@ -1723,6 +1723,93 @@ packaging_all() {
     [ "$status" -eq 0 ]
 }
 
+# ---- instruction adapter validation (--all) ----
+
+instruction_hash() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$TEST_ROOT/.docs/status/project-instructions.md" | awk '{print $1}'
+    else
+        shasum -a 256 "$TEST_ROOT/.docs/status/project-instructions.md" | awk '{print $1}'
+    fi
+}
+
+put_instruction_block() {
+    local hash
+    hash="$(instruction_hash)"
+    put "$1" <<DOC
+# $1
+<!-- loom:project-instructions begin schema=loom-project-instructions/v1 sha256=$hash -->
+- Shared one.
+- Shared two.
+- $2 final bullet.
+<!-- loom:project-instructions end -->
+DOC
+}
+
+put_instruction_fixture() {
+    put .docs/status/project-instructions.md <<'DOC'
+# Project Instructions
+Status: Living
+Schema: loom-project-instructions/v1
+
+- One bullet.
+DOC
+    put_instruction_block CLAUDE.md Claude
+    put_instruction_block AGENTS.md Codex
+}
+
+@test "instruction adapters: matching digest hash and shared lines pass" {
+    make_docs_root
+    put_instruction_fixture
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "instruction adapters: stale marker hash fails" {
+    make_docs_root
+    put_instruction_fixture
+    printf 'extra\n' >>"$TEST_ROOT/.docs/status/project-instructions.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"CLAUDE.md: loom:project-instructions sha256"* ]]
+    [[ "$output" == *"does not match canonical digest sha256"* ]]
+}
+
+@test "instruction adapters: single-adapter shared-line drift fails" {
+    make_docs_root
+    put_instruction_fixture
+    edit_file AGENTS.md 's/Shared one/Shared 1/'
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"AGENTS.md: loom:project-instructions shared lines differ from CLAUDE.md"* ]]
+}
+
+@test "instruction adapters: client-specific final bullet may differ" {
+    make_docs_root
+    put_instruction_fixture
+    edit_file AGENTS.md 's/Codex final bullet/Codex other bullet/'
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "instruction adapters: duplicate begin marker fails" {
+    make_docs_root
+    put_instruction_fixture
+    edit_file AGENTS.md '/loom:project-instructions begin/p'
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"AGENTS.md: expected exactly one loom:project-instructions begin marker"* ]]
+}
+
+@test "instruction adapters: an adapter block without the canonical digest fails" {
+    make_docs_root
+    put_instruction_fixture
+    rm "$TEST_ROOT/.docs/status/project-instructions.md"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/status/project-instructions.md: required file is missing"* ]]
+}
+
 # ---- documentation-state validation (--all) ----
 
 fixture_git() {

@@ -1,6 +1,6 @@
 # Instruction Adapter Sync
 
-Status: In Progress
+Status: Implemented
 Target specs: 08-playbook.md, 06-init-modes.md, 03-artifact-lifecycle.md
 Target size: <= 170 LOC net change (keep this plan document <= 250 lines)
 
@@ -248,3 +248,8 @@ the rule inactive.
 |---|---|
 | 0 | Initial draft |
 | 1 | Plan-eval FAIL: V8 now requires unchanged .bats lint baselines (15/170) + `node --check`; hand-stamp noted as renderer stand-in; V7 LOOM_NODE, test 5 name, V5 numstat fixed |
+
+## Gate Evidence
+
+- Verification 1-8 all met: validator `--all` exit 0; old wording absent (grep exit 1, count 0); one sha256 `1c04cef5...ee11` (node and shasum agree) in all three markers; shared-part hashes identical; CLAUDE.md numstat `1 1`, 101 lines; negative check exit 1 with the expected diagnostic (restored); 6 `instruction adapters` Bats tests pass; .bats lint baselines unchanged (shfmt 15, ShellCheck 170); `node --check` exit 0.
+- Full gate `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: exit 0, "All checks passed".
