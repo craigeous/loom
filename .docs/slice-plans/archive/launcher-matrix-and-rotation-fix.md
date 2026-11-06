@@ -1,14 +1,14 @@
 # Launcher Matrix Binding and Two-Client Default Rotation (G1, G2)
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 10-packaging.md (Versioned compatibility and capability mapping)
-Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted; §1, §3 E1, §6); [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) (Accepted; §2 sequence)
+Authority: [ADR 0032](../../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted; §1, §3 E1, §6); [ADR 0033](../../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) (Accepted; §2 sequence)
 Inputs: the v0.2.0 live-proof research note §3 G1 and G2 (linked under Context); `plugins/loom/bin/loom-launch-role`; `plugins/loom/bin/loom-launch-role.bats`; `plugins/loom/adapters/compatibility/v0.2.0.json`; `plugins/loom/adapters/compatibility/v0.3.0.json`
 Target size: about 150 lines changed across the launcher and its Bats suite; no new files except this plan.
 
 ## Context
 
-Grounding: [v0.2.0 live proof preparation](../research/2026-11-06-v020-live-proof-preparation.md) §3 G1 and G2.
+Grounding: [v0.2.0 live proof preparation](../../research/2026-11-06-v020-live-proof-preparation.md) §3 G1 and G2.
 
 **G1 — the launcher reads the v0.3.0 matrix.** `plugins/loom/bin/loom-launch-role` hard-codes `adapters/compatibility/v0.3.0.json` (line 492) and fails closed on any other `version` (line 498). Main's product version is `0.2.0` in both plugin manifests, so a v0.2.0 candidate today would launch Codex with the v0.3.0 profile map (`gpt-6.1-terra` / `gpt-6.1-sol`) instead of its own `v0.2.0.json` map (`gpt-5.6-terra` / `gpt-5.6`). ADR 0032 §3 E1 requires the release's own `vR.json` to carry the profile mapping the launcher uses. Spec 10 names the v0.2.0 effective map, so the binding is to the product release, not to a caller's choice.
 

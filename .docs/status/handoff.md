@@ -19,6 +19,7 @@ Current milestone: M9
    override `user.*`. The command surface is `/loom:run` plus one-off `/loom:<role>`.
 
 ## Where things stand
+- **Landed (2026-11-06):** `launcher-matrix-and-rotation-fix` via remote-direct: `loom-launch-role` binds the release compatibility matrix (0.2.0 default) and rotates the default to two clients (claude ↔ codex), without Antigravity. Live proof (ADR 0032 E1–E5) is still outstanding.
 - **Landed (2026-11-06):** `instruction-adapter-sync` via remote-direct: the ADR 0032 §2 wording is in the instruction digest and all three derived blocks; hashes re-stamped; `--all` now fails on digest/marker/shared-line drift. Follow-up (optional): a Bats case with a drifted `GEMINI.md` and extra marker-structure negatives (review TST-1..3, MINOR).
 - **Landed (2026-11-05):** `dogfood-retirement` (ADR 0033 D1) via remote-direct: the macOS dual-client checkpoint tooling and its temporary gate exclusion list are deleted; the preserved evidence record and its schema check remain; `dogfood-int-race` is Abandoned. The exclusion reader is retired, so its follow-up test is moot.
 - **Landed (2026-11-05):** `herdr-surface-retirement` (M9 4 of 4) via remote-direct: Herdr plugin surfaces retired; Claude and Codex are the only supported clients. `hc-host-adapter` and `hc-live-probe` stay shelved (ADR 0033 D4); no probe evidence recorded.

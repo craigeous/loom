@@ -1,6 +1,6 @@
 # Plan Evaluation: launcher-matrix-and-rotation-fix
 
-Artifact: [launcher-matrix-and-rotation-fix](../slice-plans/launcher-matrix-and-rotation-fix.md)
+Artifact: [launcher-matrix-and-rotation-fix](../slice-plans/archive/launcher-matrix-and-rotation-fix.md)
 Commit: 5bc55d2
 Round: 2
 Verdict: PASS

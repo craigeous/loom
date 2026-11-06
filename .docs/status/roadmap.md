@@ -43,6 +43,7 @@ Current milestone: M9
   - Landed 2026-11-05: `herdr-surface-retirement` (4 of 4): Herdr plugin surfaces retired.
   - Landed 2026-11-05: `dogfood-retirement` (ADR 0033 D1): macOS checkpoint tooling retired.
   - Landed 2026-11-06: `instruction-adapter-sync`: instruction digest and derived blocks aligned with ADR 0032 §2; drift now fails `--all`.
+  - Landed 2026-11-06: `launcher-matrix-and-rotation-fix`: `loom-launch-role` binds the release compatibility matrix (0.2.0 default) and the default rotation is two clients (claude ↔ codex), without Antigravity; plan archived.
   - **Deferred (ADR 0033 D4):** the Herdr/`hc` evaluator question stays open until the v0.2.0 live proof (below) completes; `hc` evaluators remain prohibited (ADR 0031 §5). No new `hc`, Orca or Antigravity build starts.
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
