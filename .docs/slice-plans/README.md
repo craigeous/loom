@@ -17,6 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
+- [instruction-adapter-sync.md](instruction-adapter-sync.md) — `Plan Review` — carry the ADR 0032 §2 invariant into the canonical instruction digest, re-stamp the `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` block hashes, sync the stale adapter bullets, and add an `--all` validator drift check.
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
 - [dogfood-int-race.md](dogfood-int-race.md) — `Abandoned` — superseded by `dogfood-retirement` (ADR 0033), which deletes its target suite (history kept).
