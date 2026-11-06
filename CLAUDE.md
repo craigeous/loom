@@ -92,10 +92,8 @@ green at least once). loom imposes this gate on managed projects and on itself.
 
 ## Update this file before committing
 
-This file is a **curated digest** — a stable, agent-facing map of durable conventions,
-repo-layout facts, gate definitions, and read-first pointers. It is maintained by the
-**developer's finalize pass** when a landed slice changes something in that scope (per
-spec 03 finalize pass step 2; boundary defined in `.docs/spec/08-playbook.md` —
-*Evolving the playbook → CLAUDE.md auto-propagation*). Per-slice history stays in
-`.docs/status/progress.md`, not here. On any conflict, the specs win and this file is
-corrected to match. See spec 08 (*§ Shape and Concision Discipline*) — this file stays ≤ ~100 lines; point, don't restate.
+This file is a **curated digest**, not a changelog. The **developer's finalize pass**
+updates it only when a landed slice changes a durable convention, layout fact, or gate
+(spec 03 step 2; boundary in `.docs/spec/08-playbook.md`, *Evolving the playbook*).
+Per-slice history stays in `.docs/status/progress.md`. On conflict, the specs win.
+Keep this file ≤ ~100 lines (spec 08, *§ Shape and Concision Discipline*); point, don't restate.

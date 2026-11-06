@@ -39,7 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
-  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `herdr-surface-retirement` (approved; runs first). `hc-host-adapter` and `hc-live-probe` are **shelved** (ADR 0033 D4, Plan Review): requirements and review history kept, not built.
+  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `herdr-surface-retirement` (approved; runs first). `hc-host-adapter` and `hc-live-probe` are **shelved** (ADR 0033 D4): requirements and review history kept, not built.
   - Landed 2026-11-05: `herdr-surface-retirement` (4 of 4): Herdr plugin surfaces retired.
   - Landed 2026-11-05: `dogfood-retirement` (ADR 0033 D1): macOS checkpoint tooling retired.
   - Landed 2026-11-06: `instruction-adapter-sync`: instruction digest and derived blocks aligned with ADR 0032 §2; drift now fails `--all`.
@@ -48,16 +48,17 @@ Current milestone: M9
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification). All three slices landed (offline fixture verification only); live Herdr and native-app execution evidence is separate owner-run work and remains outstanding.
 
-## Next: v0.2.0 live proof, then scope (ADR 0033, Plan Review — not yet Accepted)
+## Next: v0.2.0 live proof, then scope (ADR 0033, Accepted 2026-11-03)
 
-Order of work: (1) land `herdr-surface-retirement`; (2) `dogfood-retirement` (retires the
-macOS checkpoint harness; Plan Review); (3) **v0.2.0 live proof** for Claude Code CLI and
-Codex CLI on macOS 14+ Apple silicon — authenticated isolated runs of all five roles and
-the full loop, install/upgrade/uninstall, platform gate, bound to the final candidate
-under ADR 0032 E1–E5; the Codex 401 in the isolated home is an unmet proof to resolve
-first; (4) only then admit further harnesses one at a time by per-harness ADR. ADR 0033
-proposes replacing ADR 0032's five-pair v0.3.0 set with evidence-admitted pairs;
-Antigravity, Orca and Herdr are deferred.
+Order of work: (1) `herdr-surface-retirement` (1bed05f), (2) `dogfood-retirement` (cc2b1ef),
+and (3) `instruction-adapter-sync` (93c4f23) have all landed on `origin/main`. The next
+action is (4) **v0.2.0 live proof** for Claude Code CLI and Codex CLI on macOS 14+ Apple
+silicon — authenticated isolated runs of all five roles and the full loop,
+install/upgrade/uninstall, platform gate, bound to the final candidate under ADR 0032
+E1–E5; the Codex 401 in the isolated home is an unmet proof to resolve first. Only after
+that proof, (5) admit further harnesses one at a time by per-harness ADR. ADR 0033 replaces
+ADR 0032's five-pair v0.3.0 set with evidence-admitted pairs; Antigravity, Orca and Herdr
+are deferred.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition
