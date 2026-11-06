@@ -17,13 +17,13 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [instruction-adapter-sync.md](instruction-adapter-sync.md) — `Approved` — carry the ADR 0032 §2 invariant into the canonical instruction digest, re-stamp the `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` block hashes, sync the stale adapter bullets, and add an `--all` validator drift check.
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
 - [dogfood-int-race.md](dogfood-int-race.md) — `Abandoned` — superseded by `dogfood-retirement` (ADR 0033), which deletes its target suite (history kept).
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
+- [instruction-adapter-sync.md](archive/instruction-adapter-sync.md) — `Landed` — 2026-11-06 — ADR 0032 §2 invariant carried into the instruction digest; CLAUDE.md/AGENTS.md/GEMINI.md block hashes re-stamped; `--all` validator drift check added.
 - [dogfood-retirement.md](archive/dogfood-retirement.md) — `Landed` — 2026-11-05 — ADR 0033 D1: retired the macOS dual-client checkpoint tooling; the preserved evidence record stays as history.
 - [herdr-surface-retirement.md](archive/herdr-surface-retirement.md) — `Landed` — 2026-11-05 — M9 (4 of 4): retire the Herdr plugin surfaces (ADR 0031 §7); Claude and Codex are the only clients.
 - [hc-guard-deny-policy.md](archive/hc-guard-deny-policy.md) — `Landed` — 2026-11-02 — M9 (1 of 4): deny every `hc` form to role sessions (ADR 0031).

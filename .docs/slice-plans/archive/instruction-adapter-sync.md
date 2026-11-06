@@ -1,6 +1,6 @@
 # Instruction Adapter Sync
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 08-playbook.md, 06-init-modes.md, 03-artifact-lifecycle.md
 Target size: <= 170 LOC net change (keep this plan document <= 250 lines)
 

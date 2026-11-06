@@ -1,6 +1,6 @@
 # Plan evaluation — instruction-adapter-sync (Round 1)
 
-Artifact: [instruction-adapter-sync](../slice-plans/instruction-adapter-sync.md)
+Artifact: [instruction-adapter-sync](../slice-plans/archive/instruction-adapter-sync.md)
 Commit: 2b23221
 Round: 1
 Verdict: PASS

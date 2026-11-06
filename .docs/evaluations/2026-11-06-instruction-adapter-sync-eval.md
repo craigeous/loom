@@ -1,6 +1,6 @@
 # Code evaluation — instruction-adapter-sync
 
-Artifact: [instruction-adapter-sync](../slice-plans/instruction-adapter-sync.md)
+Artifact: [instruction-adapter-sync](../slice-plans/archive/instruction-adapter-sync.md)
 Commit: 631d180
 Round: 1
 Verdict: PASS

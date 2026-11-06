@@ -1,6 +1,6 @@
 # Plan evaluation — instruction-adapter-sync
 
-Artifact: [instruction-adapter-sync](../slice-plans/instruction-adapter-sync.md)
+Artifact: [instruction-adapter-sync](../slice-plans/archive/instruction-adapter-sync.md)
 Commit: f32b9b0
 Round: 0
 Verdict: FAIL
