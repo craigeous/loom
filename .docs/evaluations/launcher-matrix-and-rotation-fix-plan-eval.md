@@ -1,8 +1,10 @@
 # Plan Evaluation: launcher-matrix-and-rotation-fix
 
-- Round: 0
-- Verdict: FAIL
-- Target: .docs/slice-plans/launcher-matrix-and-rotation-fix.md
+Artifact: [launcher-matrix-and-rotation-fix](../slice-plans/launcher-matrix-and-rotation-fix.md)
+Commit: 3315134
+Round: 0
+Verdict: FAIL
+Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md), [spec 10](../spec/10-packaging.md), and [plan-eval rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md).
 
 ## Summary
 
