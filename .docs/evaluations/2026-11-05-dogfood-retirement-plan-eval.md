@@ -2,7 +2,7 @@
 
 Verdict: PASS
 Round: 1
-Artifact: [dogfood-retirement](../slice-plans/dogfood-retirement.md)
+Artifact: [dogfood-retirement](../slice-plans/archive/dogfood-retirement.md)
 Reviewed against: ADR 0033 §3, ADR 0032 §2, ADR 0024 §§2–5 and §8; specs 03, 08 and 10; the plan-evaluation rubric.
 Commit: ad1c13d
 

@@ -1,6 +1,6 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
 Target size: <= 60 LOC added (one present-only validator check, one Bats test, a one-line stub swap, doc/comment/status edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines

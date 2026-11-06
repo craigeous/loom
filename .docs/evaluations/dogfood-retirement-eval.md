@@ -2,7 +2,7 @@
 
 Verdict: PASS
 Round: 1
-Artifact: [dogfood-retirement](../slice-plans/dogfood-retirement.md)
+Artifact: [dogfood-retirement](../slice-plans/archive/dogfood-retirement.md)
 Commit: 922562a
 Reviewed against: `.docs/slice-plans/dogfood-retirement.md`, ADR 0033 §3, ADR 0032 §2, ADR 0024 §§2–5 and §8, specs 08 (gate, root-file size) and 10 (release evidence inputs), the code-eval rubric, `severity.md`, and `.docs/evaluations/dogfood-retirement-review-findings.md`. Diff: pinned baseline 65799b8 to 922562a (code commit 44f4c33, evidence commit 922562a); gate rerun on 3b1d30c, which adds only the review-findings record.
 

@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-05 — `dogfood-retirement` (retire the macOS checkpoint tooling, ADR 0033 D1) landed via remote-direct; plan archived; `dogfood-int-race` abandoned.
 - 2026-11-05 — M9 slice 4 `herdr-surface-retirement` (retire the Herdr plugin surfaces, ADR 0031 §7) landed via remote-direct; plan archived.
 - 2026-11-02 — M9 hc-driven client slice 1 `hc-guard-deny-policy` (deny-by-default hc guard for role sessions) landed via remote-direct; plan archived.
 

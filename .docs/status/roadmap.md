@@ -41,6 +41,7 @@ Current milestone: M9
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
   - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `herdr-surface-retirement` (approved; runs first). `hc-host-adapter` and `hc-live-probe` are **shelved** (ADR 0033 D4, Plan Review): requirements and review history kept, not built.
   - Landed 2026-11-05: `herdr-surface-retirement` (4 of 4): Herdr plugin surfaces retired.
+  - Landed 2026-11-05: `dogfood-retirement` (ADR 0033 D1): macOS checkpoint tooling retired.
   - **Deferred (ADR 0033 D4):** the Herdr/`hc` evaluator question stays open until the v0.2.0 live proof (below) completes; `hc` evaluators remain prohibited (ADR 0031 §5). No new `hc`, Orca or Antigravity build starts.
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
