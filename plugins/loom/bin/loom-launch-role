@@ -4,13 +4,17 @@
 # ADR 0032 E4).
 #
 # Usage:
-#   loom-launch-role claude|codex researcher|planner|plan-evaluator|developer|code-evaluator
+#   loom-launch-role claude|codex researcher|planner|plan-evaluator|developer|code-evaluator [--release X.Y.Z]
 #
 # The caller supplies only a client and a role. Every model/tier/effort value is
-# derived from the tracked, versioned compatibility matrix
-# (adapters/compatibility/v0.3.0.json) resolved relative to this script's own
-# physical location -- never from a caller-supplied vendor selector, a bare
-# PATH lookup, CLAUDE_PLUGIN_ROOT, PLUGIN_ROOT, or CODEX_HOME.
+# derived from the compatibility matrix for this build's product release
+# (adapters/compatibility/v${DEFAULT_COMPATIBILITY_RELEASE}.json, where the
+# constant is defined below and cross-checked against the plugin manifests by
+# the Bats suite), resolved relative to this script's own physical location --
+# never from a caller-supplied vendor selector, a bare PATH lookup,
+# CLAUDE_PLUGIN_ROOT, PLUGIN_ROOT, CODEX_HOME, or a release environment variable.
+# --release X.Y.Z is a pin, not a selector: it must equal this build's release
+# exactly, else the launcher fails closed (exit 2) before any matrix read.
 #
 # Model/effort resolution (ADR 0027 section 2), highest precedence first:
 #   1. --model <id> / --effort low|medium|high flags
@@ -49,7 +53,7 @@ CLIENTS=(claude codex antigravity)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--author-client claude|codex|antigravity] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--release X.Y.Z (must equal the product release)] [--author-client claude|codex|antigravity] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
     exit 1
 }
 
@@ -182,14 +186,25 @@ _sha256_file() {
     fi
 }
 
+# _next_client_in_cycle <author> — default cross-family rotation. Antigravity is
+# never a default target (ADR 0032 section 6, restored only by v0.3.0 evidence);
+# an explicit `antigravity` client argument still works.
 _next_client_in_cycle() {
     case "$1" in
     claude) printf 'codex' ;;
-    codex) printf 'antigravity' ;;
+    codex) printf 'claude' ;;
     antigravity) printf 'claude' ;;
     *) return 1 ;;
     esac
 }
+
+# DEFAULT_COMPATIBILITY_RELEASE — the product release this build binds (spec 10;
+# ADR 0032 section 3 E1). The compatibility matrix is adapters/compatibility/
+# v<this>.json. A release slice bumps this constant, both plugin manifests, and
+# ships its own matrix; the Bats suite fails the gate if they disagree. Never
+# read from the environment or a caller.
+DEFAULT_COMPATIBILITY_RELEASE="0.2.0"
+RELEASE_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
 
 CODEX_MODEL_RE='^(gpt-6(\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\.6(-[a-z0-9]+)?)$'
 AGY_MODEL_RE='^[A-Za-z0-9][A-Za-z0-9._-]*$'
@@ -374,8 +389,16 @@ main() {
     local author_client="${LOOM_AUTHOR_CLIENT:-}"
     local routing_file="${LOOM_ROUTING_FILE:-}"
     local flag_model="" flag_effort="" flag_model_set=0 flag_effort_set=0
+    local flag_release="" flag_release_set=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
+        --release)
+            [ "$flag_release_set" -eq 0 ] || _usage
+            [ "$#" -ge 2 ] || _usage
+            flag_release="$2"
+            flag_release_set=1
+            shift 2
+            ;;
         --author-client)
             [ "$#" -ge 2 ] || _usage
             author_client="$2"
@@ -405,6 +428,13 @@ main() {
     done
     if [ "$flag_effort_set" -eq 1 ]; then
         _valid_effort "$flag_effort" || _fail "invalid --effort (expected low, medium, or high): $flag_effort"
+    fi
+    # --release is a pin (ADR 0032 E1): syntax first, then exact equality with
+    # this build's release. Both checks precede any matrix read.
+    if [ "$flag_release_set" -eq 1 ]; then
+        [[ "$flag_release" =~ $RELEASE_RE ]] || _fail "invalid --release value (expected X.Y.Z): $flag_release"
+        [ "$flag_release" = "$DEFAULT_COMPATIBILITY_RELEASE" ] ||
+            _fail "unsupported or mismatched release for this build: --release $flag_release (this build binds release $DEFAULT_COMPATIBILITY_RELEASE)"
     fi
 
     case "$0" in
@@ -489,13 +519,14 @@ main() {
     local script_dir root matrix_path matrix_json schema_ok matrix_version role_key profile
     script_dir=$(_canon_dir "$(dirname -- "$0")") || _fail "cannot canonicalize script directory"
     root=$(_canon_dir "$script_dir/..") || _fail "cannot canonicalize plugin root"
-    matrix_path="$root/adapters/compatibility/v0.3.0.json"
+    matrix_path="$root/adapters/compatibility/v${DEFAULT_COMPATIBILITY_RELEASE}.json"
     [ -f "$matrix_path" ] || _fail "compatibility matrix is missing"
+    [ ! -L "$matrix_path" ] || _fail "compatibility matrix is a symlink"
     matrix_json=$(cat -- "$matrix_path" 2>/dev/null) || _fail "cannot read compatibility matrix"
     schema_ok=$(printf '%s' "$matrix_json" | jq -r '.schema // empty' 2>/dev/null) || _fail "compatibility matrix is not valid JSON"
     [ "$schema_ok" = "loom-compatibility-matrix/v1" ] || _fail "compatibility matrix schema mismatch"
     matrix_version=$(printf '%s' "$matrix_json" | jq -r '.version // empty')
-    [ "$matrix_version" = "0.3.0" ] || _fail "compatibility matrix version mismatch"
+    [ "$matrix_version" = "$DEFAULT_COMPATIBILITY_RELEASE" ] || _fail "compatibility matrix version mismatch"
 
     role_key=$(_role_key "$role")
     profile=$(printf '%s' "$matrix_json" | jq -r --arg r "$role_key" '[.profiles[] | select(.consumers[]? == $r)] | .[0].profile // empty')

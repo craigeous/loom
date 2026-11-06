@@ -1,6 +1,6 @@
 # Launcher Matrix Binding and Two-Client Default Rotation (G1, G2)
 
-Status: In Progress
+Status: Implemented
 Target specs: 10-packaging.md (Versioned compatibility and capability mapping)
 Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted; §1, §3 E1, §6); [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) (Accepted; §2 sequence)
 Inputs: the v0.2.0 live-proof research note §3 G1 and G2 (linked under Context); `plugins/loom/bin/loom-launch-role`; `plugins/loom/bin/loom-launch-role.bats`; `plugins/loom/adapters/compatibility/v0.2.0.json`; `plugins/loom/adapters/compatibility/v0.3.0.json`
