@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # loom-launch-role — the sole client role launcher (spec 10 -> Versioned
-# compatibility and capability mapping; ADR 0018/0019; the v0.2.0 live proof
-# (ADR 0032 E4).
+# compatibility and capability mapping; ADR 0018/0019; the v0.2.0 live proof,
+# ADR 0032 E4).
 #
 # Usage:
 #   loom-launch-role claude|codex researcher|planner|plan-evaluator|developer|code-evaluator
