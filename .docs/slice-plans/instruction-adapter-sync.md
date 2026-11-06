@@ -1,6 +1,6 @@
 # Instruction Adapter Sync
 
-Status: Draft
+Status: Plan Review
 Target specs: 08-playbook.md, 06-init-modes.md, 03-artifact-lifecycle.md
 Target size: <= 170 LOC net change (keep this plan document <= 250 lines)
 
@@ -49,34 +49,33 @@ Findings, verified against the tree at `cc2b1ef`:
    (historical records), and the shelved active plan `hc-live-probe.md:39` (a
    parenthetical citation, not an instruction block). There are no spec examples or
    test fixtures that embed the bullet.
+5. **Lint scope.** `scripts/check` runs shfmt/ShellCheck only on `*.sh` and executable
+   Bash scripts, not `.bats` files, and has no JS lint stage. At `1d43ec5`,
+   `repository-validation.bats` already has 15 `shfmt -ln bats` diff lines and 170
+   ShellCheck findings; this slice must not add to either (Verification 8).
 
-This slice does four things. It moves the ADR 0032 §2 wording into the canonical
-digest. It recomputes the digest hash with a fixed command and writes it into all
-three markers. It makes the shared lines of the `AGENTS.md` and `GEMINI.md` blocks
-byte-identical to `CLAUDE.md`. It also adds a small `--all` validator rule so the
-next drift of this kind fails `scripts/check`. Only the hash/marker/parity subset of
-spec 08 gets mechanized here. That subset needs no renderer, and it fits the existing
-`validatePackaging()` pattern.
+This slice moves the ADR 0032 §2 wording into the digest, re-stamps all three markers
+from a mechanically computed hash, makes the `AGENTS.md`/`GEMINI.md` shared lines
+byte-identical to `CLAUDE.md`, and adds a small `--all` rule (hash/marker/parity only;
+no renderer needed; `validatePackaging()` pattern) so this drift fails the gate.
 
 ## Out of Scope & Threat-Model Boundary
 
 - No spec, ADR, `README.md`, or `hc-live-probe.md` edit. Historical records stay
   untouched.
 - No renderer, renderer fixtures, or semantic check that block text matches the
-  digest's meaning. A future slice should implement the spec 08 renderer. Until
-  then, a coordinated edit of all three blocks without a digest change still passes.
-  The new rule catches single-adapter drift and digest changes made without
-  re-stamping the markers.
+  digest's meaning. A future slice should implement the spec 08 renderer; the
+  digest-first hand-stamp in Steps 2–4 is the interim stand-in for it. Until then, a
+  coordinated edit of all three blocks without a digest change still passes. The new
+  rule catches single-adapter drift and digest changes made without re-stamping.
+- No reformatting or lint cleanup of pre-existing `repository-validation.bats` code.
 - The client-specific final bullet of each block (Claude, Codex, and Antigravity
   invocation lines) stays as it is, and the rule does not compare it.
-- `CLAUDE.md` changes only on its marker line, so it stays at 101 lines. A reflow
-  back to 100 lines is **not** included. The ADR 0032 §2 sentence is about 300
-  characters and needs 4 lines at the file's ~88-column width, so dropping a line
-  would mean editing owner text outside the block. The 1-line excess over spec 08's
-  80–100 target is a pre-existing finalize-pass item and stays out of this slice.
-- No other digest content changes. For example, the "v0.2 release gate remains
-  M0–M7" gate bullet stays as written, even if ADR 0032 makes it stale. That needs
-  separate authorization.
+- `CLAUDE.md` changes only on its marker line and stays at 101 lines; no reflow to 100
+  (that would edit owner text outside the block; the 1-line excess over spec 08's
+  80–100 target is a pre-existing finalize-pass item).
+- No other digest content changes (e.g. the "v0.2 release gate remains M0–M7" bullet
+  stays even if ADR 0032 makes it stale; that needs separate authorization).
 - Threat model: per `.docs/spec/00-overview.md` *Non-goals*, the rule is a drift
   detector for trusted maintainers, not a defense against a hostile local writer.
   It reuses `readText`/`safeNode` (symlink and escape rejection) and nothing more.
@@ -181,7 +180,7 @@ spec 08 gets mechanized here. That subset needs no renderer, and it fits the exi
       `AGENTS.md: loom:project-instructions shared lines differ from CLAUDE.md`.
    4. `instruction adapters: client-specific final bullet may differ`: change only
       `AGENTS.md`'s final bullet. Status 0.
-   5. `instruction adapters: duplicate or missing markers fail`: duplicate the begin
+   5. `instruction adapters: duplicate begin marker fails`: duplicate the begin
       line in `AGENTS.md`. Status 1, and output contains
       `AGENTS.md: expected exactly one loom:project-instructions begin marker`.
    6. `instruction adapters: an adapter block without the canonical digest fails`:
@@ -212,19 +211,22 @@ Fast targeted checks (macOS, repo root):
 4. Run
    `for f in CLAUDE.md AGENTS.md GEMINI.md; do awk '/loom:project-instructions begin/{p=1;next}/loom:project-instructions end/{p=0}p' "$f" | sed -n '1,11p' | shasum -a 256; done`.
    Expected: three identical hashes. The first 11 body lines are the shared part.
-5. `git diff --stat cc2b1ef -- CLAUDE.md` should show 1 line changed (the marker
-   only), and `wc -l < CLAUDE.md` should print `101`.
+5. `git diff --numstat cc2b1ef -- CLAUDE.md` prints `1`, `1`, `CLAUDE.md`
+   (tab-separated; marker only), and `wc -l < CLAUDE.md` prints `101`.
 6. A negative check proving the new rule protects the real tree: temporarily
    `sed -i.bak 's/no self-review/no self review/' AGENTS.md`, run
    `node scripts/validate-repository.mjs --all; echo "exit=$?"`, and expect exit=1
    with `AGENTS.md: loom:project-instructions shared lines differ from CLAUDE.md`.
    Then restore with `mv AGENTS.md.bak AGENTS.md`.
-7. `TMPDIR=/private/tmp bats --filter 'instruction adapters' scripts/tests/repository-validation.bats`
-   (with `LOOM_NODE` set as `scripts/check` sets it). Expected: 6 tests, 0 failures.
-8. Format/lint the touched shell test file:
-   `shfmt -i 4 -d scripts/tests/repository-validation.bats` and
-   `shellcheck -s bash scripts/tests/repository-validation.bats`. Expected: no output
-   and exit 0.
+7. `LOOM_NODE="$(command -v node)" TMPDIR=/private/tmp bats --filter 'instruction adapters' scripts/tests/repository-validation.bats`
+   (`LOOM_NODE` must be an absolute Node executable; any modern Node works).
+   Expected: 6 tests, 0 failures.
+8. No new lint debt (`.bats` files are outside the gate's shfmt/ShellCheck stages, so
+   the check is "baseline unchanged", not "clean"):
+   `shfmt -ln bats -i 4 -d scripts/tests/repository-validation.bats | wc -l` prints
+   `15`, and `shellcheck -s bash scripts/tests/repository-validation.bats | grep -c '^In '`
+   prints `170` (both verified at `1d43ec5`). Also
+   `node --check scripts/validate-repository.mjs; echo "exit=$?"` prints `exit=0`.
 
 Full gate (once, on the candidate commit):
 `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` must exit 0. The regression
@@ -235,16 +237,14 @@ the rule inactive.
 
 ## Notes
 
-- 2026-11-06 (planner): Spec 08, spec 09 *Instruction files*, and the spec README
-  make the digest canonical, not `CLAUDE.md`. `CLAUDE.md` holds the correct ADR 0032
-  §2 text only because its block was hand-edited, so Step 1 restores the canonical
-  source first.
-- Docs-only fallback: if the plan evaluator judges a partial mechanization of spec 08
-  *Mechanical invariants* out of bounds, drop Steps 5–6 and Verification 6–7. The
-  slice then becomes Steps 1–4 (about 12 LOC), and the gate gap goes on the roadmap.
+- 2026-11-06 (planner): Spec 08, spec 09 *Instruction files*, and the spec README make
+  the digest canonical, not `CLAUDE.md`, so Step 1 restores the canonical source first.
+- Docs-only fallback (not invoked by round 0 eval): drop Steps 5–6 and Verification
+  6–7, leaving Steps 1–4 (about 12 LOC) with the gate gap on the roadmap.
 
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Plan-eval FAIL: V8 now requires unchanged .bats lint baselines (15/170) + `node --check`; hand-stamp noted as renderer stand-in; V7 LOOM_NODE, test 5 name, V5 numstat fixed |
