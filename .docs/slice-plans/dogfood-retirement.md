@@ -1,9 +1,9 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: Plan Review
+Status: Draft
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
-Target size: <= 60 LOC added (one validator binding, one Bats test, doc/comment/status edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
+Target size: <= 60 LOC added (one present-only validator check, one Bats test, a one-line stub swap, doc/comment/status edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
 
 ## Context
 
@@ -20,23 +20,22 @@ code/state for that tooling and nothing else in the gate depends on them:
 
 Mechanical facts (verified with `rg` at the pinned baseline `65799b8`; re-run in Step 1):
 
-- `scripts/check` has no entry for the harness: shell files are found by `git ls-files`
-  (`*.sh`, and executable extensionless files whose shebang ends in `bash`, lines 495–507)
-  and Bats files by `git ls-files '*.bats'` (line 543). It reads the exclusion list only
-  inside `if [ -f "$SCRIPT_DIR/check-bats-exclusions.txt" ]` (line 527), so deleting the
-  list fails open to "exclude nothing". `scripts/check`, `.github/workflows/check.yml` and
-  `scripts/check-toolchain.json` contain **no** `dogfood` string. Deleting the files
-  therefore shrinks the gate with no gate edit.
-- Because the suite is already excluded, `scripts/check` prints `Discovered 901 Bats tests`
-  at the baseline; deleting the suite and the list changes that by 0, and Step 4 adds 1.
+- `scripts/check` finds shell files and Bats files by `git ls-files` (lines 495–507, 543)
+  and reads the exclusion list only inside `if [ -f "$SCRIPT_DIR/check-bats-exclusions.txt" ]`
+  (line 527), so deleting the list fails open. `scripts/check`, `.github/workflows/check.yml`
+  and `scripts/check-toolchain.json` contain **no** `dogfood` string: no gate edit is needed.
+- Bats count: 942 tracked `@test`s − 41 excluded suite = `Discovered 901 Bats tests` at the
+  baseline; deleting the suite and list changes that by 0, and Step 4 adds exactly 1 → 902.
 - `scripts/validate-repository.mjs` does not load the state schema. Line 1013 exempts the
-  preserved evidence file from evaluation-name checks (**keep**); lines 361–369 build the
-  schema bindings `[0..6]` (the evidence schema is **not** bound today).
+  evidence file from evaluation-name checks (**keep**); lines 361–369 build `schemaBindings`
+  `[0..6]`. Every binding target is *required* (`safeNode` → `required file is missing`,
+  line 100) and the Bats fixture roots lack the evidence, so an 8th binding breaks 33 tests.
 - The preserved record — `.docs/evaluations/macos-dual-client-dogfood-evidence.json`
   (state `infrastructure-blocked`, candidate `a0bf31604cc760631ba48b8fee574f89ef120cc8`)
-  and `plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json` — is today read only by
-  the harness. Retiring the harness would leave the schema unused, so Step 3 binds the
-  evidence to its schema in the validator to keep it checkable.
+  and `plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json` — is read only by the
+  harness today, so Step 4 validates it against that schema **only when present**
+  (planner-prototyped on `fe1e019`: `repository-validation.bats` 207 tests with the same 9
+  cache-dependent scratch-clone failures as the 206-test baseline; real tree `--all` exit 0).
 - The install-command fixture `plugins/loom/adapters/fixtures/v0.2.0/dogfood/macos-arm64.json`
   (schema string `loom-dogfood-fixture/v1`, client floors, marketplace/plugin names,
   install commands) is cited by `README.md:168` and read by the harness (`:117`). It
@@ -46,6 +45,8 @@ Mechanical facts (verified with `rg` at the pinned baseline `65799b8`; re-run in
   harness path. It is moot once this slice lands, so Step 2 withdraws it (`Abandoned`) per
   the README's convention (`herdr-hc-client.md`): in place, `Abandoned` label, "history
   kept", no `archive/` move (the validator allows that only from a baseline `Abandoned`).
+  This meets ADR 0033 §3's "every plan preserved unchanged": the spec 03 `Approved →
+  Abandoned` transition is a status withdrawal, and the plan's content and history stay intact.
 - The link allowlist `scripts/validation/relative-link-allowlist.txt` has 34 rows containing
   `dogfood`; every one names an archived or historical `.docs/` record that stays. **No
   allowlist row names the script, state schema, fixture, evidence JSON or exclusion list**,
@@ -53,12 +54,12 @@ Mechanical facts (verified with `rg` at the pinned baseline `65799b8`; re-run in
 
 ## Out of Scope & Threat-Model Boundary
 
-- No edit to any ADR (0024, 0032, 0033), spec, verdict, archive or research note, and no
-  plan other than this one and `dogfood-int-race.md` (status + note only; its body, Steps
-  and Revision Log history stay). `dogfood-gate-exclusion.md` (Landed) is not touched or
+- No edit to any ADR, spec, verdict, archive or research note, and no plan other than this
+  one and `dogfood-int-race.md` (status + note only; body and history stay). `dogfood-gate-exclusion.md` (Landed) is not touched or
   archived here. Spec 03 line 370 and the `progress.md`/`roadmap.md` mentions are history
   and stay; frozen-spec wording about dogfood is a separate planner cycle (ADR 0033
   Consequences).
+- `repository-validation.bats`: only the stub-evidence lines change (Step 4); `schemaBindings` is not edited.
 - No edit to `scripts/check`, `check.yml` or `check-toolchain.json`; no change to
   `loom-launch-role` behavior, hooks, matrices, manifests, schemas other than the one
   deleted, or any live-proof procedure. No run of `hc`, Orca, `agy` or live clients. No
@@ -70,8 +71,7 @@ Mechanical facts (verified with `rg` at the pinned baseline `65799b8`; re-run in
 
 ## Steps
 
-Prerequisites (met at the baseline): ADR 0033 Accepted; `herdr-surface-retirement` Landed
-(do not renumber `schemaBindings[0..6]`, which `fixtureBindings` indexes).
+Prerequisites (met at the baseline): ADR 0033 Accepted; `herdr-surface-retirement` Landed.
 
 0. **Baseline is pinned:** `## Notes` holds `Baseline: 65799b81d9140e4f33497361488b9c0a69c0ccde`
    (committed in `e1a4b59`). Keep that line unchanged; every check uses it, never `HEAD`.
@@ -88,30 +88,31 @@ Prerequisites (met at the baseline): ADR 0033 Accepted; `herdr-surface-retiremen
      `- [dogfood-int-race.md](dogfood-int-race.md) — \`Abandoned\` — superseded by \`dogfood-retirement\` (ADR 0033), which deletes its target suite (history kept).`
      and move that line to sit directly above the `herdr-hc-client.md` Abandoned entry.
      No `git mv`; the file stays in `.docs/slice-plans/`.
-3. **Relocate the fixture, bytes unchanged:**
-   `git mv plugins/loom/adapters/fixtures/v0.2.0/dogfood/macos-arm64.json plugins/loom/adapters/fixtures/v0.2.0/release-install/macos-arm64.json`
-   and update the one live reference `README.md:168`
-   (`fixtures/v0.2.0/dogfood/` → `fixtures/v0.2.0/release-install/`). The directory
-   `…/dogfood/` ends empty (git drops it). `sha256` of the file is identical before and
-   after (record both). No allowlist row is added; if `validate-repository` reports a new
-   broken-link row, fix the link, never allowlist it.
-4. **Keep the preserved evidence checkable.** In `scripts/validate-repository.mjs`,
-   append one entry after the last `schemaBindings` item (index 7):
-   `[".docs/evaluations/macos-dual-client-dogfood-evidence.json", "plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json"]`.
-   Do **not** edit the evidence file or its schema. If it fails validation, stop and
-   escalate via `## Notes`: the record is immutable; the fix is then the binding
-   (e.g. drop it and assert only JSON parse + `.state=="infrastructure-blocked"` in Bats),
-   decided by the planner.
-   Then add the regression test in `scripts/tests/repository-validation.bats` (≈25 LOC),
-   named `repository: preserved dogfood evidence validates against its schema`:
-   it asserts the real evidence validates (the repository validator exits 0 on the real
-   tree) and that a copy with `.state` mutated to a non-enumerated value, in a temp
-   `TEST_ROOT`, is rejected with the evidence path in the output. The existing stub-evidence
-   test in that file is unchanged.
-5. **Delete** (one `git rm`):
-   `scripts/macos-dual-client-dogfood`,
-   `scripts/tests/macos-dual-client-dogfood.bats`,
-   `plugins/loom/schemas/loom-dogfood-state-v1.schema.json`,
+3. **Relocate the fixture, bytes unchanged** (`F=plugins/loom/adapters/fixtures/v0.2.0`):
+   `mkdir -p $F/release-install && git mv $F/dogfood/macos-arm64.json $F/release-install/macos-arm64.json && rmdir $F/dogfood`
+   (`git mv` fails without the target directory; `dogfood/` holds only that file, so the
+   `rmdir` succeeds and Verification 1's `test ! -e` passes locally). Update the one live
+   reference `README.md:168` (`fixtures/v0.2.0/dogfood/` → `fixtures/v0.2.0/release-install/`).
+   `sha256` is identical before and after (record both). Add no allowlist row; if
+   `validate-repository` reports a new broken link, fix the link.
+4. **Keep the preserved evidence checkable (present-only, fail closed when present).**
+   In `scripts/validate-repository.mjs` `validateMetadata`, directly after the
+   `schemaBindings` loop (leave `schemaBindings[0..6]` untouched), add (~4 lines):
+   `const dogfoodEvidence = ".docs/evaluations/macos-dual-client-dogfood-evidence.json";`
+   then `if (safeNode(dogfoodEvidence, { missing: false, regularFile: true }) && !validateJson(dogfoodEvidence, "plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json", ajv)) structurallyValid = false;`
+   Absent → skipped; symlink/non-regular → unsafe; schema-invalid → `schema /…`, exit 1.
+   Do **not** edit the evidence or its schema; if it fails, stop and escalate in `## Notes`.
+   In `scripts/tests/repository-validation.bats`:
+   - **Stub-evidence test** (`docs state: evaluation names accept every legal form…`, ~line
+     1903): its `{}` heredoc would now fail the schema and its `status -eq 0`; replace it with
+     `mkdir -p "$TEST_ROOT/.docs/evaluations"` + `cp "$REPOSITORY_ROOT/.docs/evaluations/macos-dual-client-dogfood-evidence.json" "$TEST_ROOT/.docs/evaluations/"`
+     (its allowlist `grep -v` line and assertions stay).
+   - **Exactly one new `@test`** (≈12 LOC), `repository: preserved dogfood evidence validates
+     against its schema`: `make_metadata_root`, copy the evidence as above, `metadata` → 0;
+     `mutate_json …evidence.json '.state = "bogus"'`, `metadata` → 1 with output containing
+     `.docs/evaluations/macos-dual-client-dogfood-evidence.json: schema /state`.
+5. **Delete** (one `git rm`): `scripts/macos-dual-client-dogfood`,
+   `scripts/tests/macos-dual-client-dogfood.bats`, `plugins/loom/schemas/loom-dogfood-state-v1.schema.json`,
    `scripts/check-bats-exclusions.txt` (authorized: its only entry is the deleted suite;
    `scripts/check` fails open on its absence and is **not** edited).
 6. **Update exact references (live files only):**
@@ -130,17 +131,16 @@ Prerequisites (met at the baseline): ADR 0033 Accepted; `herdr-surface-retiremen
      `plugins/loom/bin/loom-launch-role.bats:3` — comment-only: replace "macos-dual-client-dogfood
      plan Step 6" / "dogfood pass (ADR 0024)" with "the v0.2.0 live proof (ADR 0032 E4)".
      No code or test-body change; `shfmt -i 4 -d` clean.
-7. **Gate and CI changes: none** (Context, first bullet). Expected edits to `scripts/check`,
-   `check.yml` and `scripts/check-toolchain.json`: 0 lines (Verification 4).
+7. **Gate and CI changes: none** (Context; Verification 4 proves 0 lines changed).
 8. **Finalize note** (developer finalize pass): `progress.md`/`handoff.md` record the
    slice (and that `dogfood-int-race` is Abandoned and the exclusion list is gone); the
    Landed log lists the deleted-file line total (2670) and the preserved evidence hash.
-   `roadmap.md` is unchanged.
+   `handoff.md` is in the 1b scan: name the deletions in words ("the checkpoint harness, its
+   suite and state schema"), never a `PAT` path. `roadmap.md` is unchanged.
 
 ## Verification
 
-Fast targeted (iteration; macOS needs `TMPDIR=/private/tmp`). Every command must exit 0;
-`! rg` lines additionally print nothing.
+Fast targeted (macOS: `TMPDIR=/private/tmp`). Every command exits 0; `! rg` lines print nothing.
 
 ```sh
 # 0. Baseline from `## Notes` (never HEAD); must be an ancestor of the candidate.
@@ -179,8 +179,8 @@ test -z "$(git diff --stat "$BASE" HEAD -- scripts/check .github/workflows/check
 grep -qF 'if [ -f "$SCRIPT_DIR/check-bats-exclusions.txt" ]; then' scripts/check
 # 5. Link rows: none added; the 34 historic `dogfood` rows unchanged.
 test -z "$(git diff "$BASE" HEAD -- scripts/validation/relative-link-allowlist.txt)"
-# 6. New validation test and the touched suites.
-TMPDIR=/private/tmp bats --filter 'preserved dogfood evidence' scripts/tests/repository-validation.bats
+# 6. New + stub-evidence validation tests (setup_file needs LOOM_NODE) and the touched suites.
+LOOM_NODE="$(command -v node)" TMPDIR=/private/tmp bats --filter 'preserved dogfood evidence|evaluation names accept' scripts/tests/repository-validation.bats
 TMPDIR=/private/tmp bats plugins/loom/bin/loom-launch-role.bats
 shfmt -i 4 -d plugins/loom/bin/loom-launch-role
 node scripts/validate-repository.mjs --all
@@ -191,7 +191,7 @@ Full gate, once, on the candidate commit; its log is the regression proof (exact
 ```sh
 L=$(mktemp /private/tmp/loom-check.XXXXXX)
 TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check >"$L" 2>&1; echo "check exit $?"   # must print 0
-# Discovered count: baseline 901 (suite already excluded, so deleting it changes 0) + 1 new test.
+# 942 tracked @tests - 41 suite = 901 at baseline (suite excluded); deleting suite+list: 0; Step 4: +1.
 grep -qx 'Discovered 902 Bats tests' "$L"
 # The exclusion reader ran with no list: nothing is excluded.
 ! grep -n '^Excluding ' "$L"
@@ -247,3 +247,4 @@ Verification 4 and the gate-log `Discovered 902` check (901 + 1 new test).
 | 1 | Plan-eval r1: pinned explicit `Baseline:` SHA (Step 0) replacing `HEAD`/`HEAD~1` in checks 2-5; hash equality is an executable `test`; reference scan now `rg --hidden` with stated exclusions, a listing command and an empty-output assertion |
 | 2 | Plan-eval r2 PASS; owner approved. Added exact runnable count-comparison and fresh-clone commands and the `test` exit-0/no-output statement; no requirement changed |
 | 3 | Developer clarification: new Step 2 abandons `dogfood-int-race` (guarded exact-path 1b exclusion); Step 5 deletes `check-bats-exclusions.txt` with fail-open + `Discovered 902` checks replacing the find-based count; line refs refreshed to baseline `65799b8`; steps renumbered |
+| 4 | Plan-eval r0 FAIL: Step 4 present-only evidence check (no `schemaBindings` entry), stub test copies real evidence; Step 3 `mkdir -p`/`rmdir`; ADR 0033 §3 reconciliation; Step 8 handoff wording; 902 unchanged |
