@@ -165,7 +165,7 @@ codex plugin add loom@loom
 To upgrade, `codex plugin remove loom@loom` and add it again from the updated
 checkout. Invoke workflows as `$loom-<name>` (for example `$loom-init`,
 `$loom-run`). Syntax follows the checked-in compatibility fixtures
-(`plugins/loom/adapters/fixtures/v0.2.0/dogfood/`); migration and
+(`plugins/loom/adapters/fixtures/v0.2.0/release-install/`); migration and
 unsupported-surface limits are in [spec 10](.docs/spec/10-packaging.md).
 
 ### Antigravity (unverified)
@@ -247,9 +247,7 @@ PowerShell, Git Bash/MSYS2, Cygwin, and WSL are unsupported. CI covers both Ubun
 LTS releases, macOS Apple silicon, macOS Intel, Bash 3.2.57, and Bash 5.x.
 
 The checked Codex manifest/catalog, compatibility matrix, and installed-root
-bindings are static scaffolding only. Private Apple-silicon dogfood evidence in
+bindings are static scaffolding only. The evidence file
 [`.docs/evaluations/macos-dual-client-dogfood-evidence.json`](.docs/evaluations/macos-dual-client-dogfood-evidence.json)
-additionally proves real Codex installation, hook activation, workflow invocation,
-helper resolution, and uninstall — a role launch remains `infrastructure-blocked`
-in the isolated, credential-less dogfood environment. This is private evidence, not
-a public-release claim.
+records a blocked historical checkpoint (Codex role launch `infrastructure-blocked`)
+and confers no support status.

@@ -10,8 +10,10 @@ this repo.
 - Five cold roles use committed artifacts; no self-review; only root delegates.
 - Specs change only through planner + cold plan evaluation. Remote verification and
   receipt establish `Landed`; never force-push a target.
-- Keep shared policy portable and client adapters thin. Private macOS dogfood is not
-  public support or release conformance.
+- Keep shared policy portable and client adapters thin. A (platform, harness)
+  pair is supported only in a release whose compatibility matrix lists it with
+  complete conformance evidence; there is no private or partial support tier. Evidence
+  from one platform or harness is not conformance for another.
 - Run `scripts/check`; runtime floors are Bash 3.2+, Git 2.34+, and jq 1.6+.
 - Claude workflows use `/loom:<name>` and installed helpers resolve from the physical
   Claude plugin root; see specs 03, 04, 07, 08, and 10 for authority.
@@ -44,7 +46,6 @@ after approval and change only via planning. Design decisions are in
 - **`.docs/`** — loom's own design memory (dogfooding); not a plugin component.
 - **`plugins/loom/hooks/`** — `git-identity-guard.sh` (ADR 0003) + `precompact-write-ahead-backstop.sh` (ADR 0013 §Decision 5); one shared `hooks.json` for both clients (policy/wire split at the executable boundary, spec 08; 12-case (2 clients × 2 events × 3 outcomes; 48 fixture files at 4/case) `hooks/fixtures/hook-wire-v1/` product); shell-gated.
 - **`plugins/loom/bin/`** — `loom` (unified CLI entry point), `loom-doctor` (foundation diagnostics), `loom-coord` (multi-session coordination CLI; ADR 0014/0015/0016), `loom-land` (remote landing helper; ADR 0020), `loom-review` (local 3-finder review runner; ADR 0021), `loom-eval-workspace` (sanitized workspace and gate runner; ADR 0022), `loom-resolve-helper` (installed-root helper resolution), `loom-launch-role` (sole client role launcher, compatibility-matrix-driven), `loom-verify-identity` (post-commit identity check); on `$PATH`.
-- **`scripts/macos-dual-client-dogfood`** — private Apple-silicon dual-client dogfood harness (fail-closed supervisor/worker journal); private evidence only, not public Codex support (ADR 0024).
 - **`gates/rust.md`** — Rust gate loom imposes on managed projects.
 - **`references/init-detection.md`** — Greenfield/Unaligned/Initialized classifier; all `/loom:*` run this first (M2).
 - **`references/greenfield.md`** — Greenfield init body (scaffold + seed + CLAUDE.md + gate).

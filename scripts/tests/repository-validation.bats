@@ -1892,6 +1892,18 @@ set_status() {
     [[ "$output" == *"slice-plans/p-plan.md: slice 'p' has more than one active plan"* ]]
 }
 
+@test "repository: preserved dogfood evidence validates against its schema" {
+    make_metadata_root
+    mkdir -p "$TEST_ROOT/.docs/evaluations"
+    cp "$REPOSITORY_ROOT/.docs/evaluations/macos-dual-client-dogfood-evidence.json" "$TEST_ROOT/.docs/evaluations/"
+    metadata
+    [ "$status" -eq 0 ]
+    mutate_json .docs/evaluations/macos-dual-client-dogfood-evidence.json '.state = "bogus"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/macos-dual-client-dogfood-evidence.json: schema /state"* ]]
+}
+
 @test "docs state: evaluation names accept every legal form and reject others" {
     make_docs_root
     put .docs/evaluations/p-review-findings.md <<'DOC'
@@ -1900,9 +1912,8 @@ DOC
     put .docs/evaluations/p-acceptance.md <<'DOC'
 acceptance
 DOC
-    put .docs/evaluations/macos-dual-client-dogfood-evidence.json <<'DOC'
-{}
-DOC
+    mkdir -p "$TEST_ROOT/.docs/evaluations"
+    cp "$REPOSITORY_ROOT/.docs/evaluations/macos-dual-client-dogfood-evidence.json" "$TEST_ROOT/.docs/evaluations/"
     # The fixture README's inventoried link to this evidence file now resolves.
     grep -v 'dogfood-evidence.json' "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt" >"$TEST_ROOT/allowlist.next" || true
     mv "$TEST_ROOT/allowlist.next" "$TEST_ROOT/scripts/validation/relative-link-allowlist.txt"
