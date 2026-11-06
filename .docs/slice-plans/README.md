@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [launcher-matrix-and-rotation-fix.md](launcher-matrix-and-rotation-fix.md) — `Implemented` — v0.2.0 live proof prerequisites (research G1, G2; ADR 0032 §1, §3 E1, §6): `loom-launch-role` `--release` matrix selection with a 0.2.0 default, and two-client default rotation (claude ↔ codex).
+- [launcher-matrix-and-rotation-fix.md](launcher-matrix-and-rotation-fix.md) — `Ready to Publish` — v0.2.0 live proof prerequisites (research G1, G2; ADR 0032 §1, §3 E1, §6): `loom-launch-role` `--release` matrix selection with a 0.2.0 default, and two-client default rotation (claude ↔ codex).
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
 - [dogfood-int-race.md](dogfood-int-race.md) — `Abandoned` — superseded by `dogfood-retirement` (ADR 0033), which deletes its target suite (history kept).
