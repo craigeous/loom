@@ -1,6 +1,6 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: Approved
+Status: Needs Clarification
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Plan Review; this slice may not start until it is Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
 Target size: <= 60 LOC added (one validator binding, one Bats test, doc/comment edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
@@ -188,6 +188,24 @@ D=$(mktemp -d /private/tmp/loom-fresh.XXXXXX) && git clone -q . "$D/c" \
 ## Notes
 
 (Clarification requests between roles go here, dated.)
+
+Baseline: 65799b81d9140e4f33497361488b9c0a69c0ccde
+
+2026-11-05 developer, Needs Clarification (no slice edits made yet). Two findings:
+
+1. Verification 1b (and the fresh-clone variant) cannot pass as written. At the baseline,
+   `.docs/slice-plans/dogfood-int-race.md` (live, `Status: Approved`, listed under Active plans in
+   `.docs/slice-plans/README.md`) matches the retired-path pattern (it cites
+   `scripts/macos-dual-client-dogfood:1795` and targets `scripts/tests/macos-dual-client-dogfood.bats`)
+   and is not in 1b's exclusion globs. Its sole target file is deleted by Step 5, so the plan is moot
+   after this slice. Developer may not edit it or the README (not authorized). Planner decision needed:
+   e.g. archive/withdraw `dogfood-int-race` before this slice, or add it to the 1b exclusions and
+   authorize its status/README handling.
+2. Landed `dogfood-gate-exclusion` added `scripts/check-bats-exclusions.txt` (lists the dogfood suite;
+   contains `dogfood`, but matches none of PAT). The plan does not mention it. Verified: `scripts/check`
+   reads it only `if [ -f ... ]` (fails open on absence) and contains no `dogfood` text, so Verification 4
+   holds. Needs authorization to `git rm` the list with the suite (otherwise the list names a missing
+   file; harmless to the gate but stale), and Bats count baseline is 901 discovered with it excluded.
 
 ## Revision Log
 
