@@ -17,8 +17,10 @@ Schema: loom-project-instructions/v1
 - Approved specs are frozen and changed only by a planner plus cold plan evaluator.
 - The configured remote target and verified receipt establish `Landed`; local `main`
   is not publication authority and target refs are never force-pushed.
-- Loom has a portable shared core with thin client/host adapters. Private macOS
-  dogfood is not public support or release conformance.
+- Loom has a portable shared core with thin client/host adapters. A (platform,
+  harness) pair is supported only in a release whose compatibility matrix lists it
+  with complete conformance evidence; there is no private or partial support tier.
+  Evidence from one platform or harness is not conformance for another.
 - One canonical instruction digest renders Loom-owned blocks in both root adapters.
 
 ## Gate
