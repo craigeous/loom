@@ -1,6 +1,6 @@
 # Instruction Adapter Sync
 
-Status: Plan Review
+Status: Approved
 Target specs: 08-playbook.md, 06-init-modes.md, 03-artifact-lifecycle.md
 Target size: <= 170 LOC net change (keep this plan document <= 250 lines)
 
