@@ -1,6 +1,6 @@
 # Retire the macOS Dual-Client Checkpoint Tooling
 
-Status: In Progress
+Status: Implemented
 Target specs: 10-packaging.md (release evidence inputs), 08-playbook.md (gate); no spec text changes
 Authority: ADR 0033 §3 (Accepted), ADR 0032 §2 (Accepted), ADR 0024 §§2–5, §8 (history, unchanged)
 Target size: <= 60 LOC added (one present-only validator check, one Bats test, a one-line stub swap, doc/comment/status edits); deletions and the byte-identical relocation are not counted; keep this plan <= 250 lines
@@ -213,6 +213,10 @@ Why 1b excludes `dogfood-int-race.md` by exact path: the Abandoned plan keeps it
 the `Status: Abandoned` and README checks, so it fails closed if Step 2 is skipped or
 reverted. `PAT` omits `check-bats-exclusions` because the unedited `scripts/check` keeps
 naming it; the list's removal is proven by `test ! -e` plus Verification 4.
+
+## Gate evidence (developer, candidate 44f4c33)
+
+`TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check`: exit 0, `Discovered 902 Bats tests`, no `Excluding` line, `All checks passed` (the gate ran its own `npm ci`; no manual dependency link). Verifications 0-5 pass; `rg` 1b assertion empty; fixture sha256 `71e53d08...634a` identical before/after; new test `preserved dogfood evidence validates against its schema` and the stub-evidence test pass; `validate-repository --all` exit 0. Fresh-clone proof not run separately (the gate ran on this worktree).
 
 ## Notes
 
