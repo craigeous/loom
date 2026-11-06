@@ -374,6 +374,12 @@ async function validateMetadata() {
     if (!valid) structurallyValid = false;
   }
 
+  const dogfoodEvidence = ".docs/evaluations/macos-dual-client-dogfood-evidence.json";
+  if (
+    safeNode(dogfoodEvidence, { missing: false, regularFile: true }) &&
+    !validateJson(dogfoodEvidence, "plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json", ajv)
+  ) structurallyValid = false;
+
   const readme = readText("README.md");
   if (readme !== null) {
     if (!/The exact supported client floors are\s+Claude Code 2\.1\.216 and Codex CLI 0\.144\.6\./.test(readme)) {

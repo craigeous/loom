@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Test suite for loom-launch-role (spec 10 -> Versioned compatibility and
-# capability mapping; macos-dual-client-dogfood plan Step 6). Positive tests
+# capability mapping; the v0.2.0 live proof, ADR 0032 E4). Positive tests
 # run the real script against the real repository tree (proving no drift from
 # the tracked compatibility matrix / agents / skills / schema). Negative
 # tests that need a corrupted input build an isolated fixture tree so the

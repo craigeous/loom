@@ -1,6 +1,6 @@
 # Deflake the Dogfood INT Test: Replace the Fixed Sleep with a Readiness Signal
 
-Status: Approved
+Status: Abandoned
 Target specs: none (test-only change); gate per 08-playbook.md
 Authority: ADR 0033 (Accepted order: `herdr-surface-retirement` lands first, then `dogfood-retirement`); owner decision to fix this race in its own slice before the Herdr retirement gate runs
 Target size: <= 15 LOC net change in one file (`scripts/tests/macos-dual-client-dogfood.bats`); keep this plan <= 250 lines
@@ -88,7 +88,7 @@ installed and a foreground mutation step is running: exactly the state the test 
 
 ## Notes
 
-(none)
+2026-11-05: Abandoned — superseded by ADR 0033 / dogfood-retirement, which deletes the fix target scripts/tests/macos-dual-client-dogfood.bats; history kept.
 
 ## Revision Log
 
@@ -96,3 +96,4 @@ installed and a foreground mutation step is running: exactly the state the test 
 |---|---|
 | 0 | Initial draft |
 | 1 | Added `LOOM_TEST_BASH`/`LOOM_EXPECTED_BASH_VERSION` to all Bats commands; dropped whole-file shfmt requirement (`scripts/check` does not shfmt `*.bats`) |
+| 2 | Abandoned: moot after dogfood-retirement |
