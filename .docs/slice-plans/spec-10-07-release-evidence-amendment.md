@@ -195,26 +195,24 @@ Not drafted: the v0.3.0 matrix correction and any admission, which enters only t
 ## Steps (evaluator checklist)
 
 1. **Platform, elements, record.** Status table, E1–E5 and record match ADR 0032 §1, §3 (as amended by ADR 0033 §1); additions are labelled.
-2. **Retirement, deferral, size, decisions.** Checks 1–2 and 6 pass; spec 07 role table and pairs unchanged (ADR 0032 §2, ADR 0033 §3); each of D-a to D-e is confirmed or redirected.
+2. **Retirement, deferral, size, decisions.** Checks 1–2 pass and check 6 passes on the amended specs; spec 07 role table and pairs unchanged (ADR 0032 §2, ADR 0033 §3); each of D-a to D-e is confirmed or redirected.
 
 ## Verification
 
-Checks 1–2 run before approval; check 6 runs on the amended specs; checks 3–5 are release-time and kept apart from repo validation.
+Checks 1–2 run before approval; check 6 runs on the amended specs; checks 3–5 are release-time and kept apart from repo validation. Check 5's archive has file members only (no directory entries), e.g. `tar -czf ARCHIVE MANIFEST.sha256 $(find logs -type f)` run in the staging directory.
 
 1. **Diff fidelity:** every `-` line in Diffs A and B occurs verbatim in its target spec.
 
 ```sh
 A=.docs/slice-plans/spec-10-07-release-evidence-amendment.md
-awk '/^## Drafted Diff/{t=/Diff A/?"10-packaging.md":"07-command-surface.md"; next} /^## /{t=""}
-  /^```diff/{d=1; next} /^```/{d=0} d && /^-/ && !/^---/ && length($0)>1 {print t "\t" substr($0,2)}' "$A" |
+awk '/^## Drafted Diff/{t=/Diff A/?"10-packaging.md":"07-command-surface.md"; next} /^## /{t=""} /^```diff/{d=1; next} /^```/{d=0} d && /^-/ && !/^---/ && length($0)>1 {print t "\t" substr($0,2)}' "$A" |
 while IFS="$(printf '\t')" read -r t line; do grep -qxF -- "$line" ".docs/spec/$t" || echo "MISSING $t: $line"; done
 ```
 
 2. **Size:** net change (added minus removed diff lines) is at most 200; file at most 250 lines.
 
 ```sh
-awk '/^```diff/{d=1;next} /^```/{d=0} d && /^\+/ && !/^\+\+\+/{a++} d && /^-/ && !/^---/{r++}
-  END{print "net=" a-r}' "$A"; wc -l < "$A"
+awk '/^```diff/{d=1;next} /^```/{d=0} d && /^\+/ && !/^\+\+\+/{a++} d && /^-/ && !/^---/{r++} END{print "net=" a-r}' "$A"; wc -l < "$A"
 ```
 
 3. **Repo validation** (offline): `node scripts/validate-repository.mjs --all` exits 0; once implemented, `--metadata` also checks record shape, names, log paths, corrections, E1/E2.
@@ -223,9 +221,10 @@ awk '/^```diff/{d=1;next} /^```/{d=0} d && /^\+/ && !/^\+\+\+/{a++} d && /^-/ &&
 
 ```sh
 D=$(mktemp -d) && tar -xzf ARCHIVE -C "$D"
-tar -tzf ARCHIVE | grep -v -E '^(\./)?(MANIFEST\.sha256|logs/[a-z0-9][a-z0-9._/-]*)$' && echo 'INVALID ARCHIVE ENTRY'
+tar -tzf ARCHIVE | grep -v -E '^(\./)?(MANIFEST\.sha256|logs/[a-z0-9][a-z0-9._/-]*\.log)$' && echo 'INVALID ARCHIVE ENTRY'
 tar -tzf ARCHIVE | grep -F '..' && echo 'DOTDOT ENTRY'
-find "$D/logs" ! -type f && echo 'NON-FILE IN LOGS'
+find "$D/logs" -type f | grep -v -E '\.log$' && echo 'NON-LOG FILE IN ARCHIVE'
+find "$D" ! -type f ! -type d | grep . && echo 'SPECIAL FILE IN ARCHIVE'
 (cd "$D" && shasum -a 256 -c MANIFEST.sha256 >/dev/null) || echo "HASH FAIL"
 diff <(cd "$D" && find logs -type f | LC_ALL=C sort) <(cut -c67- "$D/MANIFEST.sha256" | LC_ALL=C sort)
 shasum -a 256 "$D/MANIFEST.sha256" | cut -c1-64            # equals ownerAck.evidenceSet
@@ -233,11 +232,12 @@ comm -23 <(jq -r '..|objects|select(has("logSha256"))|"\(.logSha256)  \(.log)"' 
   <(LC_ALL=C sort "$D/MANIFEST.sha256")                    # must print nothing
 ```
 
-6. **Retirement and deferral invariants** (amended specs; silent on success; each host checked):
+6. **Retirement and deferral invariants** (amended specs; silent on success):
 
 ```sh
-grep -E '(scripts/macos-dual-client-dogfood|loom-dogfood-)' .docs/spec/10-packaging.md .docs/spec/07-command-surface.md && echo 'STALE DOGFOOD NAME'
-for h in Antigravity Orca Herdr; do grep -qE "$h.*deferred" .docs/spec/10-packaging.md .docs/spec/07-command-surface.md || echo "UNLABELLED $h"; done
+grep -n -E '(scripts/macos-dual-client-dogfood|loom-dogfood-|status:.*dogfood|dogfood-int-race|dogfood-gate-exclusion)' .docs/spec/10-packaging.md .docs/spec/07-command-surface.md && echo 'STALE RETIRED DOGFOOD OCCURRENCE'
+grep -E 'Herdr.*deferred' .docs/spec/10-packaging.md >/dev/null || echo 'MISSING HERDR DEFERRED IN 10'
+grep -E 'Orca and Herdr.*deferred' .docs/spec/07-command-surface.md >/dev/null || echo 'MISSING HOST DEFERRED IN 07'
 ```
 
 ## Revision Log
@@ -247,3 +247,4 @@ for h in Antigravity Orca Herdr; do grep -qE "$h.*deferred" .docs/spec/10-packag
 | 0 | Initial draft |
 | 1 | Addressed F1–F3: restored manifest/catalog loading, offline and live per-run detail, and explicit candidate clean install (F1). Added the per-release status table, admission-based pair support, and Herdr deferral in retained spec 10 text and the spec 07 host section (F2). Defined `vR.corr<N>.json` corrections, split git checks from repo validation, and added executable checks (F3). |
 | 2 | Addressed F2: pair support now cites the applicable release row, including an accepted per-harness admission ADR (ADR 0033 §1). Addressed F3: archive check pins the log path pattern and file types (plus a `..` check for the pattern's exclusion); added retirement and per-host deferral checks (6). |
+| 3 | Addressed F3: archive entries must match `logs/<name>.log` (the `..` check stays); non-log and special-file checks test leaf files so directories pass, and the special-file check is guarded by `grep` because `find` exits 0 on matches. Retirement check covers all dogfood-name patterns; deferral is checked per spec (Herdr in 10, Orca and Herdr in 07) (6). |
