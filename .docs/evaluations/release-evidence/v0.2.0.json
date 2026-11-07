@@ -1,0 +1,185 @@
+{
+  "schema": "loom-release-evidence/v1",
+  "release": "0.2.0",
+  "tag": "v0.2.0",
+  "candidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+  "platform": {
+    "os": "macOS 14+",
+    "arch": "arm64"
+  },
+  "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+  "bashRuns": {
+    "bash32": {
+      "bashVersion": "3.2.57",
+      "result": "pass",
+      "log": "logs/bash/bash32.log",
+      "logSha256": "0de49c65207c2fed77af311b55b6ac6068e54e55723603bb68baf1965bbb8c39"
+    },
+    "bash5": {
+      "bashVersion": "5.3.9",
+      "result": "pass",
+      "log": "logs/bash/bash5.log",
+      "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+    }
+  },
+  "pairs": [
+    {
+      "harness": "claude-code-cli",
+      "client": "claude",
+      "floor": "2.1.216",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+        "entry": "claude"
+      },
+      "e2": {
+        "binding": "claude-plugin-root/v1"
+      },
+      "e3": {
+        "runId": "e3-claude-launch-matrix",
+        "result": "pass",
+        "log": "logs/claude/e3.log",
+        "logSha256": "f533950b61d210222ac525a94e42c477c44271ac01729d1ba98ae0a138eeada1"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/claude/role-researcher.log",
+            "logSha256": "3e6c2573d739708c1ee1ec2ddffa6cabb5021ac278d2ffbe3c37c905702aa19f",
+            "outputHash": "3e6c2573d739708c1ee1ec2ddffa6cabb5021ac278d2ffbe3c37c905702aa19f"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/claude/role-planner.log",
+            "logSha256": "f4f901a35e77179581bba0249b76be1a3834c173e78d12757f810a3f34fee5a5",
+            "outputHash": "f4f901a35e77179581bba0249b76be1a3834c173e78d12757f810a3f34fee5a5"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-plan-evaluator.log",
+            "logSha256": "3acd7717394a94d9fddc6e0a75f2fdf81eaf4ebee0e19a0e3e20ec460a58b88d",
+            "outputHash": "3acd7717394a94d9fddc6e0a75f2fdf81eaf4ebee0e19a0e3e20ec460a58b88d"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/claude/role-developer.log",
+            "logSha256": "15a6bd1c00a17ea673fe628fc0a8f7ec7cc74ed70717ac91791cd5d432c76cb9",
+            "outputHash": "15a6bd1c00a17ea673fe628fc0a8f7ec7cc74ed70717ac91791cd5d432c76cb9"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-code-evaluator.log",
+            "logSha256": "008d49ec339c9572a557fd50f8abef3d20899dffbccff3e798c88e6d3e624137",
+            "outputHash": "008d49ec339c9572a557fd50f8abef3d20899dffbccff3e798c88e6d3e624137"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-claude-v020",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/claude/loop.log",
+          "logSha256": "6a05ef73de923f8bac5756fd87bcaa54ecc148565b4982d8ddfc718bc4a71f9b"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/claude/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "611a79f64bf71eb1b12fa6b38c360a80b1e15fa5",
+          "result": "pass",
+          "log": "logs/claude/lifecycle.log",
+          "logSha256": "06a3a133dfae4b67b61502d15038ddcf283e1b2e19f9f02bf975e26d0f1dfdf5"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "codex-cli",
+      "client": "codex",
+      "floor": "0.144.6",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+        "entry": "codex"
+      },
+      "e2": {
+        "binding": "codex-skill-source/v1"
+      },
+      "e3": {
+        "runId": "e3-codex-launch-matrix",
+        "result": "pass",
+        "log": "logs/codex/e3.log",
+        "logSha256": "f533950b61d210222ac525a94e42c477c44271ac01729d1ba98ae0a138eeada1"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/codex/role-researcher.log",
+            "logSha256": "e5008ce038af5296d07dd4ae5442dc1a3285b46c3570989bfa9d150fa995b721",
+            "outputHash": "e5008ce038af5296d07dd4ae5442dc1a3285b46c3570989bfa9d150fa995b721"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/codex/role-planner.log",
+            "logSha256": "102e96044b59f1da51cbf16b24d7633f6bd60b22e661c511aed84dda88ac9954",
+            "outputHash": "102e96044b59f1da51cbf16b24d7633f6bd60b22e661c511aed84dda88ac9954"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-plan-evaluator.log",
+            "logSha256": "c93204884b3efd276d528c69845a9e3ba8d8dedcc3014ef4b9668a0e8c9b317f",
+            "outputHash": "c93204884b3efd276d528c69845a9e3ba8d8dedcc3014ef4b9668a0e8c9b317f"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/codex/role-developer.log",
+            "logSha256": "a226af15d165bfd1160c88da26c6bb0682a21ca7787bc28dbbd5bbfea74c8289",
+            "outputHash": "a226af15d165bfd1160c88da26c6bb0682a21ca7787bc28dbbd5bbfea74c8289"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-code-evaluator.log",
+            "logSha256": "e1635193205874007729a37f4c98a1b7126449c6c1c90f96e82b85689bc5af59",
+            "outputHash": "e1635193205874007729a37f4c98a1b7126449c6c1c90f96e82b85689bc5af59"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-codex-v020",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/codex/loop.log",
+          "logSha256": "3a33008017e1c973da16bdfdeb42dee7bebacb0a116020ef086b13a175c691f5"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/codex/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "611a79f64bf71eb1b12fa6b38c360a80b1e15fa5",
+          "result": "pass",
+          "log": "logs/codex/lifecycle.log",
+          "logSha256": "1b2c6fdd99d7307aec7bb08ca909631d48b0553ee8874f3c35be050e03ae3e6a"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    }
+  ],
+  "ownerAck": {
+    "by": "owner",
+    "pairs": [
+      "claude-code-cli",
+      "codex-cli"
+    ],
+    "evidenceSet": "b8a216a823edf0d74dafa5be9613f796ad7ff3a7c1c7fe5c2251aa39f5111d6c",
+    "candidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+    "date": "2026-11-07"
+  }
+}
