@@ -57,7 +57,7 @@ Current milestone: M9
   document shape and milestone synchronization rules.
 - **M7 — Packaging Conformance & README Refresh**: Canonical MIT license, version [0.2.0] CHANGELOG,
   CommonMark code fence tracking, supported platforms/prerequisites, multi-client installation/upgrade
-  guides, end-to-end example, tier expectations table, and 886 Bats tests snapshot.
+  guides, end-to-end example, tier expectations table, and 947 Bats tests snapshot.
 - **M8 — Process Cost & Repository Noise**: Paired workflow benchmark harness (`scripts/workflow-benchmark.sh`),
   owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`), and provisional
   landing history policy with squash publication and durable tracked evidence (ADR 0028).
@@ -70,15 +70,36 @@ Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start wi
 
 ## Supported Platforms & Prerequisites
 
-- **Hosts:** Ubuntu 22.04 and 24.04 (x86-64); macOS 14+ (arm64 and x86-64), where the
-  selected client is supported. Native Windows, PowerShell, Git Bash/MSYS2, Cygwin, and
-  WSL are unsupported.
+- **Hosts:** macOS 14+ on Apple silicon (arm64) for v0.2.0 and v0.3.0; Ubuntu 22.04/24.04
+  x86-64 moves to v0.4.0; macOS Intel is not supported. Native Windows, PowerShell,
+  Git Bash/MSYS2, Cygwin, and WSL are unsupported.
 - **Runtime tools:** Bash 3.2+, Git 2.34+, jq 1.6+.
 - **Clients:** Claude Code >= 2.1.216; Codex CLI >= 0.144.6. Newer client versions
   require release evidence per spec 10.
 - **Plugin dependencies:** none. loom declares no external plugin dependencies in its
   manifests or catalogs; Bash, Git, and jq are system tools, and Claude Code and Codex
   CLI are the host clients.
+
+## Verifying release evidence
+
+A release record (`.docs/evaluations/release-evidence/v0.2.0.json`) names sanitized logs by
+path and SHA-256. The logs live in an archive attached to the GitHub Release, not in the
+repository. A reviewer verifies the archive against the record with the commands below
+(`ARCHIVE` and `RECORD` are local paths). Verification needs no credentials and reads only
+hashes; each check is silent on success.
+
+```sh
+D=$(mktemp -d) && tar -xzf ARCHIVE -C "$D"
+tar -tzf ARCHIVE | grep -v -E '^(\./)?(MANIFEST\.sha256|logs/[a-z0-9][a-z0-9._/-]*\.log)$' && echo 'INVALID ARCHIVE ENTRY'
+tar -tzf ARCHIVE | grep -F '..' && echo 'DOTDOT ENTRY'
+find "$D/logs" -type f | grep -v -E '\.log$' && echo 'NON-LOG FILE IN ARCHIVE'
+find "$D" ! -type f ! -type d | grep . && echo 'SPECIAL FILE IN ARCHIVE'
+(cd "$D" && shasum -a 256 -c MANIFEST.sha256 >/dev/null) || echo 'HASH FAIL'
+diff <(cd "$D" && find logs -type f | LC_ALL=C sort) <(cut -c67- "$D/MANIFEST.sha256" | LC_ALL=C sort)
+shasum -a 256 "$D/MANIFEST.sha256" | cut -c1-64            # equals ownerAck.evidenceSet
+comm -23 <(jq -r '..|objects|select(has("logSha256"))|"\(.logSha256)  \(.log)"' RECORD | LC_ALL=C sort) \
+  <(LC_ALL=C sort "$D/MANIFEST.sha256")                    # must print nothing
+```
 
 ## Repository layout
 
@@ -110,7 +131,7 @@ loom/                                    # this repo = loom core + client bindin
 │   ├── hooks/                           # git-identity-guard.sh, precompact-write-ahead-backstop.sh
 │   ├── schemas/                         # JSON Schemas for manifests, reviews, outputs
 │   └── skills/loom-playbook/            # templates, rubrics, conventions, gates
-├── scripts/check                        # pinned, reproducible local gate (886 Bats tests, a snapshot count)
+├── scripts/check                        # pinned, reproducible local gate (947 Bats tests, a snapshot count)
 └── .docs/                               # loom's own design memory (dogfooding)
 ```
 
@@ -237,14 +258,16 @@ The check pins shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0, Node 22.17.0,
 Claude Code 2.1.216, Ajv 8.17.1, YAML 2.8.0, markdown-it 14.1.0, and
 github-slugger 2.0.0. Bootstrap prerequisites are `curl` and `tar`; production
 requires Bash 3.2+, Git 2.34+, and jq 1.6+. The exact supported client floors are
-Claude Code 2.1.216 and Codex CLI 0.144.6. 886 Bats tests (a snapshot count, not a permanent guarantee) verify end-to-end
+Claude Code 2.1.216 and Codex CLI 0.144.6. 947 Bats tests (a snapshot count, not a permanent guarantee) verify end-to-end
 coordination, evaluation workspaces, review finders, identity guards, and role
 routing.
 
-The v0.2 host baseline is Ubuntu 22.04/24.04 x86-64 and macOS 14+ on Apple
-silicon or Intel where the selected client is supported. Native Windows,
-PowerShell, Git Bash/MSYS2, Cygwin, and WSL are unsupported. CI covers both Ubuntu
-LTS releases, macOS Apple silicon, macOS Intel, Bash 3.2.57, and Bash 5.x.
+The v0.2 host baseline is macOS 14+ on Apple silicon (arm64) only. Native Windows,
+PowerShell, Git Bash/MSYS2, Cygwin, and WSL are unsupported. Bash 5.x is release
+evidence (`bashRuns.bash5` in the release record). Retiring the extra CI runner rows
+(Ubuntu and macOS Intel) is deferred to the sibling `ci-macos-only-lane` slice; until it
+lands, CI still runs the four legacy rows. A (platform, harness) pair is supported only
+with its complete release record (spec 10).
 
 The checked Codex manifest/catalog, compatibility matrix, and installed-root
 bindings are static scaffolding only. The evidence file

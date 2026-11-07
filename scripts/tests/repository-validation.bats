@@ -2739,3 +2739,210 @@ living_fail() {
     [[ "$(jq -r '.hooks.PreCompact[0].hooks[0].command' "$hooks")" == *precompact-write-ahead-backstop.sh* ]]
     ! grep -qi herdr "$hooks"
 }
+
+install_release_evidence() {
+    mkdir -p "$TEST_ROOT/.docs/evaluations/release-evidence"
+    cp "$REPOSITORY_ROOT/scripts/tests/fixtures/release-evidence/v0.2.0-valid.json.in" "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.0.json"
+}
+
+assert_release_evidence_rejected() {
+    local filter="$1" expected="$2"
+    make_metadata_root
+    install_release_evidence
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.json "$filter"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/release-evidence/v0.2.0.json: "*"$expected"* ]]
+}
+
+@test "release evidence: valid record passes metadata mode" {
+    make_metadata_root
+    install_release_evidence
+    metadata
+    [ "$status" -eq 0 ]
+}
+
+@test "release evidence: missing role key fails" {
+    assert_release_evidence_rejected 'del(.pairs[0].e4.a_roles.planner)' 'schema /pairs/0/e4/a_roles'
+}
+
+@test "release evidence: failed role result fails" {
+    assert_release_evidence_rejected '.pairs[1].e4.a_roles.developer.result = "fail"' 'schema /pairs/1/e4/a_roles/developer/result'
+}
+
+@test "release evidence: failed gate result fails" {
+    assert_release_evidence_rejected '.pairs[0].e4.c_gate.result = "fail"' 'schema /pairs/0/e4/c_gate/result'
+}
+
+@test "release evidence: codex floor 0.144.5 fails" {
+    assert_release_evidence_rejected '.pairs[1].floor = "0.144.5"' 'schema /pairs/1/floor'
+}
+
+@test "release evidence: third pair fails" {
+    assert_release_evidence_rejected '.pairs += [.pairs[0]]' 'schema /pairs'
+}
+
+@test "release evidence: duplicate claude pair in place of codex fails" {
+    assert_release_evidence_rejected '.pairs[1] = .pairs[0]' 'schema /pairs'
+}
+
+@test "release evidence: codex harness with claude client fails" {
+    assert_release_evidence_rejected '.pairs[1].client = "claude"' 'schema /pairs/1'
+}
+
+@test "release evidence: 39-character candidate fails" {
+    assert_release_evidence_rejected '.candidate = ("a" * 39)' 'schema /candidate'
+}
+
+@test "release evidence: absolute log path fails" {
+    assert_release_evidence_rejected '.bashRuns.bash5.log = "/tmp/x.log"' 'schema /bashRuns/bash5/log'
+}
+
+@test "release evidence: log path with dot-dot fails" {
+    assert_release_evidence_rejected '.pairs[0].e3.log = "logs/../x.log"' 'schema /pairs/0/e3/log'
+}
+
+@test "release evidence: release 0.2.1 fails" {
+    assert_release_evidence_rejected '.release = "0.2.1"' 'schema /release'
+}
+
+@test "release evidence: tag v0.2.1 fails" {
+    assert_release_evidence_rejected '.tag = "v0.2.1"' 'schema /tag'
+}
+
+@test "release evidence: top-level matrix naming v0.3.0 fails" {
+    assert_release_evidence_rejected '.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"' 'schema /matrix'
+}
+
+@test "release evidence: pair e1 matrix naming v0.3.0 fails" {
+    assert_release_evidence_rejected '.pairs[0].e1.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"' 'schema /pairs/0/e1/matrix'
+}
+
+@test "release evidence: ownerAck candidate differing from candidate fails" {
+    assert_release_evidence_rejected '.ownerAck.candidate = ("c" * 40)' 'ownerAck.candidate must equal candidate'
+}
+
+@test "release evidence: priorCandidate equal to candidate fails" {
+    assert_release_evidence_rejected '.pairs[0].e4.d_lifecycle.priorCandidate = .candidate' 'priorCandidate must differ from candidate'
+}
+
+@test "release evidence: missing bash5 run fails" {
+    assert_release_evidence_rejected 'del(.bashRuns.bash5)' 'schema /bashRuns'
+}
+
+@test "release evidence: bash5 version 3.2.57 fails" {
+    assert_release_evidence_rejected '.bashRuns.bash5.bashVersion = "3.2.57"' 'schema /bashRuns/bash5/bashVersion'
+}
+
+@test "release evidence: docs state accepts only release-evidence/v0.2.0.json nested path" {
+    make_docs_root
+    install_release_evidence
+    docs_all
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"unexpected nested path"* ]]
+    mkdir -p "$TEST_ROOT/.docs/evaluations/other"
+    printf '{}\n' >"$TEST_ROOT/.docs/evaluations/other/x.json"
+    cp "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.0.json" "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.1.json"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/other/x.json"*"unexpected nested path"* ]]
+    [[ "$output" == *".docs/evaluations/release-evidence/v0.2.1.json"*"unexpected nested path"* ]]
+}
+
+@test "release evidence: pair floor drifting from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json '.clientFloors.claude = "2.1.217"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"floor '2.1.216' differs"* ]]
+}
+
+@test "release evidence: pair client absent from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json 'del(.clientFloors.claude)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"client 'claude' is not a client in"* ]]
+}
+
+@test "release evidence: e2 binding drifting from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json '.rootBindings |= map(if (.id | startswith("claude-")) then .id = "claude-other/v1" else . end)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"e2.binding 'claude-plugin-root/v1' differs"* ]]
+}
+
+@test "release evidence: e1 entry differing from client fails" {
+    assert_release_evidence_rejected '.pairs[0].e1.entry = "codex"' 'schema /pairs/0/e1/entry'
+}
+
+install_correction() {
+    local n="$1" prior="$2" dir="$TEST_ROOT/.docs/evaluations/release-evidence"
+    local sha
+    sha=$(shasum -a 256 "$dir/$prior" | cut -c1-64)
+    jq --arg p ".docs/evaluations/release-evidence/$prior" --arg h "$sha" '.supersedes = {path: $p, sha256: $h}' "$dir/v0.2.0.json" >"$dir/v0.2.0.corr$n.json"
+}
+
+@test "release evidence: valid correction chain passes" {
+    make_docs_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 2 v0.2.0.corr1.json
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "release evidence: correction with wrong supersedes sha256 fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json '.supersedes.sha256 = ("0" * 64)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"supersedes.sha256 does not match"* ]]
+}
+
+@test "release evidence: correction naming a non-immediate predecessor fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 2 v0.2.0.corr1.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr2.json '.supersedes.path = ".docs/evaluations/release-evidence/v0.2.0.json"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr2.json"*"immediate predecessor"* ]]
+}
+
+@test "release evidence: correction changing the candidate fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json '.candidate = ("d" * 40) | .ownerAck.candidate = .candidate'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"never changes the candidate"* ]]
+}
+
+@test "release evidence: gap in correction numbers fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 3 v0.2.0.corr1.json
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr3.json"*"without gaps"* ]]
+}
+
+@test "release evidence: correction without supersedes fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json 'del(.supersedes)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"must carry supersedes"* ]]
+}

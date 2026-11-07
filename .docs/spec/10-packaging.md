@@ -10,8 +10,10 @@ ADRs [0006](../ADR/0006-distribution-self-marketplace.md),
 [0019](../ADR/0019-supported-runtime-and-release-contract.md),
 [0020](../ADR/0020-remote-publication-is-the-landing-authority.md),
 [0021](../ADR/0021-loom-owned-local-review-protocol.md),
-[0022](../ADR/0022-controlled-input-independent-evaluation.md), and
-[0031](../ADR/0031-herdr-as-an-hc-driven-client.md), informed by the
+[0022](../ADR/0022-controlled-input-independent-evaluation.md),
+[0031](../ADR/0031-herdr-as-an-hc-driven-client.md),
+[0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), and
+[0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md), informed by the
 [approved dual-platform research](../research/2026-07-21-dual-platform-plugin-architecture.md).
 
 ## One distribution, two catalogs
@@ -104,16 +106,28 @@ publication evidence. Destructive cleanup requires exact validated targets.
 
 The v0.2 support matrix is:
 
-- Ubuntu 22.04 LTS and 24.04 LTS on x86-64;
-- macOS 14+ on Apple silicon and x86-64 where the selected client supports it;
+- macOS 14+ on Apple silicon (arm64), where the selected harness itself is supported;
 - Bash 3.2+, Git 2.34+, jq 1.6+; and
 - one supported client at or above the exact tested floor: Claude Code 2.1.216 or
   Codex CLI 0.144.6.
 
-Tests run Bash 3.2 and current Bash 5.x. Native Windows, PowerShell, Git Bash/MSYS2,
-Cygwin, and WSL are unsupported in v0.2. Documentation may identify an unverified
+Bash obligation: CI runs one macOS 14 arm64 lane on `/bin/bash` 3.2.57, the floor; Bash 5.x
+is required as recorded evidence (`bashRuns.bash5`). Native Windows, PowerShell, Git
+Bash/MSYS2, Cygwin, and WSL are unsupported. Documentation may identify an unverified
 community path but must not imply release support.
 
+**Release status (ADR 0032 §1, as amended by ADR 0033 §1).** A pair is *supported* in release R only if it is REQUIRED in R's row and R's record verifies.
+
+| Release | Platform | Harness | Status |
+|---|---|---|---|
+| v0.2.0 | macOS 14+ arm64 | Claude Code CLI | REQUIRED |
+| v0.2.0 | macOS 14+ arm64 | Codex CLI | REQUIRED |
+| v0.3.0 | macOS 14+ arm64 | the two v0.2.0 pairs | REQUIRED (carried) |
+| v0.3.0 | macOS 14+ arm64 | any other harness | absent unless admitted by a per-harness ADR under ADR 0033 §1 |
+| v0.4.0 | Ubuntu 22.04, 24.04 x86-64 | fixed by the v0.4.0 planning ADR | not in v0.2.0 or v0.3.0 |
+| any | macOS Intel | any | unsupported |
+
+Antigravity, Orca and Herdr (`hc`) are **deferred** (ADR 0033 §1); a pair in no row is unsupported.
 An unknown, below-floor, or merely newer-but-untested client is not automatically
 supported. Newer versions become supported only after CI or release-candidate
 compatibility evidence passes. `loom doctor` blocks supported-mode claims it cannot
@@ -142,10 +156,10 @@ doctor checks. Changing any table value requires a reviewed matrix change, full 
 revalidation, and a product release; roles and shared skills do not carry duplicate
 vendor mappings.
 
-The matrix records `hc` as a host with a floor of `0.1.16` (the only observed
-version) and does not floor herdr-app, which loom does not call. It carries no Herdr
-root binding and no per-profile Herdr entry. A host entry never changes the profile
-map; model and effort are carried in the inner client's command string.
+Herdr (`hc`) is deferred under ADR 0033 §1 and has no entry in the v0.2.0 matrix. The `herdr`
+entries in `v0.3.0.json` (floor `0.1.10`, `herdr-plugin-root/v1`) are stale under ADR 0031 and
+ADR 0032 §6 and are corrected only on admission. A host entry never changes the profile map;
+model and effort are carried in the inner client's command string.
 
 ## Installed-root and helper binding
 
@@ -169,7 +183,7 @@ The matrix binds Claude to `claude-plugin-root/v1`, defined at
 - **Codex hooks.** The manifest uses a root-relative `./hooks/hooks.json`; hook commands
   may use Codex's hook-process-only `PLUGIN_ROOT` to invoke the shared hook dispatcher
   absolutely. That environment binding is not reused by skills or workflow helpers.
-- **Herdr.** Herdr has no installed root, manifest, marketplace or hook binding. It is a
+- **Herdr (deferred, ADR 0033 §1; no v0.2.0 binding).** Herdr has no installed root, manifest, marketplace or hook binding. It is a
   host driven through `hc` (spec 07 §Host surfaces); roles it launches resolve helpers
   through their own client's root above. Herdr does not install, host or intercept hooks;
   Claude Code and Codex hooks keep running in their own plugin systems under the
@@ -230,8 +244,7 @@ A release is immutable tested source at a tag, not a manifest edit. From a clean
 at the proposed tag, all of these must pass:
 
 - the full local check;
-- Ubuntu and macOS CI, Bash floor/current lanes, and both required client-floor
-  adapter matrices;
+- macOS 14 arm64 CI (`/bin/bash` 3.2.57 lane) and each REQUIRED pair's adapter matrix;
 - clean install, upgrade, uninstall, and fresh-clone end-to-end tests;
 - local-review exact-SHA/network-silent and evaluation isolation/gate-runner/recorder
   conformance;
@@ -240,26 +253,64 @@ at the proposed tag, all of these must pass:
 - migration notes for existing `.git/loom` state;
 - actual MIT `LICENSE`, versioned `CHANGELOG.md`, accurate README limitations and
   support/install/recovery guidance;
-- agreement of manifests, catalogs, helpers, schemas, docs, and release metadata; and
-- proof the `vX.Y.Z` tag resolves to the exact tested commit.
+- agreement of manifests, catalogs, helpers, schemas, docs, and release metadata;
+- proof the `vX.Y.Z` tag resolves to the exact tested commit; and
+- a release conformance record that verifies under Release conformance evidence.
 
-No v0.2 artifact is published until improvement milestones M0–M7 are green on the
-declared matrix. Release assets derive from that tag and are never edited afterward.
+No v0.2.0 artifact is published until improvement milestones M0–M7 are green on the
+declared matrix and the v0.2.0 record verifies. Build assets derive from that tag and are
+never edited afterward. The sanitized evidence archive is an evidence asset, not a build asset.
 
-## Private Apple-silicon dogfood evidence
+## Release conformance evidence
 
-Before M1, ADR 0024 permits one private Darwin `arm64` checkpoint using exact floors
-Claude Code 2.1.216 and Codex CLI 0.144.6. In isolated client/project homes, each
-client must pass clean marketplace/plugin install, second reinstall, discovery,
-explicit workflow invocation, real cold role launch, hook/trust fixtures, absolute-
-root helper execution, inside/outside-project behavior, and clean uninstall. Evidence
-records commands, versions, roots, exits, structured-output/fixture hashes, and
-before/after inventories.
+A (platform, harness) pair is supported in release R only when the applicable release row
+(ADR 0032 §1 for v0.2.0, or an accepted per-harness admission ADR under ADR 0033 §1) lists
+it as REQUIRED for R and every element below verifies. ADR 0024 evidence is historical; one
+platform's or harness's evidence is not conformance for another.
 
-This checkpoint is not release evidence. v0.2 still requires M0 through M7 and the
-full Ubuntu 22.04/24.04 x86-64 plus macOS 14+ `arm64` and Intel matrix, including
-both pinned-client install/behavior lanes, fresh-clone checks, synchronized metadata,
-and exact tested tag.
+Per required pair, the record carries:
+
+- **E1 matrix entry:** the harness in `plugins/loom/adapters/compatibility/vR.json` with its
+  pinned floor, profile mapping and platform.
+- **E2 binding:** `claude-plugin-root/v1` or `codex-skill-source/v1`, plus manifest and
+  catalog loading (manifest and marketplace catalog load; name and version match the release).
+- **E3 offline conformance:** Bats tests in `scripts/check` on that platform for the launch
+  descriptor from `loom-launch-role`, role contract parity across all five roles, the hook/
+  guard behavior the harness exposes, and refusal of unknown and below-floor versions.
+- **E4 live conformance** at the pinned floor. Each run records platform, harness floor, result
+  and log reference (path and `logSha256`): (a) all five roles launched and returned through the
+  harness, each with an output hash; (b) one full loop from research through landing, with blind
+  review (ADR 0022) and every handoff committed; (c) `scripts/check` passing on the platform; (d)
+  in fresh isolated homes, clean install of the candidate; prior-candidate install, then upgrade
+  to the candidate; clean uninstall (ADR 0032 §4–§5). `authSource` names how the isolated client
+  was authenticated (never a value).
+- **E5 owner acknowledgement:** names each pair, the evidence-set hash and the candidate.
+
+Record-level: `bashRuns.bash32` (`/bin/bash` 3.2.57, the CI lane) and `bashRuns.bash5` (full
+`scripts/check` under Bash 5.x) must both pass.
+
+**Record.** `.docs/evaluations/release-evidence/vR.json`, schema `loom-release-evidence/v1`
+(`plugins/loom/schemas/loom-release-evidence-v1.schema.json`), bound to release 0.2.0 and its two
+pairs. Written after the candidate is tagged, so the candidate never contains its own hash.
+Published records are never edited.
+
+**Corrections.** `vR.corr<N>.json`, N = 1, 2, … with no gaps. The current record has the highest N
+(compared as an integer), or is `vR.json` if none exists. Each carries `supersedes: {path, sha256}`
+naming its predecessor, unbroken back to `vR.json`. A correction never changes the candidate.
+
+**Candidate binding.** A record verifies only if (1) `git rev-parse vR^{commit}` equals `candidate`;
+(2) `git merge-base --is-ancestor vR <record-commit>` succeeds and the record is on `main`; (3)
+`ownerAck.candidate` equals `candidate` and each `priorCandidate` differs from it; (4) each pair's
+E1 and E2 entries match the matrix and binding the record names. Items 1–2 are release-time git
+checks; items 3–4, shape, naming, the correction chain and log paths are repo validation. Neither
+can prove that a run happened.
+
+**Sanitized archive.** Logs are not committed. `loom-release-evidence-<tag>-<candidate>.tar.gz` is
+attached before publication and holds only `MANIFEST.sha256` and `logs/<name>.log` files matching
+`^logs/(?!.*\.\.)[a-z0-9][a-z0-9._/-]*$`, sanitized before hashing (no credential values, auth file
+content, environment dumps; home becomes `~`). `MANIFEST.sha256` is `find logs -type f | LC_ALL=C
+sort | xargs shasum -a 256`. Each run's `logSha256` equals its manifest line; `ownerAck.evidenceSet`
+equals `shasum -a 256 MANIFEST.sha256`.
 
 Workflow-profile policy and target-branch history shape are deliberately not release
 contracts here. They require benchmark evidence and a later accepted decision.

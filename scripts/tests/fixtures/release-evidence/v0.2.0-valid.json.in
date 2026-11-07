@@ -1,0 +1,185 @@
+{
+  "schema": "loom-release-evidence/v1",
+  "release": "0.2.0",
+  "tag": "v0.2.0",
+  "candidate": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "platform": {
+    "os": "macOS 14+",
+    "arch": "arm64"
+  },
+  "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+  "bashRuns": {
+    "bash32": {
+      "bashVersion": "3.2.57",
+      "result": "pass",
+      "log": "logs/bash/bash32.log",
+      "logSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "bash5": {
+      "bashVersion": "5.3.9",
+      "result": "pass",
+      "log": "logs/bash/bash5.log",
+      "logSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  },
+  "pairs": [
+    {
+      "harness": "claude-code-cli",
+      "client": "claude",
+      "floor": "2.1.216",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+        "entry": "claude"
+      },
+      "e2": {
+        "binding": "claude-plugin-root/v1"
+      },
+      "e3": {
+        "runId": "e3-claude",
+        "result": "pass",
+        "log": "logs/claude/e3.log",
+        "logSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/claude/role-researcher.log",
+            "logSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/claude/role-planner.log",
+            "logSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-plan-evaluator.log",
+            "logSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/claude/role-developer.log",
+            "logSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-code-evaluator.log",
+            "logSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-claude",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/claude/loop.log",
+          "logSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/claude/gate.log",
+          "logSha256": "9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "result": "pass",
+          "log": "logs/claude/lifecycle.log",
+          "logSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "codex-cli",
+      "client": "codex",
+      "floor": "0.144.6",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.2.0.json",
+        "entry": "codex"
+      },
+      "e2": {
+        "binding": "codex-skill-source/v1"
+      },
+      "e3": {
+        "runId": "e3-codex",
+        "result": "pass",
+        "log": "logs/codex/e3.log",
+        "logSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/codex/role-researcher.log",
+            "logSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/codex/role-planner.log",
+            "logSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-plan-evaluator.log",
+            "logSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/codex/role-developer.log",
+            "logSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-code-evaluator.log",
+            "logSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+            "outputHash": "7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-codex",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/codex/loop.log",
+          "logSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/codex/gate.log",
+          "logSha256": "9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "result": "pass",
+          "log": "logs/codex/lifecycle.log",
+          "logSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    }
+  ],
+  "ownerAck": {
+    "by": "owner",
+    "pairs": [
+      "claude-code-cli",
+      "codex-cli"
+    ],
+    "evidenceSet": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidate": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "date": "2026-11-06"
+  }
+}

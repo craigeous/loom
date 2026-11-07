@@ -120,9 +120,9 @@ case "${LOOM_BATS_JOBS:-}" in
 esac
 set +e
 if [ "${#tests[@]}" -gt 0 ]; then
-    "$physical_bash" "$bats_entry" "${bats_jobs_args[@]}" "$runtime_canary" "${tests[@]}"
+    "$physical_bash" "$bats_entry" ${bats_jobs_args[@]+"${bats_jobs_args[@]}"} "$runtime_canary" "${tests[@]}"
 else
-    "$physical_bash" "$bats_entry" "${bats_jobs_args[@]}" "$runtime_canary"
+    "$physical_bash" "$bats_entry" ${bats_jobs_args[@]+"${bats_jobs_args[@]}"} "$runtime_canary"
 fi
 bats_status=$?
 set -e
