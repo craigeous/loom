@@ -1,6 +1,6 @@
 # Plan Evaluation: release-conformance-and-evidence-schema
 
-Artifact: [release-conformance-and-evidence-schema](../slice-plans/release-conformance-and-evidence-schema.md)
+Artifact: [release-conformance-and-evidence-schema](../slice-plans/archive/release-conformance-and-evidence-schema.md)
 Commit: 0e4a678
 Round: 1
 Verdict: FAIL

@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-07 — `release-conformance-and-evidence-schema` (v0.2.0 release evidence schema and chain validator, macOS-only CI/docs alignment) landed via remote-direct; plan archived.
 - 2026-11-06 — `launcher-matrix-and-rotation-fix` (release matrix binding, two-client default rotation without Antigravity) landed via remote-direct; plan archived.
 - 2026-11-06 — `instruction-adapter-sync` (digest wording, re-stamped block hashes, `--all` drift check) landed via remote-direct; plan archived.
 - 2026-11-05 — `dogfood-retirement` (retire the macOS checkpoint tooling, ADR 0033 D1) landed via remote-direct; plan archived; `dogfood-int-race` abandoned.

@@ -1,14 +1,14 @@
 # Release Conformance and Evidence Schema
 
-Status: Ready to Publish
+Status: Landed
 Target files: `plugins/loom/schemas/`, `scripts/validate-repository.mjs`, `.github/workflows/check.yml`, `scripts/check-toolchain.json`, `scripts/check`, `scripts/tests/repository-validation.bats`, `scripts/run-bats-under`, `README.md`, `.docs/ADR/README.md` (index lines only)
-Target specs: [10-packaging.md](../spec/10-packaging.md), [07-command-surface.md](../spec/07-command-surface.md) (amended by a sibling plan, not by this slice; see Out of Scope)
-Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) §3, §4, §8; [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) D3
+Target specs: [10-packaging.md](../../spec/10-packaging.md), [07-command-surface.md](../../spec/07-command-surface.md) (amended by a sibling plan, not by this slice; see Out of Scope)
+Authority: [ADR 0032](../../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) §3, §4, §8; [ADR 0033](../../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) D3
 Target size: <= 150 LOC net code change in validator/runner, plus standalone schema, test fixture, and Bats tests; keep this plan document <= 250 lines
 
 ## Context
 
-This slice closes gaps G4 and G5 in the [v0.2.0 live-proof research note](../research/2026-11-06-v020-live-proof-preparation.md) (§3). It implements the machine-checkable form of the ADR 0032 §3 evidence record for the v0.2.0 release and the ADR 0032 §8 edits that belong to code, CI and README. The live v0.2.0 proof comes after this slice, and a candidate cannot be frozen until its record format and checks exist.
+This slice closes gaps G4 and G5 in the [v0.2.0 live-proof research note](../../research/2026-11-06-v020-live-proof-preparation.md) (§3). It implements the machine-checkable form of the ADR 0032 §3 evidence record for the v0.2.0 release and the ADR 0032 §8 edits that belong to code, CI and README. The live v0.2.0 proof comes after this slice, and a candidate cannot be frozen until its record format and checks exist.
 
 - **G4 — no evidence schema.** `plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json` describes one retired-checkpoint run and cannot hold the ADR 0032 §3 record: per-pair grouping, the E4(a) role results, the E4(b) loop, the E4(c) gate, the E5 owner acknowledgement, and the candidate binding. ADR 0032 §3 leaves the exact format to a spec 10 amendment.
 - **G5 — ADR 0032 §8 edits owed in code and CI.** `README.md` "Supported Platforms & Prerequisites" (lines 71–75) and the v0.2 baseline paragraph (lines 244–247) still list Ubuntu and macOS Intel. `.github/workflows/check.yml` still runs four lanes. `CLAUDE.md` is already corrected.
@@ -20,7 +20,7 @@ Corrections found while planning:
 2. **The CI lane list is pinned in three more places.** `scripts/check-toolchain.json` and the jq contract inside `scripts/check` carry the SHA-256 of `check.yml` and the runner rows, and `scripts/tests/repository-validation.bats` addresses removed rows by name. All change in the same commit.
 3. **The validator rejects nested evaluation paths.** `validateDocsState` (`--all` only) reports "unexpected nested path under .docs/evaluations". ADR 0032 §3 requires `.docs/evaluations/release-evidence/vR.json`, so that one path must be accepted and nothing else nested.
 
-**Dependency (satisfied).** The format decisions this schema encodes (E4 sub-checks, the archive contract, the bash-run record, the upgrade definition) are normative text for spec 10 and spec 07. Under ADR 0005 and the severity rules, that text is owned by the sibling planning artifact [spec-10-07-release-evidence-amendment](spec-10-07-release-evidence-amendment.md). It has passed cold plan evaluation (Round 3, PASS; [evaluation](../evaluations/spec-10-07-release-evidence-amendment-plan-eval.md)) and reached `Approved`. Its spec text is not yet applied to spec 10 or spec 07; that lands with the implementing slice. This slice does not write or edit spec files.
+**Dependency (satisfied).** The format decisions this schema encodes (E4 sub-checks, the archive contract, the bash-run record, the upgrade definition) are normative text for spec 10 and spec 07. Under ADR 0005 and the severity rules, that text is owned by the sibling planning artifact [spec-10-07-release-evidence-amendment](../spec-10-07-release-evidence-amendment.md). It has passed cold plan evaluation (Round 3, PASS; [evaluation](../../evaluations/spec-10-07-release-evidence-amendment-plan-eval.md)) and reached `Approved`. Its spec text is not yet applied to spec 10 or spec 07; that lands with the implementing slice. This slice does not write or edit spec files.
 
 **Archive verification commands (executable).** A reviewer runs these against the sanitized archive `ARCHIVE` and the record `RECORD`. They need no credentials and read only the archive, its manifest and the record. Each check is silent on success. This is the approved amendment's Verification check 5. It differs from the earlier draft in two ways: the `..` entry check is kept, and the special-file check is guarded by `| grep .`, because `find` exits 0 even when it matches.
 

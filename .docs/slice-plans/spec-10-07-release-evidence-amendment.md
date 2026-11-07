@@ -11,7 +11,7 @@ Drafted diff for the plan evaluator; nothing here is applied. Specs 07 and 10 ar
 this file if ADR 0032 or 0033 is superseded. Authority: ADR 0032 §1, §3–§5, §8 and ADR 0033
 §1–§2 (owner decision D3: v0.2.0 live proof first). ADR 0032 §8 lists these edits as "listed,
 not drafted"; this draft supplies them and is the dependency of
-[release-conformance-and-evidence-schema](release-conformance-and-evidence-schema.md).
+[release-conformance-and-evidence-schema](archive/release-conformance-and-evidence-schema.md).
 
 Sibling-plan decisions; the evaluator confirms or redirects each:
 
