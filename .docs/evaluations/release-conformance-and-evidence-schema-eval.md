@@ -1,21 +1,23 @@
 # Code Evaluation: release-conformance-and-evidence-schema
 
 Artifact: [release-conformance-and-evidence-schema](../slice-plans/release-conformance-and-evidence-schema.md)
-Commit: 8845343
-Round: 2
+Commit: c55ac98
+Round: 3
 Verdict: FAIL
 Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md), [spec-10-07-release-evidence-amendment](../slice-plans/spec-10-07-release-evidence-amendment.md), [spec 10](../spec/10-packaging.md), [spec 07](../spec/07-command-surface.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
 
 ## Summary
 
-The implementation conflicts with the approved correction-record invariant and omits required plan verification and scope controls. The sibling amendment passed cold plan evaluation; its added spec lines match the implementation. The review is round 2 following plan evaluation, not a re-review of a previous code evaluation. Repository `--all` validation passes. The requested HEAD gate `TMPDIR=/private/tmp LOOM_BATS_JOBS=4 scripts/check` passed, including all 937 Bats tests and all remaining checks; it selected Homebrew Bash 5.3.9, not the macOS Bash 3.2 floor.
+Round 2's size blocker remains unresolved. The CI files were restored, but the complete base-to-implementation diff is 933 additions and 52 deletions, net +881 lines; the implementation paths alone are net +739. The plan requires at most 300 net lines and permits only the CI sibling split. Repository `--all` passed before recording this evaluation, but rejects the requested Round 3 record under eval-sequence: it expects Round 2 after the plan evaluation. Both requested gate commands selected Bash 5.3.9 and completed 947 tests with failures; their concurrent execution collided in shared temporary worktree paths, and the evaluation was edited during the runs, so these results are not clean HEAD verification. An explicit `BASH_BIN=/bin/bash` floor run failed before Bats on Bash 3.2.57.
 
 ## Findings
 
-- [BLOCKER] Spec 10 requires repository validation of correction record names, predecessor hashes, an unbroken chain, and unchanged candidate (`.docs/spec/10-packaging.md:297`–305). `scripts/validate-repository.mjs:384` validates only `v0.2.0.json`; line 1046 rejects every correction as an unexpected nested path, and the schema has no `supersedes` property. Thus a spec-permitted correction cannot pass, and the required chain validation is absent. The implementation plan instead explicitly permits only the original path, so resolve that conflict through the planner and cold plan evaluation before implementing and testing the approved behavior.
-- [BLOCKER] The plan's 300 net LOC limit and explicit required split are exceeded: the complete diff is +697/−88, net +609 lines, and even excluding both spec files remains over 300. CI lane retirement remains in this slice rather than the required sibling. Resolve the plan's size/split requirement through the prescribed workflow.
-- [MAJOR] The required valid-fixture `--all` test does not assert success (`scripts/tests/repository-validation.bats:2837`); it only checks absence of one diagnostic. A different validation error can make `--all` fail while the test passes. Assert exit 0 for a valid fixture in a fully valid test root. This confirms advisory TST-2.
-- [MAJOR] The plan requires the developer to record the Bash 5.x candidate gate version and result in `progress.md`; no such record exists in the implementation commit. Supply the candidate-bound run and required record; a later HEAD rerun alone does not establish the required evidence at 8845343.
-- [MINOR] Advisory TST-1 is confirmed: record-versus-matrix checks lack focused negative tests. The fixed per-harness schema already checks client, floor, entry and binding, but matrix drift should also be tested so these semantic checks cannot silently disappear.
+- [BLOCKER] The Bash 3.2.57 platform gate fails before running Bats: `scripts/run-bats-under:123` expands an empty `bats_jobs_args` array under `set -u` when GNU parallel is unavailable. Make the launcher handle the empty argument list on Bash 3.2, then rerun the floor gate.
+- [BLOCKER] The plan's <= 300 net LOC limit remains exceeded. The diff from d877660 to c55ac98 is net +881, and even limiting the count to README, schema, tests, fixture and validator gives +739. Restoring the CI files does not resolve this finding. Return to the planner for an approved scope/size resolution before landing.
+- [MINOR] COR-1 confirmed: correction numbers are converted to Number before the purported leading-zero check, so `corr01` alone is accepted. The spec describes N as an integer and does not explicitly forbid that spelling; align the diagnostic or reject the spelling as a follow-up.
+- [MINOR] TST-1 confirmed: broad schema-path assertions do not isolate the cardinality constraints. TST-4 confirmed: matrix drift tests exercise Claude only. TST-3 confirmed: original-with-supersedes and missing-original branches lack focused negative tests.
+- TST-2 is rejected as a defect: schema validation already enforces the entry/client relationship before the semantic check; the redundant check is harmless.
 
-Advisory findings adjudicated: COR-3 is rejected because the sibling amendment was approved through cold plan evaluation and its Context authorizes landing its matching normative text with the implementation. COR-2 is rejected: the approved amendment's verification procedure explicitly requires file-only tar members and gives a construction example; directory members are outside that archive procedure. COR-1 is rejected: the matrix is independently required and validated in metadata mode, and `readJson` reports a missing required path, so absence does not silently pass validation. TST-2 and TST-1 are addressed above.
+## Prior Rounds Summary
+
+Round 2 failed on correction records, the net LOC limit / CI split, fixture exit status, and the Bash 5 run record. The revision adds predecessor/hash/candidate and chain checks, restores the CI files, asserts valid-fixture success, records Bash 5.3.9, and adds matrix and correction-chain negative cases. The net LOC finding remains open as stated above.
