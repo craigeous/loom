@@ -1,6 +1,6 @@
 # Release Conformance and Evidence Schema
 
-Status: Draft
+Status: Plan Review
 Target specs: 10-packaging.md, 07-command-surface.md
 Target size: <= 300 LOC net change (keep this plan document <= 250 lines)
 
