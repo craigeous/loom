@@ -29,6 +29,9 @@ Current milestone: M9
 
 ## Current state
 
+- **Current activity (2026-11-07) — `release-conformance-and-evidence-schema` Implemented (code-eval Round 1 findings resolved):**
+  Added correction records to the release-evidence schema and validator, negative tests, and reverted CI runner changes. Gate passed under Bash 3.2.57 and under Homebrew Bash 5.3.9 (`TMPDIR=/private/tmp BASH_BIN=/opt/homebrew/bin/bash /opt/homebrew/bin/bash scripts/check`, exit 0). Awaiting Round 2 code re-evaluation.
+
 - **Last action (2026-11-01) — M9 slice 3 (`herdr-verification`) Landed:**
   Landed offline Herdr verification in `scripts/tests/herdr-verification.bats` (16 tests): clean install-layout discovery of marketplace, plugin manifest, skills and hooks; five-role launch descriptors; hook execution against Herdr wire fixtures with fail-closed competing roots; 952 passing Bats tests across the repository. No product code changed. Completed local review under `loom-local-review/v1`. Evaluated blind by the code evaluator with Verdict: PASS (Round: 0). Published via `loom-land` remote-direct with a local receipt. Milestone M9 offline slices are complete; live Herdr/native-app evidence remains owed.
 

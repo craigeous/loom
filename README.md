@@ -57,7 +57,7 @@ Current milestone: M9
   document shape and milestone synchronization rules.
 - **M7 — Packaging Conformance & README Refresh**: Canonical MIT license, version [0.2.0] CHANGELOG,
   CommonMark code fence tracking, supported platforms/prerequisites, multi-client installation/upgrade
-  guides, end-to-end example, tier expectations table, and 937 Bats tests snapshot.
+  guides, end-to-end example, tier expectations table, and 947 Bats tests snapshot.
 - **M8 — Process Cost & Repository Noise**: Paired workflow benchmark harness (`scripts/workflow-benchmark.sh`),
   owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`), and provisional
   landing history policy with squash publication and durable tracked evidence (ADR 0028).
@@ -131,7 +131,7 @@ loom/                                    # this repo = loom core + client bindin
 │   ├── hooks/                           # git-identity-guard.sh, precompact-write-ahead-backstop.sh
 │   ├── schemas/                         # JSON Schemas for manifests, reviews, outputs
 │   └── skills/loom-playbook/            # templates, rubrics, conventions, gates
-├── scripts/check                        # pinned, reproducible local gate (937 Bats tests, a snapshot count)
+├── scripts/check                        # pinned, reproducible local gate (947 Bats tests, a snapshot count)
 └── .docs/                               # loom's own design memory (dogfooding)
 ```
 
@@ -258,15 +258,16 @@ The check pins shfmt 3.13.1, ShellCheck 0.11.0, Bats 1.13.0, Node 22.17.0,
 Claude Code 2.1.216, Ajv 8.17.1, YAML 2.8.0, markdown-it 14.1.0, and
 github-slugger 2.0.0. Bootstrap prerequisites are `curl` and `tar`; production
 requires Bash 3.2+, Git 2.34+, and jq 1.6+. The exact supported client floors are
-Claude Code 2.1.216 and Codex CLI 0.144.6. 937 Bats tests (a snapshot count, not a permanent guarantee) verify end-to-end
+Claude Code 2.1.216 and Codex CLI 0.144.6. 947 Bats tests (a snapshot count, not a permanent guarantee) verify end-to-end
 coordination, evaluation workspaces, review finders, identity guards, and role
 routing.
 
 The v0.2 host baseline is macOS 14+ on Apple silicon (arm64) only. Native Windows,
-PowerShell, Git Bash/MSYS2, Cygwin, and WSL are unsupported. CI runs one macOS 14
-arm64 lane on Bash 3.2.57. Bash 5.x is release evidence (`bashRuns.bash5` in the
-release record), not a CI lane. A (platform, harness) pair is supported only with
-its complete release record (spec 10).
+PowerShell, Git Bash/MSYS2, Cygwin, and WSL are unsupported. Bash 5.x is release
+evidence (`bashRuns.bash5` in the release record). Retiring the extra CI runner rows
+(Ubuntu and macOS Intel) is deferred to the sibling `ci-macos-only-lane` slice; until it
+lands, CI still runs the four legacy rows. A (platform, harness) pair is supported only
+with its complete release record (spec 10).
 
 The checked Codex manifest/catalog, compatibility matrix, and installed-root
 bindings are static scaffolding only. The evidence file

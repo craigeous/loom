@@ -1067,7 +1067,7 @@ mutate_contract() {
 
 @test "workflow runner row deletion fails" {
     ensure_contract_root
-    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-14\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
+    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-15-intel\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
     contract_check
     [ "$status" -ne 0 ]
     [[ "$output" == *"workflow exact-contract digest drift"* ]]
@@ -1102,37 +1102,37 @@ mutate_contract() {
 }
 
 @test "workflow runner label mutation fails" {
-    rewrite_workflow '          - runner: macos-14' '          - runner: macos-13'
+    rewrite_workflow '          - runner: ubuntu-22.04' '          - runner: ubuntu-20.04'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow host mutation fails" {
-    rewrite_workflow '            host: Darwin' '            host: Other'
+    rewrite_workflow '            host: Linux' '            host: Other'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow architecture mutation fails" {
-    rewrite_workflow '            architecture: arm64' '            architecture: x86_64'
+    rewrite_workflow '            architecture: x86_64' '            architecture: arm64'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow release mutation fails" {
-    rewrite_workflow '            release: "14"' '            release: "13"'
+    rewrite_workflow '            release: "22.04"' '            release: "20.04"'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow selected shell mutation fails" {
-    rewrite_workflow '            shell: /bin/bash' '            shell: /usr/bin/bash'
+    rewrite_workflow '            shell: /usr/bin/bash' '            shell: /bin/bash'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow Bash regex mutation fails" {
-    rewrite_workflow "            bash_regex: '^3\\.2\\.57'" "            bash_regex: '^4\\.'"
+    rewrite_workflow "            bash_regex: '^5\\.'" "            bash_regex: '^4\\.'"
     contract_check
     [ "$status" -ne 0 ]
 }
@@ -1174,7 +1174,7 @@ mutate_contract() {
 }
 
 @test "toolchain runner deletion fails closed" {
-    mutate_contract 'del(.runners[0])'
+    mutate_contract 'del(.runners[3])'
     contract_check
     [ "$status" -ne 0 ]
 }
@@ -2838,6 +2838,7 @@ assert_release_evidence_rejected() {
     make_docs_root
     install_release_evidence
     docs_all
+    [ "$status" -eq 0 ]
     [[ "$output" != *"unexpected nested path"* ]]
     mkdir -p "$TEST_ROOT/.docs/evaluations/other"
     printf '{}\n' >"$TEST_ROOT/.docs/evaluations/other/x.json"
@@ -2846,4 +2847,102 @@ assert_release_evidence_rejected() {
     [ "$status" -eq 1 ]
     [[ "$output" == *".docs/evaluations/other/x.json"*"unexpected nested path"* ]]
     [[ "$output" == *".docs/evaluations/release-evidence/v0.2.1.json"*"unexpected nested path"* ]]
+}
+
+@test "release evidence: pair floor drifting from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json '.clientFloors.claude = "2.1.217"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"floor '2.1.216' differs"* ]]
+}
+
+@test "release evidence: pair client absent from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json 'del(.clientFloors.claude)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"client 'claude' is not a client in"* ]]
+}
+
+@test "release evidence: e2 binding drifting from the matrix fails" {
+    make_metadata_root
+    install_release_evidence
+    mutate_json plugins/loom/adapters/compatibility/v0.2.0.json '.rootBindings |= map(if (.id | startswith("claude-")) then .id = "claude-other/v1" else . end)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release-evidence/v0.2.0.json"*"e2.binding 'claude-plugin-root/v1' differs"* ]]
+}
+
+@test "release evidence: e1 entry differing from client fails" {
+    assert_release_evidence_rejected '.pairs[0].e1.entry = "codex"' 'schema /pairs/0/e1/entry'
+}
+
+install_correction() {
+    local n="$1" prior="$2" dir="$TEST_ROOT/.docs/evaluations/release-evidence"
+    local sha
+    sha=$(shasum -a 256 "$dir/$prior" | cut -c1-64)
+    jq --arg p ".docs/evaluations/release-evidence/$prior" --arg h "$sha" '.supersedes = {path: $p, sha256: $h}' "$dir/v0.2.0.json" >"$dir/v0.2.0.corr$n.json"
+}
+
+@test "release evidence: valid correction chain passes" {
+    make_docs_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 2 v0.2.0.corr1.json
+    docs_all
+    [ "$status" -eq 0 ]
+}
+
+@test "release evidence: correction with wrong supersedes sha256 fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json '.supersedes.sha256 = ("0" * 64)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"supersedes.sha256 does not match"* ]]
+}
+
+@test "release evidence: correction naming a non-immediate predecessor fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 2 v0.2.0.corr1.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr2.json '.supersedes.path = ".docs/evaluations/release-evidence/v0.2.0.json"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr2.json"*"immediate predecessor"* ]]
+}
+
+@test "release evidence: correction changing the candidate fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json '.candidate = ("d" * 40) | .ownerAck.candidate = .candidate'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"never changes the candidate"* ]]
+}
+
+@test "release evidence: gap in correction numbers fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    install_correction 3 v0.2.0.corr1.json
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr3.json"*"without gaps"* ]]
+}
+
+@test "release evidence: correction without supersedes fails" {
+    make_metadata_root
+    install_release_evidence
+    install_correction 1 v0.2.0.json
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.corr1.json 'del(.supersedes)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"v0.2.0.corr1.json"*"must carry supersedes"* ]]
 }
