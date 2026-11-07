@@ -1,6 +1,6 @@
 # Release Conformance and Evidence Schema
 
-Status: Approved
+Status: In Progress
 Target files: `plugins/loom/schemas/`, `scripts/validate-repository.mjs`, `.github/workflows/check.yml`, `scripts/check-toolchain.json`, `scripts/check`, `scripts/tests/repository-validation.bats`, `README.md`, `.docs/ADR/README.md` (index lines only)
 Target specs: [10-packaging.md](../spec/10-packaging.md), [07-command-surface.md](../spec/07-command-surface.md) (amended by a sibling plan, not by this slice; see Out of Scope)
 Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) §3, §4, §8; [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) D3
