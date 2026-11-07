@@ -381,6 +381,13 @@ async function validateMetadata() {
     !validateJson(dogfoodEvidence, "plugins/loom/schemas/loom-dogfood-evidence-v1.schema.json", ajv)
   ) structurallyValid = false;
 
+  const releaseEvidence = ".docs/evaluations/release-evidence/v0.2.0.json";
+  if (safeNode(releaseEvidence, { missing: false, regularFile: true })) {
+    if (validateJson(releaseEvidence, "plugins/loom/schemas/loom-release-evidence-v1.schema.json", ajv)) {
+      validateReleaseEvidence(releaseEvidence);
+    } else structurallyValid = false;
+  }
+
   const readme = readText("README.md");
   if (readme !== null) {
     if (!/The exact supported client floors are\s+Claude Code 2\.1\.216 and Codex CLI 0\.144\.6\./.test(readme)) {
@@ -434,6 +441,26 @@ async function validateMetadata() {
 
   // Schema-invalid release objects are never passed into semantic validation.
   if (structurallyValid) semanticMetadata();
+}
+
+// Semantic checks the release-evidence schema cannot express (plan: release-conformance-and-evidence-schema).
+function validateReleaseEvidence(target) {
+  const record = readJson(target);
+  if (record === JSON_READ_FAILURE) return;
+  const matrix = readJson(record.matrix);
+  if (matrix === JSON_READ_FAILURE || !isObject(matrix)) return;
+  const floors = isObject(matrix.clientFloors) ? matrix.clientFloors : {};
+  const bindings = Array.isArray(matrix.rootBindings) ? matrix.rootBindings : [];
+  record.pairs.forEach((pair, index) => {
+    const at = `pairs[${index}] (${pair.harness})`;
+    if (!Object.prototype.hasOwnProperty.call(floors, pair.client)) report(target, `${at}.client '${pair.client}' is not a client in ${record.matrix}`);
+    else if (pair.floor !== floors[pair.client]) report(target, `${at}.floor '${pair.floor}' differs from ${record.matrix} clientFloors.${pair.client} '${floors[pair.client]}'`);
+    if (pair.e1.entry !== pair.client) report(target, `${at}.e1.entry '${pair.e1.entry}' must equal client '${pair.client}'`);
+    const binding = bindings.find((item) => isObject(item) && typeof item.id === "string" && item.id.startsWith(`${pair.client}-`));
+    if (!binding || pair.e2.binding !== binding.id) report(target, `${at}.e2.binding '${pair.e2.binding}' differs from the ${record.matrix} rootBindings id for ${pair.client}`);
+    if (pair.e4.d_lifecycle.priorCandidate === record.candidate) report(target, `${at}.e4.d_lifecycle.priorCandidate must differ from candidate`);
+  });
+  if (record.ownerAck.candidate !== record.candidate) report(target, "ownerAck.candidate must equal candidate");
 }
 
 function validateJson(target, schemaPath, ajv) {
@@ -1016,6 +1043,7 @@ function validateEvaluations(markdownParser) {
   const events = new Map();
   for (const relative of files.filter((file) => file.startsWith(".docs/evaluations/"))) {
     const name = relative.slice(".docs/evaluations/".length);
+    if (name === "release-evidence/v0.2.0.json") continue;
     if (name.includes("/")) { ruleReport(relative, "eval-name", "unexpected nested path under .docs/evaluations"); continue; }
     if (name === "README.md" || name === "macos-dual-client-dogfood-evidence.json") continue;
     if (/^.+-(?:review-findings|acceptance)\.md$/.test(name)) continue;

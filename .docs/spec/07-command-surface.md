@@ -51,6 +51,8 @@ commands; the orchestrator launches them only within `loom-local-review/v1`.
 
 ## Host surfaces (Orca, Herdr `hc`)
 
+**Status (ADR 0033 §1).** Orca and Herdr (`hc`) are deferred: the text below is design for a future admission, with no v0.2.0 status or matrix entry.
+
 A **host** runs a role's inner client (`claude` or `codex`) in a persistent terminal;
 it is not a model client, plugin root or hook runtime. `loom-launch-role` emits the
 inner-client descriptor; a host adapter turns descriptor, worktree and brief into host
@@ -91,9 +93,10 @@ current Codex launch is one-shot and read-only. Evaluator roles are not supporte
   may be documented as an unguaranteed fallback and must not be labeled full plugin
   support.
 
-## Private dogfood workflow and role mapping
+## v0.2.0 release conformance workflow and role mapping
 
-The ADR 0024 code slice must prove these exact client-native workflow pairs:
+The v0.2.0 release conformance run (spec 10, Release conformance evidence; ADR 0032 §3 E4) must
+prove these exact client-native workflow pairs for each required pair, Claude Code CLI and Codex CLI:
 
 | Shared workflow | Claude Code | Codex CLI |
 |---|---|---|
@@ -116,5 +119,6 @@ The role adapter table is exactly:
 | `developer` | `loom:developer` | `loom-developer` |
 | `code-evaluator` | `loom:code-evaluator` | `loom-code-evaluator` |
 
-These are intended mappings. Codex behavior is pending until the exact-candidate
-dogfood evaluation passes; ChatGPT desktop and Codex IDE are outside this checkpoint.
+These are the v0.2.0 mappings. Each client's behavior counts as supported only when the
+v0.2.0 record verifies for its pair. ChatGPT desktop and Codex IDE are not v0.2.0 surfaces,
+and Antigravity, Orca and Herdr (`hc`) have no mapping in v0.2.0.

@@ -1067,7 +1067,7 @@ mutate_contract() {
 
 @test "workflow runner row deletion fails" {
     ensure_contract_root
-    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-15-intel\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
+    "$LOOM_NODE" -e 'const fs=require("fs"),f=process.argv[1];let s=fs.readFileSync(f,"utf8");s=s.replace(/          - runner: macos-14\n(?:            .*\n){5}/,"");fs.writeFileSync(f,s)' "$TEST_ROOT/.github/workflows/check.yml"
     contract_check
     [ "$status" -ne 0 ]
     [[ "$output" == *"workflow exact-contract digest drift"* ]]
@@ -1102,37 +1102,37 @@ mutate_contract() {
 }
 
 @test "workflow runner label mutation fails" {
-    rewrite_workflow '          - runner: ubuntu-22.04' '          - runner: ubuntu-20.04'
+    rewrite_workflow '          - runner: macos-14' '          - runner: macos-13'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow host mutation fails" {
-    rewrite_workflow '            host: Linux' '            host: Other'
+    rewrite_workflow '            host: Darwin' '            host: Other'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow architecture mutation fails" {
-    rewrite_workflow '            architecture: x86_64' '            architecture: arm64'
+    rewrite_workflow '            architecture: arm64' '            architecture: x86_64'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow release mutation fails" {
-    rewrite_workflow '            release: "22.04"' '            release: "20.04"'
+    rewrite_workflow '            release: "14"' '            release: "13"'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow selected shell mutation fails" {
-    rewrite_workflow '            shell: /usr/bin/bash' '            shell: /bin/bash'
+    rewrite_workflow '            shell: /bin/bash' '            shell: /usr/bin/bash'
     contract_check
     [ "$status" -ne 0 ]
 }
 
 @test "workflow Bash regex mutation fails" {
-    rewrite_workflow "            bash_regex: '^5\\.'" "            bash_regex: '^4\\.'"
+    rewrite_workflow "            bash_regex: '^3\\.2\\.57'" "            bash_regex: '^4\\.'"
     contract_check
     [ "$status" -ne 0 ]
 }
@@ -1174,7 +1174,7 @@ mutate_contract() {
 }
 
 @test "toolchain runner deletion fails closed" {
-    mutate_contract 'del(.runners[3])'
+    mutate_contract 'del(.runners[0])'
     contract_check
     [ "$status" -ne 0 ]
 }
@@ -2738,4 +2738,112 @@ living_fail() {
     [[ "$(jq -r '.hooks.PreToolUse[0].hooks[1].command' "$hooks")" == *role-governance-guard.sh* ]]
     [[ "$(jq -r '.hooks.PreCompact[0].hooks[0].command' "$hooks")" == *precompact-write-ahead-backstop.sh* ]]
     ! grep -qi herdr "$hooks"
+}
+
+install_release_evidence() {
+    mkdir -p "$TEST_ROOT/.docs/evaluations/release-evidence"
+    cp "$REPOSITORY_ROOT/scripts/tests/fixtures/release-evidence/v0.2.0-valid.json.in" "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.0.json"
+}
+
+assert_release_evidence_rejected() {
+    local filter="$1" expected="$2"
+    make_metadata_root
+    install_release_evidence
+    mutate_json .docs/evaluations/release-evidence/v0.2.0.json "$filter"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/release-evidence/v0.2.0.json: "*"$expected"* ]]
+}
+
+@test "release evidence: valid record passes metadata mode" {
+    make_metadata_root
+    install_release_evidence
+    metadata
+    [ "$status" -eq 0 ]
+}
+
+@test "release evidence: missing role key fails" {
+    assert_release_evidence_rejected 'del(.pairs[0].e4.a_roles.planner)' 'schema /pairs/0/e4/a_roles'
+}
+
+@test "release evidence: failed role result fails" {
+    assert_release_evidence_rejected '.pairs[1].e4.a_roles.developer.result = "fail"' 'schema /pairs/1/e4/a_roles/developer/result'
+}
+
+@test "release evidence: failed gate result fails" {
+    assert_release_evidence_rejected '.pairs[0].e4.c_gate.result = "fail"' 'schema /pairs/0/e4/c_gate/result'
+}
+
+@test "release evidence: codex floor 0.144.5 fails" {
+    assert_release_evidence_rejected '.pairs[1].floor = "0.144.5"' 'schema /pairs/1/floor'
+}
+
+@test "release evidence: third pair fails" {
+    assert_release_evidence_rejected '.pairs += [.pairs[0]]' 'schema /pairs'
+}
+
+@test "release evidence: duplicate claude pair in place of codex fails" {
+    assert_release_evidence_rejected '.pairs[1] = .pairs[0]' 'schema /pairs'
+}
+
+@test "release evidence: codex harness with claude client fails" {
+    assert_release_evidence_rejected '.pairs[1].client = "claude"' 'schema /pairs/1'
+}
+
+@test "release evidence: 39-character candidate fails" {
+    assert_release_evidence_rejected '.candidate = ("a" * 39)' 'schema /candidate'
+}
+
+@test "release evidence: absolute log path fails" {
+    assert_release_evidence_rejected '.bashRuns.bash5.log = "/tmp/x.log"' 'schema /bashRuns/bash5/log'
+}
+
+@test "release evidence: log path with dot-dot fails" {
+    assert_release_evidence_rejected '.pairs[0].e3.log = "logs/../x.log"' 'schema /pairs/0/e3/log'
+}
+
+@test "release evidence: release 0.2.1 fails" {
+    assert_release_evidence_rejected '.release = "0.2.1"' 'schema /release'
+}
+
+@test "release evidence: tag v0.2.1 fails" {
+    assert_release_evidence_rejected '.tag = "v0.2.1"' 'schema /tag'
+}
+
+@test "release evidence: top-level matrix naming v0.3.0 fails" {
+    assert_release_evidence_rejected '.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"' 'schema /matrix'
+}
+
+@test "release evidence: pair e1 matrix naming v0.3.0 fails" {
+    assert_release_evidence_rejected '.pairs[0].e1.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"' 'schema /pairs/0/e1/matrix'
+}
+
+@test "release evidence: ownerAck candidate differing from candidate fails" {
+    assert_release_evidence_rejected '.ownerAck.candidate = ("c" * 40)' 'ownerAck.candidate must equal candidate'
+}
+
+@test "release evidence: priorCandidate equal to candidate fails" {
+    assert_release_evidence_rejected '.pairs[0].e4.d_lifecycle.priorCandidate = .candidate' 'priorCandidate must differ from candidate'
+}
+
+@test "release evidence: missing bash5 run fails" {
+    assert_release_evidence_rejected 'del(.bashRuns.bash5)' 'schema /bashRuns'
+}
+
+@test "release evidence: bash5 version 3.2.57 fails" {
+    assert_release_evidence_rejected '.bashRuns.bash5.bashVersion = "3.2.57"' 'schema /bashRuns/bash5/bashVersion'
+}
+
+@test "release evidence: docs state accepts only release-evidence/v0.2.0.json nested path" {
+    make_docs_root
+    install_release_evidence
+    docs_all
+    [[ "$output" != *"unexpected nested path"* ]]
+    mkdir -p "$TEST_ROOT/.docs/evaluations/other"
+    printf '{}\n' >"$TEST_ROOT/.docs/evaluations/other/x.json"
+    cp "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.0.json" "$TEST_ROOT/.docs/evaluations/release-evidence/v0.2.1.json"
+    docs_all
+    [ "$status" -eq 1 ]
+    [[ "$output" == *".docs/evaluations/other/x.json"*"unexpected nested path"* ]]
+    [[ "$output" == *".docs/evaluations/release-evidence/v0.2.1.json"*"unexpected nested path"* ]]
 }
