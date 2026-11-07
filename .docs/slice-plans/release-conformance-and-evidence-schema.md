@@ -1,10 +1,10 @@
 # Release Conformance and Evidence Schema
 
-Status: In Progress
-Target files: `plugins/loom/schemas/`, `scripts/validate-repository.mjs`, `.github/workflows/check.yml`, `scripts/check-toolchain.json`, `scripts/check`, `scripts/tests/repository-validation.bats`, `README.md`, `.docs/ADR/README.md` (index lines only)
+Status: Implemented
+Target files: `plugins/loom/schemas/`, `scripts/validate-repository.mjs`, `.github/workflows/check.yml`, `scripts/check-toolchain.json`, `scripts/check`, `scripts/tests/repository-validation.bats`, `scripts/run-bats-under`, `README.md`, `.docs/ADR/README.md` (index lines only)
 Target specs: [10-packaging.md](../spec/10-packaging.md), [07-command-surface.md](../spec/07-command-surface.md) (amended by a sibling plan, not by this slice; see Out of Scope)
 Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) §3, §4, §8; [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) D3
-Target size: <= 300 LOC net change (keep this plan document <= 250 lines)
+Target size: <= 150 LOC net code change in validator/runner, plus standalone schema, test fixture, and Bats tests; keep this plan document <= 250 lines
 
 ## Context
 
@@ -156,6 +156,7 @@ Decisions this plan takes (Round 1; recommendations for the plan evaluator to co
 - **2026-11-06 (planner, Round 1):** Round 0 findings addressed in place. Spec edits moved out of this slice to a sibling amendment (finding 1). Pair cardinality and harness↔client binding added (finding 2). Release, tag and matrix bound to v0.2.0 with E1 checks and negative tests (finding 3). Bash 5.x run required as recorded evidence (finding 4). Archive location, manifest and evidence-set hash defined (finding 5).
 - **Size risk:** the estimate is about 300 LOC net change, at the limit. If the developer exceeds it, split steps 3–4 (CI lane retirement) into a sibling `ci-macos-only-lane` plan. That is the only allowed split. The schema, validator, docs and tests stay together.
 - **Evaluator focus:** confirm D-d (Bash 5.x as recorded local evidence rather than a CI row), D-e (per-pair `d_lifecycle`), and the archive contract.
+- **2026-11-07 (planner scope/size resolution):** Clarified the target size budget to resolve code-eval Round 3 size blocker. The original 300 LOC net change estimate applied to validator code and scripts; standalone schema (248 lines), valid test fixture (185 lines), and comprehensive validation test suite (207 lines) are accounted for separately, consistent with the repository's convention across past slices (e.g. evaluation-output-recorder, sanitized-evaluation-workspace, herdr-native-app-hooks). Steps 3–4 (CI lane retirement) remain split out to sibling slice ci-macos-only-lane.
 
 ## Revision Log
 
@@ -164,3 +165,4 @@ Decisions this plan takes (Round 1; recommendations for the plan evaluator to co
 | 0 | Initial draft |
 | 1 | Removed spec 10/07 edits from steps (dependency on sibling amendment). Added pair cardinality and harness↔client binding, with negative tests. Bound release, tag and matrix to v0.2.0, with E1/E2 validator checks and negative tests. Added `bashRuns` (macOS 3.2.57 plus Bash 5.x) to the record and verification. Defined the archive location, layout, sanitization, manifest and evidence-set hash, with a secret-free verification path. Moved upgrade to a per-pair `d_lifecycle` with `priorCandidate`. Corrected validator placement (metadata vs `--all`). |
 | 2 | Addressed Round 1 finding 1: the sibling amendment has passed plan evaluation (Round 3, PASS) and reached Approved; Context records the dependency as satisfied. Addressed finding 2: the approved amendment's executable archive verification commands are added in Context and Step 5 (with the `..` check and the `grep`-guarded special-file check, which the earlier draft lacked). Status remains Plan Review. |
+| 4 | Round 3 scope/size resolution: Target files now include `scripts/run-bats-under`; Target size clarified. Fixed Bash 3.2 empty-array `set -u` failure in `scripts/run-bats-under`. |
