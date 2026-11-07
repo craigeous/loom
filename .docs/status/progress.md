@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-07 — `v0.2.0` released: tag `v0.2.0` and release evidence (`.docs/evaluations/release-evidence/v0.2.0.json`, ADR 0032 E1–E5, ADR 0033 D3) published to `origin/main`.
 - 2026-11-07 — `release-conformance-and-evidence-schema` (v0.2.0 release evidence schema and chain validator, macOS-only CI/docs alignment) landed via remote-direct; plan archived.
 - 2026-11-06 — `launcher-matrix-and-rotation-fix` (release matrix binding, two-client default rotation without Antigravity) landed via remote-direct; plan archived.
 - 2026-11-06 — `instruction-adapter-sync` (digest wording, re-stamped block hashes, `--all` drift check) landed via remote-direct; plan archived.
@@ -30,7 +31,10 @@ Current milestone: M9
 
 ## Current state
 
-- **Current activity (2026-11-07) — `release-conformance-and-evidence-schema` Implemented (code-eval Round 3 blockers resolved):**
+- **Current activity (2026-11-07) — `v0.2.0` Released and Published (ADR 0032 E1–E5, ADR 0033 D3):**
+  Candidate commit `78a21fb9dd681912b6b0f866bba5d4d58a2b13c5` tagged `v0.2.0` and release evidence commit `b5110e5c730e6451f2c95dd021aab28a02744b08` (`.docs/evaluations/release-evidence/v0.2.0.json`) published to `origin/main`. Live conformance proven for Claude Code CLI (2.1.216 floor) and Codex CLI (0.144.6 floor) across all five roles, full dev loop, install/upgrade/uninstall lifecycle, and dual-platform gate passing (Bash 3.2.57 / Bash 5.3.9; 30 release-evidence tests passing).
+
+- **Prior action (2026-11-07) — `release-conformance-and-evidence-schema` Landed:**
   Fixed Bash 3.2 empty-array `set -u` failure in `scripts/run-bats-under`; clarified slice target size/files. Gate passed: `TMPDIR=/private/tmp BASH_BIN=/bin/bash /bin/bash scripts/check` under Bash 3.2.57 (947 Bats tests, finished 2026-11-07 09:29 CST) and `BASH_BIN=/opt/homebrew/bin/bash` under Bash 5.3.9 (finished 2026-11-07 09:45 CST).
 
 - **Last action (2026-11-01) — M9 slice 3 (`herdr-verification`) Landed:**
