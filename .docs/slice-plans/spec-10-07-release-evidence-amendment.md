@@ -1,6 +1,6 @@
 # Proposed spec amendments — v0.2.0 release conformance and evidence
 
-Status: Plan Review
+Status: Approved
 Target specs: 10-packaging.md, 07-command-surface.md
 Target size: <= 200 LOC net change (keep document <= 250 lines)
 

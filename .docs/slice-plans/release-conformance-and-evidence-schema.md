@@ -20,7 +20,22 @@ Corrections found while planning:
 2. **The CI lane list is pinned in three more places.** `scripts/check-toolchain.json` and the jq contract inside `scripts/check` carry the SHA-256 of `check.yml` and the runner rows, and `scripts/tests/repository-validation.bats` addresses removed rows by name. All change in the same commit.
 3. **The validator rejects nested evaluation paths.** `validateDocsState` (`--all` only) reports "unexpected nested path under .docs/evaluations". ADR 0032 §3 requires `.docs/evaluations/release-evidence/vR.json`, so that one path must be accepted and nothing else nested.
 
-**Dependency (blocks Approved).** The format decisions this schema encodes (E4 sub-checks, the archive contract, the bash-run record, the upgrade definition) are normative text for spec 10 and spec 07. Under ADR 0005 and the severity rules, that text is owned by a sibling planning artifact, `spec-10-07-release-evidence-amendment`, which must reach Approved through the planner and cold plan evaluation before this slice moves to Approved. This slice does not write or edit spec files. The sibling artifact is not written yet.
+**Dependency (satisfied).** The format decisions this schema encodes (E4 sub-checks, the archive contract, the bash-run record, the upgrade definition) are normative text for spec 10 and spec 07. Under ADR 0005 and the severity rules, that text is owned by the sibling planning artifact [spec-10-07-release-evidence-amendment](spec-10-07-release-evidence-amendment.md). It has passed cold plan evaluation (Round 3, PASS; [evaluation](../evaluations/spec-10-07-release-evidence-amendment-plan-eval.md)) and reached `Approved`. Its spec text is not yet applied to spec 10 or spec 07; that lands with the implementing slice. This slice does not write or edit spec files.
+
+**Archive verification commands (executable).** A reviewer runs these against the sanitized archive `ARCHIVE` and the record `RECORD`. They need no credentials and read only the archive, its manifest and the record. Each check is silent on success. This is the approved amendment's Verification check 5. It differs from the earlier draft in two ways: the `..` entry check is kept, and the special-file check is guarded by `| grep .`, because `find` exits 0 even when it matches.
+
+```sh
+D=$(mktemp -d) && tar -xzf ARCHIVE -C "$D"
+tar -tzf ARCHIVE | grep -v -E '^(\./)?(MANIFEST\.sha256|logs/[a-z0-9][a-z0-9._/-]*\.log)$' && echo 'INVALID ARCHIVE ENTRY'
+tar -tzf ARCHIVE | grep -F '..' && echo 'DOTDOT ENTRY'
+find "$D/logs" -type f | grep -v -E '\.log$' && echo 'NON-LOG FILE IN ARCHIVE'
+find "$D" ! -type f ! -type d | grep . && echo 'SPECIAL FILE IN ARCHIVE'
+(cd "$D" && shasum -a 256 -c MANIFEST.sha256 >/dev/null) || echo 'HASH FAIL'
+diff <(cd "$D" && find logs -type f | LC_ALL=C sort) <(cut -c67- "$D/MANIFEST.sha256" | LC_ALL=C sort)
+shasum -a 256 "$D/MANIFEST.sha256" | cut -c1-64            # equals ownerAck.evidenceSet
+comm -23 <(jq -r '..|objects|select(has("logSha256"))|"\(.logSha256)  \(.log)"' RECORD | LC_ALL=C sort) \
+  <(LC_ALL=C sort "$D/MANIFEST.sha256")                    # must print nothing
+```
 
 Decisions this plan takes (Round 1; recommendations for the plan evaluator to confirm or redirect):
 
@@ -37,7 +52,7 @@ Decisions this plan takes (Round 1; recommendations for the plan evaluator to co
 - **Sanitization before hashing.** The hashed bytes are the sanitized bytes. Sanitized logs contain no credential values, no auth file content, no environment dumps, and no absolute owner paths (home paths become `~`). The secret-pattern scan in the spec amendment must be clean.
 - **Manifest.** Generate it with `find logs -type f | LC_ALL=C sort | xargs shasum -a 256 > MANIFEST.sha256`. Each line is `<64-hex>  logs/<path>`, LF-terminated.
 - **Hashes.** Each record `logSha256` equals the manifest line for its `log`. `ownerAck.evidenceSet` equals `shasum -a 256 MANIFEST.sha256`.
-- **Secret-free verification.** A reviewer needs no credentials and no access to the runs. The commands are in the README section that this slice adds.
+- **Secret-free verification.** A reviewer needs no credentials and no access to the runs. The commands are in the archive verification block above and are reproduced in the README section that this slice adds.
 
 ## Out of Scope & Threat-Model Boundary
 
@@ -86,7 +101,22 @@ Decisions this plan takes (Round 1; recommendations for the plan evaluator to co
    - *Hosts bullet* (lines 73–75): "macOS 14+ on Apple silicon (arm64) for v0.2.0 and v0.3.0; Ubuntu 22.04/24.04 x86-64 moves to v0.4.0; macOS Intel is not supported." Keep the Windows, PowerShell, Git Bash/MSYS2, Cygwin and WSL sentence.
    - *v0.2 baseline paragraph* (lines 244–247): name macOS 14+ Apple silicon as the only v0.2 platform; say CI runs one macOS 14 arm64 lane on Bash 3.2.57; say Bash 5.x is release evidence (`bashRuns.bash5`); say a pair is supported only with its complete record (spec 10).
    - Keep verbatim, since the validator requires them (lines 386–395): "The exact supported client floors are Claude Code 2.1.216 and Codex CLI 0.144.6." and "static scaffolding only".
-   - Add a short "Verifying release evidence" subsection with the three archive commands from the Context contract. State that verification needs no credentials and reads only hashes.
+   - Add a "Verifying release evidence" subsection containing this block verbatim (the archive verification commands in Context; `ARCHIVE` and `RECORD` are the reviewer's local paths):
+
+     ```sh
+     D=$(mktemp -d) && tar -xzf ARCHIVE -C "$D"
+     tar -tzf ARCHIVE | grep -v -E '^(\./)?(MANIFEST\.sha256|logs/[a-z0-9][a-z0-9._/-]*\.log)$' && echo 'INVALID ARCHIVE ENTRY'
+     tar -tzf ARCHIVE | grep -F '..' && echo 'DOTDOT ENTRY'
+     find "$D/logs" -type f | grep -v -E '\.log$' && echo 'NON-LOG FILE IN ARCHIVE'
+     find "$D" ! -type f ! -type d | grep . && echo 'SPECIAL FILE IN ARCHIVE'
+     (cd "$D" && shasum -a 256 -c MANIFEST.sha256 >/dev/null) || echo 'HASH FAIL'
+     diff <(cd "$D" && find logs -type f | LC_ALL=C sort) <(cut -c67- "$D/MANIFEST.sha256" | LC_ALL=C sort)
+     shasum -a 256 "$D/MANIFEST.sha256" | cut -c1-64            # equals ownerAck.evidenceSet
+     comm -23 <(jq -r '..|objects|select(has("logSha256"))|"\(.logSha256)  \(.log)"' RECORD | LC_ALL=C sort) \
+       <(LC_ALL=C sort "$D/MANIFEST.sha256")                    # must print nothing
+     ```
+
+     State that verification needs no credentials and reads only hashes.
    - Update every "886" Bats count (lines 60, 113, 240) to the new count from the gate run.
 
 6. **Update `.docs/ADR/README.md` (index lines only).** The ADR 0032 entry already records the ADR 0019 §2/§5, ADR 0024 §1 and ADR 0027 §4 supersessions. Add to the ADR 0024 entry that ADR 0033 supersedes its §6/§7 ongoing obligations (ADR 0033's entry already says so). Verify the ADR 0019 and ADR 0027 entries match ADR 0032 §4 and §8. Edit no ADR body.
@@ -133,3 +163,4 @@ Decisions this plan takes (Round 1; recommendations for the plan evaluator to co
 |---|---|
 | 0 | Initial draft |
 | 1 | Removed spec 10/07 edits from steps (dependency on sibling amendment). Added pair cardinality and harness↔client binding, with negative tests. Bound release, tag and matrix to v0.2.0, with E1/E2 validator checks and negative tests. Added `bashRuns` (macOS 3.2.57 plus Bash 5.x) to the record and verification. Defined the archive location, layout, sanitization, manifest and evidence-set hash, with a secret-free verification path. Moved upgrade to a per-pair `d_lifecycle` with `priorCandidate`. Corrected validator placement (metadata vs `--all`). |
+| 2 | Addressed Round 1 finding 1: the sibling amendment has passed plan evaluation (Round 3, PASS) and reached Approved; Context records the dependency as satisfied. Addressed finding 2: the approved amendment's executable archive verification commands are added in Context and Step 5 (with the `..` check and the `grep`-guarded special-file check, which the earlier draft lacked). Status remains Plan Review. |
