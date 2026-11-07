@@ -17,7 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [release-conformance-and-evidence-schema.md](release-conformance-and-evidence-schema.md) — `Implemented` — v0.2.0 release-evidence record schema (`loom-release-evidence/v1`, ADR 0032 §3), macOS-only CI and docs alignment (research G4, G5; ADR 0032 §8); passed plan evaluation Round 2 (PASS, commit c410e76; eval record in `2c9c1a0`).
+- [release-conformance-and-evidence-schema.md](release-conformance-and-evidence-schema.md) — `In Progress` — v0.2.0 release-evidence record schema (`loom-release-evidence/v1`, ADR 0032 §3), macOS-only CI and docs alignment (research G4, G5; ADR 0032 §8); passed plan evaluation Round 2 (PASS, commit c410e76; eval record in `2c9c1a0`).
 - [spec-10-07-release-evidence-amendment.md](spec-10-07-release-evidence-amendment.md) — `Landed` — spec 10 and spec 07 text for v0.2.0 release conformance and the evidence record (ADR 0032 §3, §8; ADR 0033 D3); passed plan evaluation Round 3 (PASS); the schema plan above depends on it.
 - [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
 - [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
