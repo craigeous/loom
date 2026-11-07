@@ -1,0 +1,19 @@
+# Plan Evaluation: spec-10-07-release-evidence-amendment
+
+Artifact: [spec-10-07-release-evidence-amendment](../slice-plans/spec-10-07-release-evidence-amendment.md)
+Commit: 29d74d3
+Round: 0
+Verdict: FAIL
+Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md), [ADR 0005](../ADR/0005-specs-frozen-after-approval.md), [spec 10](../spec/10-packaging.md), [spec 07](../spec/07-command-surface.md), and [plan-eval rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md).
+
+## Summary
+
+The two v0.2.0 pairs and platform scope are correctly identified, and the draft preserves the spec 07 tables and recognizes the planner-led amendment process. The proposed amendment nevertheless drops required evidence details, leaves contradictory approved text in place, and does not make its evidence verification executable. It needs revision before approval.
+
+Checklist: (1) platform: pass; (2) E1–E5: fail, F1; (3) record: fail, F3; (4) retirement: pass for the named retired statuses and tooling; (5) deferral: fail, F2; (6) spec 07 tables: pass; (7) size: the draft is 224 lines, but the claimed net-change budget is not mechanically demonstrated; (8) decisions: D-a needs correction for later admitted pairs (F2); D-b is consistent with the stated Bash floor and recorded Bash 5 test; D-c needs a clean candidate install explicitly proven (F1); D-d and D-e are reasonable choices subject to executable archive verification (F3). The existing spec 07 host discussion remains a provisional design, not an admission of support; its continued presence is consistent with deferral if clearly labeled as such.
+
+## Findings
+
+- [BLOCKER] **F1 — Required per-pair proof is lost.** Diff A reduces E2 to a binding name, omitting ADR 0032 §3's manifest/catalog loading, and E3 to unspecified Bats suites, omitting its launch descriptor, role parity, applicable hook/guard, and unknown/below-floor refusal coverage. E4 omits the required platform, floor, and result for each run. Its lifecycle starts by installing a prior candidate, without explicitly proving a clean install of the release candidate as required by ADR 0032 §4 and ADR 0033 §2. Restore these explicit requirements in the proposed spec text, including the per-run fields and candidate clean-install proof.
+- [BLOCKER] **F2 — The resulting specifications conflict with the release policy and themselves.** Diff A says a pair is supported only if ADR 0032 §1 lists it as REQUIRED, excluding future pairs admitted under ADR 0033 §1. It also leaves spec 10's Herdr matrix and binding descriptions presenting that deferred host as a current matrix entry. The draft neither provides ADR 0032 §8's per-release table nor clearly describes carried and subsequently admitted pairs. Amend the retained passages and define the release rows and admission rule consistently with ADR 0033; and label deferred host design accordingly.
+- [MAJOR] **F3 — The verification and append-only contract is underspecified.** The checklist asks for mechanical verification, but gives no executable checks for the diff, the net LOC budget, or the claimed retirement and deferral invariants. The record rules say published records are not edited and corrections use new files, while prescribing only `vR.json` and no correction naming or selection rule; they also require `--metadata` to check bindings without specifying how it identifies the record commit, checks main membership, or verifies the external archive and all referenced log hashes. Define an unambiguous correction and verification procedure, including archive acquisition and completeness, and provide reproducible checks for the checklist. Preserve the ADR's immutable published record and tag binding.
