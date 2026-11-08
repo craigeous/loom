@@ -19,6 +19,7 @@ Current milestone: M9
    override `user.*`. The command surface is `/loom:run` plus one-off `/loom:<role>`.
 
 ## Where things stand
+- **Landed (2026-11-08):** `hc-host-adapter` (M9 / v0.3.0 Slice 1): `loom-host-hc` observation/cleanup helper, `v0.3.0` matrix `hostFloors` registration, `loom-host-binding-v1` schema, fixture, and repository validator; 271 Bats tests passing; code evaluation passed Round 4 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
 - **Accepted (2026-11-08):** ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 Scope and Settle Evaluator Governance) Accepted after Round 3 PASS via Codex cross-family evaluation. Formally admits Antigravity, Orca, and Herdr to v0.3.0. Settles host evaluator governance (ADR 0034 §2): interactive roles run inside host harnesses (`herdr`, `orca`), while evaluators run in cold, isolated POSIX workspaces with certified model CLIs (`codex` or `claude`). Slices ordered: (1) `hc-host-adapter`, (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`.
 - **Landed (2026-11-07):** `codex-launch-schema-fix` (v0.2.1 preparation): removed `--output-schema` from `codex exec` in `loom-launch-role`, allowing native unwrapped execution; enforced non-symlinked regular file check on launch descriptor schema; 103/103 Bats tests passing.
 - **Published (2026-11-07):** `v0.2.0` release tag and release evidence (`.docs/evaluations/release-evidence/v0.2.0.json`, ADR 0032 E1–E5, ADR 0033 D3) published to `origin/main`. Live conformance proven for Claude Code CLI (2.1.216 floor) and Codex CLI (0.144.6 floor) on macOS 14+ Apple silicon.
@@ -28,5 +29,5 @@ Current milestone: M9
 - **Landed (2026-11-05):** `dogfood-retirement` (ADR 0033 D1) via remote-direct: the macOS dual-client checkpoint tooling and its temporary gate exclusion list are deleted; the preserved evidence record and its schema check remain; `dogfood-int-race` is Abandoned.
 - **Landed (2026-11-05):** `herdr-surface-retirement` (M9 4 of 4) via remote-direct: Herdr plugin surfaces retired; Claude and Codex are the only supported clients.
 - **Landed (2026-11-02):** `hc-guard-deny-policy` (M9 1 of 4) via remote-direct. M9 slices `herdr-client-adapter`, `herdr-native-app-hooks`, `herdr-verification` Landed; 952 Bats tests passing (offline fixtures only).
-- **Next action:** Deliver Slice 1 (`hc-host-adapter`): review and update `.docs/slice-plans/hc-host-adapter.md`, implement `plugins/loom/bin/loom-host-hc` and metadata fixture, run Bats test suite and cross-family evaluation with Codex.
+- **Next action:** Deliver Slice 2 (`hc-live-probe`): review `.docs/slice-plans/hc-live-probe.md`, implement generic live `hc` probe script and offline tests, run local review and cross-family evaluation with Codex.
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.

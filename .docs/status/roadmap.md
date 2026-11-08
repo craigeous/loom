@@ -39,6 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+  - Landed 2026-11-08: M9 / v0.3.0 Slice 1: `hc-host-adapter` (`loom-host-hc` observation/cleanup helper, v0.3.0 matrix `hostFloors` registration, `loom-host-binding-v1` schema, fixture, and repository validator); passed plan evaluation Round 3 (PASS) and blind code evaluation Round 4 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Accepted 2026-11-08: ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 scope and settle evaluator governance): admits Antigravity, Orca, and Herdr to v0.3.0 scope under ADR 0033 §1; settles host evaluator governance by restricting `hc`/Orca to authoring/interactive host roles and delegating evaluation to cold, isolated workspaces with certified model clients; un-shelves `hc-host-adapter` and `hc-live-probe`.
   - Landed 2026-11-07: `codex-launch-schema-fix` (v0.2.1 preparation): removed `--output-schema` from `codex exec` in `loom-launch-role`, allowing native unwrapped role execution; plan archived.
   - Landed 2026-11-07: v0.2.0 live proof complete; release tag `v0.2.0` and evidence record published to `origin/main` (ADR 0032 E1–E5, ADR 0033 D3).
