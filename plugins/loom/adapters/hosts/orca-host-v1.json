@@ -1,0 +1,14 @@
+{
+  "schema": "loom-host-binding-v1",
+  "id": "orca-host/v1",
+  "host": "orca",
+  "controlCli": "orca",
+  "floor": "1.4.250",
+  "helper": "loom-host-orca",
+  "helperPath": "bin/loom-host-orca",
+  "helperMustBeRegularFile": true,
+  "helperMustBeExecutable": true,
+  "helperDirectoryMustBeDirectChild": true,
+  "reachableVerbs": ["show", "wait", "read", "close"],
+  "launch": "unsupported"
+}

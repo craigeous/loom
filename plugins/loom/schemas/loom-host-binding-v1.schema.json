@@ -2,36 +2,76 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/craigeous/loom/schemas/loom-host-binding-v1.schema.json",
   "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema",
-    "id",
-    "host",
-    "controlCli",
-    "floor",
-    "helper",
-    "helperPath",
-    "helperMustBeRegularFile",
-    "helperMustBeExecutable",
-    "helperDirectoryMustBeDirectChild",
-    "reachableVerbs",
-    "launch"
-  ],
-  "properties": {
-    "schema": { "const": "loom-host-binding-v1" },
-    "id": { "const": "hc-host/v1" },
-    "host": { "const": "herdr" },
-    "controlCli": { "const": "hc" },
-    "floor": { "const": "0.1.16" },
-    "helper": { "const": "loom-host-hc" },
-    "helperPath": { "const": "bin/loom-host-hc" },
-    "helperMustBeRegularFile": { "const": true },
-    "helperMustBeExecutable": { "const": true },
-    "helperDirectoryMustBeDirectChild": { "const": true },
-    "reachableVerbs": {
-      "type": "array",
-      "const": ["get", "wait", "events", "kill", "rm"]
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "id",
+        "host",
+        "controlCli",
+        "floor",
+        "helper",
+        "helperPath",
+        "helperMustBeRegularFile",
+        "helperMustBeExecutable",
+        "helperDirectoryMustBeDirectChild",
+        "reachableVerbs",
+        "launch"
+      ],
+      "properties": {
+        "schema": { "const": "loom-host-binding-v1" },
+        "id": { "const": "hc-host/v1" },
+        "host": { "const": "herdr" },
+        "controlCli": { "const": "hc" },
+        "floor": { "const": "0.1.16" },
+        "helper": { "const": "loom-host-hc" },
+        "helperPath": { "const": "bin/loom-host-hc" },
+        "helperMustBeRegularFile": { "const": true },
+        "helperMustBeExecutable": { "const": true },
+        "helperDirectoryMustBeDirectChild": { "const": true },
+        "reachableVerbs": {
+          "type": "array",
+          "const": ["get", "wait", "events", "kill", "rm"]
+        },
+        "launch": { "const": "unsupported" }
+      }
     },
-    "launch": { "const": "unsupported" }
-  }
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "id",
+        "host",
+        "controlCli",
+        "floor",
+        "helper",
+        "helperPath",
+        "helperMustBeRegularFile",
+        "helperMustBeExecutable",
+        "helperDirectoryMustBeDirectChild",
+        "reachableVerbs",
+        "launch"
+      ],
+      "properties": {
+        "schema": { "const": "loom-host-binding-v1" },
+        "id": { "const": "orca-host/v1" },
+        "host": { "const": "orca" },
+        "controlCli": { "const": "orca" },
+        "floor": { "const": "1.4.250" },
+        "helper": { "const": "loom-host-orca" },
+        "helperPath": { "const": "bin/loom-host-orca" },
+        "helperMustBeRegularFile": { "const": true },
+        "helperMustBeExecutable": { "const": true },
+        "helperDirectoryMustBeDirectChild": { "const": true },
+        "reachableVerbs": {
+          "type": "array",
+          "const": ["show", "wait", "read", "close"]
+        },
+        "launch": { "const": "unsupported" }
+      }
+    }
+  ]
 }

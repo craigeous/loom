@@ -21,6 +21,15 @@
             "floor": { "const": "0.1.16" },
             "helper": { "const": "loom-host-hc" }
           }
+        },
+        "orca": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["floor", "helper"],
+          "properties": {
+            "floor": { "const": "1.4.250" },
+            "helper": { "const": "loom-host-orca" }
+          }
         }
       }
     },

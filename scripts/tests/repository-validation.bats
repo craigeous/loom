@@ -2978,6 +2978,12 @@ install_correction() {
     [[ "$output" == *"missing hostFloors.hc entry"* ]]
 
     make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json 'del(.hostFloors.orca)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing hostFloors.orca entry"* ]]
+
+    make_metadata_root
     mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.hostFloors.hc.floor = "0.1.15"'
     metadata
     [ "$status" -eq 1 ]
@@ -2988,6 +2994,18 @@ install_correction() {
     metadata
     [ "$status" -eq 1 ]
     [[ "$output" == *"hostFloors.hc.helper"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.hostFloors.orca.floor = "1.4.249"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hostFloors.orca.floor"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.hostFloors.orca.helper = "wrong-helper"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hostFloors.orca.helper"* ]]
 }
 
 @test "host binding: unexpected files in hosts directory or wrong floor are reported" {
@@ -2999,6 +3017,11 @@ install_correction() {
 
     make_metadata_root
     mutate_json plugins/loom/adapters/hosts/hc-host-v1.json '.floor = "0.1.15"'
+    metadata
+    [ "$status" -eq 1 ]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/hosts/orca-host-v1.json '.floor = "1.4.249"'
     metadata
     [ "$status" -eq 1 ]
 }
@@ -3015,9 +3038,21 @@ install_correction() {
     metadata
     [ "$status" -eq 1 ]
     [[ "$output" == *"missing v0.3.0 host-hc metadata fixture"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/fixtures/v0.3.0/metadata/host-orca.json '.floor = "1.4.251"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release fixture differs from"* ]]
+
+    make_metadata_root
+    rm -f "$TEST_ROOT/plugins/loom/adapters/fixtures/v0.3.0/metadata/host-orca.json"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing v0.3.0 host-orca metadata fixture"* ]]
 }
 
-@test "host binding: missing or non-executable loom-host-hc is reported" {
+@test "host binding: missing or non-executable loom-host helpers are reported" {
     make_metadata_root
     rm -f "$TEST_ROOT/plugins/loom/bin/loom-host-hc"
     metadata
@@ -3029,9 +3064,21 @@ install_correction() {
     metadata
     [ "$status" -eq 1 ]
     [[ "$output" == *"helper is not executable"* ]]
+
+    make_metadata_root
+    rm -f "$TEST_ROOT/plugins/loom/bin/loom-host-orca"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing regular executable helper file"* ]]
+
+    make_metadata_root
+    chmod 644 "$TEST_ROOT/plugins/loom/bin/loom-host-orca"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"helper is not executable"* ]]
 }
 
-@test "host binding: loom-host-hc in ALLOWED_HELPERS or root allowedHelpers is reported" {
+@test "host binding: loom-host helpers in ALLOWED_HELPERS or root allowedHelpers are reported" {
     make_metadata_root
     sed -i.bak 's/ALLOWED_HELPERS=(/ALLOWED_HELPERS=(loom-host-hc /' "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper"
     rm -f "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper.bak"
@@ -3044,4 +3091,17 @@ install_correction() {
     metadata
     [ "$status" -eq 1 ]
     [[ "$output" == *"loom-host-hc must not appear in root allowedHelpers"* ]]
+
+    make_metadata_root
+    sed -i.bak 's/ALLOWED_HELPERS=(/ALLOWED_HELPERS=(loom-host-orca /' "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper"
+    rm -f "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper.bak"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"loom-host-orca must not appear in ALLOWED_HELPERS"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/roots/claude-plugin-root-v1.json '.allowedHelpers += ["loom-host-orca"]'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"loom-host-orca must not appear in root allowedHelpers"* ]]
 }

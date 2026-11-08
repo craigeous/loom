@@ -1,0 +1,187 @@
+#!/bin/bash
+# loom-host-orca — observation, lifecycle, and cleanup host adapter for Orca
+# Bash 3.2 compatible.
+
+set -u
+
+LOOM_ORCA_BIN="${LOOM_ORCA_BIN:-orca}"
+
+_fail() {
+    printf 'loom-host-orca: %s\n' "$1" >&2
+    exit 2
+}
+
+_usage() {
+    printf 'usage: loom-host-orca <launch|status|wait|read|events|end> ...\n' >&2
+    exit 1
+}
+
+_validate_handle() {
+    local handle="${1:-}"
+    if [ -z "$handle" ]; then
+        return 1
+    fi
+    case "$handle" in
+    *$'\n'* | *$'\r'* | -*) return 1 ;;
+    esac
+    if [ "${#handle}" -lt 1 ] || [ "${#handle}" -gt 64 ]; then
+        return 1
+    fi
+    if printf '%s' "$handle" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$'; then
+        return 0
+    fi
+    return 1
+}
+
+[ "$#" -ge 1 ] || _usage
+
+cmd="$1"
+shift
+
+case "$cmd" in
+launch)
+    printf 'unsupported: role launch on orca requires the owner-recorded probes (ADR 0034 sections 1 and 2)\n' >&2
+    exit 2
+    ;;
+status)
+    [ "$#" -eq 1 ] || _usage
+    handle="$1"
+    _validate_handle "$handle" || _fail "invalid terminal handle: '$handle'"
+    raw_out=""
+    set +e
+    raw_out=$("$LOOM_ORCA_BIN" terminal show --terminal "$handle" --json 2>/dev/null)
+    status_rc=$?
+    set -e
+    if [ "$status_rc" -eq 1 ] && printf '%s\n' "$raw_out" | jq -e '.ok == false and .error.code == "terminal_handle_stale"' >/dev/null 2>&1; then
+        printf 'not_found\n'
+        exit 2
+    elif [ "$status_rc" -ne 0 ]; then
+        _fail "orca terminal show exited with status $status_rc"
+    fi
+    printf '%s\n' "$raw_out" | jq -c '{
+            handle: (if .result.terminal.handle then .result.terminal.handle else null end),
+            title: (if .result.terminal.title then .result.terminal.title else null end),
+            connected: (if .result.terminal.connected != null then .result.terminal.connected else null end),
+            exitCause: (if .result.terminal.exitCause.kind then .result.terminal.exitCause.kind else null end),
+            worktreePath: (if .result.terminal.worktreePath then .result.terminal.worktreePath else null end)
+        }' 2>/dev/null || _fail "failed to parse orca terminal show JSON"
+    exit 0
+    ;;
+wait)
+    [ "$#" -ge 1 ] || _usage
+    handle="$1"
+    shift
+    _validate_handle "$handle" || _fail "invalid terminal handle: '$handle'"
+    timeout=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --timeout)
+            [ "$#" -ge 2 ] || _usage
+            timeout="$2"
+            shift 2
+            ;;
+        --timeout=*)
+            timeout="${1#--timeout=}"
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+    if [ -z "$timeout" ]; then
+        _usage
+    fi
+    if ! printf '%s' "$timeout" | grep -Eq '^[1-9][0-9]*$'; then
+        _usage
+    fi
+    if [ "${#timeout}" -gt 4 ] || [ "$timeout" -lt 1 ] || [ "$timeout" -gt 3600 ]; then
+        _usage
+    fi
+    timeout_ms=$((timeout * 1000))
+    set +e
+    "$LOOM_ORCA_BIN" terminal wait --terminal "$handle" --for exit --timeout-ms "$timeout_ms" --json >/dev/null 2>&1
+    wait_rc=$?
+    set -e
+    if [ "$wait_rc" -eq 0 ]; then
+        printf 'returned: read the committed artifact\n'
+        exit 0
+    else
+        printf 'degraded: wait did not return (orca exit %d); not completion\n' "$wait_rc"
+        exit 4
+    fi
+    ;;
+read | events)
+    [ "$#" -ge 1 ] || _usage
+    handle="$1"
+    shift
+    _validate_handle "$handle" || _fail "invalid terminal handle: '$handle'"
+    lines=500
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --lines)
+            [ "$#" -ge 2 ] || _usage
+            lines="$2"
+            shift 2
+            ;;
+        --lines=*)
+            lines="${1#--lines=}"
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+    if ! printf '%s' "$lines" | grep -Eq '^[1-9][0-9]*$'; then
+        _usage
+    fi
+    if [ "${#lines}" -gt 3 ] || [ "$lines" -lt 1 ] || [ "$lines" -gt 500 ]; then
+        _usage
+    fi
+    set +e
+    raw_read=$("$LOOM_ORCA_BIN" terminal read --terminal "$handle" --limit "$lines" --json 2>/dev/null)
+    read_rc=$?
+    set -e
+    if [ "$read_rc" -ne 0 ]; then
+        _fail "orca terminal read exited with status $read_rc"
+    fi
+    printf '%s\n' "$raw_read" | jq -e . >/dev/null 2>&1 || _fail "failed to parse orca terminal read JSON"
+    printf '%s\n' "$raw_read" | jq -r '.result.terminal.tail[]?' 2>/dev/null | head -n "$lines"
+    exit 0
+    ;;
+end)
+    [ "$#" -eq 1 ] || _usage
+    handle="$1"
+    _validate_handle "$handle" || _fail "invalid terminal handle: '$handle'"
+    set +e
+    raw_close=$("$LOOM_ORCA_BIN" terminal close --terminal "$handle" --tab --json 2>/dev/null)
+    close_rc=$?
+    set -e
+    printf '%s\n' "$raw_close" | jq -e . >/dev/null 2>&1 || _fail "failed to parse orca terminal close JSON"
+    if [ "$close_rc" -eq 0 ]; then
+        printf '%s\n' "$raw_close" | jq -e --arg h "$handle" '.ok == true and .result.close.handle == $h' >/dev/null 2>&1 ||
+            _fail "orca terminal close response did not confirm handle $handle"
+    elif [ "$close_rc" -eq 1 ]; then
+        printf '%s\n' "$raw_close" | jq -e '.ok == false and .error.code == "terminal_handle_stale"' >/dev/null 2>&1 ||
+            _fail "orca terminal close exited with status 1 but was not stale"
+    else
+        _fail "orca terminal close exited with status $close_rc"
+    fi
+    set +e
+    raw_show=$("$LOOM_ORCA_BIN" terminal show --terminal "$handle" --json 2>/dev/null)
+    show_rc=$?
+    set -e
+    printf '%s\n' "$raw_show" | jq -e . >/dev/null 2>&1 || _fail "failed to parse orca terminal show JSON"
+    if [ "$show_rc" -eq 1 ] && printf '%s\n' "$raw_show" | jq -e '.ok == false and .error.code == "terminal_handle_stale"' >/dev/null 2>&1; then
+        exit 0
+    elif [ "$show_rc" -eq 0 ] && printf '%s\n' "$raw_show" | jq -e '.ok == true and .result.terminal.connected == false and .result.terminal.exitCause.kind == "operator_close"' >/dev/null 2>&1; then
+        exit 0
+    else
+        _fail "orca terminal show after close did not confirm terminal termination"
+    fi
+    ;;
+*)
+    _usage
+    ;;
+esac

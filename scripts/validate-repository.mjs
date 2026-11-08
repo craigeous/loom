@@ -367,7 +367,8 @@ async function validateMetadata() {
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
-    ["plugins/loom/adapters/hosts/hc-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"]
+    ["plugins/loom/adapters/hosts/hc-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"],
+    ["plugins/loom/adapters/hosts/orca-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"]
   ];
   const schemaResults = new Map();
   for (const [target, schemaPath] of schemaBindings) {
@@ -661,72 +662,97 @@ function validateCatalogSource(catalogPath, source) {
 }
 
 function validateHostBinding(ajv) {
-  const liveBindingPath = "plugins/loom/adapters/hosts/hc-host-v1.json";
-  const fixturePath = "plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json";
   const v030Path = "plugins/loom/adapters/compatibility/v0.3.0.json";
-  const helperPath = "plugins/loom/bin/loom-host-hc";
-
-  // (a) Validate v0.3.0.json against matrix schema and require hostFloors.hc match
   validateJson(v030Path, "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json", ajv);
   const v030 = readJson(v030Path);
-  const liveBinding = readJson(liveBindingPath);
-  if (!v030 || typeof v030 !== "object" || !v030.hostFloors || !v030.hostFloors.hc) {
-    report(v030Path, "missing hostFloors.hc entry");
-  } else if (liveBinding && typeof liveBinding === "object") {
-    if (v030.hostFloors.hc.floor !== liveBinding.floor) {
-      report(v030Path, `hostFloors.hc.floor '${v030.hostFloors.hc.floor}' does not match host binding floor '${liveBinding.floor}'`);
+
+  const hosts = [
+    {
+      key: "hc",
+      liveBindingPath: "plugins/loom/adapters/hosts/hc-host-v1.json",
+      fixturePath: "plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json",
+      helperPath: "plugins/loom/bin/loom-host-hc",
+      floor: "0.1.16",
+      helper: "loom-host-hc"
+    },
+    {
+      key: "orca",
+      liveBindingPath: "plugins/loom/adapters/hosts/orca-host-v1.json",
+      fixturePath: "plugins/loom/adapters/fixtures/v0.3.0/metadata/host-orca.json",
+      helperPath: "plugins/loom/bin/loom-host-orca",
+      floor: "1.4.250",
+      helper: "loom-host-orca"
     }
-    if (v030.hostFloors.hc.helper !== liveBinding.helper) {
-      report(v030Path, `hostFloors.hc.helper '${v030.hostFloors.hc.helper}' does not match host binding helper '${liveBinding.helper}'`);
-    }
+  ];
+
+  // (b) the hosts/ directory holds exactly the host binding files
+  const hostFiles = files.filter((f) => f.startsWith("plugins/loom/adapters/hosts/")).sort();
+  const expectedHostFiles = hosts.map((h) => h.liveBindingPath).sort();
+  if (!deepEqual(hostFiles, expectedHostFiles)) {
+    report("plugins/loom/adapters/hosts/", `hosts/ directory must hold exactly '${expectedHostFiles.join(", ")}', found [${hostFiles.join(", ")}]`);
   }
 
-  // (b) the hosts/ directory holds exactly that one binding file and floor is 0.1.16
-  const hostFiles = files.filter((f) => f.startsWith("plugins/loom/adapters/hosts/"));
-  if (hostFiles.length !== 1 || hostFiles[0] !== liveBindingPath) {
-    report(liveBindingPath, `hosts/ directory must hold exactly '${liveBindingPath}', found [${hostFiles.join(", ")}]`);
-  }
-  if (liveBinding && typeof liveBinding === "object" && liveBinding.floor !== "0.1.16") {
-    report(liveBindingPath, `host binding floor must be '0.1.16', found '${liveBinding.floor}'`);
-  }
-
-  // (c) the live binding and the v0.3.0 fixture are deep-equal
-  const fixtureNode = safeNode(fixturePath, { missing: false, regularFile: true });
-  if (!fixtureNode) {
-    report(fixturePath, "missing v0.3.0 host-hc metadata fixture");
-  } else {
-    validateJson(fixturePath, "plugins/loom/schemas/loom-host-binding-v1.schema.json", ajv);
-    const fixture = readJson(fixturePath);
-    if (liveBinding && fixture && !deepEqual(liveBinding, fixture)) {
-      report(fixturePath, `release fixture differs from ${liveBindingPath}`);
-    }
-  }
-
-  // (d) bin/loom-host-hc exists as a regular, executable file
-  const helperNode = safeNode(helperPath, { missing: false, regularFile: true });
-  if (!helperNode) {
-    report(helperPath, "missing regular executable helper file");
-  } else {
-    try {
-      fs.accessSync(helperNode.physical, fs.constants.X_OK);
-    } catch {
-      report(helperPath, "helper is not executable");
-    }
-  }
-
-  // (e) loom-host-hc appears in neither ALLOWED_HELPERS of loom-resolve-helper nor any root allowedHelpers
   const resolverText = readText("plugins/loom/bin/loom-resolve-helper");
-  if (resolverText !== null && /ALLOWED_HELPERS=\([^)]*loom-host-hc[^)]*\)/.test(resolverText)) {
-    report("plugins/loom/bin/loom-resolve-helper", "loom-host-hc must not appear in ALLOWED_HELPERS");
-  }
   const rootPaths = [
     "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
     "plugins/loom/adapters/roots/codex-skill-source-v1.json"
   ];
-  for (const rootPath of rootPaths) {
-    const rootJson = readJson(rootPath);
-    if (rootJson && Array.isArray(rootJson.allowedHelpers) && rootJson.allowedHelpers.includes("loom-host-hc")) {
-      report(rootPath, "loom-host-hc must not appear in root allowedHelpers");
+  const rootJsons = rootPaths.map((rp) => ({ path: rp, json: readJson(rp) }));
+
+  for (const host of hosts) {
+    const liveBinding = readJson(host.liveBindingPath);
+
+    // (a) Validate v0.3.0.json against matrix schema and require hostFloors entry match
+    if (!v030 || typeof v030 !== "object" || !v030.hostFloors || !v030.hostFloors[host.key]) {
+      report(v030Path, `missing hostFloors.${host.key} entry`);
+    } else if (liveBinding && typeof liveBinding === "object") {
+      if (v030.hostFloors[host.key].floor !== liveBinding.floor) {
+        report(v030Path, `hostFloors.${host.key}.floor '${v030.hostFloors[host.key].floor}' does not match host binding floor '${liveBinding.floor}'`);
+      }
+      if (v030.hostFloors[host.key].helper !== liveBinding.helper) {
+        report(v030Path, `hostFloors.${host.key}.helper '${v030.hostFloors[host.key].helper}' does not match host binding helper '${liveBinding.helper}'`);
+      }
+    }
+
+    if (liveBinding && typeof liveBinding === "object" && liveBinding.floor !== host.floor) {
+      report(host.liveBindingPath, `host binding floor must be '${host.floor}', found '${liveBinding.floor}'`);
+    }
+
+    // (c) the live binding and the v0.3.0 fixture are deep-equal
+    const fixtureNode = safeNode(host.fixturePath, { missing: false, regularFile: true });
+    if (!fixtureNode) {
+      report(host.fixturePath, `missing v0.3.0 ${path.basename(host.fixturePath, ".json")} metadata fixture`);
+    } else {
+      validateJson(host.fixturePath, "plugins/loom/schemas/loom-host-binding-v1.schema.json", ajv);
+      const fixture = readJson(host.fixturePath);
+      if (liveBinding && fixture && !deepEqual(liveBinding, fixture)) {
+        report(host.fixturePath, `release fixture differs from ${host.liveBindingPath}`);
+      }
+    }
+
+    // (d) helper exists as a regular, executable file
+    const helperNode = safeNode(host.helperPath, { missing: false, regularFile: true });
+    if (!helperNode) {
+      report(host.helperPath, "missing regular executable helper file");
+    } else {
+      try {
+        fs.accessSync(helperNode.physical, fs.constants.X_OK);
+      } catch {
+        report(host.helperPath, "helper is not executable");
+      }
+    }
+
+    // (e) helper appears in neither ALLOWED_HELPERS of loom-resolve-helper nor any root allowedHelpers
+    if (resolverText !== null) {
+      const helperRe = new RegExp(`ALLOWED_HELPERS=\\([^)]*\\b${host.helper}\\b[^)]*\\)`);
+      if (helperRe.test(resolverText)) {
+        report("plugins/loom/bin/loom-resolve-helper", `${host.helper} must not appear in ALLOWED_HELPERS`);
+      }
+    }
+    for (const root of rootJsons) {
+      if (root.json && Array.isArray(root.json.allowedHelpers) && root.json.allowedHelpers.includes(host.helper)) {
+        report(root.path, `${host.helper} must not appear in root allowedHelpers`);
+      }
     }
   }
 }

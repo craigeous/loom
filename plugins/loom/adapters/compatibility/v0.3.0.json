@@ -7,6 +7,10 @@
     "hc": {
       "floor": "0.1.16",
       "helper": "loom-host-hc"
+    },
+    "orca": {
+      "floor": "1.4.250",
+      "helper": "loom-host-orca"
     }
   },
   "workflows": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init"],
