@@ -1,6 +1,6 @@
 # Herdr `hc` Client (3 of 4): Generic Live Probe
 
-Status: Implemented
+Status: Ready to Publish
 Un-shelved: 2026-11-08 per ADR 0034 §5 (Accepted) — requirements below unchanged; review history kept.
 Target specs: 07-command-surface.md (Host surfaces, probes before role support), 08-playbook.md
 Authority: ADR 0031 §6 (Accepted)
