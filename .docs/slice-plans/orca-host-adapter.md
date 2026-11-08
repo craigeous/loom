@@ -92,12 +92,14 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca` and documented 
      If read exit != 0: fail-closed exit 2 (`orca terminal read exited with status $rc`).
      If JSON parsing fails: fail-closed exit 2. Prints tail lines, truncated after N lines; exit 0.
    - `end <handle>`: runs `raw_close=$(orca terminal close --terminal <handle> --tab --json)`.
-     If close exit != 0: requires exit 1 and valid JSON with `.error.code == "terminal_handle_stale"`, else exit 2.
+     Validates the close response on every exit path: `$raw_close` must be valid JSON, else fail-closed exit 2.
+     - if close exit == 0: requires `.ok == true` and `.result.close.handle == "$handle"`.
+     - if close exit != 0: requires exit 1 and `.ok == false and .error.code == "terminal_handle_stale"`. Any other exit code or error code: fail-closed exit 2.
      Verifies cleanup: runs `raw_show=$(orca terminal show --terminal <handle> --json)`.
-     Requires valid JSON:
-     - if show exit 1 and `.error.code == "terminal_handle_stale"`: exit 0.
+     Validates show response on every exit path: `$raw_show` must be valid JSON, else fail-closed exit 2.
+     - if show exit 1 and `.ok == false and .error.code == "terminal_handle_stale"`: exit 0.
      - if show exit 0 and `.ok == true and .result.terminal.connected == false and .result.terminal.exitCause.kind == "operator_close"`: exit 0.
-     - any other state (malformed JSON, active/connected terminal, unexpected exitCause, or unrecognized exit code): fail-closed exit 2.
+     - any other state (unexpected exit code != 0 and != 1, active/connected terminal, unexpected exitCause, or unrecognized state): fail-closed exit 2.
 2. **`plugins/loom/adapters/hosts/orca-host-v1.json`** (new; binding, schema `loom-host-binding-v1`):
    `{ "schema":"loom-host-binding-v1", "id":"orca-host/v1", "host":"orca", "controlCli":"orca", "floor":"1.4.250", "helper":"loom-host-orca", "helperPath":"bin/loom-host-orca", "helperMustBeRegularFile":true, "helperMustBeExecutable":true, "helperDirectoryMustBeDirectChild":true, "reachableVerbs":["show","wait","read","close"], "launch":"unsupported" }`.
 3. **`plugins/loom/schemas/loom-host-binding-v1.schema.json`** (touched):
@@ -127,7 +129,7 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca` and documented 
    - `wait` requires `--timeout` (and rejects 0, 3601, `abc`), converts to ms, exit 0 prints `returned`,
      nonzero exits map to exit 4 `degraded` and never contain `complete`.
    - `read` / `events` maps `--lines` to `--limit`, parses tail lines and truncates after lines; CLI error or malformed JSON exits 2.
-   - `end` invokes `terminal close --terminal <handle> --tab --json`; tests malformed close response (exit 2), non-stale close error (exit 2), malformed show response (exit 2), show reporting connected (exit 2), show reporting unrecognized exitCause without stale error (exit 2), and confirms cleanup on stale show or operator_close show.
+   - `end` invokes `terminal close --terminal <handle> --tab --json`; tests malformed close response on exit 0 (exit 2), malformed close response on exit 1 (exit 2), non-stale close error (exit 2), unexpected close exit codes (exit 2), malformed show response (exit 2), show reporting connected (exit 2), show reporting unrecognized exitCause without stale error (exit 2), and confirms cleanup on stale show or operator_close show.
    - Across all subcommands, only `terminal` with subcommands `show`, `wait`, `read`, `close` ever appear in stub log.
 8. **`scripts/tests/repository-validation.bats`**:
    Update and expand host binding test cases to cover both `hc` and `orca` bindings, fixtures, helpers,
@@ -153,6 +155,7 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca` and documented 
 
 | Round | Summary of in-place changes |
 |---|---|
+| 3 | Plan-eval Round 3: specified strict fail-closed JSON validation for `close` on every exit path including exit 0; added negative stub tests for malformed exit 0 close responses and unexpected exit codes |
 | 2 | Plan-eval Round 2: updated authority runtime reference with verified Orca 1.4.250 command schemas, flags, exit codes, and `--limit` resolution; refined `end` cleanup verification with strict fail-closed handling for malformed JSON, connected state, and unrecognized exitCause; added negative cleanup tests |
 | 1 | Plan-eval Round 1: explicitly scheduled `orca-live-probe` follow-on slice for interactive create/send/worktree primitives; embedded verified Orca 1.4.250 CLI schemas & exit codes; defined strict fail-closed error handling for non-stale CLI failures and malformed JSON across status, read, and end; aligned fixture equality to validator deep-equal |
 | 0 | Initial draft for Slice 3: `loom-host-orca` host adapter and v0.3.0 matrix registration beside `hc` |
