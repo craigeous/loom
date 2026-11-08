@@ -179,6 +179,20 @@ EOF
         run "$HELPER" status my-term
     [ "$status" -eq 2 ]
     [[ "$output" == *"failed to parse orca terminal show JSON"* ]]
+
+    # empty response on exit 0 fails closed with exit 2
+    : >"$STUB_LOG"
+    STUB_SHOW_EXIT=0 STUB_SHOW_OUTPUT='' \
+        run "$HELPER" status my-term
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"failed to parse orca terminal show JSON"* ]]
+
+    # whitespace-only response on exit 0 fails closed with exit 2
+    : >"$STUB_LOG"
+    STUB_SHOW_EXIT=0 STUB_SHOW_OUTPUT='   ' \
+        run "$HELPER" status my-term
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"failed to parse orca terminal show JSON"* ]]
 }
 
 @test "wait requires valid --timeout and maps exit codes correctly" {

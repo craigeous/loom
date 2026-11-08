@@ -58,6 +58,7 @@ status)
     elif [ "$status_rc" -ne 0 ]; then
         _fail "orca terminal show exited with status $status_rc"
     fi
+    printf '%s\n' "$raw_out" | jq -e . >/dev/null 2>&1 || _fail "failed to parse orca terminal show JSON"
     printf '%s\n' "$raw_out" | jq -c '{
             handle: (if .result.terminal.handle then .result.terminal.handle else null end),
             title: (if .result.terminal.title then .result.terminal.title else null end),
