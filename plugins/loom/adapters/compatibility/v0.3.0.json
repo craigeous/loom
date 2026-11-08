@@ -9,7 +9,7 @@
       "helper": "loom-host-hc"
     }
   },
-  "workflows": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init", "doctor"],
+  "workflows": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init"],
   "roles": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"],
   "hookWireFixtureVersion": "hook-wire-v1",
   "rootBindings": [

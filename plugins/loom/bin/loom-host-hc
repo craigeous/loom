@@ -22,8 +22,11 @@ _validate_name() {
         return 1
     fi
     case "$name" in
-    -*) return 1 ;;
+    *$'\n'*|*$'\r'*|-*) return 1 ;;
     esac
+    if [ "${#name}" -lt 1 ] || [ "${#name}" -gt 32 ]; then
+        return 1
+    fi
     if printf '%s' "$name" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,31}$'; then
         return 0
     fi
@@ -92,7 +95,7 @@ wait)
     if ! printf '%s' "$timeout" | grep -Eq '^[1-9][0-9]*$'; then
         _usage
     fi
-    if [ "$timeout" -lt 1 ] || [ "$timeout" -gt 3600 ]; then
+    if [ "${#timeout}" -gt 4 ] || [ "$timeout" -lt 1 ] || [ "$timeout" -gt 3600 ]; then
         _usage
     fi
     set +e
@@ -132,7 +135,7 @@ events)
     if ! printf '%s' "$lines" | grep -Eq '^[1-9][0-9]*$'; then
         _usage
     fi
-    if [ "$lines" -lt 1 ] || [ "$lines" -gt 500 ]; then
+    if [ "${#lines}" -gt 3 ] || [ "$lines" -lt 1 ] || [ "$lines" -gt 500 ]; then
         _usage
     fi
     "$LOOM_HC_BIN" events --terminal "$name" 2>/dev/null | head -n "$lines"

@@ -98,7 +98,7 @@ EOF
 }
 
 @test "bad terminal names are refused before invoking hc" {
-    for bad_name in "-x" "A" "abcdefghijklmnopqrstuvwxyz0123456" "a b" ""; do
+    for bad_name in "-x" "A" "abcdefghijklmnopqrstuvwxyz0123456" "a b" "" $'valid\ninvalid' $'valid\rinvalid'; do
         run "$HELPER" status "$bad_name"
         [ "$status" -ne 0 ]
         [ ! -s "$STUB_LOG" ]
@@ -140,7 +140,7 @@ EOF
     [ ! -s "$STUB_LOG" ]
 
     # invalid timeout values
-    for bad_timeout in 0 3601 abc -5 ""; do
+    for bad_timeout in 0 3601 abc -5 "" 999999999999999999999999999999; do
         run "$HELPER" wait my-term --timeout "$bad_timeout"
         [ "$status" -eq 1 ]
         [ ! -s "$STUB_LOG" ]
@@ -171,7 +171,7 @@ EOF
     [ "${#lines[@]}" -eq 500 ]
 
     # out of bounds lines
-    for bad_lines in 0 501 -1 abc; do
+    for bad_lines in 0 501 -1 abc 999999999999999999999999999999; do
         run "$HELPER" events my-term --lines "$bad_lines"
         [ "$status" -eq 1 ]
     done
