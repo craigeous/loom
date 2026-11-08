@@ -22,7 +22,7 @@ _validate_name() {
         return 1
     fi
     case "$name" in
-    *$'\n'*|*$'\r'*|-*) return 1 ;;
+    *$'\n'* | *$'\r'* | -*) return 1 ;;
     esac
     if [ "${#name}" -lt 1 ] || [ "${#name}" -gt 32 ]; then
         return 1

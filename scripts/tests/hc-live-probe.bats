@@ -12,15 +12,15 @@ setup_file() {
 
 setup() {
     STUB_DIR="$BATS_TEST_TMPDIR/bin"; mkdir -p "$STUB_DIR"
-    STUB_LOG="$BATS_TEST_TMPDIR/hc.log"; : >"$STUB_LOG"
-    EVID_FILE="$BATS_TEST_TMPDIR/evidence/ev.txt"
+    STUB_LOG="$BATS_TEST_TMPDIR/hc.log" && : >"$STUB_LOG" && EVID_FILE="$BATS_TEST_TMPDIR/evidence/ev.txt"
     cat >"$STUB_DIR/hc" <<'EOF'
 #!/bin/bash
-printf '%s\n' "$*" >>"${STUB_LOG:?}"
+{ for a in "$@"; do printf '<%s>' "$a"; done; echo; } >>"${STUB_LOG:?}"
 case "${1:-}" in
     --version) printf 'hc 0.1.16\n' ;;
     get)
         [ -n "${STUB_GET_EXIT:-}" ] && exit "$STUB_GET_EXIT"
+        [ "${3:-}" = "--json" ] && [ -n "${STUB_GET_JSON_EXIT:-}" ] && exit "$STUB_GET_JSON_EXIT"
         [ "${3:-}" = "--json" ] || exit 3
         m="${STUB_MODEL:-claude-haiku-5-5}" r="${STUB_REPORTED:-true}" s="${STUB_STATUS_STATE:-done}" dt="" res=""
         case "$2" in probe-nd-*) dt=', "--disallowedTools", "Agent"'; p="If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop." ;; *) p='What is 37+5? Reply with only the number, then stop. Use no tools.' ;; esac
@@ -51,30 +51,30 @@ EOF
     [ "$status" -eq 0 ] && [[ "$output" == *"RESULT PASS"* ]]
     grep -q "RESULT PASS" "$EVID_FILE"
     diff -u - "$STUB_LOG" <<'EOF'
---version
-get probe-test0001
-get probe-nd-test0001
-run --bg --name probe-test0001 claude --model claude-haiku-5-5 What is 37+5? Reply with only the number, then stop. Use no tools.
-wait probe-test0001 --timeout 120
-get probe-test0001 --json
-read probe-test0001 --lines 60
-run --bg --name probe-nd-test0001 claude --model claude-haiku-5-5 --disallowedTools Agent If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop.
-wait probe-nd-test0001 --timeout 120
-get probe-nd-test0001 --json
-read probe-nd-test0001 --lines 60
-kill probe-test0001
-rm probe-test0001
-get probe-test0001
-kill probe-nd-test0001
-rm probe-nd-test0001
-get probe-nd-test0001
+<--version>
+<get><probe-test0001>
+<get><probe-nd-test0001>
+<run><--bg><--name><probe-test0001><claude><--model><claude-haiku-5-5><What is 37+5? Reply with only the number, then stop. Use no tools.>
+<wait><probe-test0001><--timeout><120>
+<get><probe-test0001><--json>
+<read><probe-test0001><--lines><60>
+<run><--bg><--name><probe-nd-test0001><claude><--model><claude-haiku-5-5><--disallowedTools><Agent><If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop.>
+<wait><probe-nd-test0001><--timeout><120>
+<get><probe-nd-test0001><--json>
+<read><probe-nd-test0001><--lines><60>
+<kill><probe-test0001>
+<rm><probe-test0001>
+<get><probe-test0001>
+<kill><probe-nd-test0001>
+<rm><probe-nd-test0001>
+<get><probe-nd-test0001>
 EOF
 }
 
 @test "collision on P1 aborts immediately without launching or killing pre-existing terminals" {
     STUB_GET_EXIT=0 LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
     [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P1"* ]]
-    ! grep -q "^run " "$STUB_LOG" && ! grep -q "^kill " "$STUB_LOG" && ! grep -q "^rm " "$STUB_LOG"
+    ! grep -q "<run>" "$STUB_LOG" && ! grep -q "<kill>" "$STUB_LOG" && ! grep -q "<rm>" "$STUB_LOG"
 }
 
 @test "FAIL for failed exit or bad output in each criterion" {
@@ -93,19 +93,19 @@ EOF
 }
 
 @test "BLOCKED when hc get shows blocked with no keys or --force in log" {
-    for env_var in "STUB_STATUS_STATE=blocked" "STUB_GET_EXIT=9"; do
-        eval "$env_var LOOM_HC_LIVE_PROBE=1 run \"\$PROBE\" --evidence-file \"\$EVID_FILE\""
+    for v in "STUB_STATUS_STATE=blocked" "STUB_GET_JSON_EXIT=9"; do
+        eval "$v LOOM_HC_LIVE_PROBE=1 run \"\$PROBE\" --evidence-file \"\$EVID_FILE\""
         [ "$status" -eq 3 ] && [[ "$output" == *"RESULT BLOCKED"* ]]
     done
-    ! grep -q "\-\-force" "$STUB_LOG" && ! grep -q "^send$" "$STUB_LOG"
+    ! grep -q "\-\-force" "$STUB_LOG" && ! grep -q "<send>" "$STUB_LOG"
 }
 
 @test "cleanup runs on mid-run signal and resists interruption during cleanup" {
     export STUB_WAIT_SLEEP=1 STUB_KILL_SLEEP=1; set -m
     LOOM_HC_LIVE_PROBE=1 "$PROBE" --evidence-file "$EVID_FILE" &
-    pid=$!; sleep 0.1; kill -INT -$pid 2>/dev/null || true
-    sleep 0.05; kill -INT -$pid 2>/dev/null || true
+    pid=$!; sleep 0.1; kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
+    sleep 0.05; kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
     rc=0; wait "$pid" || rc=$?; [ "$rc" -eq 130 ]
-    grep -q "kill probe-test0001" "$STUB_LOG" && grep -q "rm probe-test0001" "$STUB_LOG"
-    ! grep -q "kill probe-nd-test0001" "$STUB_LOG"
+    grep -q "<kill><probe-test0001>" "$STUB_LOG" && grep -q "<rm><probe-test0001>" "$STUB_LOG"
+    ! grep -q "<kill><probe-nd-test0001>" "$STUB_LOG"
 }
