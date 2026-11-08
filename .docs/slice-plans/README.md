@@ -18,8 +18,8 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 ## Active plans
 
 - [spec-10-07-release-evidence-amendment.md](spec-10-07-release-evidence-amendment.md) — `Landed` — spec 10 and spec 07 text for v0.2.0 release conformance and the evidence record (ADR 0032 §3, §8; ADR 0033 D3); passed plan evaluation Round 3 (PASS); the schema plan above depends on it.
-- [hc-host-adapter.md](hc-host-adapter.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (2 of 4, runs after `herdr-surface-retirement`; rebases onto it): `loom-host-hc` observation helper and v0.3.0-only registration.
-- [hc-live-probe.md](hc-live-probe.md) — `Approved` (**shelved**, ADR 0033 D4) — M9 (3 of 4): generic live `hc` probe script and offline tests.
+- [hc-host-adapter.md](hc-host-adapter.md) — `In Progress` (un-shelved per ADR 0034 §5) — M9 / v0.3.0 Slice 1: `loom-host-hc` observation helper and v0.3.0-only registration.
+- [hc-live-probe.md](hc-live-probe.md) — `Approved` (un-shelved per ADR 0034 §5) — M9 / v0.3.0 Slice 2: generic live `hc` probe script and offline tests.
 - [dogfood-int-race.md](dogfood-int-race.md) — `Abandoned` — superseded by `dogfood-retirement` (ADR 0033), which deletes its target suite (history kept).
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 

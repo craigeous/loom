@@ -1,7 +1,7 @@
 # Herdr `hc` Client (2 of 4): Host Adapter `loom-host-hc` and v0.3.0 Registration
 
-Status: Approved
-Shelved: 2026-11-03 per ADR 0033 D4 (Plan Review) — not to be built until the v0.2.0 live proof completes and the Herdr/hc evaluator question is reopened. Requirements below unchanged; review history kept.
+Status: In Progress
+Un-shelved: 2026-11-08 per ADR 0034 §5 (Accepted) — requirements below unchanged; review history kept.
 Target specs: 07-command-surface.md (Host surfaces), 10-packaging.md (host floor, no Herdr root)
 Authority: ADR 0031 §3, §5, §6, §7 (Accepted)
 Target size: <= 380 LOC added (helper + Bats + registration; deletions not counted); keep this plan <= 250 lines
