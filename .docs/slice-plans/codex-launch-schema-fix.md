@@ -28,35 +28,36 @@ This slice cleanly fixes the Codex launch contract in `loom-launch-role` by remo
 ## Decisions
 
 - **D1 — Omit `--output-schema` from `codex exec` argv.** In `plugins/loom/bin/loom-launch-role`'s `_launch_codex`, remove `--output-schema "$schema_path"` from the `argv` array passed to `codex exec`. Codex roles communicate bounded results via standard markdown output per ADR 0012, symmetric with Claude.
-- **D2 — Verify launch descriptor schema as a required plugin asset.** `_launch_codex` continues to verify that `schemas/loom-role-launch-v1.schema.json` is a regular, non-symlinked file before printing the descriptor and launching Codex. The guard error message is updated to `"launch descriptor schema is missing"`.
-- **D3 — Update argv assertions in `loom-launch-role.bats`.** Update the Bats test suite to verify that `codex exec` argv contains all required security/sandbox options and specifically does NOT contain `--output-schema`.
+- **D2 — Verify launch descriptor schema as a required, non-symlinked plugin asset.** `_launch_codex` verifies that `schemas/loom-role-launch-v1.schema.json` is a regular, non-symlinked file (`[ -f "$schema_path" ] && [ ! -L "$schema_path" ]`) before printing the descriptor and launching Codex. The guard error message is updated to `"launch descriptor schema is missing"`.
+- **D3 — Update test suite assertions in `loom-launch-role.bats`.** Update the Bats test suite to verify that `codex exec` argv contains all required security/sandbox options and specifically does NOT contain `--output-schema`. Delete the obsolete test that extracted `--output-schema` from `$RECORD`. Add a negative test verifying that a symlinked schema file fails closed.
 
 ## Steps
 
 1. **Update `plugins/loom/bin/loom-launch-role`:**
    - In `_launch_codex`:
-     - Update failure message if schema file is missing: `"launch descriptor schema is missing"`.
+     - Add non-symlink check alongside regular file check: `[ -f "$schema_path" ] && [ ! -L "$schema_path" ] || _fail "launch descriptor schema is missing"`.
      - Remove `--output-schema "$schema_path"` from the `argv` array.
      - Update header comment to reflect that `--output-schema` is no longer passed to `codex exec`.
 2. **Update `plugins/loom/bin/loom-launch-role.bats`:**
    - In `codex: exact argv contract`:
+     - Retitle test to `codex: exact argv contract (ephemeral, no user config, strict, no multi-agent, read-only, model/effort, no web search, no output schema, canonical contract)`.
      - Replace `[[ "$output" == *'ARG:--output-schema'* ]]` with `[[ "$output" != *'ARG:--output-schema'* ]]`.
      - Remove `[[ "$output" == *'loom-role-launch-v1.schema.json'* ]]` from argv checks.
-   - In `codex: the closed bounded-output schema path is a real regular file`:
-     - Retitle to `codex: launch descriptor schema path is a real regular file`.
-     - Assert `$ROOT/schemas/loom-role-launch-v1.schema.json` is a regular file.
+   - Delete obsolete test `codex: the closed bounded-output schema path is a real regular file` (since `--output-schema` is no longer emitted in `$RECORD`).
    - In `codex: missing closed bounded-output schema fails closed`:
      - Retitle to `codex: missing launch descriptor schema fails closed`.
      - Expect error output `launch descriptor schema is missing`.
+   - Add negative test `codex: symlinked launch descriptor schema fails closed`:
+     - In `make_root` fixture, replace `$ROOT/schemas/loom-role-launch-v1.schema.json` with a symlink to a copy, run launch, and assert exit 2 with error `launch descriptor schema is missing`.
 3. **Run targeted Bats test:**
-   - Run `scripts/run-bats-under /bin/bash '^3\.2' /opt/homebrew/Cellar/bats-core/1.13.0/bin/bats scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats`.
+   - Run `scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats`.
 4. **Run repository validation:**
    - Run `node scripts/validate-repository.mjs --all`.
 
 ## Verification
 
 - **Targeted Bats test:**
-  `scripts/run-bats-under /bin/bash '^3\.2' /opt/homebrew/Cellar/bats-core/1.13.0/bin/bats scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats` passes all tests with 0 failures under Bash 3.2.
+  `scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats` passes all tests with 0 failures under Bash 3.2.
 - **Repository state validation:**
   `node scripts/validate-repository.mjs --all` exits 0 with zero rule reports.
 - **Full platform gate:**
@@ -65,9 +66,11 @@ This slice cleanly fixes the Codex launch contract in `loom-launch-role` by remo
 ## Notes
 
 - 2026-11-07: Authored initial draft to resolve the Codex live-proof workaround cleanly in product code.
+- 2026-11-07: Revised plan in Round 1 addressing plan-evaluator findings (deleted obsolete argv-extraction test, added explicit symlink check and test, retitled argv test).
 
 ## Revision Log
 
 | Round | Summary of in-place changes |
 |---|---|
 | 0 | Initial draft |
+| 1 | Resolved Round 0 findings: deleted obsolete argv-extraction test, added explicit non-symlink schema check and test, retitled argv test, and updated verification commands |
