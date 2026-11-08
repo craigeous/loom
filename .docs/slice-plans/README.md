@@ -17,6 +17,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
+- [v0.3.0-live-proof.md](v0.3.0-live-proof.md) — `Plan Review` — M9 / v0.3.0 Slice 5: release conformance, schema amendment to `loom-release-evidence-v1`, product version bump to 0.3.0, candidate tagging, live proof across all five harnesses (Claude, Codex, Antigravity, Orca, Herdr), and v0.3.0 release evidence assembly.
 - [spec-10-07-release-evidence-amendment.md](spec-10-07-release-evidence-amendment.md) — `Landed` — spec 10 and spec 07 text for v0.2.0 release conformance and the evidence record (ADR 0032 §3, §8; ADR 0033 D3); passed plan evaluation Round 3 (PASS); the schema plan above depends on it.
 - [hc-host-adapter.md](hc-host-adapter.md) — `Landed` — M9 / v0.3.0 Slice 1: `loom-host-hc` observation helper and v0.3.0-only registration; passed plan evaluation Round 3 (PASS, commit 1c7b0ef) and code evaluation Round 4 (PASS, commit 5aa084d).
 - [hc-live-probe.md](hc-live-probe.md) — `Landed` — M9 / v0.3.0 Slice 2: generic live `hc` probe script and offline tests; passed plan evaluation Round 3 (PASS) and code evaluation Round 5 (PASS, commit d822236 via OpenAI Codex `gpt-6.1-terra`).
