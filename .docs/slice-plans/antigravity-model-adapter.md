@@ -25,8 +25,8 @@ evaluation governance must track the **underlying model provider family**, not s
 - Concrete model resolution: Every Antigravity launch resolves to a concrete model ID from the catalog; aliases (`flash`, `inherit`, `pro`) never map directly to a family and must resolve to concrete models or fail closed (`exit 2`).
 - Evidence capture & handoff flow:
   - Component: The orchestrator driver (`loom-run`) captures the author launch descriptor stdout (`loom-role-launch/v1`), extracting `.claude.selector`, `.codex.model`, or `.antigravity.model`.
-  - Handoff: The driver stores the resolved model in the routing file (`.routes["planner-model"]` / `.routes["developer-model"]`) and passes `--author-client <client> --author-model <model>` to evaluator launches (`plan-evaluator`, `code-evaluator`).
-  - Validation: For `claude` author: `authorFamily=anthropic`. For `codex` author: `authorFamily=openai`. For `antigravity` author: author MUST supply concrete `--author-model <id>`. If missing or an unresolved alias, fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
+  - Handoff: The driver stores the resolved model in the routing file (`.routes["planner-model"]` / `.routes["developer-model"]`) and passes `--routing-file <path>` (or `--author-client <client> --author-model <model>`) to evaluator launches (`plan-evaluator`, `code-evaluator`).
+  - Validation: For single-family authors (`claude` -> `anthropic`, `codex` -> `openai`), `--author-model` is optional and automatically defaults to the client's sole family. For multi-family author `antigravity`, author model MUST be supplied via `--author-model <id>` or `.routes["<author-role>-model"]`. If missing or an alias, fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
   - Invariant check: Deterministically resolve evaluator family from concrete model; if `authorFamily == evaluatorFamily`, fail closed (`exit 2`) with `cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)`.
 - Cross-family rotation rules:
   - Author `claude` (`anthropic`) -> evaluator `codex` (`openai`).
@@ -66,12 +66,28 @@ Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`
    - `profiles[].items.properties`: add `antigravity: { "type": "object", "required": ["model"], "properties": { "model": { "type": "string" } }, "additionalProperties": false }`.
 3. Complete launch descriptor contract in `plugins/loom/schemas/loom-role-launch-v1.schema.json`:
    - Top-level `oneOf` with 3 objects (`additionalProperties: false` on every object):
-     - Common required fields: `["schema", "client", "role", "profile", "coldId", "cold", "delegation", "permissions", "<client>"]`.
-     - Common optional fields: `authorClient` (enum: `["claude", "codex", "antigravity"]`), `authorFamily` (enum: `["anthropic", "openai", "google", "oss"]`), `evaluatorFamily` (enum: `["anthropic", "openai", "google", "oss"]`), `crossFamilyVerified` (const `true`).
-     - Variant `claude`: required `["selector", "agentCapability"]`; `selector` enum `["haiku", "sonnet", "opus"]`, `agentCapability` const `false`.
-     - Variant `codex`: required `["model", "effort", "sandbox", "webSearch", "argv"]`; `model` pattern `^(gpt-6(\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\.6(-[a-z0-9]+)?)$`, `effort` enum `["low", "medium", "high"]`, `sandbox` const `"read-only"`, `webSearch` const `false`, `argv` array of strings (minItems 1).
-     - Variant `antigravity`: required `["subagentName", "model", "enableSubagentTools", "enableWriteTools", "rolePromptPath", "rolePromptSha256"]`; `subagentName` string minLength 1, `model` string minLength 1, `enableSubagentTools` const `false`, `enableWriteTools` const `true`, `rolePromptPath` string minLength 1, `rolePromptSha256` pattern `^[0-9a-f]{64}$`, optional `environment` object with required `LOOM_ROLE` string.
-   - Compatibility: `--author-model` CLI flag is additive; emitted `authorFamily` and `evaluatorFamily` are additive top-level properties; existing consumers reading `authorClient` and `crossFamilyVerified` parse without modification.
+     - Common required fields (identical across all 3 variants):
+       - `schema`: `{ "const": "loom-role-launch/v1" }`
+       - `client`: `{ "const": "<variant-client>" }` (`"claude"`, `"codex"`, or `"antigravity"`)
+       - `role`: `{ "enum": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"] }`
+       - `profile`: `{ "enum": ["Economy", "Standard", "Deep review"] }`
+       - `coldId`: `{ "type": "string", "minLength": 1 }`
+       - `cold`: `{ "const": true }`
+       - `delegation`: `{ "const": false }`
+       - `permissions`: `{ "const": "one-level" }`
+       - Variant key: `"claude"`, `"codex"`, or `"antigravity"` (required object per variant).
+     - Common optional fields (identical across all 3 variants):
+       - `authorClient`: `{ "enum": ["claude", "codex", "antigravity"] }`
+       - `authorFamily`: `{ "enum": ["anthropic", "openai", "google", "oss"] }`
+       - `evaluatorFamily`: `{ "enum": ["anthropic", "openai", "google", "oss"] }`
+       - `crossFamilyVerified`: `{ "type": "boolean" }`
+     - Variant-specific object shapes:
+       - `claude`: `type: "object"`, `additionalProperties: false`, required `["selector", "agentCapability"]`; `selector`: `{ "enum": ["haiku", "sonnet", "opus"] }`, `agentCapability`: `{ "const": false }`.
+       - `codex`: `type: "object"`, `additionalProperties: false`, required `["model", "effort", "sandbox", "webSearch", "argv"]`; `model`: `{ "type": "string", "pattern": "^(gpt-6(\\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\\.6(-[a-z0-9]+)?)$" }`, `effort`: `{ "enum": ["low", "medium", "high"] }`, `sandbox`: `{ "const": "read-only" }`, `webSearch`: `{ "const": false }`, `argv`: `{ "type": "array", "minItems": 1, "items": { "type": "string" } }`.
+       - `antigravity`: `type: "object"`, `additionalProperties: false`, required `["subagentName", "model", "enableSubagentTools", "enableWriteTools", "rolePromptPath", "rolePromptSha256"]`; `subagentName`: `{ "type": "string", "minLength": 1 }`, `model`: `{ "type": "string", "minLength": 1 }`, `enableSubagentTools`: `{ "type": "boolean" }`, `enableWriteTools`: `{ "type": "boolean" }`, `rolePromptPath`: `{ "type": "string", "minLength": 1 }`, `rolePromptSha256`: `{ "type": "string", "pattern": "^[0-9a-f]{64}$" }`, optional `environment`: `{ "type": "object", "additionalProperties": false, "required": ["LOOM_ROLE"], "properties": { "LOOM_ROLE": { "type": "string", "minLength": 1 } } }`.
+   - Compatibility behavior:
+     - Launcher CLI invocations: `--author-model` is additive and optional; single-family author launches (`claude` and `codex`) continue to work without `--author-model`, automatically defaulting `authorFamily` to `anthropic` and `openai`. Only multi-family author `antigravity` requires `--author-model` or `.routes["<author-role>-model"]`.
+     - Descriptor consumers: `authorFamily` and `evaluatorFamily` are defined as optional properties in `loom-role-launch-v1.schema.json`, allowing closed schemas (`additionalProperties: false`) to validate under strict AJV/JSON Schema 2020-12; consumers reading only prior fields ignore additive family properties without code changes.
 4. Re-pin schema digests in `scripts/check-toolchain.json`.
 
 ### Step 2: v0.3.0 Matrix, Root Descriptor & Release Fixture
@@ -100,13 +116,13 @@ In `plugins/loom/bin/loom-launch-role`:
      - Unmapped model: return empty / exit 1.
 2. In role launch for `plan-evaluator` and `code-evaluator`:
    - Require author client: if absent under cross-family requirement, fail closed (`exit 2`).
+   - Read author model: from `--author-model <model>`, or if `--routing-file <path>` is supplied, from `.routes["planner-model"]` (for `plan-evaluator`) or `.routes["developer-model"]` (for `code-evaluator`).
    - Resolve `authorFamily`:
-     - If `author_client` is `claude`: `authorFamily=anthropic`.
-     - If `author_client` is `codex`: `authorFamily=openai`.
-     - If `author_client` is `antigravity`: read `--author-model` (or `--routing-file` `.routes["<author-role>-model"]`). If absent or an alias (`inherit`, `flash`, `pro`), fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
-     - `authorFamily=$(_model_family "$author_client" "$author_model")` || `_fail "cannot deterministically resolve author model family: $author_model"`.
+     - If `author_client` is `claude`: `authorFamily=anthropic` (defaulting even if `--author-model` omitted).
+     - If `author_client` is `codex`: `authorFamily=openai` (defaulting even if `--author-model` omitted).
+     - If `author_client` is `antigravity`: if `author_model` is missing or an alias (`inherit`, `flash`, `pro`), fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`; else `authorFamily=$(_model_family "$author_client" "$author_model")` || `_fail "cannot deterministically resolve author model family: $author_model"`.
    - Resolve `evaluatorFamily`: `_model_family "$client" "$resolved_model"` || `_fail "cannot deterministically resolve evaluator model family: $resolved_model"`.
-   - Enforce: `[ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"`.
+   - Enforce invariant: `[ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"`.
    - Emit in launch descriptor: `"authorClient":"$author_client","authorFamily":"$authorFamily","evaluatorFamily":"$evaluatorFamily","crossFamilyVerified":true`.
 3. Auto rotation update in `_next_client_in_cycle`:
    - Author `claude` -> `codex`. Author `codex` -> `claude`.
@@ -123,15 +139,20 @@ In `scripts/validate-repository.mjs`:
 ### Step 5: Test Coverage & Verification
 1. `plugins/loom/bin/loom-launch-role.bats`:
    - Model-family extraction across all four families (`anthropic`, `openai`, `google`, `oss`).
-   - Cross-family rejection: `antigravity` running Claude model evaluating `claude` author fails closed with family violation.
-   - Cross-family acceptance: `antigravity` running Gemini model evaluating `claude` author succeeds.
-   - Author model evidence handoff test: run author launch `antigravity planner`, extract emitted `.antigravity.model`, pass as `--author-model` to `codex plan-evaluator`, verify `authorFamily` and `evaluatorFamily` emitted with exit 0.
-   - Multi-family author fail-closed: `antigravity` author without `--author-model` fails closed (exit 2).
+   - Backward compatibility: `--author-client claude` without `--author-model` succeeds with `authorFamily: "anthropic"`; `--author-client codex` without `--author-model` succeeds with `authorFamily: "openai"`.
+   - Cross-family rejection with CLI flags: `antigravity` running Claude model evaluating `claude` author fails closed (exit 2).
+   - Cross-family acceptance with CLI flags: `antigravity` running Gemini model evaluating `claude` author succeeds (exit 0).
+   - Orchestrator author-launch capture and routing-file persistence handoff test:
+     1. Run author launch: `loom-launch-role antigravity planner`, capture stdout `loom-role-launch/v1` JSON, parse `.client` and `.antigravity.model`.
+     2. Orchestrator persistence: write `loom-role-routing/v1` file with `requireCrossFamilyEval: true`, `.routes["planner"] = author_client`, `.routes["planner-model"] = author_model`, and `.routes["plan-evaluator"] = "codex"`.
+     3. Evaluator handoff via routing file: run `loom-launch-role auto plan-evaluator --routing-file <path>`, verifying that `loom-launch-role` extracts author client and model from `.routes`, resolves `authorFamily=google` and `evaluatorFamily=openai`, enforces the cross-family invariant, and emits `authorFamily`, `evaluatorFamily`, and `crossFamilyVerified: true` with exit 0.
+     4. Same-family rejection via routing file: write routing file with `.routes["planner"] = "antigravity"`, `.routes["planner-model"] = "claude-3-7-sonnet"`, and `.routes["plan-evaluator"] = "claude"`; run `loom-launch-role auto plan-evaluator --routing-file <path>` and assert exit 2 with `cross-family evaluation violation: evaluator model family (anthropic) matches author model family (anthropic)`.
+   - Multi-family author fail-closed: `antigravity` author without `--author-model` or routing model fails closed (exit 2).
    - Alias rejection: `--author-model inherit` fails closed (exit 2).
    - Unknown author model fail-closed: `--author-model unknown-model` fails closed (exit 2).
-   - Same-family rejection: author Antigravity resolving to Claude model evaluated by Antigravity resolving to Claude model fails closed (exit 2).
    - Dynamic discovery cache: verifies hit, 24h TTL expiration, and atomic 0600 file rewrite.
    - Version refusal: below-floor `agy` (< 1.4.12) or unknown version fails closed (exit 2).
+   - Schema validation: emitted launch descriptors validate against updated `loom-role-launch-v1.schema.json` using strict Ajv 2020 (`additionalProperties: false`).
 2. `scripts/tests/repository-validation.bats`:
    - Validate `antigravity-plugin-root/v1` schema and reject unknown fields.
    - Validate v0.3.0 matrix `clientFloors.antigravity` drift or omission fails closed.
@@ -142,6 +163,7 @@ In `scripts/validate-repository.mjs`:
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 4 | plan | FAIL | Descriptor types & constraints incomplete across 3 variants and environment object; consumer and CLI compatibility unspecified for omitted --author-model and closed schemas; handoff test bypassed orchestrator routing-file flow. Resolved in Round 5 by defining complete types, enums, patterns, and constraints for all common and variant fields with additionalProperties: false; specifying single-family backward compatibility defaults and schema property updates for closed-schema consumers; and replacing manual extraction test with full orchestrator launch capture, routing-file persistence, and evaluator handoff test. |
 | 3 | plan | FAIL | Author model handoff data flow and handoff test unspecified; launch descriptor schema lacked complete 3-variant contract and consumer compatibility definition. Resolved in Round 4 by specifying orchestrator descriptor capture, persistence, and `--author-model` handoff; defining the complete 3-variant `loom-role-launch-v1` schema with closed constraints, required/optional fields, and additive consumer compatibility; and adding an explicit author-to-evaluator handoff test. |
 | 2 | plan | FAIL | Author model propagation lacked concrete evidence capture definition; launch schema lacked complete 3-variant contract and consumer compatibility; threat-model overstated cognitive independence; baseline paths not fully specified. Resolved in Round 3 by specifying author descriptor capture and mandatory concrete `--author-model`, rejecting aliases in family extraction, detailing the complete 3-variant `loom-role-launch-v1` schema with additive compatibility, enumerating the exact 6-file v0.2.0 repository paths for git show validation, and narrowing the threat-model claim to provider-family classification separation. |
 | 1 | plan | FAIL | Step 3 mapped aliases to Google without establishing concrete model; `--author-family` permitted unverified claims; launch schema shape not detailed for all variants; v0.2.0 baseline and fixture comparisons inconsistent; threat-model overstated cognitive independence. Resolved in Round 2 by requiring concrete model resolution before family extraction, eliminating unverified `--author-family` in favor of mandatory concrete `--author-model`, defining exact launch schema additions across all three variants, specifying the 6-file v0.2.0 baseline verified against `git show v0.2.0:<path>`, and narrowing the threat-model claim strictly to provider-family separation. |
