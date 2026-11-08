@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-08 — M9 / v0.3.0 Slice 2 `hc-live-probe` (generic live probe script `scripts/hc-live-probe`, offline Bats suite `scripts/tests/hc-live-probe.bats`, 20/20 tests passing under Bash 3.2, 260 LOC budget respected) landed; passed plan evaluation Round 3 (PASS) and blind code evaluation Round 5 (PASS via OpenAI Codex `gpt-6.1-terra`); executed live probe against `hc 0.1.16` with scratch evidence recorded.
 - 2026-11-08 — M9 / v0.3.0 Slice 1 `hc-host-adapter` (`loom-host-hc` observation/cleanup helper, v0.3.0 matrix `hostFloors` registration, `loom-host-binding-v1` schema, fixture, and repository validator) landed; passed plan evaluation Round 3 (PASS, commit 1c7b0ef) and blind code evaluation Round 4 (PASS, commit 5aa084d via OpenAI Codex `gpt-6.1-terra`); plan archived.
 - 2026-11-08 — ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 scope and settle evaluator governance) Accepted after Round 3 PASS via Codex cross-family evaluation; admits Antigravity, Orca, and Herdr into v0.3.0 scope under ADR 0033 §1; settles host evaluator governance by restricting `hc`/Orca to authoring/interactive host roles and delegating evaluation to cold, isolated workspaces with certified model clients.
 - 2026-11-07 — `codex-launch-schema-fix` (v0.2.1 preparation: remove `--output-schema` from `codex exec` in `loom-launch-role`, non-symlink schema check, 103/103 Bats tests passing) landed; plan archived.
@@ -34,7 +35,10 @@ Current milestone: M9
 
 ## Current state
 
-- **Current activity (2026-11-08) — `hc-host-adapter` Landed (M9 / v0.3.0 Slice 1):**
+- **Current activity (2026-11-08) — `hc-live-probe` Landed (M9 / v0.3.0 Slice 2):**
+  Landed generic live probe script `scripts/hc-live-probe` and offline Bats suite `scripts/tests/hc-live-probe.bats` (148 script LOC + 112 test LOC = 260 total LOC, exactly within budget). Evaluated criteria P1–P7: version, collision abort, background run with address validation, wait timeout, JSON inspection, read verification, and signal-resistant cleanup. All 20 Bats tests passing under Bash 3.2 runtime canary. Local review completed clean (`ran-clean`, 3 finders). Blind, cross-family code evaluation passed Round 5 (PASS via OpenAI Codex `gpt-6.1-terra`). Executed live probe against `hc 0.1.16` (evidence at `/private/tmp/hc-probe-evidence/live-probe-1.txt`); observed Claude Code workspace trust prompt in scratch directory. Next slice to deliver: `orca-host-adapter` (M9 / v0.3.0 Slice 3).
+
+- **Prior activity (2026-11-08) — `hc-host-adapter` Landed (M9 / v0.3.0 Slice 1):**
   Landed `loom-host-hc` (observation, wait, events, and end lifecycle helper; launch fail-closed exit 2), `plugins/loom/adapters/hosts/hc-host-v1.json` registered under `loom-host-binding-v1.schema.json`, `v0.3.0.json` matrix `hostFloors.hc` registered with `0.1.16` floor and helper, byte-equal fixture `plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json`, and comprehensive repository validator checks. Tested with 271/271 passing Bats tests across `shell-runtime.bats`, `loom-host-hc.bats`, and `repository-validation.bats`. Local review completed clean (`ran-clean`, 3 finders). Blind, cross-family code evaluation passed Round 4 (PASS via OpenAI Codex `gpt-6.1-terra`). Plan archived. Next slice to deliver: `hc-live-probe` (M9 / v0.3.0 Slice 2).
 
 - **Prior activity (2026-11-08) — ADR 0034 Accepted (Admit Antigravity, Orca, and Herdr to v0.3.0 Scope):**
