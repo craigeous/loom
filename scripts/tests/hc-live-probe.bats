@@ -27,11 +27,11 @@ case "${1:-}" in
         [ -n "${STUB_RESUME:-}" ] && res=', "--resume", "p"'
         printf '{"name":"%s","reported":%s,"status":{"state":"%s"},"foreground":{"argv":["claude", "--model", "%s"%s%s, "%s"]}}\n' "$2" "$r" "$s" "$m" "$res" "$dt" "$p" ;;
     run) [ -n "${STUB_RUN_EXIT:-}" ] && exit "$STUB_RUN_EXIT"; printf '%s\n' "${STUB_RUN_OUT-t1}" ;;
-    wait) [ -n "${STUB_WAIT_SLEEP:-}" ] && sleep 2; exit "${STUB_WAIT_EXIT:-0}" ;;
+    wait) [ -n "${STUB_WAIT_SYNC:-}" ] && : >"$STUB_WAIT_SYNC" && sleep 2; exit "${STUB_WAIT_EXIT:-0}" ;;
     read)
         [ -n "${STUB_READ_EXIT:-}" ] && exit "$STUB_READ_EXIT"
         case "$2" in probe-nd-*) printf '%s\n' "${STUB_READ_ND:-TOOL_ABSENT}" ;; *) printf '%s\n' "${STUB_READ_A:-42}" ;; esac ;;
-    kill) [ -n "${STUB_KILL_SLEEP:-}" ] && sleep 0.2; exit "${STUB_KILL_EXIT:-0}" ;;
+    kill) [ -n "${STUB_KILL_SYNC:-}" ] && : >"$STUB_KILL_SYNC" && sleep 0.2; exit "${STUB_KILL_EXIT:-0}" ;;
     rm) exit "${STUB_RM_EXIT:-0}" ;;
     *) exit 99 ;;
 esac
@@ -101,10 +101,11 @@ EOF
 }
 
 @test "cleanup runs on mid-run signal and resists interruption during cleanup" {
-    export STUB_WAIT_SLEEP=1 STUB_KILL_SLEEP=1; set -m
-    LOOM_HC_LIVE_PROBE=1 "$PROBE" --evidence-file "$EVID_FILE" &
-    pid=$!; sleep 0.1; kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
-    sleep 0.05; kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
+    w="$BATS_TEST_TMPDIR/w" k="$BATS_TEST_TMPDIR/k"; set -m
+    STUB_WAIT_SYNC="$w" STUB_KILL_SYNC="$k" LOOM_HC_LIVE_PROBE=1 "$PROBE" --evidence-file "$EVID_FILE" &
+    pid=$!; for _ in {1..200}; do [ -f "$w" ] && break; sleep 0.01; done; [ -f "$w" ]
+    kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
+    for _ in {1..200}; do [ -f "$k" ] && break; sleep 0.01; done; [ -f "$k" ]; kill -INT -$pid 2>/dev/null || kill -INT "$pid" 2>/dev/null || true
     rc=0; wait "$pid" || rc=$?; [ "$rc" -eq 130 ]
     grep -q "<kill><probe-test0001>" "$STUB_LOG" && grep -q "<rm><probe-test0001>" "$STUB_LOG"
     ! grep -q "<kill><probe-nd-test0001>" "$STUB_LOG"

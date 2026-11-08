@@ -37,8 +37,7 @@ MODEL="claude-haiku-5-5"
 PROMPT_A="What is 37+5? Reply with only the number, then stop. Use no tools."
 PROMPT_B="If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop."
 
-EVID_DIR="$(dirname "$EVIDENCE_FILE")"
-mkdir -p "$EVID_DIR" && chmod 0700 "$EVID_DIR" 2>/dev/null || true
+mkdir -p "$(dirname "$EVIDENCE_FILE")" && chmod 0700 "$(dirname "$EVIDENCE_FILE")" 2>/dev/null || true
 : >"$EVIDENCE_FILE"
 SCRATCH_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/hc-probe.XXXXXX")
 cd "$SCRATCH_DIR" || exit 2
