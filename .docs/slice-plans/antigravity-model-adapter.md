@@ -24,7 +24,7 @@ evaluation governance must track the **underlying model provider family**, not s
   - `oss`: `antigravity` model matching `gpt-oss-*`.
 - Concrete model resolution: Every Antigravity launch resolves to a concrete model ID from the catalog; aliases (`flash`, `inherit`, `pro`) never map directly to a family and must resolve to concrete models or fail closed (`exit 2`).
 - Evidence capture & handoff flow:
-  - Component: The orchestrator driver (`loom-run`) launches roles via `loom-launch-role`. When an author role (`planner`, `developer`) is launched with `--routing-file <path>`, `loom-launch-role` captures the resolved concrete model and persists `.routes["planner"]` / `.routes["planner-model"]` (or `developer`) into the routing file.
+  - Component: The orchestrator driver (`loom-run`) launches roles via `loom-launch-role`. When an author role (`planner`, `developer`, `researcher`) is launched with `--routing-file <path>`, `loom-launch-role` captures the resolved concrete model and persists its role keys into the routing file.
   - Handoff: The orchestrator passes `--routing-file <path>` to evaluator launches (`plan-evaluator`, `code-evaluator`), where `loom-launch-role auto <evaluator-role> --routing-file <path>` extracts author provenance, resolves families, enforces the cross-family invariant, and prints the verified descriptor.
   - Validation: For single-family authors (`claude` -> `anthropic`, `codex` -> `openai`), `--author-model` is optional and defaults to the client's sole family. For multi-family author `antigravity`, author model MUST be supplied via `--author-model <id>` or `.routes["<author-role>-model"]`. If missing or an alias, fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
   - Invariant check: Deterministically resolve evaluator family from concrete model; if `authorFamily == evaluatorFamily`, fail closed (`exit 2`) with `cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)`.
@@ -52,7 +52,7 @@ Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`
 
 ## Steps
 
-### Step 1: Update Schemas, Consumer Compatibility & Toolchain Digests
+### Step 1: Update Schemas, Consumer Resolution Paths & Digests
 1. Update `plugins/loom/schemas/loom-installed-root-binding-v1.schema.json`:
    - Add `antigravity-plugin-root/v1` variant to `oneOf` with exact properties:
      `schema` ("antigravity-plugin-root/v1"), `client` ("antigravity"), `inputMustBeAbsolute` (true),
@@ -85,10 +85,15 @@ Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`
        - `claude`: `type: "object"`, `additionalProperties: false`, required `["selector", "agentCapability"]`; `selector`: `{ "enum": ["haiku", "sonnet", "opus"] }`, `agentCapability`: `{ "const": false }`.
        - `codex`: `type: "object"`, `additionalProperties: false`, required `["model", "effort", "sandbox", "webSearch", "argv"]`; `model`: `{ "type": "string", "pattern": "^(gpt-6(\\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\\.6(-[a-z0-9]+)?)$" }`, `effort`: `{ "enum": ["low", "medium", "high"] }`, `sandbox`: `{ "const": "read-only" }`, `webSearch`: `{ "const": false }`, `argv`: `{ "type": "array", "minItems": 1, "items": { "type": "string" } }`.
        - `antigravity`: `type: "object"`, `additionalProperties: false`, required `["subagentName", "model", "enableSubagentTools", "enableWriteTools", "rolePromptPath", "rolePromptSha256"]`; `subagentName`: `{ "type": "string", "minLength": 1 }`, `model`: `{ "type": "string", "minLength": 1 }`, `enableSubagentTools`: `{ "type": "boolean" }`, `enableWriteTools`: `{ "type": "boolean" }`, `rolePromptPath`: `{ "type": "string", "minLength": 1 }`, `rolePromptSha256`: `{ "type": "string", "pattern": "^[0-9a-f]{64}$" }`, optional `environment`: `{ "type": "object", "additionalProperties": false, "required": ["LOOM_ROLE"], "properties": { "LOOM_ROLE": { "type": "string", "minLength": 1 } } }`.
-   - Consumer schema sharing & compatible versioning:
-     - Shared schema asset: `plugins/loom/schemas/loom-role-launch-v1.schema.json` is the sole canonical schema for launch descriptors in Loom. Launchers, test runners, and packaging tools all resolve this shared file directly; there are no duplicate embedded schemas.
-     - Compatible versioning: The schema ID remains `loom-role-launch/v1` as a backward-compatible minor extension. Optional properties `authorFamily` and `evaluatorFamily` are added to the closed property set (`additionalProperties: false`), allowing consumers with strict schemas to accept both legacy v0.2.0 and new v0.3.0 descriptors without breaking.
-     - Launcher CLI compatibility: `--author-model` is optional; single-family calls (`claude` -> `anthropic`, `codex` -> `openai`) default automatically, while multi-family `antigravity` fails closed if model is missing or an alias.
+   - Consumer identification, schema resolution & version handling:
+     - Identification of consumers:
+       1. Launcher guard (`plugins/loom/bin/loom-launch-role`): verifies `$root/schemas/loom-role-launch-v1.schema.json` regular non-symlink before launch.
+       2. Test validator (`plugins/loom/bin/loom-launch-role.bats:validate_launch`): loads `$REPO_ROOT/plugins/loom/schemas/loom-role-launch-v1.schema.json` with strict Ajv 2020 (`additionalProperties: false`).
+       3. Integrity validator (`scripts/validate-repository.mjs`): verifies schema JSON and matches digest in `scripts/check-toolchain.json`.
+       4. Orchestrator (`plugins/loom/skills/loom-run/SKILL.md`): consumes stdout JSON descriptor directly.
+     - Canonical schema resolution: `plugins/loom/schemas/loom-role-launch-v1.schema.json` is the sole canonical schema asset. All internal consumers resolve this single file directly; no duplicate or out-of-tree schemas exist.
+     - Versioning: retains `$id: "loom-role-launch/v1"` as a non-breaking additive extension; updating the canonical schema updates all validation paths simultaneously.
+     - CLI compatibility: `--author-model` is optional; single-family calls default automatically, while multi-family `antigravity` fails closed if model is omitted or an alias.
 4. Re-pin schema digests in `scripts/check-toolchain.json`.
 
 ### Step 2: v0.3.0 Matrix, Root Descriptor & Release Fixture
@@ -110,8 +115,10 @@ In `plugins/loom/bin/loom-launch-role`:
    - For `codex`: return `openai`.
    - For `antigravity`: `claude-*` -> `anthropic`, `gpt-6*` | `gpt-5.6*` | `openai*` -> `openai`, `gemini-*` -> `google`, `gpt-oss-*` -> `oss`. Aliases fail closed; unmapped models return empty / exit 1.
 2. In author role launches (`planner`, `developer`, `researcher`):
-   - When `--routing-file <path>` is supplied, atomically update the routing file:
-     `.routes["planner"] = "$client"` and `.routes["planner-model"] = "$resolved_model"` (or `developer` / `developer-model`).
+   - When `--routing-file <path>` is supplied, atomically update the routing file for the specific role without touching other roles' keys:
+     - For `planner`: `.routes["planner"] = "$client"` and `.routes["planner-model"] = "$resolved_model"`.
+     - For `developer`: `.routes["developer"] = "$client"` and `.routes["developer-model"] = "$resolved_model"`.
+     - For `researcher`: `.routes["researcher"] = "$client"` and `.routes["researcher-model"] = "$resolved_model"`.
 3. In evaluator role launches (`plan-evaluator`, `code-evaluator`):
    - Require author client: if absent under cross-family requirement, fail closed (`exit 2`).
    - Read author model: from `--author-model <model>`, or if `--routing-file <path>` is supplied, from `.routes["planner-model"]` (for `plan-evaluator`) or `.routes["developer-model"]` (for `code-evaluator`).
@@ -129,7 +136,7 @@ In `plugins/loom/bin/loom-launch-role`:
 ### Step 4: Update Orchestrator Workflow Skill
 In `plugins/loom/skills/loom-run/SKILL.md`:
 1. Under Step 3.d (Driver loop):
-   - Document that when dispatching author roles (`planner`, `developer`), `loom-run` passes `--routing-file "$ROUTING_FILE"` to `loom-launch-role` so author client and concrete model are persisted automatically.
+   - Document that when dispatching author roles (`planner`, `developer`, `researcher`), `loom-run` passes `--routing-file "$ROUTING_FILE"` to `loom-launch-role` so author client and concrete model are persisted automatically into role-specific keys.
    - When dispatching evaluator roles (`plan-evaluator`, `code-evaluator`), `loom-run` passes `auto <evaluator-role> --routing-file "$ROUTING_FILE"` so `loom-launch-role` reads persisted author provenance and verifies the cross-family invariant.
 
 ### Step 5: Repository Validator Updates
@@ -152,14 +159,17 @@ In `scripts/validate-repository.mjs`:
      3. Invoke evaluator launch production path: `LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" loom-launch-role auto plan-evaluator --routing-file "$routing_file"`.
      4. Assert evaluator output: status 0, emitted JSON contains `"authorClient":"antigravity"`, `"authorFamily":"google"`, `"evaluatorFamily":"openai"`, `"crossFamilyVerified":true`.
      5. Routing-file same-family rejection: write routing file with `.routes["planner"] = "antigravity"`, `.routes["planner-model"] = "claude-3-7-sonnet"`, and `.routes["plan-evaluator"] = "claude"`; run `loom-launch-role auto plan-evaluator --routing-file "$routing_file"`; assert exit 2 with `cross-family evaluation violation: evaluator model family (anthropic) matches author model family (anthropic)`.
+   - Researcher routing-file persistence isolation test:
+     - Run `loom-launch-role antigravity researcher --routing-file "$routing_file"`.
+     - Assert `.routes["researcher"] == "antigravity"` and `.routes["researcher-model"] == "gemini-4-argon-medium"`, while `.routes["planner"]` and `.routes["developer"]` remain unchanged.
    - Multi-family author fail-closed: `antigravity` author without `--author-model` or routing model fails closed (exit 2).
    - Alias rejection: `--author-model inherit` fails closed (exit 2).
    - Unknown author model fail-closed: `--author-model unknown-model` fails closed (exit 2).
    - Dynamic discovery cache: verifies hit, 24h TTL expiration, and atomic 0600 file rewrite.
    - Version refusal: below-floor `agy` (< 1.4.12) or unknown version fails closed (exit 2).
    - Consumer schema validation & compatibility:
-     - Strict Ajv 2020 (`additionalProperties: false`) validates legacy descriptor omitting `authorFamily`/`evaluatorFamily` (exit 0).
-     - Strict Ajv 2020 validates v0.3.0 descriptor containing `authorFamily` and `evaluatorFamily` (exit 0).
+     - Strict Ajv 2020 (`additionalProperties: false`) exercises consumer validation path for legacy descriptor omitting `authorFamily`/`evaluatorFamily` (exit 0).
+     - Strict Ajv 2020 exercises consumer validation path for v0.3.0 descriptor containing `authorFamily` and `evaluatorFamily` (exit 0).
      - Strict Ajv 2020 rejects descriptor containing undeclared property (exit 1), proving `additionalProperties: false` is strictly enforced.
 2. `scripts/tests/repository-validation.bats`:
    - Validate `antigravity-plugin-root/v1` schema and reject unknown fields.
@@ -171,6 +181,7 @@ In `scripts/validate-repository.mjs`:
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 6 | plan | FAIL | Consumer resolution paths not identified to substantiate single canonical schema claim; researcher routing-file persistence behavior ambiguous. Resolved in Round 7 by explicitly enumerating all 4 launch-descriptor consumers and their file resolution paths, establishing why version v1 is backward-compatible with no duplicate schemas, defining isolated researcher routing persistence (.routes["researcher"] and ["researcher-model"]) that cannot overwrite planner/developer keys, and adding an explicit test for researcher routing isolation. |
 | 5 | plan | FAIL | Test still performed orchestrator capture manually instead of invoking production path; closed-schema consumer sharing and versioning behavior not established. Resolved in Round 6 by adding Step 4 for `loom-run/SKILL.md` orchestrator workflow, implementing `--routing-file` author-launch capture and persistence in `loom-launch-role`, asserting that all consumers share the canonical schema asset under compatible minor extension `v1`, and adding tests invoking the production author-persistence -> evaluator-handoff path and strict Ajv legacy/v0.3.0 consumer validation. |
 | 4 | plan | FAIL | Descriptor types & constraints incomplete across 3 variants and environment object; consumer and CLI compatibility unspecified for omitted --author-model and closed schemas; handoff test bypassed orchestrator routing-file flow. Resolved in Round 5 by defining complete types, enums, patterns, and constraints for all common and variant fields with additionalProperties: false; specifying single-family backward compatibility defaults and schema property updates for closed-schema consumers; and replacing manual extraction test with full orchestrator launch capture, routing-file persistence, and evaluator handoff test. |
 | 3 | plan | FAIL | Author model handoff data flow and handoff test unspecified; launch descriptor schema lacked complete 3-variant contract and consumer compatibility definition. Resolved in Round 4 by specifying orchestrator descriptor capture, persistence, and `--author-model` handoff; defining the complete 3-variant `loom-role-launch-v1` schema with closed constraints, required/optional fields, and additive consumer compatibility; and adding an explicit author-to-evaluator handoff test. |
