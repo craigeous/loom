@@ -39,6 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+  - Accepted 2026-11-08: ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 scope and settle evaluator governance): admits Antigravity, Orca, and Herdr to v0.3.0 scope under ADR 0033 §1; settles host evaluator governance by restricting `hc`/Orca to authoring/interactive host roles and delegating evaluation to cold, isolated workspaces with certified model clients; un-shelves `hc-host-adapter` and `hc-live-probe`.
   - Landed 2026-11-07: `codex-launch-schema-fix` (v0.2.1 preparation): removed `--output-schema` from `codex exec` in `loom-launch-role`, allowing native unwrapped role execution; plan archived.
   - Landed 2026-11-07: v0.2.0 live proof complete; release tag `v0.2.0` and evidence record published to `origin/main` (ADR 0032 E1–E5, ADR 0033 D3).
   - Landed 2026-11-07: `release-conformance-and-evidence-schema`: v0.2.0 release-evidence schema (`loom-release-evidence/v1`) and chain validator, macOS-only CI runner/docs alignment (G4, G5; ADR 0032 §3, §8); plan archived.
@@ -46,23 +47,15 @@ Current milestone: M9
   - Landed 2026-11-06: `instruction-adapter-sync`: instruction digest and derived blocks aligned with ADR 0032 §2; drift now fails `--all`.
   - Landed 2026-11-05: `dogfood-retirement` (ADR 0033 D1): macOS checkpoint tooling retired.
   - Landed 2026-11-05: `herdr-surface-retirement` (4 of 4): Herdr plugin surfaces retired.
-  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). Remaining: `herdr-surface-retirement` (approved; runs first). `hc-host-adapter` and `hc-live-probe` are **shelved** (ADR 0033 D4): requirements and review history kept, not built.
-  - **Deferred (ADR 0033 D4):** the Herdr/`hc` evaluator question stays open until post-v0.2.0 scope admission; `hc` evaluators remain prohibited (ADR 0031 §5). No new `hc`, Orca or Antigravity build starts without explicit admission.
+  - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). `hc-host-adapter` and `hc-live-probe` un-shelved per ADR 0034.
+  - **ADR 0034 Implementation Order:** (1) `hc-host-adapter`, (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Slices 1–3 use certified CLI evaluators per ADR 0034 §2.
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification). All three slices landed (offline fixture verification only); live Herdr and native-app execution evidence is separate owner-run work and remains outstanding.
 
-## Next: Post-v0.2.0 scope admission (ADR 0033, Accepted 2026-11-03)
+## Next: v0.3.0 Harness Delivery (ADR 0034, Accepted 2026-11-08)
 
-Order of work: (1) `herdr-surface-retirement` (1bed05f), (2) `dogfood-retirement` (cc2b1ef),
-(3) `instruction-adapter-sync` (93c4f23), (4) `release-conformance-and-evidence-schema` (78a21fb),
-(5) `v0.2.0` live proof and release evidence (`b5110e5`) have all landed and published on
-`origin/main`, and (6) Track 1 `codex-launch-schema-fix` has landed. Conformance is verified
-for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action
-is to admit follow-on scope per ADR 0033 §1 / owner direction: (a) Track 2: Orca host surface
-admission for `v0.3.0`, (b) Track 3: revisit the deferred Herdr/`hc` evaluator question (ADR 0033 D4),
-or (c) Track 4: Antigravity subagent binding. ADR 0033 replaces ADR 0032's five-pair v0.3.0 set with
-evidence-admitted pairs.
+Order of work: (1) `hc-host-adapter` (`plugins/loom/bin/loom-host-hc` and `.docs/slice-plans/hc-host-adapter.md`), (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Conformance is verified for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action is to implement `hc-host-adapter`.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition

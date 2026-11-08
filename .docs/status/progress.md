@@ -7,6 +7,7 @@ The status source of truth and decision index for building loom.
 Current milestone: M9
 
 ## Action history
+- 2026-11-08 — ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 scope and settle evaluator governance) Accepted after Round 3 PASS via Codex cross-family evaluation; admits Antigravity, Orca, and Herdr into v0.3.0 scope under ADR 0033 §1; settles host evaluator governance by restricting `hc`/Orca to authoring/interactive host roles and delegating evaluation to cold, isolated workspaces with certified model clients.
 - 2026-11-07 — `codex-launch-schema-fix` (v0.2.1 preparation: remove `--output-schema` from `codex exec` in `loom-launch-role`, non-symlink schema check, 103/103 Bats tests passing) landed; plan archived.
 - 2026-11-07 — `v0.2.0` released: tag `v0.2.0` and release evidence (`.docs/evaluations/release-evidence/v0.2.0.json`, ADR 0032 E1–E5, ADR 0033 D3) published to `origin/main`.
 - 2026-11-07 — `release-conformance-and-evidence-schema` (v0.2.0 release evidence schema and chain validator, macOS-only CI/docs alignment) landed via remote-direct; plan archived.
@@ -32,7 +33,10 @@ Current milestone: M9
 
 ## Current state
 
-- **Current activity (2026-11-07) — `codex-launch-schema-fix` Landed (v0.2.1 preparation):**
+- **Current activity (2026-11-08) — ADR 0034 Accepted (Admit Antigravity, Orca, and Herdr to v0.3.0 Scope):**
+  Accepted ADR 0034 following Round 3 blind, cross-family evaluation with OpenAI Codex (`gpt-6.1-terra`, Verdict: PASS). Formally admits Antigravity, Orca, and Herdr (`hc`) to the `v0.3.0` milestone scope under ADR 0033 §1. Settles host evaluator governance by superseding ADR 0032 §3/§5 host supported definition for host harnesses (`herdr`, `orca`): interactive roles run inside the host harness while evaluator roles are delegated to sanitized, cold POSIX workspaces using certified model CLI clients (`codex` or `claude`). Slices ordered per ADR 0034 §5: (1) `hc-host-adapter`, (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Next slice to deliver: `hc-host-adapter`.
+
+- **Prior activity (2026-11-07) — `codex-launch-schema-fix` Landed (v0.2.1 preparation):**
   Removed `--output-schema "$schema_path"` from `codex exec` invocation in `plugins/loom/bin/loom-launch-role`, allowing native unwrapped Codex role execution without OpenAI Structured Outputs schema rejection; verified launcher descriptor schema is a non-symlinked regular file (`[ -f "$schema_path" ] && [ ! -L "$schema_path" ] || _fail "launch descriptor schema is missing"`). Tested with 103/103 Bats tests passing in `plugins/loom/bin/loom-launch-role.bats` under Bash 3.2.57. Local review completed clean (`ran-clean`, 3 finders) and code evaluation passed Round 0 (PASS, commit `d4b24be`). Plan archived.
 
 - **Prior activity (2026-11-07) — `v0.2.0` Released and Published (ADR 0032 E1–E5, ADR 0033 D3):**
