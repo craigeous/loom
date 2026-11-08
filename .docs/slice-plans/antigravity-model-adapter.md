@@ -20,45 +20,47 @@ evaluation governance must track the **underlying model provider family**, not s
 - Provider families:
   - `anthropic`: `claude` CLI client, or `antigravity` model matching `claude-*`.
   - `openai`: `codex` CLI client, or `antigravity` model matching `gpt-6*` or `openai`.
-  - `google`: `antigravity` model matching `gemini-*` (and fallbacks `flash`, `inherit`, `pro`).
+  - `google`: `antigravity` model matching `gemini-*` (and fallbacks `flash`, `inherit`, `pro` resolving to Google matrix floors).
   - `oss`: `antigravity` model matching `gpt-oss-*`.
 - Fail-closed deterministic resolution:
   - Deterministically resolve both author family (`authorFamily`) and evaluator family (`evaluatorFamily`).
-  - If `authorFamily` cannot be resolved: fail closed (`exit 2`).
-  - If `evaluatorFamily` cannot be resolved: fail closed (`exit 2`).
-  - If `authorFamily == evaluatorFamily`: fail closed (`exit 2`).
+  - For `claude`: `authorFamily=anthropic`. For `codex`: `authorFamily=openai`.
+  - For `antigravity` author: must provide `--author-model` or `--author-family`; if absent or unmapped, fail closed (`exit 2`) with `cannot deterministically resolve author model family`.
+  - Evaluator family must map deterministically from the concrete selected model; unmapped models fail closed (`exit 2`).
+  - If `authorFamily == evaluatorFamily`: fail closed (`exit 2`) with `cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)`.
 - Cross-family rotation rules:
-  - If author is `claude` (`anthropic`): evaluator routes to `codex` (`openai`) or `antigravity` with Gemini (`google`).
-  - If author is `codex` (`openai`): evaluator routes to `claude` (`anthropic`) or `antigravity` with Gemini (`google`).
-  - If author is `antigravity` with Gemini (`google`): evaluator routes to `codex` (`openai`) or `claude` (`anthropic`).
-  - If author is `antigravity` with Claude (`anthropic`): evaluator routes to `codex` (`openai`), NEVER `claude`.
+  - Author `claude` (`anthropic`) -> evaluator `codex` (`openai`).
+  - Author `codex` (`openai`) -> evaluator `claude` (`anthropic`).
+  - Author `antigravity` with Gemini (`google`) -> evaluator `codex` or `claude`.
+  - Author `antigravity` with Claude (`anthropic`) -> evaluator `codex` (never `claude`).
+  - Author `antigravity` with OpenAI (`openai`) -> evaluator `claude` (never `codex`).
 
-**Registration decision.** Like `loom-host-hc` and `loom-host-orca`, Antigravity registration
-belongs exclusively to **v0.3.0**. The v0.2.0 matrix and fixtures remain byte-unchanged against HEAD.
+**Registration decision.** Antigravity registration belongs exclusively to **v0.3.0**.
+The v0.2.0 matrix and fixtures remain byte-identical against their release baseline (`git show v0.2.0:<path>`).
 
 ## Verified Antigravity CLI 1.4.12 Behaviors & Catalog
 
 Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
-- `agy --version`: Emits `1.4.12` (exit 0).
-- `agy models`: Emits tab-separated available models:
-  - Gemini: `gemini-4-argon-medium`, `gemini-4-argon-high`, `gemini-3.8-flash-low`, etc.
-  - Claude: `claude-opus-5-5-high`, `claude-sonnet-5-5-medium`, etc.
-  - OSS: `gpt-oss-120b-medium`.
+- `agy --version`: Emits `1.4.12` (exit 0). Below-floor (< 1.4.12) or malformed version fails closed (exit 2).
+- `agy models`: Emits tab-separated catalog (Gemini, Claude, OSS). Cached locally for 24h in owner-only `0600` file.
 
-## Step-by-Step Implementation Plan
+## Steps
 
 ### Step 1: Update Schemas & Toolchain Digests
 1. Update `plugins/loom/schemas/loom-installed-root-binding-v1.schema.json`:
-   - Add `antigravity-plugin-root/v1` variant to `oneOf` with required properties:
+   - Add `antigravity-plugin-root/v1` variant to `oneOf` with exact properties:
      `schema` ("antigravity-plugin-root/v1"), `client` ("antigravity"), `inputMustBeAbsolute` (true),
      `invocationMustBeAbsolute` (true), `canonicalRootRequired` (true), `rolesDirectory` ("roles"),
-     `rolesDirectoryMustBeDirectChild` (true), `expectedName` ("loom"), `expectedVersion` ("0.3.0"),
-     `helperDirectory` ("bin"), `helperDirectoryMustBeDirectChild` (true), `allowedHelpers`,
+     `rolesDirectoryMustBeDirectChild` (true), `canonicalRoleMustBeRegularFile` (true),
+     `expectedName` ("loom"), `expectedVersion` ("0.3.0"), `helperDirectory` ("bin"),
+     `helperDirectoryMustBeDirectChild` (true), `allowedHelpers` (`#/$defs/allowedHelpers`),
      `helperMustBeRegularFile` (true), `helperMustBeExecutable` (true).
 2. Update `plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json`:
-   - Under `clientFloors`: add `antigravity: { "type": "string" }`.
-   - Under `profiles[].items.properties`: add `antigravity: { "type": "object", "required": ["model"], "properties": { "model": { "type": "string" } }, "additionalProperties": false }`.
-3. Compute new sha256 digests and update `scripts/check-toolchain.json`.
+   - `clientFloors`: add `antigravity: { "type": "string" }`.
+   - `profiles[].items.properties`: add `antigravity: { "type": "object", "required": ["model"], "properties": { "model": { "type": "string" } }, "additionalProperties": false }`.
+3. Update `plugins/loom/schemas/loom-role-launch-v1.schema.json`:
+   - Add optional string properties `authorFamily` and `evaluatorFamily` (enum: `["anthropic", "openai", "google", "oss"]`).
+4. Re-pin schema digests in `scripts/check-toolchain.json`.
 
 ### Step 2: v0.3.0 Matrix, Root Descriptor & Release Fixture
 1. Update `plugins/loom/adapters/compatibility/v0.3.0.json`:
@@ -69,9 +71,8 @@ Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`
      - `Deep review`: `gemini-4-argon-high`
    - Register root binding: `{ "id": "antigravity-plugin-root/v1", "path": "plugins/loom/adapters/roots/antigravity-plugin-root-v1.json" }`.
 2. Create `plugins/loom/adapters/roots/antigravity-plugin-root-v1.json`:
-   - Conforms to `antigravity-plugin-root/v1` schema with `expectedVersion: "0.3.0"`.
-3. Create byte-equal fixture:
-   `plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json`.
+   - Exact descriptor matching schema, with `allowedHelpers: ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"]`.
+3. Create byte-equal fixture `plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json`.
 
 ### Step 3: Implement Launcher Model-Family Resolution & Cross-Family Invariants
 In `plugins/loom/bin/loom-launch-role`:
@@ -81,64 +82,58 @@ In `plugins/loom/bin/loom-launch-role`:
    - For `antigravity`:
      - `claude-*`: return `anthropic`.
      - `gpt-6*` | `gpt-5.6*` | `openai*`: return `openai`.
-     - `gemini-*` | `flash` | `inherit` | `pro`: return `google`.
+     - `gemini-*`: return `google`.
      - `gpt-oss-*`: return `oss`.
+     - If aliases `flash` | `inherit` | `pro`: map to matrix v0.3.0 floor models (`gemini-3.8-flash-low`, `gemini-4-argon-medium`, `gemini-4-argon-high`) which return `google`.
      - else return empty / exit 1.
 2. In role launch for `plan-evaluator` and `code-evaluator`:
+   - Require author client: if absent under cross-family requirement, fail closed (`exit 2`).
+   - Resolve `authorFamily`:
+     - If `author_client` is `claude`: `authorFamily=anthropic`.
+     - If `author_client` is `codex`: `authorFamily=openai`.
+     - If `author_client` is `antigravity`: read `--author-model` (or `--author-family`). If absent, fail closed (`exit 2`) with `cannot deterministically resolve author model family: multi-family author client requires --author-model`.
    - Resolve `evaluatorFamily`: `_model_family "$client" "$resolved_model"` || `_fail "cannot deterministically resolve evaluator model family"`.
-   - When `author_client` is supplied or routed:
-     - Resolve `author_model` (from `--author-model` if provided, else profile floor for author client).
-     - Resolve `authorFamily`: `_model_family "$author_client" "$author_model"` || `_fail "cannot deterministically resolve author model family"`.
-     - Enforce `[ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"`.
-     - Emit in launch descriptor: `"authorClient":"<author_client>","authorFamily":"<authorFamily>","evaluatorFamily":"<evaluatorFamily>","crossFamilyVerified":true`.
-3. Auto rotation update:
-   - In `_next_client_in_cycle`:
-     - When author is `claude`: default to `codex`.
-     - When author is `codex`: default to `claude`.
-     - When author is `antigravity`:
-       - If author family is `anthropic`: return `codex` (never `claude`).
-       - If author family is `openai`: return `claude`.
-       - If author family is `google`: default to `codex` (or `claude`).
-4. Update `_launch_antigravity` profile floor resolution to bind `v0.3.0.json` profiles when `--release 0.3.0` is specified or default falls through.
+   - Enforce: `[ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"`.
+   - Emit in launch descriptor: `"authorClient":"$author_client","authorFamily":"$authorFamily","evaluatorFamily":"$evaluatorFamily","crossFamilyVerified":true`.
+3. Auto rotation update in `_next_client_in_cycle`:
+   - Author `claude` -> `codex`. Author `codex` -> `claude`.
+   - Author `antigravity`: if `authorFamily` is `anthropic` -> `codex` (never `claude`); if `authorFamily` is `openai` -> `claude` (never `codex`); if `authorFamily` is `google` -> `codex`.
 
 ### Step 4: Repository Validator Updates
 In `scripts/validate-repository.mjs`:
-1. In schema validation table:
-   - Add `["plugins/loom/adapters/roots/antigravity-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]`.
-2. In `validateHostBinding` (or dedicated v0.3.0 client root validation):
-   - Include `antigravity-plugin-root-v1.json` in root paths check.
-   - Validate that `antigravity-plugin-root-v1.json` matches fixture `plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json`.
-   - Verify `v0.3.0.json` contains valid `clientFloors.antigravity: "1.4.12"` matching schema.
-   - Assert that v0.2.0 files (`compatibility/v0.2.0.json`, fixtures/v0.2.0) are completely unchanged.
+1. Add `["plugins/loom/adapters/roots/antigravity-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]` to schema table.
+2. In root validation:
+   - Validate `antigravity-plugin-root-v1.json` deep-equals fixture `root-antigravity.json`.
+   - Validate `v0.3.0.json` has `clientFloors.antigravity: "1.4.12"` matching binding floor.
+   - Assert mechanical baseline: v0.2.0 files are byte-identical to `plugins/loom/adapters/fixtures/v0.2.0/metadata/`.
 
 ### Step 5: Test Coverage & Verification
 1. `plugins/loom/bin/loom-launch-role.bats`:
-   - Test model-family extraction: `claude` is `anthropic`, `codex` is `openai`, `agy gemini-*` is `google`, `agy claude-*` is `anthropic`.
-   - Test cross-family rejection: `antigravity` running Claude model evaluating `claude` author fails closed with family violation.
-   - Test cross-family acceptance: `antigravity` running Gemini model evaluating `claude` author succeeds with `crossFamilyVerified: true`.
-   - Test intra-antigravity rejection: `antigravity` evaluating `antigravity` with same model family fails closed.
-   - Test auto rotation: `antigravity` with Claude author routes to `codex`, never `claude`.
-   - Test launch descriptor: emitted descriptor contains `authorFamily`, `evaluatorFamily`, and conforms to schema.
+   - Model-family extraction across all four families (`anthropic`, `openai`, `google`, `oss`).
+   - Cross-family rejection: `antigravity` running Claude model evaluating `claude` author fails closed with family violation.
+   - Cross-family acceptance: `antigravity` running Gemini model evaluating `claude` author succeeds.
+   - Multi-family author fail-closed: `antigravity` author without `--author-model` fails closed.
+   - Same-family rejection: `antigravity` (Gemini) evaluating `antigravity` (Gemini) fails closed.
+   - Dynamic discovery cache: verifies hit, 24h TTL expiration, and atomic 0600 file rewrite.
+   - Version refusal: below-floor `agy` (< 1.4.12) or unknown version fails closed (exit 2).
 2. `scripts/tests/repository-validation.bats`:
-   - Test `antigravity-plugin-root/v1` schema validation and reject unknown properties.
-   - Test v0.3.0 `clientFloors.antigravity` drift or omission fails closed.
-   - Test fixture drift for `root-antigravity.json` fails closed.
+   - Validate `antigravity-plugin-root/v1` schema and reject unknown fields.
+   - Validate v0.3.0 matrix `clientFloors.antigravity` drift or omission fails closed.
 3. Gate execution:
-   - Full repository check `node scripts/validate-repository.mjs --all`.
-   - Bats test suites under Bash 3.2 canary.
+   - Full gate: `scripts/check` under Bash 3.2.57 and Bash 5.3+.
+
+## Revision Log
+
+| Round | Phase | Verdict | Key Findings & Resolution |
+|---|---|---|---|
+| 0 | plan | FAIL | Author family resolution inferred from profile floor on multi-family Antigravity; `scripts/check` gate omitted; dynamic discovery cache and version refusal tests omitted; launch descriptor schema and `allowedHelpers` unspecified; mechanical baseline for v0.2.0 undefined. Resolved in Round 1 by requiring `--author-model` for multi-family author, adding `scripts/check` under Bash 3.2 and 5.3+, specifying descriptor schemas and `allowedHelpers`, adding cache and version refusal tests, and defining mechanical fixture baseline. |
 
 ## Out of Scope & Threat-Model Boundary
 
-- **Out of Scope:**
-  - Live E4 runs against real `agy` backend (reserved for `v0.3.0-live-proof` follow-on slice).
-  - Editing v0.2.0 matrices, schemas, or fixtures.
-  - Relaxing the ADR 0034 §2 evaluator isolation rule (evaluators always run in clean POSIX scratch spaces).
-- **Threat-Model Boundary:**
-  - Consistent with ADR 0022 and ADR 0034 §2, process isolation and input filtering do not provide kernel sandboxing against malicious same-UID processes.
-  - The model family invariant guarantees cognitive independence across disparate model training/weights families.
+- **Out of Scope:** Live E4 proof runs (reserved for Slice 5); editing v0.2.0 files or released tags; executing unstubbed `agy` in automated gates.
+- **Threat-Model Boundary:** Consistent with ADR 0022 and ADR 0034 §2, process isolation does not provide kernel-level sandboxing against malicious same-UID processes. The provider-family invariant enforces cognitive and model weights/training provenance separation across author and evaluator roles.
 
 ## Verification Commands
 
-- Repository validation: `node scripts/validate-repository.mjs --all`
-- Targeted Bats verification under Bash 3.2:
-  `TMPDIR=/private/tmp scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats scripts/tests/repository-validation.bats </dev/null`
+- Repository gate: `scripts/check`
+- Canonical Bash gate: `TMPDIR=/private/tmp scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats scripts/tests/repository-validation.bats </dev/null`
