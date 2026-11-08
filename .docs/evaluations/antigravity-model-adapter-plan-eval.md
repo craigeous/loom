@@ -2,30 +2,29 @@
 
 Artifact: [antigravity-model-adapter](../slice-plans/antigravity-model-adapter.md)
 Verdict: FAIL
-Round: 4
-Commit: b200179b0a642a8c087953ae29eaf829104f8f9f
+Round: 5
+Commit: d43a16a4b21974af19b52ea96dcf603b0e501c2a
 Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [spec 07](../spec/07-command-surface.md), [spec 10](../spec/10-packaging.md), [runtime research](../research/2026-11-08-orca-and-antigravity-runtime-reference.md), and [plan evaluation rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md).
 
 ## Summary
 
-FAIL (round 4; BLOCKER: 0, MAJOR: 3, MINOR: 0). The revision specifies who captures and stores the author model, how it is passed to evaluator launches, and an explicit handoff test alongside same-family rejection. The launch-descriptor contract remains incomplete, and the handoff test does not exercise the newly specified orchestrator flow. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
+FAIL (round 5; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision defines the descriptor fields and closed environment object, specifies omitted-model behavior for single-family authors, and retains same-family rejection. It does not yet test the orchestrator’s actual capture and handoff path, and its closed-schema compatibility claim remains incomplete. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
 
 ## Findings
 
-- [MAJOR] The descriptor contract names the common required fields but does not specify their types or constraints, including `schema`, `client`, `role`, `profile`, `coldId`, `cold`, `delegation`, and `permissions`. It also leaves the `environment` object's unknown-field behavior unspecified. Therefore, the plan does not define complete permitted shapes for all three variants.
-- [MAJOR] The stated compatibility claim does not establish how existing consumers with closed schemas accept the new top-level fields, or how existing launcher invocations behave when `--author-model` is omitted. The prior verdict explicitly required compatibility with existing signatures and consumers.
-- [MAJOR] The handoff test manually extracts the author model and passes it to the evaluator. It would not detect a failure in `loom-run` to capture, persist, or forward that value, which is the flow the revision assigns to the orchestrator.
+- [MAJOR] The proposed handoff test still performs the orchestrator’s work in the test: it captures the launcher output, parses it, and writes the routing file itself. It would pass if `loom-run` failed to capture or persist the model. The steps also describe orchestrator changes in context but do not identify a file-scoped implementation step for them.
+- [MAJOR] Adding optional properties to the updated launcher schema does not make an **existing consumer’s own closed schema** accept descriptors containing those properties. The plan does not identify affected closed-schema consumers, specify their updates or versioning behavior, or establish that all such consumers use the updated shared schema.
 
 ## Required Changes
 
-1. Define the types and constraints of every common descriptor field and the complete nested object shapes, including unknown-field behavior.
-2. Specify compatibility behavior for existing launcher calls and descriptor consumers, including any schema or consumer updates needed for the additive fields.
-3. Add a test that exercises the orchestrator's author-launch capture, routing-file persistence, and evaluator-launch handoff, while retaining the same-family rejection test.
+1. Add a numbered, file-scoped step for the actual `loom-run` capture, routing-file persistence, and evaluator handoff. Specify a test that invokes that production path and observes the persisted model and evaluator result; retain the routing-file same-family rejection case.
+2. Identify how existing closed-schema consumers obtain the revised schema and specify any required consumer updates or compatible versioning. Add a compatibility check that exercises the relevant consumer validation path.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 4 | plan | FAIL | Descriptor types & constraints incomplete across 3 variants and environment object; consumer and CLI compatibility unspecified for omitted --author-model and closed schemas; handoff test bypassed orchestrator routing-file flow. Resolved in Round 5 by defining complete types, enums, patterns, and constraints for all common and variant fields with additionalProperties: false; specifying single-family backward compatibility defaults and schema property updates for closed-schema consumers; and replacing manual extraction test with full orchestrator launch capture, routing-file persistence, and evaluator handoff test. |
 | 3 | plan | FAIL | Author model handoff data flow and handoff test unspecified; launch descriptor schema lacked complete 3-variant contract and consumer compatibility definition. Resolved in Round 4 by specifying orchestrator descriptor capture, persistence, and `--author-model` handoff; defining the complete 3-variant `loom-role-launch-v1` schema with closed constraints, required/optional fields, and additive consumer compatibility; and adding an explicit author-to-evaluator handoff test. |
 | 2 | plan | FAIL | Author model propagation lacked concrete evidence capture definition; launch schema lacked complete 3-variant contract and consumer compatibility; threat-model overstated cognitive independence; baseline paths not fully specified. Resolved in Round 3 by specifying author descriptor capture and mandatory concrete `--author-model`, rejecting aliases in family extraction, detailing the complete 3-variant `loom-role-launch-v1` schema with additive compatibility, enumerating the exact 6-file v0.2.0 repository paths for git show validation, and narrowing the threat-model claim to provider-family classification separation. |
 | 1 | plan | FAIL | Step 3 mapped aliases to Google without establishing concrete model; `--author-family` permitted unverified claims; launch schema shape not detailed for all variants; v0.2.0 baseline and fixture comparisons inconsistent; threat-model overstated cognitive independence. Resolved in Round 2 by requiring concrete model resolution before family extraction, eliminating unverified `--author-family` in favor of mandatory concrete `--author-model`, defining exact launch schema additions across all three variants, specifying the 6-file v0.2.0 baseline verified against `git show v0.2.0:<path>`, and narrowing the threat-model claim strictly to provider-family separation. |
@@ -33,4 +32,4 @@ FAIL (round 4; BLOCKER: 0, MAJOR: 3, MINOR: 0). The revision specifies who captu
 
 ## Notes
 
-The Round 3 request for an explicit handoff example and same-family rejection is present; the remaining test gap concerns verification of the actual orchestrator path. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
+The plan is 180 lines, within the 250-line target. It states its scope and threat-model boundary and provides a repository gate and targeted Bash command. The stated v0.3.0 floor, binding, and profile mappings match ADR 0034; E4 live proof is explicitly deferred to Slice 5. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
