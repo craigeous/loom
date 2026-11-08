@@ -1,30 +1,29 @@
 # Evaluation: orca-host-adapter
 
-Verdict: FAIL
+Verdict: PASS
 Round: 1
-Commit: 0d87c1f17edb4d83a967ad941a53213be1b114e2
+Commit: 22d961f036d49f2dc0705c35e7b3bc1c0b5b3604
 Reviewed against: ADR 0032 §6, ADR 0034 §1, §2, §5, specs 07 and 10, research reference, and the plan-evaluation rubric.
 
 ## Summary
 
-FAIL (round 1; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision addressed the follow-on disposition and fixture-equality findings, but the CLI evidence in the research authority needed alignment on `--limit` and command schemas, and `end` cleanup error handling needed strict fail-closed definitions for malformed JSON and unexpected show states.
+PASS (round 1; BLOCKER: 0, MAJOR: 0, MINOR: 0). The revised plan addresses both Round 1 findings. The supplied runtime reference aligns with the planned Orca commands and response shapes, and `end` defines fail-closed handling for close and cleanup responses.
 
 ## Findings
 
-- [MAJOR] The supplied research says `terminal read` accepts `--lines`, while the plan uses `--limit`. It does not substantiate the plan’s `show` command, `--tab` flag, JSON shapes, stale-handle exit codes, or `operator_close` behavior. Embedding those claims in the plan does not independently verify them, so the Round 0 CLI-evidence finding remains open.
-- [MAJOR] `end` does not explicitly fail closed on malformed JSON or define how to handle a successful `show` response that is neither connected nor marked `operator_close`. It also accepts a stale error without specifying the required exit code. Its tests omit malformed cleanup responses. The Round 0 error-handling finding therefore remains partly open.
+None.
 
 ## Required Changes
 
-1. Supply reviewable Orca 1.4.250 evidence for the commands, flags, response shapes, and exit codes used by the plan. Resolve the `--lines` versus `--limit` discrepancy and align the implementation and stub tests with the verified interface.
-2. Define and test `end` to accept only the verified cleanup confirmations and to exit 2 for malformed JSON, unexpected exit-code/error combinations, and every unrecognized cleanup state.
+None.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 1 | plan | FAIL | CLI evidence in research authority needed `--limit` and schema updates; `end` cleanup needed strict fail-closed definitions for malformed JSON across all exit paths including exit 0. Resolved in Round 1 revision by validating close and show responses on all exit paths, adding negative tests, and updating research note. |
 | 0 | plan | FAIL | Initial plan lacked follow-on disposition for create/send/worktree, omitted research authority, had ambiguous exit 1 error handling, and phrased fixture equality as byte-equal. Resolved in Round 1 revision by scheduling `orca-live-probe`, defining fail-closed errors, aligning to deep-equal, and adding research note. |
 
 ## Notes
 
-The plan explicitly schedules `orca-live-probe` before E4, and its fixture contract now consistently uses deep equality. `status` and `read`/`events` define fail-closed handling for non-stale CLI errors and JSON parse failures.
+The close tests explicitly cover malformed output on exits 0 and 1 and unexpected exit codes. The plan is 161 lines and states a target budget of at most 380 added LOC. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).

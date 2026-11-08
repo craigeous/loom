@@ -1,6 +1,6 @@
 # Orca Client (3 of 5): Host Adapter `loom-host-orca` and v0.3.0 Registration
 
-Status: Plan Review
+Status: Approved
 Target specs: 07-command-surface.md (Host surfaces), 10-packaging.md (host floors)
 Authority: ADR 0032 §6, ADR 0034 §1, §2, §5 (Accepted)
 Target size: <= 380 LOC added (helper + Bats + registration; deletions not counted); keep this plan <= 250 lines
