@@ -2,28 +2,29 @@
 
 Artifact: [antigravity-model-adapter](../slice-plans/antigravity-model-adapter.md)
 Verdict: FAIL
-Round: 6
-Commit: 33afb0b5b30df65a1aa18cc4e5b2719c834943bb
+Round: 7
+Commit: c43d500f95be870182dc2f7e2bd6b8ff73cde41e
 Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [spec 07](../spec/07-command-surface.md), [spec 10](../spec/10-packaging.md), [runtime research](../research/2026-11-08-orca-and-antigravity-runtime-reference.md), and [plan evaluation rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md).
 
 ## Summary
 
-FAIL (round 6; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision adds launcher persistence, the orchestrator workflow step, production-path handoff test, and strict schema checks. The Round 5 consumer-compatibility finding remains unresolved: the plan asserts that every consumer shares the revised schema, but does not establish that fact or specify how existing consumers are updated. The persistence step also leaves researcher routing ambiguous. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
+FAIL (round 7; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision defines separate researcher routing keys and specifies the three strict Ajv compatibility cases. The Round 6 consumer finding remains unresolved: the plan lists four consumers but does not establish how each handles schema resolution and versioning, and its claim that all four resolve the schema directly conflicts with the listed behavior. The researcher isolation test also omits the planner and developer model keys. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
 
 ## Findings
 
-- [MAJOR] Step 1 declares the schema to be the sole canonical asset and says all consumers resolve it directly, but identifies no consumer paths or migration work to establish that assertion. The Ajv checks validate descriptors against the revised schema; they do not exercise an identified consumer’s validation path or show how a consumer with an existing closed schema obtains the revision. Keeping the `v1` identifier alone does not make an old closed schema accept the new fields.
-- [MAJOR] Step 3 includes `researcher` among author launches that update the routing file, but specifies only planner and developer keys. An implementer cannot tell whether a researcher launch should write separate keys, leave the file unchanged, or overwrite planner/developer provenance.
+- [MAJOR] Step 1 says all internal consumers resolve the canonical schema directly, but its own descriptions say the orchestrator consumes stdout JSON, the launcher checks a file, and the integrity validator checks schema integrity. It does not establish how the orchestrator handles descriptor fields or versions, or substantiate the absence of separate closed schemas and out-of-tree copies. Retaining the `v1` identifier alone does not establish compatibility for a consumer using an older closed schema.
+- [MAJOR] The researcher isolation test asserts that `.routes["planner"]` and `.routes["developer"]` remain unchanged, but does not assert the same for `.routes["planner-model"]` and `.routes["developer-model"]`. It therefore does not fully verify the stated isolation of planner and developer provenance.
 
 ## Required Changes
 
-1. Identify the launch-descriptor consumers and how each obtains the canonical schema; specify updates or version handling for any consumer that does not already use it. Test the relevant consumer validation path with legacy and v0.3.0 descriptors and unknown-property rejection.
-2. Define researcher routing-file behavior explicitly, including its keys if persistence is required, and ensure it cannot overwrite planner or developer provenance.
+1. For each identified consumer, state accurately whether and how it resolves or validates against the canonical schema, how it handles descriptor versions and added fields, and what update is needed if it has a separate closed schema. Provide a mechanically verifiable basis for the no-duplicate claim, with an explicit boundary for out-of-tree consumers.
+2. Seed and assert all four planner and developer provenance keys unchanged in the researcher isolation test, while asserting both researcher keys update.
 
 ## Prior Rounds Summary
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 6 | plan | FAIL | Consumer resolution paths not identified to substantiate single canonical schema claim; researcher routing-file persistence behavior ambiguous. Resolved in Round 7 by explicitly enumerating all 4 launch-descriptor consumers and their file resolution paths, establishing why version v1 is backward-compatible with no duplicate schemas, defining isolated researcher routing persistence (.routes["researcher"] and ["researcher-model"]) that cannot overwrite planner/developer keys, and adding an explicit test for researcher routing isolation. |
 | 5 | plan | FAIL | Test still performed orchestrator capture manually instead of invoking production path; closed-schema consumer sharing and versioning behavior not established. Resolved in Round 6 by adding Step 4 for `loom-run/SKILL.md` orchestrator workflow, implementing `--routing-file` author-launch capture and persistence in `loom-launch-role`, asserting that all consumers share the canonical schema asset under compatible minor extension `v1`, and adding tests invoking the production author-persistence -> evaluator-handoff path and strict Ajv legacy/v0.3.0 consumer validation. |
 | 4 | plan | FAIL | Descriptor types & constraints incomplete across 3 variants and environment object; consumer and CLI compatibility unspecified for omitted --author-model and closed schemas; handoff test bypassed orchestrator routing-file flow. Resolved in Round 5 by defining complete types, enums, patterns, and constraints for all common and variant fields with additionalProperties: false; specifying single-family backward compatibility defaults and schema property updates for closed-schema consumers; and replacing manual extraction test with full orchestrator launch capture, routing-file persistence, and evaluator handoff test. |
 | 3 | plan | FAIL | Author model handoff data flow and handoff test unspecified; launch descriptor schema lacked complete 3-variant contract and consumer compatibility definition. Resolved in Round 4 by specifying orchestrator descriptor capture, persistence, and `--author-model` handoff; defining the complete 3-variant `loom-role-launch-v1` schema with closed constraints, required/optional fields, and additive consumer compatibility; and adding an explicit author-to-evaluator handoff test. |
@@ -33,4 +34,4 @@ FAIL (round 6; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision adds launcher persi
 
 ## Notes
 
-The plan is 189 lines, within the 250-line target. Step 4 is file-scoped, and Step 6 invokes the specified launcher persistence and evaluator handoff sequence while retaining same-family rejection. The stated v0.3.0 floor, binding, profile mappings, deferred live proof, and threat-model boundary align with the cited authority. The plan names the repository gate and a targeted Bash command. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
+The plan is 200 lines, within the 250-line target. Its numbered steps are file-scoped; the out-of-scope and threat-model boundary are explicit; and it names the repository gate and a targeted verification command. The specified floor, release registration, deferred live proof, and provider-family boundary align with the cited authority. Evaluated blind via OpenAI Codex (`gpt-6.1-terra`).
