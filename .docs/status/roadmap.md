@@ -39,6 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+  - Landed 2026-11-08: M9 / v0.3.0 Slice 3: `orca-host-adapter` (`loom-host-orca` observation/cleanup helper, v0.3.0 matrix `hostFloors.orca` registration, `loom-host-binding-v1` schema update, fixture, and repository validator); passed plan evaluation Round 1 (PASS) and blind code evaluation Round 2 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 2: `hc-live-probe` (generic live probe script `scripts/hc-live-probe`, offline Bats suite `scripts/tests/hc-live-probe.bats`, 20/20 tests passing under Bash 3.2, 260 LOC budget respected); passed plan evaluation Round 3 (PASS) and blind code evaluation Round 5 (PASS via OpenAI Codex `gpt-6.1-terra`); live probe executed with scratch evidence recorded; plan archived.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 1: `hc-host-adapter` (`loom-host-hc` observation/cleanup helper, v0.3.0 matrix `hostFloors` registration, `loom-host-binding-v1` schema, fixture, and repository validator); passed plan evaluation Round 3 (PASS) and blind code evaluation Round 4 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Accepted 2026-11-08: ADR 0034 (Admit Antigravity, Orca, and Herdr (`hc`) to v0.3.0 scope and settle evaluator governance): admits Antigravity, Orca, and Herdr to v0.3.0 scope under ADR 0033 §1; settles host evaluator governance by restricting `hc`/Orca to authoring/interactive host roles and delegating evaluation to cold, isolated workspaces with certified model clients; un-shelves `hc-host-adapter` and `hc-live-probe`.
@@ -57,7 +58,7 @@ Current milestone: M9
 
 ## Next: v0.3.0 Harness Delivery (ADR 0034, Accepted 2026-11-08)
 
-Order of work: (1) `hc-host-adapter` (`plugins/loom/bin/loom-host-hc` and `.docs/slice-plans/hc-host-adapter.md`), (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Conformance is verified for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action is to implement `hc-host-adapter`.
+Order of work: (1) `hc-host-adapter` (`plugins/loom/bin/loom-host-hc` and `.docs/slice-plans/hc-host-adapter.md`), (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Conformance is verified for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action is to author and implement `antigravity-model-adapter`.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition

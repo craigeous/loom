@@ -17,7 +17,6 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 
 ## Active plans
 
-- [orca-host-adapter.md](orca-host-adapter.md) — `Ready to Publish` — M9 / v0.3.0 Slice 3: `loom-host-orca` host adapter and v0.3.0-only registration; passed blind plan evaluation Round 1 and code evaluation Round 2 (PASS via OpenAI Codex `gpt-6.1-terra`).
 - [spec-10-07-release-evidence-amendment.md](spec-10-07-release-evidence-amendment.md) — `Landed` — spec 10 and spec 07 text for v0.2.0 release conformance and the evidence record (ADR 0032 §3, §8; ADR 0033 D3); passed plan evaluation Round 3 (PASS); the schema plan above depends on it.
 - [hc-host-adapter.md](hc-host-adapter.md) — `Landed` — M9 / v0.3.0 Slice 1: `loom-host-hc` observation helper and v0.3.0-only registration; passed plan evaluation Round 3 (PASS, commit 1c7b0ef) and code evaluation Round 4 (PASS, commit 5aa084d).
 - [hc-live-probe.md](hc-live-probe.md) — `Landed` — M9 / v0.3.0 Slice 2: generic live `hc` probe script and offline tests; passed plan evaluation Round 3 (PASS) and code evaluation Round 5 (PASS, commit d822236 via OpenAI Codex `gpt-6.1-terra`).
@@ -25,6 +24,7 @@ Lifecycle: `Draft → Plan Review → Approved → In Progress → Implemented �
 - [herdr-hc-client.md](herdr-hc-client.md) — `Abandoned` — superseded by the four plans above (history kept).
 
 ## Archived plans
+- [orca-host-adapter.md](archive/orca-host-adapter.md) — `Landed` — 2026-11-08 — M9 / v0.3.0 Slice 3: `loom-host-orca` observation/cleanup helper, v0.3.0 matrix `hostFloors.orca` registration, `loom-host-binding-v1` schema update, fixture, and offline Bats suite; passed plan evaluation Round 1 (PASS) and code evaluation Round 2 (PASS via OpenAI Codex `gpt-6.1-terra`).
 - [codex-launch-schema-fix.md](archive/codex-launch-schema-fix.md) — `Landed` — 2026-11-07 — v0.2.1: fix Codex launch in `loom-launch-role` by removing `--output-schema` so `codex exec` runs natively without a wrapper; passed plan evaluation Round 1 (PASS, commit 4a6b766) and code evaluation Round 0 (PASS, commit 08f5460).
 - [release-conformance-and-evidence-schema.md](archive/release-conformance-and-evidence-schema.md) — `Landed` — 2026-11-07 — v0.2.0 release-evidence record schema (`loom-release-evidence/v1`, ADR 0032 §3), macOS-only CI and docs alignment (research G4, G5; ADR 0032 §8); passed plan evaluation Round 2 (PASS, commit c410e76) and code evaluation Round 4 (PASS, commit 1cd5647).
 - [launcher-matrix-and-rotation-fix.md](archive/launcher-matrix-and-rotation-fix.md) — `Landed` — 2026-11-06 — v0.2.0 live-proof prerequisites (research G1, G2; ADR 0032 §1, §3 E1, §6): `loom-launch-role` `--release` matrix selection with a 0.2.0 default, and two-client default rotation (claude ↔ codex).

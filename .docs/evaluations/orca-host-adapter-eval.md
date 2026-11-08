@@ -1,10 +1,10 @@
 # Code Evaluation: orca-host-adapter
 
-Artifact: [orca-host-adapter](../slice-plans/orca-host-adapter.md)
+Artifact: [orca-host-adapter](../slice-plans/archive/orca-host-adapter.md)
 Commit: a818bfc
 Round: 2
 Verdict: PASS
-Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [orca-host-adapter slice plan](../slice-plans/orca-host-adapter.md), [spec 07](../spec/07-command-surface.md), [spec 10](../spec/10-packaging.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
+Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [orca-host-adapter slice plan](../slice-plans/archive/orca-host-adapter.md), [spec 07](../spec/07-command-surface.md), [spec 10](../spec/10-packaging.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
 
 ## Summary
 

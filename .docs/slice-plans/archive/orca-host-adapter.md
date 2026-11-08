@@ -1,15 +1,15 @@
 # Orca Client (3 of 5): Host Adapter `loom-host-orca` and v0.3.0 Registration
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 07-command-surface.md (Host surfaces), 10-packaging.md (host floors)
 Authority: ADR 0032 §6, ADR 0034 §1, §2, §5 (Accepted)
 Target size: <= 380 LOC added (helper + Bats + registration; deletions not counted); keep this plan <= 250 lines
 
 ## Context
 
-ADR [0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md) admits Orca to the
+ADR [0034](../../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md) admits Orca to the
 v0.3.0 scope on macOS 14+ Apple silicon at floor `1.4.250`. Runtime research in
-[Orca and Antigravity runtime reference](../research/2026-11-08-orca-and-antigravity-runtime-reference.md)
+[Orca and Antigravity runtime reference](../../research/2026-11-08-orca-and-antigravity-runtime-reference.md)
 verified CLI behavior at `/Applications/Orca.app/Contents/Resources/bin/orca` (commands:
 `orca terminal create`, `show`, `read`, `wait`, `close`, `list`).
 
@@ -57,7 +57,7 @@ with the live descriptor `plugins/loom/adapters/hosts/orca-host-v1.json`.
 ## Verified Orca CLI 1.4.250 Behaviors & Schemas
 
 Verified at `/Applications/Orca.app/Contents/Resources/bin/orca` and documented in
-`../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
+`../../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
 - `orca terminal show --terminal <h> --json`:
   Success (0): `{"ok":true,"result":{"terminal":{"handle":"...","title":...,"connected":bool,"worktreePath":"...","exitCause":{"kind":"operator_close"|...}}}}`
   Stale (1): `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}`
