@@ -1,6 +1,6 @@
 # Codex Launch Schema Fix (v0.2.1)
 
-Status: Plan Review
+Status: Approved
 Target specs: 10-packaging.md
 Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted); [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) (Accepted; §1)
 Target size: <= 50 LOC net change (keep this plan document <= 250 lines)
