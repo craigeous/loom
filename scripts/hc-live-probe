@@ -1,0 +1,162 @@
+#!/bin/bash
+# hc-live-probe — generic live probe script for hc + Claude Code (ADR 0031 §6, ADR 0034 §5)
+# Bash 3.2 compatible.
+# shellcheck disable=SC2016,SC2329
+set -u
+
+_usage() {
+    printf 'usage: LOOM_HC_LIVE_PROBE=1 hc-live-probe --evidence-file <absolute-path>\n' >&2
+    exit 2
+}
+[ "${LOOM_HC_LIVE_PROBE:-}" = "1" ] || _usage
+
+EVIDENCE_FILE=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --evidence-file)
+        [ "$#" -ge 2 ] || _usage
+        EVIDENCE_FILE="$2"
+        shift 2
+        ;;
+    --evidence-file=*)
+        EVIDENCE_FILE="${1#--evidence-file=}"
+        shift
+        ;;
+    *) _usage ;;
+    esac
+done
+case "$EVIDENCE_FILE" in /*) ;; *) _usage ;; esac
+
+LOOM_HC_BIN="${LOOM_HC_BIN:-hc}"
+PROBE_ID="${LOOM_HC_PROBE_ID:-$(od -An -tx1 -N4 /dev/urandom 2>/dev/null | tr -d ' \n')}"
+[ -n "$PROBE_ID" ] || PROBE_ID=$(printf '%04x%04x' "$RANDOM" "$RANDOM")
+
+NAME_A="probe-${PROBE_ID}"
+NAME_B="probe-nd-${PROBE_ID}"
+MODEL="claude-haiku-5-5"
+PROMPT_A="What is 37+5? Reply with only the number, then stop. Use no tools."
+PROMPT_B="If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop."
+
+EVID_DIR="$(dirname "$EVIDENCE_FILE")"
+mkdir -p "$EVID_DIR" && chmod 0700 "$EVID_DIR" 2>/dev/null || true
+: >"$EVIDENCE_FILE"
+SCRATCH_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/hc-probe.XXXXXX")
+cd "$SCRATCH_DIR" || exit 2
+
+CLEANED_UP=0
+LAUNCHED=0
+_cleanup() {
+    local rc=$1 name
+    trap - EXIT INT TERM
+    rm -rf "$SCRATCH_DIR" 2>/dev/null || true
+    if [ "$CLEANED_UP" -eq 0 ] && [ "$LAUNCHED" -eq 1 ]; then
+        CLEANED_UP=1
+        for name in "$NAME_A" "$NAME_B"; do
+            "$LOOM_HC_BIN" kill "$name" >/dev/null 2>&1 || true
+            "$LOOM_HC_BIN" rm "$name" >/dev/null 2>&1 || true
+            "$LOOM_HC_BIN" get "$name" >/dev/null 2>&1 || true
+        done
+    fi
+    exit "$rc"
+}
+trap '_cleanup $?' EXIT
+trap '_cleanup 130' INT
+trap '_cleanup 143' TERM
+
+CMD_OUT=""
+CMD_RC=0
+_cmd() {
+    printf '$ %s\n' "$*" >>"$EVIDENCE_FILE"
+    CMD_OUT=""
+    set +e
+    CMD_OUT=$("$@" 2>&1)
+    CMD_RC=$?
+    set -e
+    [ -z "$CMD_OUT" ] || printf '%s\n' "$CMD_OUT" >>"$EVIDENCE_FILE"
+    printf '[exit %d]\n\n' "$CMD_RC" >>"$EVIDENCE_FILE"
+}
+
+FAILED=()
+IS_BLOCKED=0
+
+_check_get_json() {
+    local json="$1" name="$2" prompt="$3" check_dt="$4"
+    { [ "$CMD_RC" -eq 9 ] || printf '%s\n' "$json" | jq -e '(.status.state == "blocked") or (.state == "blocked")' >/dev/null 2>&1; } && IS_BLOCKED=1
+    printf '%s\n' "$json" | jq -e --arg n "$name" --arg m "$MODEL" --arg p "$prompt" --argjson dt "$check_dt" '
+        .name == $n and .reported == true and (.status.state == "done" or .status.state == "idle") and
+        (.foreground.argv | (index("--resume") == null and index("--continue") == null)) and
+        (.foreground.argv | (index("--model") as $i | $i != null and .[$i + 1] == $m)) and
+        (.foreground.argv | index($p) != null) and
+        (if $dt then (.foreground.argv | (index("--disallowedTools") as $i | $i != null and .[$i + 1] == "Agent")) else true end)
+    ' >/dev/null 2>&1
+}
+
+# P1: hc --version is 0.1.16; both probe names absent before launch
+_cmd "$LOOM_HC_BIN" --version
+printf '%s\n' "$CMD_OUT" | grep -Eq '(^|[[:space:]])0\.1\.16($|[[:space:]])' || FAILED+=("P1")
+_cmd "$LOOM_HC_BIN" get "$NAME_A"
+[ "$CMD_RC" -eq 3 ] || FAILED+=("P1")
+_cmd "$LOOM_HC_BIN" get "$NAME_B"
+[ "$CMD_RC" -eq 3 ] || case " ${FAILED[*]:-} " in *" P1 "*) ;; *) FAILED+=("P1") ;; esac
+
+# P2 / Run A: hc run --bg
+LAUNCHED=1
+_cmd "$LOOM_HC_BIN" run --bg --name "$NAME_A" claude --model "$MODEL" "$PROMPT_A"
+[ "$CMD_RC" -eq 0 ] && [ -n "$CMD_OUT" ] && ! printf '%s\n' "$CMD_OUT" | grep -q "first_message" || FAILED+=("P2")
+
+# P3 / Run A: hc wait
+_cmd "$LOOM_HC_BIN" wait "$NAME_A" --timeout 120
+[ "$CMD_RC" -eq 0 ] || FAILED+=("P3")
+
+# P4 / Run A: hc get --json
+_cmd "$LOOM_HC_BIN" get "$NAME_A" --json
+_check_get_json "$CMD_OUT" "$NAME_A" "$PROMPT_A" false || FAILED+=("P4")
+
+# P5 / Run A: hc read
+_cmd "$LOOM_HC_BIN" read "$NAME_A" --lines 60
+printf '%s\n' "$CMD_OUT" | grep -v '37+5' | grep -Eq '(^|[[:space:]])42($|[[:space:]])' || FAILED+=("P5")
+
+# P2 / Run B: hc run --bg
+_cmd "$LOOM_HC_BIN" run --bg --name "$NAME_B" claude --model "$MODEL" --disallowedTools Agent "$PROMPT_B"
+if [ "$CMD_RC" -ne 0 ] || [ -z "$CMD_OUT" ] || printf '%s\n' "$CMD_OUT" | grep -q "first_message"; then
+    case " ${FAILED[*]:-} " in *" P2 "*) ;; *) FAILED+=("P2") ;; esac
+fi
+
+# Run B: hc wait
+_cmd "$LOOM_HC_BIN" wait "$NAME_B" --timeout 120
+
+# P6 / Run B: hc get --json and hc read
+_cmd "$LOOM_HC_BIN" get "$NAME_B" --json
+_check_get_json "$CMD_OUT" "$NAME_B" "$PROMPT_B" true || FAILED+=("P6")
+_cmd "$LOOM_HC_BIN" read "$NAME_B" --lines 60
+if ! printf '%s\n' "$CMD_OUT" | grep -Eq '^[[:space:]]*TOOL_ABSENT[[:space:]]*$' ||
+    printf '%s\n' "$CMD_OUT" | grep -Eiq 'sub-agent|subagent|Agent\(|launching agent|Tool Agent'; then
+    case " ${FAILED[*]:-} " in *" P6 "*) ;; *) FAILED+=("P6") ;; esac
+fi
+
+# P7 / Cleanup
+CLEANED_UP=1
+p7_fail=0
+for name in "$NAME_A" "$NAME_B"; do
+    _cmd "$LOOM_HC_BIN" kill "$name"
+    [ "$CMD_RC" -eq 0 ] || [ "$CMD_RC" -eq 11 ] || p7_fail=1
+    _cmd "$LOOM_HC_BIN" rm "$name"
+    [ "$CMD_RC" -eq 0 ] || p7_fail=1
+    _cmd "$LOOM_HC_BIN" get "$name"
+    [ "$CMD_RC" -eq 3 ] || p7_fail=1
+done
+[ "$p7_fail" -eq 0 ] || FAILED+=("P7")
+
+# Final verdict
+res="RESULT PASS"
+rc=0
+if [ "$IS_BLOCKED" -eq 1 ]; then
+    res="RESULT BLOCKED${FAILED:+ }${FAILED[*]:-}"
+    rc=3
+elif [ "${#FAILED[@]}" -ne 0 ]; then
+    res="RESULT FAIL ${FAILED[*]}"
+    rc=1
+fi
+printf '%s\n' "$res" >>"$EVIDENCE_FILE"
+printf '%s\n' "$res"
+exit "$rc"
