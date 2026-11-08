@@ -1,0 +1,17 @@
+{
+  "schema": "antigravity-plugin-root/v1",
+  "client": "antigravity",
+  "inputMustBeAbsolute": true,
+  "invocationMustBeAbsolute": true,
+  "canonicalRootRequired": true,
+  "rolesDirectory": "roles",
+  "rolesDirectoryMustBeDirectChild": true,
+  "canonicalRoleMustBeRegularFile": true,
+  "expectedName": "loom",
+  "expectedVersion": "0.3.0",
+  "helperDirectory": "bin",
+  "helperDirectoryMustBeDirectChild": true,
+  "allowedHelpers": ["loom-coord", "loom-verify-identity", "loom-review", "loom-eval-workspace", "loom-doctor", "loom-profile"],
+  "helperMustBeRegularFile": true,
+  "helperMustBeExecutable": true
+}

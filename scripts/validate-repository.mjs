@@ -367,6 +367,7 @@ async function validateMetadata() {
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
+    ["plugins/loom/adapters/roots/antigravity-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/hosts/hc-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"],
     ["plugins/loom/adapters/hosts/orca-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"]
   ];
@@ -439,6 +440,7 @@ async function validateMetadata() {
   // Schema-invalid release objects are never passed into semantic validation.
   if (structurallyValid) semanticMetadata();
   validateHostBinding(ajv);
+  validateAntigravityRoot(ajv);
 }
 
 // Semantic checks the release-evidence schema cannot express (plan: release-conformance-and-evidence-schema).
@@ -695,7 +697,8 @@ function validateHostBinding(ajv) {
   const resolverText = readText("plugins/loom/bin/loom-resolve-helper");
   const rootPaths = [
     "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
-    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json",
+    "plugins/loom/adapters/roots/antigravity-plugin-root-v1.json"
   ];
   const rootJsons = rootPaths.map((rp) => ({ path: rp, json: readJson(rp) }));
 
@@ -752,6 +755,69 @@ function validateHostBinding(ajv) {
     for (const root of rootJsons) {
       if (root.json && Array.isArray(root.json.allowedHelpers) && root.json.allowedHelpers.includes(host.helper)) {
         report(root.path, `${host.helper} must not appear in root allowedHelpers`);
+      }
+    }
+  }
+}
+
+function validateAntigravityRoot(ajv) {
+  const rootPath = "plugins/loom/adapters/roots/antigravity-plugin-root-v1.json";
+  const fixturePath = "plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json";
+  const v030Path = "plugins/loom/adapters/compatibility/v0.3.0.json";
+
+  const liveNode = safeNode(rootPath, { missing: false, regularFile: true });
+  const fixtureNode = safeNode(fixturePath, { missing: false, regularFile: true });
+
+  if (!liveNode) {
+    report(rootPath, "missing live antigravity root descriptor");
+  }
+  if (!fixtureNode) {
+    report(fixturePath, "missing v0.3.0 root-antigravity metadata fixture");
+  }
+
+  if (liveNode && fixtureNode) {
+    validateJson(fixturePath, "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json", ajv);
+    const liveRoot = readJson(rootPath);
+    const fixtureRoot = readJson(fixturePath);
+    if (liveRoot && fixtureRoot && !deepEqual(liveRoot, fixtureRoot)) {
+      report(fixturePath, `release fixture differs from ${rootPath}`);
+    }
+  }
+
+  const v030 = readJson(v030Path);
+  if (v030 && typeof v030 === "object") {
+    if (!v030.clientFloors || typeof v030.clientFloors !== "object" || v030.clientFloors.antigravity !== "1.4.12") {
+      report(v030Path, "missing or invalid clientFloors.antigravity entry (expected '1.4.12')");
+    }
+  }
+
+  // Mechanical baseline check: 6 v0.2.0 files must be byte-identical to git show v0.2.0:<path>
+  const baselineFiles = [
+    "plugins/loom/adapters/compatibility/v0.2.0.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json",
+    "plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json",
+    "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
+  ];
+  let hasTag = false;
+  try {
+    git(["rev-parse", "--verify", "--quiet", "refs/tags/v0.2.0"]);
+    hasTag = true;
+  } catch {
+    hasTag = false;
+  }
+  if (hasTag) {
+    for (const relPath of baselineFiles) {
+      const liveText = readText(relPath);
+      if (liveText === null) continue;
+      try {
+        const baselineText = git(["show", `v0.2.0:${relPath}`]);
+        if (liveText !== baselineText) {
+          report(relPath, "file differs from v0.2.0 baseline");
+        }
+      } catch {
+        report(relPath, "failed to read v0.2.0 baseline for comparison");
       }
     }
   }

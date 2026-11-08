@@ -3105,3 +3105,40 @@ install_correction() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"loom-host-orca must not appear in root allowedHelpers"* ]]
 }
+
+@test "antigravity root: antigravity-plugin-root-v1 validates against schema and rejects unknown fields" {
+    make_metadata_root
+    metadata
+    [ "$status" -eq 0 ]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/roots/antigravity-plugin-root-v1.json '.unknownField = true'
+    metadata
+    [ "$status" -eq 1 ]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json '.expectedVersion = "0.4.0"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release fixture differs from"* ]]
+
+    make_metadata_root
+    rm -f "$TEST_ROOT/plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing v0.3.0 root-antigravity metadata fixture"* ]]
+}
+
+@test "antigravity root: v0.3.0 matrix clientFloors.antigravity drift or omission is reported" {
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json 'del(.clientFloors.antigravity)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing or invalid clientFloors.antigravity entry"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.clientFloors.antigravity = "1.4.11"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing or invalid clientFloors.antigravity entry"* ]]
+}

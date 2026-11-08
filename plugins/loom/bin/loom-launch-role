@@ -53,8 +53,55 @@ CLIENTS=(claude codex antigravity)
 VENDOR_OVERRIDE_VARS=(CODEX_MODEL MODEL_REASONING_EFFORT OPENAI_MODEL ANTHROPIC_MODEL CLAUDE_MODEL LOOM_LAUNCH_ROLE_MODEL LOOM_LAUNCH_ROLE_EFFORT LOOM_LAUNCH_ROLE_SELECTOR)
 
 _usage() {
-    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--release X.Y.Z (must equal the product release)] [--author-client claude|codex|antigravity] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
+    printf 'usage: loom-launch-role claude|codex|antigravity|auto researcher|planner|plan-evaluator|developer|code-evaluator [--release X.Y.Z (must equal the product release)] [--author-client claude|codex|antigravity] [--author-model id] [--routing-file /abs/path] [--model id] [--effort low|medium|high]\n' >&2
     exit 1
+}
+
+# _model_family <client> <model> — resolve model provider family (ADR 0034 §3).
+# claude -> anthropic; codex -> openai; antigravity -> claude-* (anthropic),
+# gpt-6*/gpt-5.6*/openai* (openai), gemini-* (google), gpt-oss-* (oss).
+# Aliases and unmapped models fail closed (exit 1).
+_model_family() {
+    local client="$1" model="${2:-}"
+    case "$client" in
+    claude)
+        printf 'anthropic'
+        return 0
+        ;;
+    codex)
+        printf 'openai'
+        return 0
+        ;;
+    antigravity)
+        case "$model" in
+        flash | inherit | pro | "")
+            return 1
+            ;;
+        claude-*)
+            printf 'anthropic'
+            return 0
+            ;;
+        gpt-6* | gpt-5.6* | openai*)
+            printf 'openai'
+            return 0
+            ;;
+        gemini-*)
+            printf 'google'
+            return 0
+            ;;
+        gpt-oss-*)
+            printf 'oss'
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+        esac
+        ;;
+    *)
+        return 1
+        ;;
+    esac
 }
 
 _fail() {
@@ -186,14 +233,22 @@ _sha256_file() {
     fi
 }
 
-# _next_client_in_cycle <author> — default cross-family rotation. Antigravity is
-# never a default target (ADR 0032 section 6, restored only by v0.3.0 evidence);
+# _next_client_in_cycle <author> [author_family] — default cross-family rotation.
+# Antigravity is never a default target (ADR 0032 section 6, ADR 0034 §3);
 # an explicit `antigravity` client argument still works.
 _next_client_in_cycle() {
-    case "$1" in
+    local author="$1" author_family="${2:-}"
+    case "$author" in
     claude) printf 'codex' ;;
     codex) printf 'claude' ;;
-    antigravity) printf 'claude' ;;
+    antigravity)
+        case "$author_family" in
+        anthropic) printf 'codex' ;;
+        openai) printf 'claude' ;;
+        google) printf 'codex' ;;
+        *) return 1 ;;
+        esac
+        ;;
     *) return 1 ;;
     esac
 }
@@ -260,11 +315,29 @@ _codex_ambient_effort() {
     printf '%s' "$val"
 }
 
+_semver_ge() {
+    local v="$1" req_maj="$2" req_min="$3" req_patch="$4"
+    [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]] || return 1
+    local maj="${BASH_REMATCH[1]}" min="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
+    if [ "$maj" -gt "$req_maj" ]; then return 0; fi
+    if [ "$maj" -lt "$req_maj" ]; then return 1; fi
+    if [ "$min" -gt "$req_min" ]; then return 0; fi
+    if [ "$min" -lt "$req_min" ]; then return 1; fi
+    [ "$patch" -ge "$req_patch" ]
+}
+
+_check_agy_version() {
+    local bin="${LOOM_LAUNCH_ROLE_AGY_BIN:-agy}" v
+    command -v "$bin" >/dev/null 2>&1 || return 0
+    v=$("$bin" --version 2>/dev/null) || _fail "cannot determine Antigravity version"
+    _semver_ge "$v" 1 4 12 || _fail "Antigravity CLI version below floor 1.4.12: $v"
+}
+
 # _agy_models — available Antigravity model ids, one per line: a fresh (<= 24h)
 # owner-only cache, else `agy models` written back atomically (mode 0600).
 # Returns 1 when neither source is usable (caller falls back to the floor).
 _agy_models() {
-    local cache now fetched age bin ids dir tmp
+    local cache now fetched age bin ids dir tmp v
     cache="${XDG_CACHE_HOME:-${HOME:-}/.cache}/loom/agy-models.json"
     now=$(date +%s)
     # shellcheck disable=SC2012 # only the permission string of one known file is read
@@ -283,6 +356,7 @@ _agy_models() {
     fi
     bin="${LOOM_LAUNCH_ROLE_AGY_BIN:-agy}"
     command -v "$bin" >/dev/null 2>&1 || return 1
+    _check_agy_version
     ids=$("$bin" models 2>/dev/null) || return 1
     ids=$(printf '%s\n' "$ids" | awk -F'\t' 'NF >= 2 && $1 ~ /^[a-z0-9][a-z0-9._-]*$/ {print $1}')
     [ -n "$ids" ] || return 1
@@ -346,32 +420,12 @@ _launch_codex() {
 
 _launch_antigravity() {
     local root="$1" role="$2" profile="$3" cross_json="${4:-}" ag_model="${5:-}" effort="${6:-}"
-    local role_path roles_dir role_sha cold_id models picked
+    local role_path roles_dir role_sha cold_id
     [ -d "$root/roles" ] && [ ! -L "$root/roles" ] || _fail "roles directory is missing or symlinked"
     roles_dir=$(_canon_dir "$root/roles") || _fail "cannot canonicalize roles directory"
     role_path="$roles_dir/$role.md"
     [ -f "$role_path" ] && [ ! -L "$role_path" ] || _fail "canonical role contract is missing or symlinked: $role"
     role_sha=$(_sha256_file "$role_path") || _fail "cannot hash canonical role contract: $role"
-    case "$profile" in
-    Economy) [ -n "$effort" ] || effort=low ;;
-    Standard) [ -n "$effort" ] || effort=medium ;;
-    "Deep review") [ -n "$effort" ] || effort=high ;;
-    *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
-    esac
-    if [ -z "$ag_model" ]; then
-        models=$(_agy_models) || models=""
-        picked=""
-        [ -z "$models" ] || picked=$(_agy_pick "$models" "$profile" "$effort")
-        if [ -n "$picked" ]; then
-            ag_model="$picked"
-        else
-            case "$profile" in
-            Economy) ag_model="flash" ;;
-            Standard) ag_model="inherit" ;;
-            *) ag_model="pro" ;;
-            esac
-        fi
-    fi
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
     printf '{"schema":"loom-role-launch/v1","client":"antigravity","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"antigravity":{"subagentName":"loom-%s","model":"%s","enableSubagentTools":false,"enableWriteTools":true,"rolePromptPath":"%s","rolePromptSha256":"%s","environment":{"LOOM_ROLE":"%s"}}}\n' \
         "$role" "$profile" "$cold_id" "$cross_json" "$role" "$(_json_escape "$ag_model")" "$(_json_escape "$role_path")" "$role_sha" "$role"
@@ -387,6 +441,7 @@ main() {
     _is_member "$role" "${ROLES[@]}" || _usage
 
     local author_client="${LOOM_AUTHOR_CLIENT:-}"
+    local author_model="${LOOM_AUTHOR_MODEL:-}"
     local routing_file="${LOOM_ROUTING_FILE:-}"
     local flag_model="" flag_effort="" flag_model_set=0 flag_effort_set=0
     local flag_release="" flag_release_set=0
@@ -402,6 +457,11 @@ main() {
         --author-client)
             [ "$#" -ge 2 ] || _usage
             author_client="$2"
+            shift 2
+            ;;
+        --author-model)
+            [ "$#" -ge 2 ] || _usage
+            author_model="$2"
             shift 2
             ;;
         --routing-file)
@@ -478,22 +538,52 @@ main() {
                 esac
             fi
         fi
-        if [ "$client" = "auto" ]; then
-            client=$(printf '%s' "$routing_json" | jq -r --arg r "$role" '.routes[$r] // empty')
-            [ -n "$client" ] || _fail "no client route mapped for role: $role"
-            _is_member "$client" "${CLIENTS[@]}" || _fail "invalid routed client for role $role: $client"
+        if [ -z "$author_model" ]; then
+            case "$role" in
+            plan-evaluator)
+                author_model=$(printf '%s' "$routing_json" | jq -r '.routes["planner-model"] // empty')
+                ;;
+            code-evaluator)
+                author_model=$(printf '%s' "$routing_json" | jq -r '.routes["developer-model"] // empty')
+                ;;
+            esac
         fi
-    fi
-
-    if [ -n "$author_client" ]; then
-        _is_member "$author_client" "${CLIENTS[@]}" || _fail "invalid author client: $author_client"
+        if [ "$client" = "auto" ]; then
+            local routed_client
+            routed_client=$(printf '%s' "$routing_json" | jq -r --arg r "$role" '.routes[$r] // empty')
+            if [ -n "$routed_client" ]; then
+                _is_member "$routed_client" "${CLIENTS[@]}" || _fail "invalid routed client for role $role: $routed_client"
+                client="$routed_client"
+            fi
+        fi
     fi
 
     if [ "$client" = "auto" ]; then
         case "$role" in
         plan-evaluator | code-evaluator)
             [ -n "$author_client" ] || _fail "cross-family evaluation required but no author client was supplied"
-            client=$(_next_client_in_cycle "$author_client") || _fail "cannot resolve auto client for author: $author_client"
+            local author_family_for_auto=""
+            case "$author_client" in
+            claude)
+                author_family_for_auto="anthropic"
+                ;;
+            codex)
+                author_family_for_auto="openai"
+                ;;
+            antigravity)
+                [ -n "$author_model" ] || _fail "author model must be a concrete model identifier, not an alias"
+                case "$author_model" in
+                flash | inherit | pro)
+                    _fail "author model must be a concrete model identifier, not an alias"
+                    ;;
+                esac
+                author_family_for_auto=$(_model_family "$author_client" "$author_model") || _fail "cannot deterministically resolve author model family: $author_model"
+                ;;
+            *)
+                _fail "invalid author client: $author_client"
+                ;;
+            esac
+            client=$(_next_client_in_cycle "$author_client" "$author_family_for_auto") || _fail "cannot resolve auto client for author: $author_client"
             ;;
         *)
             _fail "auto client requires --routing-file for role: $role"
@@ -501,20 +591,9 @@ main() {
         esac
     fi
 
-    local cross_json=""
-    case "$role" in
-    plan-evaluator | code-evaluator)
-        if [ "$require_cross_family" -eq 1 ] && [ -z "$author_client" ]; then
-            _fail "cross-family evaluation required but no author client was supplied"
-        fi
-        if [ -n "$author_client" ]; then
-            if [ "$client" = "$author_client" ]; then
-                _fail "cross-family evaluation violation: $role client ($client) matches author client ($author_client)"
-            fi
-            cross_json=$(printf ',"authorClient":"%s","crossFamilyVerified":true' "$(_json_escape "$author_client")")
-        fi
-        ;;
-    esac
+    if [ -n "$author_client" ]; then
+        _is_member "$author_client" "${CLIENTS[@]}" || _fail "invalid author client: $author_client"
+    fi
 
     local script_dir root matrix_path matrix_json schema_ok matrix_version role_key profile
     script_dir=$(_canon_dir "$(dirname -- "$0")") || _fail "cannot canonicalize script directory"
@@ -543,15 +622,15 @@ main() {
         [ -z "$effort_in" ] || _valid_effort "$effort_in" || _fail "invalid repository effort for $client: $effort_in"
     fi
 
+    local resolved_model=""
+    local selector="" model="" effort="" ag_model="" ag_effort=""
     case "$client" in
     claude)
-        local selector
         selector=$(_matrix_field "$matrix_json" "$profile" ".claude.selector")
         [ -n "$selector" ] || _fail "no Claude selector mapped for profile: $profile"
-        _launch_claude "$root" "$role" "$profile" "${model_in:-$selector}" "$cross_json" "$selector"
+        resolved_model="${model_in:-$selector}"
         ;;
     codex)
-        local model effort
         model="$model_in"
         [ -n "$model" ] || model=$(_codex_ambient_model) || exit 2
         [ -n "$model" ] || model=$(_matrix_field "$matrix_json" "$profile" ".codex.model")
@@ -560,10 +639,111 @@ main() {
         [ -n "$effort" ] || effort=$(_matrix_field "$matrix_json" "$profile" ".codex.effort")
         [ -n "$model" ] || _fail "no Codex model mapped for profile: $profile"
         [ -n "$effort" ] || _fail "no Codex effort mapped for profile: $profile"
+        resolved_model="$model"
+        ;;
+    antigravity)
+        ag_effort="$effort_in"
+        case "$profile" in
+        Economy) [ -n "$ag_effort" ] || ag_effort=low ;;
+        Standard) [ -n "$ag_effort" ] || ag_effort=medium ;;
+        "Deep review") [ -n "$ag_effort" ] || ag_effort=high ;;
+        *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
+        esac
+        ag_model="$model_in"
+        if [ -z "$ag_model" ]; then
+            ag_model=$(_matrix_field "$matrix_json" "$profile" ".antigravity.model")
+        fi
+        if [ -z "$ag_model" ]; then
+            local models picked agy_rc=0
+            models=$(_agy_models) || agy_rc=$?
+            if [ "$agy_rc" -eq 2 ]; then
+                exit 2
+            fi
+            picked=""
+            [ -z "$models" ] || picked=$(_agy_pick "$models" "$profile" "$ag_effort")
+            if [ -n "$picked" ]; then
+                ag_model="$picked"
+            else
+                case "$profile" in
+                Economy) ag_model="flash" ;;
+                Standard) ag_model="inherit" ;;
+                *) ag_model="pro" ;;
+                esac
+            fi
+        fi
+        resolved_model="$ag_model"
+        ;;
+    esac
+
+    case "$role" in
+    planner | developer | researcher)
+        if [ -n "$routing_file" ]; then
+            local rdir rtmp
+            rdir=$(dirname -- "$routing_file")
+            rtmp=$(mktemp "$rdir/routing.XXXXXX" 2>/dev/null) || _fail "cannot create temporary routing file"
+            if jq --arg r "$role" --arg c "$client" --arg m "$resolved_model" \
+                '.routes[$r] = $c | .routes[$r + "-model"] = $m' \
+                "$routing_file" >"$rtmp" 2>/dev/null && mv -f "$rtmp" "$routing_file"; then
+                :
+            else
+                rm -f "$rtmp"
+                _fail "cannot update routing file: $routing_file"
+            fi
+        fi
+        ;;
+    esac
+
+    local cross_json=""
+    case "$role" in
+    plan-evaluator | code-evaluator)
+        if [ "$require_cross_family" -eq 1 ] && [ -z "$author_client" ]; then
+            _fail "cross-family evaluation required but no author client was supplied"
+        fi
+        if [ -n "$author_client" ]; then
+            if [ "$client" = "$author_client" ]; then
+                _fail "cross-family evaluation violation: $role client ($client) matches author client ($author_client)"
+            fi
+            local authorFamily=""
+            case "$author_client" in
+            claude)
+                authorFamily="anthropic"
+                ;;
+            codex)
+                authorFamily="openai"
+                ;;
+            antigravity)
+                if [ -z "$author_model" ]; then
+                    _fail "author model must be a concrete model identifier, not an alias"
+                fi
+                case "$author_model" in
+                flash | inherit | pro)
+                    _fail "author model must be a concrete model identifier, not an alias"
+                    ;;
+                esac
+                authorFamily=$(_model_family "$author_client" "$author_model") || _fail "cannot deterministically resolve author model family: $author_model"
+                ;;
+            esac
+
+            local evaluatorFamily=""
+            evaluatorFamily=$(_model_family "$client" "$resolved_model") || _fail "cannot deterministically resolve evaluator model family: $resolved_model"
+
+            [ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"
+
+            cross_json=$(printf ',"authorClient":"%s","authorFamily":"%s","evaluatorFamily":"%s","crossFamilyVerified":true' \
+                "$(_json_escape "$author_client")" "$authorFamily" "$evaluatorFamily")
+        fi
+        ;;
+    esac
+
+    case "$client" in
+    claude)
+        _launch_claude "$root" "$role" "$profile" "$resolved_model" "$cross_json" "$selector"
+        ;;
+    codex)
         _launch_codex "$root" "$role" "$profile" "$model" "$effort" "$cross_json"
         ;;
     antigravity)
-        _launch_antigravity "$root" "$role" "$profile" "$cross_json" "$model_in" "$effort_in"
+        _launch_antigravity "$root" "$role" "$profile" "$cross_json" "$ag_model" "$ag_effort"
         ;;
     esac
 }

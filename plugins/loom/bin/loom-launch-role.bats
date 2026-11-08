@@ -775,20 +775,24 @@ normalize_launch() {
     [[ "$output" == *"cross-family evaluation required but no author client was supplied"* ]]
 }
 
-@test "cross-family: auto rotation is exhaustive (claude->codex, codex->claude, antigravity->claude) and never selects antigravity" {
+@test "cross-family: auto rotation is exhaustive (claude->codex, codex->claude, antigravity->codex/claude) and never selects antigravity" {
     make_stub
-    local role author want
+    local role author author_client want
+    local -a model_args
     for role in plan-evaluator code-evaluator; do
-        for author in claude codex antigravity; do
+        for author in claude codex antigravity-google antigravity-anthropic antigravity-openai; do
             case "$author" in
-            claude) want=codex ;;
-            *) want=claude ;;
+            claude) author_client=claude model_args=() want=codex ;;
+            codex) author_client=codex model_args=() want=claude ;;
+            antigravity-google) author_client=antigravity model_args=(--author-model gemini-4-argon-medium) want=codex ;;
+            antigravity-anthropic) author_client=antigravity model_args=(--author-model claude-3-7-sonnet) want=codex ;;
+            antigravity-openai) author_client=antigravity model_args=(--author-model gpt-6.1-terra) want=claude ;;
             esac
-            run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$LAUNCH" auto "$role" --author-client "$author"
+            run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$LAUNCH" auto "$role" --author-client "$author_client" "${model_args[@]}"
             [ "$status" -eq 0 ]
             [[ "$output" == *"\"client\":\"$want\""* ]]
             [[ "$output" == *"\"role\":\"$role\""* ]]
-            [[ "$output" == *"\"authorClient\":\"$author\""* ]]
+            [[ "$output" == *"\"authorClient\":\"$author_client\""* ]]
             [[ "$output" == *'"crossFamilyVerified":true'* ]]
             [[ "$output" != *'"client":"antigravity"'* ]]
         done
@@ -861,7 +865,17 @@ write_agy_cache() {
 make_agy_stub() {
     make_stub
     AGY_STUB="$STUB_DIR/agy-stub"
-    printf '#!/usr/bin/env bash\nprintf "Fetching available models...\\n"\nprintf "claude-opus-5-5-high\\tClaude Opus 5.5 (High)\\n"\nprintf "claude-opus-5-5-low\\tClaude Opus 5.5 (Low)\\n"\nprintf "gemini-3.8-flash-low\\tFlash (Low)\\n"\n' >"$AGY_STUB"
+    cat >"$AGY_STUB" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    printf '1.4.12\n'
+    exit 0
+fi
+printf "Fetching available models...\n"
+printf "claude-opus-5-5-high\tClaude Opus 5.5 (High)\n"
+printf "claude-opus-5-5-low\tClaude Opus 5.5 (Low)\n"
+printf "gemini-3.8-flash-low\tFlash (Low)\n"
+EOF
     chmod +x "$AGY_STUB"
 }
 
@@ -936,9 +950,11 @@ process.exit(ok ? 0 : 1);
     [ "$status" -eq 0 ]
     printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/agy.json"
     validate_launch "$BATS_TEST_TMPDIR/agy.json"
-    launch antigravity code-evaluator --author-client claude
+    launch antigravity code-evaluator --author-client claude --model gemini-4-argon-high
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" == *'"crossFamilyVerified":true'* ]]
+    [[ "${lines[0]}" == *'"authorFamily":"anthropic"'* ]]
+    [[ "${lines[0]}" == *'"evaluatorFamily":"google"'* ]]
     printf '%s' "${lines[0]}" >"$BATS_TEST_TMPDIR/agy-cross.json"
     validate_launch "$BATS_TEST_TMPDIR/agy-cross.json"
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client claude
@@ -1081,4 +1097,187 @@ process.exit(ok ? 0 : 1);
     launch codex code-evaluator --author-client codex --model gpt-6.1-sol
     [ "$status" -eq 2 ]
     [[ "$output" == *"cross-family evaluation violation"* ]]
+}
+
+@test "cross-family: model-family extraction across all four families (anthropic, openai, google, oss)" {
+    make_stub
+    # 1. anthropic
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client antigravity --author-model claude-3-7-sonnet
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"anthropic"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"openai"'* ]]
+
+    # 2. openai
+    launch claude code-evaluator --author-client antigravity --author-model gpt-6.1-terra
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"openai"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"anthropic"'* ]]
+
+    # 3. google
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client antigravity --author-model gemini-4-argon-medium
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"google"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"openai"'* ]]
+
+    # 4. oss
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client antigravity --author-model gpt-oss-12b
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"oss"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"openai"'* ]]
+}
+
+@test "cross-family: backward compatibility for single-family authors without --author-model" {
+    make_stub
+    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator --author-client claude
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"anthropic"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"openai"'* ]]
+
+    launch claude code-evaluator --author-client codex
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorFamily":"openai"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"anthropic"'* ]]
+}
+
+@test "cross-family: antigravity running Claude model evaluating claude author fails closed" {
+    launch antigravity plan-evaluator --author-client claude --model claude-opus-5-5-high
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: evaluator model family (anthropic) matches author model family (anthropic)"* ]]
+}
+
+@test "cross-family: antigravity running Gemini model evaluating claude author succeeds" {
+    launch antigravity plan-evaluator --author-client claude --model gemini-4-argon-high
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"authorClient":"claude"'* ]]
+    [[ "$output" == *'"authorFamily":"anthropic"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"google"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+}
+
+@test "cross-family: production path orchestrator capture, persistence, and evaluator handoff" {
+    make_root
+    make_stub
+    local routing_file="$ROOT/routing.json"
+    cat >"$routing_file" <<'EOF'
+{
+  "schema": "loom-role-routing/v1",
+  "requireCrossFamilyEval": true,
+  "routes": {}
+}
+EOF
+    mkdir -p "$ROOT/.docs"
+    printf '{"antigravity":{"model":"gemini-4-argon-medium"}}' >"$ROOT/.docs/loom-models.json"
+    git init -q "$ROOT"
+
+    # 1. Invoke author launch production path
+    run env "LOOM_TEST_BASH=$LOOM_TEST_BASH" "$LOOM_TEST_BASH" -c 'cd "$1" && exec "$2" antigravity planner --routing-file "$3"' -- "$ROOT" "$ROOT/bin/loom-launch-role" "$routing_file"
+    [ "$status" -eq 0 ]
+
+    # 2. Assert routing-file persistence
+    [ "$(jq -r '.routes["planner"]' "$routing_file")" = "antigravity" ]
+    [ "$(jq -r '.routes["planner-model"]' "$routing_file")" = "gemini-4-argon-medium" ]
+
+    # 3. Invoke evaluator launch production path
+    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "LOOM_TEST_BASH=$LOOM_TEST_BASH" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto plan-evaluator --routing-file "$routing_file"
+    [ "$status" -eq 0 ]
+
+    # 4. Assert evaluator output
+    [[ "$output" == *'"authorClient":"antigravity"'* ]]
+    [[ "$output" == *'"authorFamily":"google"'* ]]
+    [[ "$output" == *'"evaluatorFamily":"openai"'* ]]
+    [[ "$output" == *'"crossFamilyVerified":true'* ]]
+
+    # 5. Routing-file same-family rejection
+    jq '.routes["planner"] = "antigravity" | .routes["planner-model"] = "claude-3-7-sonnet" | .routes["plan-evaluator"] = "claude"' "$routing_file" >"$routing_file.tmp" && mv "$routing_file.tmp" "$routing_file"
+    run env "LOOM_TEST_BASH=$LOOM_TEST_BASH" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" auto plan-evaluator --routing-file "$routing_file"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cross-family evaluation violation: evaluator model family (anthropic) matches author model family (anthropic)"* ]]
+}
+
+@test "cross-family: researcher routing-file persistence isolation" {
+    make_root
+    local routing_file="$ROOT/routing.json"
+    cat >"$routing_file" <<'EOF'
+{
+  "schema": "loom-role-routing/v1",
+  "requireCrossFamilyEval": true,
+  "routes": {
+    "planner": "claude",
+    "planner-model": "sonnet",
+    "developer": "codex",
+    "developer-model": "gpt-6.1-terra"
+  }
+}
+EOF
+    mkdir -p "$ROOT/.docs"
+    printf '{"antigravity":{"model":"gemini-4-argon-medium"}}' >"$ROOT/.docs/loom-models.json"
+    git init -q "$ROOT"
+
+    run env "LOOM_TEST_BASH=$LOOM_TEST_BASH" "$LOOM_TEST_BASH" -c 'cd "$1" && exec "$2" antigravity researcher --routing-file "$3"' -- "$ROOT" "$ROOT/bin/loom-launch-role" "$routing_file"
+    [ "$status" -eq 0 ]
+
+    [ "$(jq -r '.routes["researcher"]' "$routing_file")" = "antigravity" ]
+    [ "$(jq -r '.routes["researcher-model"]' "$routing_file")" = "gemini-4-argon-medium" ]
+    [ "$(jq -r '.routes["planner"]' "$routing_file")" = "claude" ]
+    [ "$(jq -r '.routes["planner-model"]' "$routing_file")" = "sonnet" ]
+    [ "$(jq -r '.routes["developer"]' "$routing_file")" = "codex" ]
+    [ "$(jq -r '.routes["developer-model"]' "$routing_file")" = "gpt-6.1-terra" ]
+}
+
+@test "cross-family: antigravity author without --author-model fails closed" {
+    launch codex plan-evaluator --author-client antigravity
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"author model must be a concrete model identifier, not an alias"* ]]
+}
+
+@test "cross-family: alias --author-model fails closed" {
+    launch codex plan-evaluator --author-client antigravity --author-model inherit
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"author model must be a concrete model identifier, not an alias"* ]]
+
+    launch codex plan-evaluator --author-client antigravity --author-model flash
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"author model must be a concrete model identifier, not an alias"* ]]
+
+    launch codex plan-evaluator --author-client antigravity --author-model pro
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"author model must be a concrete model identifier, not an alias"* ]]
+}
+
+@test "cross-family: unknown --author-model fails closed" {
+    launch codex plan-evaluator --author-client antigravity --author-model unknown-model
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"cannot deterministically resolve author model family: unknown-model"* ]]
+}
+
+@test "agy: below-floor version (< 1.4.12) or unknown version fails closed" {
+    make_stub
+    local bad_agy="$STUB_DIR/bad-agy"
+    cat >"$bad_agy" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    printf '1.4.11\n'
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$bad_agy"
+
+    launch_env LOOM_LAUNCH_ROLE_AGY_BIN="$bad_agy" -- antigravity researcher
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"Antigravity CLI version below floor 1.4.12: 1.4.11"* ]]
+
+    cat >"$bad_agy" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+    printf 'unknown-version\n'
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$bad_agy"
+
+    launch_env LOOM_LAUNCH_ROLE_AGY_BIN="$bad_agy" -- antigravity researcher
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"Antigravity CLI version below floor 1.4.12: unknown-version"* ]]
 }

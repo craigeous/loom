@@ -95,6 +95,13 @@ needs an approved spec amendment first.
       and enforce a fresh, one-level, non-delegating cold child (Codex: this
       performs the cold launch itself; Claude: launch natively per
       `roles/<role>.md` / `agents/<role>.md` using its printed configuration).
+      When dispatching author roles (`planner`, `developer`, `researcher`),
+      pass `--routing-file "$ROUTING_FILE"` to `loom-launch-role` so author client
+      and concrete model are persisted automatically into role-specific keys.
+      When dispatching evaluator roles (`plan-evaluator`, `code-evaluator`),
+      pass `auto <evaluator-role> --routing-file "$ROUTING_FILE"` so
+      `loom-launch-role` reads persisted author provenance and verifies the
+      cross-family invariant.
       Tell the role to return only the **bounded contract** — `{Status:, path(s),
       ≤~150-token summary, the one branch signal}`, no echoed body
       (orchestration.md → *Context discipline*). Independent/disjoint slices may

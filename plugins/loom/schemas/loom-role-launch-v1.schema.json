@@ -16,6 +16,8 @@
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
         "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
+        "evaluatorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
         "crossFamilyVerified": { "type": "boolean" },
         "claude": {
           "type": "object",
@@ -42,6 +44,8 @@
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
         "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
+        "evaluatorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
         "crossFamilyVerified": { "type": "boolean" },
         "codex": {
           "type": "object",
@@ -71,6 +75,8 @@
         "delegation": { "const": false },
         "permissions": { "const": "one-level" },
         "authorClient": { "enum": ["claude", "codex", "antigravity"] },
+        "authorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
+        "evaluatorFamily": { "enum": ["anthropic", "openai", "google", "oss"] },
         "crossFamilyVerified": { "type": "boolean" },
         "antigravity": {
           "type": "object",

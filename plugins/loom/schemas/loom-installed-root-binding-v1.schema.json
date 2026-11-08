@@ -79,6 +79,34 @@
         "hookBinding": { "const": "PLUGIN_ROOT" },
         "hookManifest": { "const": "./hooks/hooks.json" }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "client", "inputMustBeAbsolute", "invocationMustBeAbsolute",
+        "canonicalRootRequired", "rolesDirectory", "rolesDirectoryMustBeDirectChild",
+        "canonicalRoleMustBeRegularFile", "expectedName", "expectedVersion",
+        "helperDirectory", "helperDirectoryMustBeDirectChild", "allowedHelpers",
+        "helperMustBeRegularFile", "helperMustBeExecutable"
+      ],
+      "properties": {
+        "schema": { "const": "antigravity-plugin-root/v1" },
+        "client": { "const": "antigravity" },
+        "inputMustBeAbsolute": { "const": true },
+        "invocationMustBeAbsolute": { "const": true },
+        "canonicalRootRequired": { "const": true },
+        "rolesDirectory": { "const": "roles" },
+        "rolesDirectoryMustBeDirectChild": { "const": true },
+        "canonicalRoleMustBeRegularFile": { "const": true },
+        "expectedName": { "const": "loom" },
+        "expectedVersion": { "const": "0.3.0" },
+        "helperDirectory": { "const": "bin" },
+        "helperDirectoryMustBeDirectChild": { "const": true },
+        "allowedHelpers": { "$ref": "#/$defs/allowedHelpers" },
+        "helperMustBeRegularFile": { "const": true },
+        "helperMustBeExecutable": { "const": true }
+      }
     }
   ]
 }
