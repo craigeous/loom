@@ -1,6 +1,6 @@
 # Evaluation: antigravity-model-adapter
 
-Artifact: [antigravity-model-adapter](../slice-plans/antigravity-model-adapter.md)
+Artifact: [antigravity-model-adapter](../slice-plans/archive/antigravity-model-adapter.md)
 Verdict: PASS
 Round: 8
 Commit: 6e88afe02b62643fbac5b980417453a30eb60b52

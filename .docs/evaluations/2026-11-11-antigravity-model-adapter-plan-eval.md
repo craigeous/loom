@@ -1,6 +1,6 @@
 # Evaluation: antigravity-model-adapter
 
-Artifact: [antigravity-model-adapter](../slice-plans/antigravity-model-adapter.md)
+Artifact: [antigravity-model-adapter](../slice-plans/archive/antigravity-model-adapter.md)
 Verdict: FAIL
 Round: 6
 Commit: 33afb0b5b30df65a1aa18cc4e5b2719c834943bb

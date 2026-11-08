@@ -1,14 +1,14 @@
 # Code Evaluation: antigravity-model-adapter
 
-Artifact: [antigravity-model-adapter](../slice-plans/antigravity-model-adapter.md)
+Artifact: [antigravity-model-adapter](../slice-plans/archive/antigravity-model-adapter.md)
 Commit: e1c668d
-Round: 0
+Round: 8
 Verdict: PASS
-Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [antigravity-model-adapter slice plan](../slice-plans/antigravity-model-adapter.md), [spec 10](../spec/10-packaging.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
+Reviewed against: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [antigravity-model-adapter slice plan](../slice-plans/archive/antigravity-model-adapter.md), [spec 10](../spec/10-packaging.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
 
 ## Summary
 
-Evaluated the implementation of slice `antigravity-model-adapter` (commit `58d1aa9` against base `b01fb26`) blind against approved slice-plan `.docs/slice-plans/antigravity-model-adapter.md`, target authorities ADR 0034, ADR 0032, and Spec 10, the local review findings artifact, and the code evaluation rubric. All six planned steps are implemented with exact fidelity, correct fail-closed guards, robust schema validation, comprehensive test coverage, and clean review adjudication.
+Evaluated the implementation of slice `antigravity-model-adapter` (commit `58d1aa9` against base `b01fb26`) blind against approved slice-plan `.docs/slice-plans/archive/antigravity-model-adapter.md`, target authorities ADR 0034, ADR 0032, and Spec 10, the local review findings artifact, and the code evaluation rubric. All six planned steps are implemented with exact fidelity, correct fail-closed guards, robust schema validation, comprehensive test coverage, and clean review adjudication.
 
 All components, schemas, descriptors, test suites, and validator rules were mechanically verified:
 - `plugins/loom/adapters/roots/antigravity-plugin-root-v1.json` and fixture `plugins/loom/adapters/fixtures/v0.3.0/metadata/root-antigravity.json` are byte-identical and strictly conform to `loom-installed-root-binding-v1.schema.json`.

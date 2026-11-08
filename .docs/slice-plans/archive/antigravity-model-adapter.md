@@ -1,15 +1,15 @@
 # Antigravity Client (4 of 5): Model Adapter and v0.3.0 Registration
 
-Status: Ready to Publish
+Status: Landed
 Target specs: 07-command-surface.md (Model and client surfaces), 10-packaging.md (client floors, compatibility matrix)
 Authority: ADR 0032 §6, ADR 0034 §1, §3, §4, §5 (Accepted)
 Target size: <= 380 LOC added (launcher + schema + fixtures + Bats; deletions not counted); keep this plan <= 250 lines
 
 ## Context
 
-ADR [0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md) admits Antigravity (`agy`)
+ADR [0034](../../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md) admits Antigravity (`agy`)
 to the v0.3.0 scope on macOS 14+ Apple silicon at floor `1.4.12`. Runtime research in
-[Orca and Antigravity runtime reference](../research/2026-11-08-orca-and-antigravity-runtime-reference.md)
+[Orca and Antigravity runtime reference](../../research/2026-11-08-orca-and-antigravity-runtime-reference.md)
 verified CLI behavior at `/Users/craig/.local/bin/agy` (commands: `agy --version`, `agy models`).
 
 Antigravity is a multi-family client runtime capable of running models from Google (`gemini-*`),
@@ -46,7 +46,7 @@ The v0.2.0 baseline file set is mechanically verified byte-identical against tag
 
 ## Verified Antigravity CLI 1.4.12 Behaviors & Catalog
 
-Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
+Documented in `../../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
 - `agy --version`: Emits `1.4.12` (exit 0). Below-floor (< 1.4.12) or malformed version fails closed (exit 2).
 - `agy models`: Emits tab-separated catalog (Gemini, Claude, OSS). Cached locally for 24h in owner-only `0600` file.
 
