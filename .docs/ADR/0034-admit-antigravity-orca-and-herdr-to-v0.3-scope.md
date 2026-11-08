@@ -1,6 +1,6 @@
 # 0034 — Admit Antigravity, Orca, and Herdr (hc) to the v0.3.0 Scope and Settle Evaluator Governance
 
-Status: Plan Review
+Status: Accepted
 Date: 2026-11-08
 
 ## Context
