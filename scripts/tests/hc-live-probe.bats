@@ -16,7 +16,7 @@ setup() {
     EVID_FILE="$BATS_TEST_TMPDIR/evidence/ev.txt"
     cat >"$STUB_DIR/hc" <<'EOF'
 #!/bin/bash
-for a in "$@"; do printf '%s\n' "$a" >>"${STUB_LOG:?}"; done
+printf '%s\n' "$*" >>"${STUB_LOG:?}"
 case "${1:-}" in
     --version) printf 'hc 0.1.16\n' ;;
     get)
@@ -28,8 +28,8 @@ case "${1:-}" in
         p='What is 37+5? Reply with only the number, then stop. Use no tools.'
         case "$2" in probe-nd-*) p="If you have a tool named Agent, call it once with the prompt 'say hi'. If you do not have it, reply with only TOOL_ABSENT, then stop." ;; esac
         printf '{"name":"%s","reported":%s,"status":{"state":"%s"},"foreground":{"argv":["claude", "--model", "%s"%s%s, "%s"]}}\n' "$2" "$r" "$s" "$m" "$res" "$dt" "$p" ;;
-    run) [ -n "${STUB_RUN_EXIT:-}" ] && exit "$STUB_RUN_EXIT"; printf 't1\n' ;;
-    wait) [ -n "${STUB_WAIT_SIGINT:-}" ] && kill -INT "$$"; exit "${STUB_WAIT_EXIT:-0}" ;;
+    run) [ -n "${STUB_RUN_EXIT:-}" ] && exit "$STUB_RUN_EXIT"; printf '%s\n' "${STUB_RUN_OUT:-t1}" ;;
+    wait) [ -n "${STUB_WAIT_SLEEP:-}" ] && sleep 2; exit "${STUB_WAIT_EXIT:-0}" ;;
     read)
         [ -n "${STUB_READ_EXIT:-}" ] && exit "$STUB_READ_EXIT"
         case "$2" in probe-nd-*) printf '%s\n' "${STUB_READ_ND:-TOOL_ABSENT}" ;; *) printf '%s\n' "${STUB_READ_A:-42}" ;; esac ;;
@@ -42,45 +42,46 @@ EOF
     export PATH="$STUB_DIR:$PATH" STUB_LOG LOOM_HC_PROBE_ID="test0001"
 }
 
-@test "refusal without LOOM_HC_LIVE_PROBE=1 exits 2 with empty stub log" {
+@test "refusal without LOOM_HC_LIVE_PROBE=1 or absolute evidence file exits 2 with empty stub log" {
     run "$PROBE" --evidence-file "$EVID_FILE"
     [ "$status" -eq 2 ] && [ ! -s "$STUB_LOG" ]
-}
-
-@test "refusal without absolute evidence file exits 2 with empty stub log" {
     LOOM_HC_LIVE_PROBE=1 run "$PROBE"
     [ "$status" -eq 2 ]
     LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "relative/path.txt"
     [ "$status" -eq 2 ] && [ ! -s "$STUB_LOG" ]
 }
 
-@test "PASS when all criteria met with exact command sequence and allowed verbs" {
+@test "PASS with exact command and argv sequence, matching address, and P1-P7 evidence" {
     LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
     [ "$status" -eq 0 ] && [[ "$output" == *"RESULT PASS"* ]]
-    grep -q "RESULT PASS" "$EVID_FILE" && grep -q "claude-haiku-5-5" "$STUB_LOG"
-    while IFS= read -r a; do
-        case "$a" in
-        get | run | wait | read | kill | rm | --version | --* | claude | claude-haiku-5-5 | Agent | test0001 | probe-* | t1 | *[0-9]* | "What is 37+5?"* | "If you have a tool named Agent"* | "") ;;
-        *) false ;;
-        esac
-    done <"$STUB_LOG"
+    grep -q "RESULT PASS" "$EVID_FILE"
+    verbs="$(awk '{print $1}' "$STUB_LOG" | tr '\n' ' ' | sed 's/ $//')"
+    [ "$verbs" = "--version get get run wait get read run wait get read kill rm get kill rm get" ]
+    grep -q -- "--model claude-haiku-5-5 What is 37+5?" "$STUB_LOG"
+    grep -q -- "--disallowedTools Agent If you have a tool named Agent" "$STUB_LOG"
 }
 
-@test "FAIL for each of: reported false, wrong status, missing 42, 37+5 echoed, resume, missing model, agent present, kill fail, get 0" {
+@test "collision on P1 aborts immediately without launching or killing pre-existing terminals" {
+    STUB_GET_EXIT=0 LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
+    [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P1"* ]]
+    ! grep -q "^run " "$STUB_LOG" && ! grep -q "^kill " "$STUB_LOG" && ! grep -q "^rm " "$STUB_LOG"
+}
+
+@test "FAIL for failed exit or bad output in each criterion" {
     for var in "STUB_REPORTED=false" "STUB_STATUS_STATE=working" "STUB_RESUME=1" "STUB_MODEL=bad"; do
         eval "$var LOOM_HC_LIVE_PROBE=1 run \"\$PROBE\" --evidence-file \"\$EVID_FILE\""
         [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P4"* ]]
     done
-    for var in "STUB_READ_A=wrong" "STUB_READ_A='37+5 is 42'"; do
+    for var in "STUB_READ_A=wrong" "STUB_READ_A='37+5 is 42'" "STUB_READ_EXIT=1"; do
         eval "$var LOOM_HC_LIVE_PROBE=1 run \"\$PROBE\" --evidence-file \"\$EVID_FILE\""
         [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P5"* ]]
     done
-    STUB_READ_ND="TOOL_ABSENT with sub-agent" LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
-    [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P6"* ]]
+    for var in "STUB_READ_ND=sub-agent" "STUB_RUN_EXIT=1" "STUB_RUN_OUT='bad address'"; do
+        eval "$var LOOM_HC_LIVE_PROBE=1 run \"\$PROBE\" --evidence-file \"\$EVID_FILE\""
+        [ "$status" -eq 1 ]
+    done
     STUB_KILL_EXIT=1 LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
     [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"*"P7"* ]]
-    STUB_GET_EXIT=0 LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
-    [ "$status" -eq 1 ] && [[ "$output" == *"RESULT FAIL"* ]]
 }
 
 @test "BLOCKED when hc get shows blocked with no keys or --force in log" {
@@ -89,7 +90,15 @@ EOF
     ! grep -q "\-\-force" "$STUB_LOG" && ! grep -q "^send$" "$STUB_LOG"
 }
 
-@test "cleanup runs on mid-run signal" {
-    STUB_WAIT_SIGINT=1 LOOM_HC_LIVE_PROBE=1 run "$PROBE" --evidence-file "$EVID_FILE"
-    grep -q "kill" "$STUB_LOG" && grep -q "rm" "$STUB_LOG"
+@test "cleanup runs on mid-run signal to probe" {
+    export STUB_WAIT_SLEEP=1
+    set -m
+    LOOM_HC_LIVE_PROBE=1 "$PROBE" --evidence-file "$EVID_FILE" &
+    pid=$!
+    sleep 0.1
+    kill -INT -$pid 2>/dev/null || true
+    rc=0; wait "$pid" || rc=$?
+    [ "$rc" -eq 130 ]
+    grep -q "kill probe-test0001" "$STUB_LOG" && grep -q "rm probe-test0001" "$STUB_LOG"
+    ! grep -q "kill probe-nd-test0001" "$STUB_LOG"
 }

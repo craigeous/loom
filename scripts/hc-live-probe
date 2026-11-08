@@ -43,26 +43,6 @@ mkdir -p "$EVID_DIR" && chmod 0700 "$EVID_DIR" 2>/dev/null || true
 SCRATCH_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/hc-probe.XXXXXX")
 cd "$SCRATCH_DIR" || exit 2
 
-CLEANED_UP=0
-LAUNCHED=0
-_cleanup() {
-    local rc=$1 name
-    trap - EXIT INT TERM
-    rm -rf "$SCRATCH_DIR" 2>/dev/null || true
-    if [ "$CLEANED_UP" -eq 0 ] && [ "$LAUNCHED" -eq 1 ]; then
-        CLEANED_UP=1
-        for name in "$NAME_A" "$NAME_B"; do
-            "$LOOM_HC_BIN" kill "$name" >/dev/null 2>&1 || true
-            "$LOOM_HC_BIN" rm "$name" >/dev/null 2>&1 || true
-            "$LOOM_HC_BIN" get "$name" >/dev/null 2>&1 || true
-        done
-    fi
-    exit "$rc"
-}
-trap '_cleanup $?' EXIT
-trap '_cleanup 130' INT
-trap '_cleanup 143' TERM
-
 CMD_OUT=""
 CMD_RC=0
 _cmd() {
@@ -78,6 +58,40 @@ _cmd() {
 
 FAILED=()
 IS_BLOCKED=0
+LAUNCHED=()
+
+_cleanup() {
+    local rc=$1 name p7_fail=0
+    trap - EXIT INT TERM
+    rm -rf "$SCRATCH_DIR" 2>/dev/null || true
+    if [ "${#LAUNCHED[@]}" -gt 0 ]; then
+        for name in "${LAUNCHED[@]}"; do
+            _cmd "$LOOM_HC_BIN" kill "$name"
+            [ "$CMD_RC" -eq 0 ] || [ "$CMD_RC" -eq 11 ] || p7_fail=1
+            _cmd "$LOOM_HC_BIN" rm "$name"
+            [ "$CMD_RC" -eq 0 ] || p7_fail=1
+            _cmd "$LOOM_HC_BIN" get "$name"
+            [ "$CMD_RC" -eq 3 ] || p7_fail=1
+        done
+        [ "$p7_fail" -eq 0 ] || case " ${FAILED[*]:-} " in *" P7 "*) ;; *) FAILED+=("P7") ;; esac
+    fi
+    local res="RESULT PASS"
+    if [ "$rc" -gt 128 ]; then
+        res="RESULT FAIL interrupted"
+    elif [ "$IS_BLOCKED" -eq 1 ]; then
+        res="RESULT BLOCKED${FAILED:+ }${FAILED[*]:-}"
+        rc=3
+    elif [ "${#FAILED[@]}" -ne 0 ]; then
+        res="RESULT FAIL ${FAILED[*]}"
+        [ "$rc" -ne 0 ] || rc=1
+    fi
+    printf '%s\n' "$res" >>"$EVIDENCE_FILE"
+    printf '%s\n' "$res"
+    exit "$rc"
+}
+trap '_cleanup $?' EXIT
+trap '_cleanup 130' INT
+trap '_cleanup 143' TERM
 
 _check_get_json() {
     local json="$1" name="$2" prompt="$3" check_dt="$4"
@@ -93,16 +107,17 @@ _check_get_json() {
 
 # P1: hc --version is 0.1.16; both probe names absent before launch
 _cmd "$LOOM_HC_BIN" --version
-printf '%s\n' "$CMD_OUT" | grep -Eq '(^|[[:space:]])0\.1\.16($|[[:space:]])' || FAILED+=("P1")
+[ "$CMD_RC" -eq 0 ] && printf '%s\n' "$CMD_OUT" | grep -Eq '(^|[[:space:]])0\.1\.16($|[[:space:]])' || FAILED+=("P1")
 _cmd "$LOOM_HC_BIN" get "$NAME_A"
 [ "$CMD_RC" -eq 3 ] || FAILED+=("P1")
 _cmd "$LOOM_HC_BIN" get "$NAME_B"
 [ "$CMD_RC" -eq 3 ] || case " ${FAILED[*]:-} " in *" P1 "*) ;; *) FAILED+=("P1") ;; esac
+[ "${#FAILED[@]}" -eq 0 ] || exit 1
 
 # P2 / Run A: hc run --bg
-LAUNCHED=1
+LAUNCHED+=("$NAME_A")
 _cmd "$LOOM_HC_BIN" run --bg --name "$NAME_A" claude --model "$MODEL" "$PROMPT_A"
-[ "$CMD_RC" -eq 0 ] && [ -n "$CMD_OUT" ] && ! printf '%s\n' "$CMD_OUT" | grep -q "first_message" || FAILED+=("P2")
+[ "$CMD_RC" -eq 0 ] && printf '%s\n' "$CMD_OUT" | grep -Eq '^[a-zA-Z0-9_.-]+$' && ! printf '%s\n' "$CMD_OUT" | grep -q "first_message" || FAILED+=("P2")
 
 # P3 / Run A: hc wait
 _cmd "$LOOM_HC_BIN" wait "$NAME_A" --timeout 120
@@ -110,15 +125,16 @@ _cmd "$LOOM_HC_BIN" wait "$NAME_A" --timeout 120
 
 # P4 / Run A: hc get --json
 _cmd "$LOOM_HC_BIN" get "$NAME_A" --json
-_check_get_json "$CMD_OUT" "$NAME_A" "$PROMPT_A" false || FAILED+=("P4")
+[ "$CMD_RC" -eq 0 ] && _check_get_json "$CMD_OUT" "$NAME_A" "$PROMPT_A" false || FAILED+=("P4")
 
 # P5 / Run A: hc read
 _cmd "$LOOM_HC_BIN" read "$NAME_A" --lines 60
-printf '%s\n' "$CMD_OUT" | grep -v '37+5' | grep -Eq '(^|[[:space:]])42($|[[:space:]])' || FAILED+=("P5")
+[ "$CMD_RC" -eq 0 ] && printf '%s\n' "$CMD_OUT" | grep -v '37+5' | grep -Eq '(^|[[:space:]])42($|[[:space:]])' || FAILED+=("P5")
 
 # P2 / Run B: hc run --bg
+LAUNCHED+=("$NAME_B")
 _cmd "$LOOM_HC_BIN" run --bg --name "$NAME_B" claude --model "$MODEL" --disallowedTools Agent "$PROMPT_B"
-if [ "$CMD_RC" -ne 0 ] || [ -z "$CMD_OUT" ] || printf '%s\n' "$CMD_OUT" | grep -q "first_message"; then
+if [ "$CMD_RC" -ne 0 ] || ! printf '%s\n' "$CMD_OUT" | grep -Eq '^[a-zA-Z0-9_.-]+$' || printf '%s\n' "$CMD_OUT" | grep -q "first_message"; then
     case " ${FAILED[*]:-} " in *" P2 "*) ;; *) FAILED+=("P2") ;; esac
 fi
 
@@ -127,36 +143,11 @@ _cmd "$LOOM_HC_BIN" wait "$NAME_B" --timeout 120
 
 # P6 / Run B: hc get --json and hc read
 _cmd "$LOOM_HC_BIN" get "$NAME_B" --json
-_check_get_json "$CMD_OUT" "$NAME_B" "$PROMPT_B" true || FAILED+=("P6")
+[ "$CMD_RC" -eq 0 ] && _check_get_json "$CMD_OUT" "$NAME_B" "$PROMPT_B" true || FAILED+=("P6")
 _cmd "$LOOM_HC_BIN" read "$NAME_B" --lines 60
-if ! printf '%s\n' "$CMD_OUT" | grep -Eq '^[[:space:]]*TOOL_ABSENT[[:space:]]*$' ||
+if [ "$CMD_RC" -ne 0 ] || ! printf '%s\n' "$CMD_OUT" | grep -Eq '^[[:space:]]*TOOL_ABSENT[[:space:]]*$' ||
     printf '%s\n' "$CMD_OUT" | grep -Eiq 'sub-agent|subagent|Agent\(|launching agent|Tool Agent'; then
     case " ${FAILED[*]:-} " in *" P6 "*) ;; *) FAILED+=("P6") ;; esac
 fi
 
-# P7 / Cleanup
-CLEANED_UP=1
-p7_fail=0
-for name in "$NAME_A" "$NAME_B"; do
-    _cmd "$LOOM_HC_BIN" kill "$name"
-    [ "$CMD_RC" -eq 0 ] || [ "$CMD_RC" -eq 11 ] || p7_fail=1
-    _cmd "$LOOM_HC_BIN" rm "$name"
-    [ "$CMD_RC" -eq 0 ] || p7_fail=1
-    _cmd "$LOOM_HC_BIN" get "$name"
-    [ "$CMD_RC" -eq 3 ] || p7_fail=1
-done
-[ "$p7_fail" -eq 0 ] || FAILED+=("P7")
-
-# Final verdict
-res="RESULT PASS"
-rc=0
-if [ "$IS_BLOCKED" -eq 1 ]; then
-    res="RESULT BLOCKED${FAILED:+ }${FAILED[*]:-}"
-    rc=3
-elif [ "${#FAILED[@]}" -ne 0 ]; then
-    res="RESULT FAIL ${FAILED[*]}"
-    rc=1
-fi
-printf '%s\n' "$res" >>"$EVIDENCE_FILE"
-printf '%s\n' "$res"
-exit "$rc"
+exit 0
