@@ -1,6 +1,6 @@
 # Antigravity Client (4 of 5): Model Adapter and v0.3.0 Registration
 
-Status: Approved
+Status: In Progress
 Target specs: 07-command-surface.md (Model and client surfaces), 10-packaging.md (client floors, compatibility matrix)
 Authority: ADR 0032 §6, ADR 0034 §1, §3, §4, §5 (Accepted)
 Target size: <= 380 LOC added (launcher + schema + fixtures + Bats; deletions not counted); keep this plan <= 250 lines
