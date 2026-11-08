@@ -212,7 +212,7 @@ launch_env() {
 # Codex argv/env contract
 # ---------------------------------------------------------------------------
 
-@test "codex: exact argv contract (ephemeral, no user config, strict, no multi-agent, read-only, model/effort, no web search, output schema, canonical contract)" {
+@test "codex: exact argv contract (ephemeral, no user config, strict, no multi-agent, read-only, model/effort, no web search, no output schema, canonical contract)" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
     [ "$status" -eq 0 ]
@@ -229,16 +229,7 @@ launch_env() {
     [[ "$output" == *'ARG:gpt-5.6-terra'* ]]
     [[ "$output" == *'ARG:model_reasoning_effort=low'* ]]
     [[ "$output" == *'ARG:tools.web_search=false'* ]]
-    [[ "$output" == *'ARG:--output-schema'* ]]
-    [[ "$output" == *'loom-role-launch-v1.schema.json'* ]]
-}
-
-@test "codex: the closed bounded-output schema path is a real regular file" {
-    make_stub
-    LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
-    [ "$status" -eq 0 ]
-    schema_path=$(awk '/ARG:--output-schema/{getline; print}' "$RECORD" | sed 's/^ARG://')
-    [ -f "$schema_path" ]
+    [[ "$output" != *'ARG:--output-schema'* ]]
 }
 
 @test "codex: never emits a bare --model without an exact matrix value" {
@@ -502,13 +493,24 @@ launch_env() {
     [[ "$output" == *"codex role skill is missing"* ]]
 }
 
-@test "codex: missing closed bounded-output schema fails closed (unbounded output)" {
+@test "codex: missing launch descriptor schema fails closed" {
     make_root
     make_stub
     rm "$ROOT/schemas/loom-role-launch-v1.schema.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
-    [[ "$output" == *"closed bounded-output schema is missing"* ]]
+    [[ "$output" == *"launch descriptor schema is missing"* ]]
+    [ ! -e "$RECORD" ]
+}
+
+@test "codex: symlinked launch descriptor schema fails closed" {
+    make_root
+    make_stub
+    mv "$ROOT/schemas/loom-role-launch-v1.schema.json" "$ROOT/schemas/real.json"
+    ln -s "real.json" "$ROOT/schemas/loom-role-launch-v1.schema.json"
+    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"launch descriptor schema is missing"* ]]
     [ ! -e "$RECORD" ]
 }
 

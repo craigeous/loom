@@ -32,7 +32,7 @@
 #
 # Codex launches print that same normalized configuration line and then
 # execute a fresh, ephemeral `codex exec` child (read-only sandbox, no web
-# search, delegation disabled, a closed bounded-output schema) via
+# search, delegation disabled) via
 # `exec env LOOM_LAUNCH_ROLE_ACTIVE=1 "$CODEX_BIN" ...`. Tests MUST NOT spawn a
 # live codex process: point LOOM_LAUNCH_ROLE_CODEX_BIN at a stub executable
 # that records its argv/environment and this script will invoke that stub
@@ -331,12 +331,12 @@ _launch_codex() {
     skill_path="$root/skills/loom-$role/SKILL.md"
     [ -f "$skill_path" ] || _fail "codex role skill is missing: $role"
     schema_path="$root/schemas/loom-role-launch-v1.schema.json"
-    [ -f "$schema_path" ] || _fail "closed bounded-output schema is missing"
+    [ -f "$schema_path" ] && [ ! -L "$schema_path" ] || _fail "launch descriptor schema is missing"
     cold_id=$(_cold_id) || _fail "cannot generate a cold launch id"
     argv=(
         exec --ephemeral --ignore-user-config --strict-config --disable multi_agent
         --sandbox read-only --model "$model" -c "model_reasoning_effort=$effort"
-        -c "tools.web_search=false" --output-schema "$schema_path" "\$loom-$role"
+        -c "tools.web_search=false" "\$loom-$role"
     )
     printf '{"schema":"loom-role-launch/v1","client":"codex","role":"%s","profile":"%s","coldId":"%s","cold":true,"delegation":false,"permissions":"one-level"%s,"codex":{"model":"%s","effort":"%s","sandbox":"read-only","webSearch":false,"argv":%s}}\n' \
         "$role" "$profile" "$cold_id" "$cross_json" "$model" "$effort" "$(_json_argv_array "${argv[@]}")"

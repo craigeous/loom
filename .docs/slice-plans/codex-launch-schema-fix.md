@@ -1,6 +1,6 @@
 # Codex Launch Schema Fix (v0.2.1)
 
-Status: In Progress
+Status: Implemented
 Target specs: 10-packaging.md
 Authority: [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md) (Accepted); [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md) (Accepted; §1)
 Target size: <= 50 LOC net change (keep this plan document <= 250 lines)
@@ -57,7 +57,11 @@ This slice cleanly fixes the Codex launch contract in `loom-launch-role` by remo
 ## Verification
 
 - **Targeted Bats test:**
-  `scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats` passes all tests with 0 failures under Bash 3.2.
+  `scripts/run-bats-under /bin/bash '^3\.2' "$(readlink -f "$(which bats)")" scripts/tests/shell-runtime.bats plugins/loom/bin/loom-launch-role.bats` passed: 103/103 tests passing under Bash 3.2 (exit 0).
+- **Static code checks:**
+  `shfmt -i 4 -d -ln bash plugins/loom/bin/loom-launch-role` clean (exit 0).
+  `shellcheck -s bash plugins/loom/bin/loom-launch-role` clean (exit 0).
+  `git diff --check` clean (exit 0).
 - **Repository state validation:**
   `node scripts/validate-repository.mjs --all` exits 0 with zero rule reports.
 - **Full platform gate:**
