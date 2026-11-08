@@ -2,7 +2,7 @@
 
 Artifact: [hc-host-adapter](../slice-plans/hc-host-adapter.md)
 Commit: 78d011e
-Round: 0
+Round: 3
 Verdict: FAIL
 Reviewed against: [ADR 0031](../ADR/0031-herdr-as-an-hc-driven-client.md), [ADR 0034](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md), [hc-host-adapter slice plan](../slice-plans/hc-host-adapter.md), [spec 10](../spec/10-packaging.md), and [code-eval rubric](../../plugins/loom/skills/loom-playbook/references/code-eval-rubric.md).
 
