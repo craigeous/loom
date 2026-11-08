@@ -1,13 +1,13 @@
 # Review findings — orca-host-adapter
 
 - Protocol: loom-local-review/v1
-- Run: orca-host-adapter-ddb03af0952d
+- Run: orca-host-adapter-fb46c83d264f
 - Aggregate: ran-clean
 - Base: 763a57efe0cad863dd2c4c927eda2e3b9d83b26c
-- Head: ddb03af0952d0088eb04388709fd53a0abba1a57
-- Diff sha256: 072c815447f412f539eba63a189e5c79d55375218b6d7055a07226e37fd31426
-- Manifest sha256: fe9555dac22418473143b330de5740736853c72c226c93cfcb13c2aa6a04cf83
-- Findings sha256: 97f7e0ec54559d83e75035bb38307439d08caef39098f1be49b7b0ccc877bd8f
+- Head: fb46c83d264f4f2a6294f887e1fda0cf1014f358
+- Diff sha256: 63278c96be285539bf729dadbe029941b5975230457f74262f9c7246a0ffbd20
+- Manifest sha256: 18f75bca9ec7313659d6dd5fe282b21b1b4599adb5ec23ede367ca21ef757543
+- Findings sha256: f37557d357c7685a2490150e1fab08f1adbbaffac792fd33f86655fa3449ba1c
 
 ## Provenance
 
