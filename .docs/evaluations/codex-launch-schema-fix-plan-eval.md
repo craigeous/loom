@@ -1,6 +1,6 @@
 # Plan Evaluation: codex-launch-schema-fix
 
-Artifact: [codex-launch-schema-fix](../slice-plans/codex-launch-schema-fix.md)
+Artifact: [codex-launch-schema-fix](../slice-plans/archive/codex-launch-schema-fix.md)
 Commit: 4a6b766
 Round: 0
 Verdict: PASS

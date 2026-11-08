@@ -39,6 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+  - Landed 2026-11-07: `codex-launch-schema-fix` (v0.2.1 preparation): removed `--output-schema` from `codex exec` in `loom-launch-role`, allowing native unwrapped role execution; plan archived.
   - Landed 2026-11-07: v0.2.0 live proof complete; release tag `v0.2.0` and evidence record published to `origin/main` (ADR 0032 E1–E5, ADR 0033 D3).
   - Landed 2026-11-07: `release-conformance-and-evidence-schema`: v0.2.0 release-evidence schema (`loom-release-evidence/v1`) and chain validator, macOS-only CI runner/docs alignment (G4, G5; ADR 0032 §3, §8); plan archived.
   - Landed 2026-11-06: `launcher-matrix-and-rotation-fix`: `loom-launch-role` binds the release compatibility matrix (0.2.0 default) and the default rotation is two clients (claude ↔ codex), without Antigravity; plan archived.
@@ -55,13 +56,13 @@ Current milestone: M9
 
 Order of work: (1) `herdr-surface-retirement` (1bed05f), (2) `dogfood-retirement` (cc2b1ef),
 (3) `instruction-adapter-sync` (93c4f23), (4) `release-conformance-and-evidence-schema` (78a21fb),
-and (5) `v0.2.0` live proof and release evidence (`b5110e5`) have all landed and published on
-`origin/main`. Conformance is verified for Claude Code CLI and Codex CLI on macOS 14+ Apple
-silicon under ADR 0032 E1–E5. The next action is to admit follow-on scope per ADR 0033 §1 /
-owner direction: (a) Track 1: patch Codex Structured Outputs schema in `loom-launch-role` for
-`v0.2.1`, (b) Track 2: Orca host surface admission for `v0.3.0`, or (c) Track 3: revisit the
-deferred Herdr/`hc` evaluator question (ADR 0033 D4). ADR 0033 replaces ADR 0032's five-pair
-v0.3.0 set with evidence-admitted pairs.
+(5) `v0.2.0` live proof and release evidence (`b5110e5`) have all landed and published on
+`origin/main`, and (6) Track 1 `codex-launch-schema-fix` has landed. Conformance is verified
+for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action
+is to admit follow-on scope per ADR 0033 §1 / owner direction: (a) Track 2: Orca host surface
+admission for `v0.3.0`, (b) Track 3: revisit the deferred Herdr/`hc` evaluator question (ADR 0033 D4),
+or (c) Track 4: Antigravity subagent binding. ADR 0033 replaces ADR 0032's five-pair v0.3.0 set with
+evidence-admitted pairs.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition
