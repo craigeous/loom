@@ -56,14 +56,15 @@ with the live descriptor `plugins/loom/adapters/hosts/orca-host-v1.json`.
 
 ## Verified Orca CLI 1.4.250 Behaviors & Schemas
 
-Verified at `/Applications/Orca.app/Contents/Resources/bin/orca`:
+Verified at `/Applications/Orca.app/Contents/Resources/bin/orca` and documented in
+`../research/2026-11-08-orca-and-antigravity-runtime-reference.md`:
 - `orca terminal show --terminal <h> --json`:
   Success (0): `{"ok":true,"result":{"terminal":{"handle":"...","title":...,"connected":bool,"worktreePath":"...","exitCause":{"kind":"operator_close"|...}}}}`
   Stale (1): `{"ok":false,"error":{"code":"terminal_handle_stale","message":"terminal_handle_stale"}}`
 - `orca terminal wait --terminal <h> --for exit --timeout-ms <ms> --json`:
   Success (0): `{"ok":true,"result":{"wait":{"handle":"...","condition":"exit","satisfied":true,"status":"exited","exitCode":0}}}`
   Timeout (1): `{"ok":false,"error":{"code":"timeout","message":"timeout"}}`
-- `orca terminal read --terminal <h> --limit <n> --json`:
+- `orca terminal read --terminal <h> --limit <n> --json` (CLI bounds row count with `--limit`):
   Success (0): `{"ok":true,"result":{"terminal":{"handle":"...","status":"...","tail":[...],"returnedLineCount":n}}}`
 - `orca terminal close --terminal <h> --tab --json`:
   Success (0): `{"ok":true,"result":{"close":{"handle":"...","tabId":"...","ptyKilled":true}}}`
@@ -77,8 +78,8 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca`:
    `orca` call. Exit codes: 0 ok, 1 usage, 2 fail-closed, 4 degraded wait. Subcommands:
    - `launch ...`: exit 2, `unsupported: role launch on orca requires the owner-recorded probes (ADR 0034 sections 1 and 2)`. Unknown subcommand: exit 1.
    - `status <handle>`: runs `orca terminal show --terminal <handle> --json`.
-     If exit 1 and output has `.error.code == "terminal_handle_stale"`, prints `not_found` and exits 2.
-     If exit != 0 with any other error: fail-closed exit 2 (`orca terminal show exited with status $rc`).
+     If exit 1 and output has valid JSON with `.ok == false and .error.code == "terminal_handle_stale"`, prints `not_found` and exits 2.
+     If exit != 0 with any other error or malformed JSON: fail-closed exit 2 (`orca terminal show exited with status $rc`).
      If exit 0: parses with `jq -c` extracting `{"handle","title","connected","exitCause","worktreePath"}`
      (`exitCause` from `exitCause.kind`, absent fields `null`). If JSON parsing fails: fail-closed exit 2.
    - `wait <handle> --timeout <1..3600>`: converts seconds to ms (`timeout_ms=$((timeout * 1000))`),
@@ -87,14 +88,16 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca`:
      and exits 0; any nonzero exit prints `degraded: wait did not return (orca exit <rc>); not completion`
      and exits 4. Neither is completion; the artifact `Status:` is.
    - `read <handle> [--lines <1..500>]` / `events <handle> [--lines <1..500>]`:
-     runs `orca terminal read --terminal <handle> --limit <lines> --json`. Default lines: 500.
+     accepts `--lines <1..500>` (default 500), runs `orca terminal read --terminal <handle> --limit "$lines" --json`.
      If read exit != 0: fail-closed exit 2 (`orca terminal read exited with status $rc`).
      If JSON parsing fails: fail-closed exit 2. Prints tail lines, truncated after N lines; exit 0.
-   - `end <handle>`: runs `orca terminal close --terminal <handle> --tab --json`.
-     If close exit != 0 and error code is not `terminal_handle_stale`: fail-closed exit 2.
-     Verifies cleanup: runs `orca terminal show --terminal <handle> --json`.
-     If show returns `terminal_handle_stale` or `operator_close`: exits 0.
-     If show reports terminal connected or returns unexpected error: fail-closed exit 2.
+   - `end <handle>`: runs `raw_close=$(orca terminal close --terminal <handle> --tab --json)`.
+     If close exit != 0: requires exit 1 and valid JSON with `.error.code == "terminal_handle_stale"`, else exit 2.
+     Verifies cleanup: runs `raw_show=$(orca terminal show --terminal <handle> --json)`.
+     Requires valid JSON:
+     - if show exit 1 and `.error.code == "terminal_handle_stale"`: exit 0.
+     - if show exit 0 and `.ok == true and .result.terminal.connected == false and .result.terminal.exitCause.kind == "operator_close"`: exit 0.
+     - any other state (malformed JSON, active/connected terminal, unexpected exitCause, or unrecognized exit code): fail-closed exit 2.
 2. **`plugins/loom/adapters/hosts/orca-host-v1.json`** (new; binding, schema `loom-host-binding-v1`):
    `{ "schema":"loom-host-binding-v1", "id":"orca-host/v1", "host":"orca", "controlCli":"orca", "floor":"1.4.250", "helper":"loom-host-orca", "helperPath":"bin/loom-host-orca", "helperMustBeRegularFile":true, "helperMustBeExecutable":true, "helperDirectoryMustBeDirectChild":true, "reachableVerbs":["show","wait","read","close"], "launch":"unsupported" }`.
 3. **`plugins/loom/schemas/loom-host-binding-v1.schema.json`** (touched):
@@ -123,9 +126,8 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca`:
    - `status` parses JSON shape, stale handle exit 1 -> `not_found` on stdout and exit 2; non-stale error exits 2 with failure message; malformed JSON exits 2.
    - `wait` requires `--timeout` (and rejects 0, 3601, `abc`), converts to ms, exit 0 prints `returned`,
      nonzero exits map to exit 4 `degraded` and never contain `complete`.
-   - `read` / `events` parses tail lines and truncates after specified or default lines; CLI error or malformed JSON exits 2.
-   - `end` invokes `terminal close --terminal <handle> --tab --json`, accepts stale or operator_close on show,
-     fails closed if show still reports connected or close hits unexpected error.
+   - `read` / `events` maps `--lines` to `--limit`, parses tail lines and truncates after lines; CLI error or malformed JSON exits 2.
+   - `end` invokes `terminal close --terminal <handle> --tab --json`; tests malformed close response (exit 2), non-stale close error (exit 2), malformed show response (exit 2), show reporting connected (exit 2), show reporting unrecognized exitCause without stale error (exit 2), and confirms cleanup on stale show or operator_close show.
    - Across all subcommands, only `terminal` with subcommands `show`, `wait`, `read`, `close` ever appear in stub log.
 8. **`scripts/tests/repository-validation.bats`**:
    Update and expand host binding test cases to cover both `hc` and `orca` bindings, fixtures, helpers,
@@ -151,5 +153,6 @@ Verified at `/Applications/Orca.app/Contents/Resources/bin/orca`:
 
 | Round | Summary of in-place changes |
 |---|---|
+| 2 | Plan-eval Round 2: updated authority runtime reference with verified Orca 1.4.250 command schemas, flags, exit codes, and `--limit` resolution; refined `end` cleanup verification with strict fail-closed handling for malformed JSON, connected state, and unrecognized exitCause; added negative cleanup tests |
 | 1 | Plan-eval Round 1: explicitly scheduled `orca-live-probe` follow-on slice for interactive create/send/worktree primitives; embedded verified Orca 1.4.250 CLI schemas & exit codes; defined strict fail-closed error handling for non-stale CLI failures and malformed JSON across status, read, and end; aligned fixture equality to validator deep-equal |
 | 0 | Initial draft for Slice 3: `loom-host-orca` host adapter and v0.3.0 matrix registration beside `hc` |

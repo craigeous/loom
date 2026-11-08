@@ -1,28 +1,30 @@
 # Evaluation: orca-host-adapter
 
 Verdict: FAIL
-Round: 0
-Commit: 36de18ba351a19b238bc6dd377a5210ce23b15b0
-Reviewed against: ADR 0032 §6, ADR 0034 §1, §2, §5, specs 07 and 10, and the plan-evaluation rubric.
+Round: 1
+Commit: 0d87c1f17edb02d8478d59dbec9bc82d02c813be
+Reviewed against: ADR 0032 §6, ADR 0034 §1, §2, §5, specs 07 and 10, research reference, and the plan-evaluation rubric.
 
 ## Summary
 
-FAIL (round 0; BLOCKER: 1, MAJOR: 2, MINOR: 1). The plan provides observation and cleanup only without an explicit follow-on disposition for create/send/worktree isolation; the review authority omitted verified CLI evidence; error handling for stale vs non-stale CLI failures was ambiguous; and descriptor-fixture equality was phrased as byte-equal while validator checks deep equality.
+FAIL (round 1; BLOCKER: 0, MAJOR: 2, MINOR: 0). The revision addressed the follow-on disposition and fixture-equality findings, but the CLI evidence in the research authority needed alignment on `--limit` and command schemas, and `end` cleanup error handling needed strict fail-closed definitions for malformed JSON and unexpected show states.
 
 ## Findings
 
-- [BLOCKER] ADR 0032 §6 and ADR 0034 §1 and §5 call for Orca terminal lifecycle integration, including create, send, and worktree isolation. The plan provides observation and cleanup only, with no concrete follow-on disposition for the missing primitives. Its unconditional launch refusal preserves the requested no-role-launch boundary, but leaves the required integration unfinished.
-- [MAJOR] The supplied authority does not establish the proposed Orca 1.4.250 flags, JSON shapes, exit codes, or `operator_close` behavior. The plan cites runtime research, but that file is outside the permitted review inputs. The sketches and stub assertions therefore cannot be verified against the real CLI in this review.
-- [MAJOR] Error handling is ambiguous or can misreport failure: `status` treats every exit 1 as a stale handle, `end` accepts exit 1 as proof of cleanup, and `read`/`events` specify exit 0 without defining how CLI or JSON parsing failures are handled.
-- [MINOR] The plan requires the Orca fixture to be byte-equal to its descriptor, but the validator checks deep equality, which does not establish byte equality.
+- [MAJOR] The supplied research says `terminal read` accepts `--lines`, while the plan uses `--limit`. It does not substantiate the plan’s `show` command, `--tab` flag, JSON shapes, stale-handle exit codes, or `operator_close` behavior. Embedding those claims in the plan does not independently verify them, so the Round 0 CLI-evidence finding remains open.
+- [MAJOR] `end` does not explicitly fail closed on malformed JSON or define how to handle a successful `show` response that is neither connected nor marked `operator_close`. It also accepts a stale error without specifying the required exit code. Its tests omit malformed cleanup responses. The Round 0 error-handling finding therefore remains partly open.
 
 ## Required Changes
 
-1. Specify a concrete, file-scoped disposition for create, send, and worktree isolation consistent with the no-role-launch boundary, or identify an authoritative follow-on slice that delivers them before conformance.
-2. Supply verifiable Orca 1.4.250 command and response evidence within the permitted review inputs; align the commands and stub assertions with it.
-3. Define and test fail-closed behavior for non-stale CLI failures and malformed responses, including cleanup verification and read failures.
-4. Mechanically check the stated byte-equality invariant, or change the invariant to deep equality if that is the intended contract.
+1. Supply reviewable Orca 1.4.250 evidence for the commands, flags, response shapes, and exit codes used by the plan. Resolve the `--lines` versus `--limit` discrepancy and align the implementation and stub tests with the verified interface.
+2. Define and test `end` to accept only the verified cleanup confirmations and to exit 2 for malformed JSON, unexpected exit-code/error combinations, and every unrecognized cleanup state.
+
+## Prior Rounds Summary
+
+| Round | Phase | Verdict | Key Findings & Resolution |
+|---|---|---|---|
+| 0 | plan | FAIL | Initial plan lacked follow-on disposition for create/send/worktree, omitted research authority, had ambiguous exit 1 error handling, and phrased fixture equality as byte-equal. Resolved in Round 1 revision by scheduling `orca-live-probe`, defining fail-closed errors, aligning to deep-equal, and adding research note. |
 
 ## Notes
 
-The plan is within 250 lines and states a target of at most 380 added LOC. Its proposed unconditional launch refusal prevents role launch, while its stated evaluator boundary keeps evaluation outside Orca terminals.
+The plan explicitly schedules `orca-live-probe` before E4, and its fixture contract now consistently uses deep equality. `status` and `read`/`events` define fail-closed handling for non-stale CLI errors and JSON parse failures.
