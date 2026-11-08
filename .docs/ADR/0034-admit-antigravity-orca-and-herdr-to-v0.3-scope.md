@@ -126,24 +126,20 @@ cross-family evaluation MUST inspect the **underlying model provider family**, n
   - If author is `antigravity` using Gemini (`google`), evaluator routes to `codex` (`openai`) or `claude` (`anthropic`).
   - If author is `antigravity` using Claude (`anthropic`), evaluator routes to `codex` (`openai`), never `claude`.
 
-### 4. Actionable E1–E5 Conformance Plan
+### 4. Actionable E1–E5 Conformance Plan and Post-Tag Evidence Record
 
-Each admitted pair must satisfy ADR 0032 §3 (E1–E5) before v0.3.0 is tagged:
-- **E1 (Compatibility Matrix):** `adapters/compatibility/v0.3.0.json` defines all five pairs with
-  pinned floors, allowed helpers, and role profile mappings.
-- **E2 (Installed Root & Host Bindings):** Validated bindings created under `plugins/loom/adapters/roots/`:
-  `claude-plugin-root-v1.json`, `codex-skill-source-v1.json`, `antigravity-plugin-root-v1.json`,
-  `orca-host-v1.json`, and `hc-host-v1.json`.
-- **E3 (Automated Repository Gate):** Full local gate (`scripts/check`) passes cleanly under both
-  macOS Bash 3.2.57 and Bash 5.3+, with comprehensive offline Bats test coverage for all five harnesses
-  including parity, guards, and fail-closed refusal of unknown/below-floor versions.
-- **E4 (Live Conformance Evidence):** Live executions on macOS 14+ Apple silicon for each pair at
-  its pinned floor: clean install/load, interactive role execution, full development loop (with
-  evaluators dispatched to isolated `0700` workspaces per §2), and dual-platform gate passing.
-- **E5 (Release Evidence Record):** Evidence record `.docs/evaluations/release-evidence/v0.3.0.json`
-  conforming to `loom-release-evidence/v1`, validated by `scripts/validate-repository.mjs --release 0.3.0`,
-  bearing explicit owner acknowledgement and sign-off, published to `origin/main` atomically with
-  the release tag `v0.3.0`.
+Each admitted pair must satisfy ADR 0032 §3 (E1–E5). In accordance with ADR 0032 §3, E1–E3 hold in the candidate commit chosen for tagging, while E4–E5 are recorded in an immutable evidence record written after the candidate commit is tagged:
+
+- **E1 — Compatibility Matrix (in candidate commit):** `adapters/compatibility/v0.3.0.json` defines all five pairs with pinned floors, profile mappings, allowed helpers, and platforms (macOS 14+ Apple silicon).
+- **E2 — Bindings (in candidate commit):** Validated bindings under `plugins/loom/adapters/roots/`: `claude-plugin-root-v1.json`, `codex-skill-source-v1.json`, `antigravity-plugin-root-v1.json`, `orca-host-v1.json`, and `hc-host-v1.json`.
+- **E3 — Automated Repository Gate (in candidate commit):** Full repository gate (`scripts/check`) passes cleanly under both macOS Bash 3.2.57 and Bash 5.3+, with comprehensive offline Bats test coverage for all five harnesses including launch descriptors, role contract parity, hook and guard behavior, and fail-closed refusal of unknown or below-floor versions.
+- **E4 — Live Conformance per Pair (recorded runs):** For each REQUIRED pair in the v0.3.0 row at its pinned floor against the matrix, recorded runs proving:
+  (a) each role launched and returning through the harness (with host harnesses operating per §2: interactive roles execute within the host; evaluator roles execute in independent, sanitized `0700` POSIX workspaces per ADR 0022);
+  (b) one full loop from research through landing, with blind review (no author identity, no author reasoning, committed handoffs); and
+  (c) the repository gate passing on that platform.
+  Each run is recorded with platform, harness floor, result, and a log or journal reference.
+- **E5 — Owner Sign-off (in evidence record):** An explicit owner acknowledgement in the evidence record, naming each pair, the evidence set, and the tagged candidate commit hash.
+- **Evidence Record Ordering and Commit Binding:** E4 and E5 are recorded in `.docs/evaluations/release-evidence/v0.3.0.json` conforming to schema `loom-release-evidence/v1`, written **after** the candidate commit is tagged `v0.3.0`. The evidence record names the full tagged candidate commit hash (`git rev-parse v0.3.0^{commit}`) and lives in a descendant commit on `main` (`git merge-base --is-ancestor v0.3.0 <record-commit>`). Release publication to `origin/main` requires both the tag and the descendant evidence record commit to verify under `scripts/validate-repository.mjs --release 0.3.0`.
 
 ### 5. Implementation Slicing Sequence
 
