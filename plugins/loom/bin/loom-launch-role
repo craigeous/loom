@@ -258,7 +258,7 @@ _next_client_in_cycle() {
 # v<this>.json. A release slice bumps this constant, both plugin manifests, and
 # ships its own matrix; the Bats suite fails the gate if they disagree. Never
 # read from the environment or a caller.
-DEFAULT_COMPATIBILITY_RELEASE="0.2.0"
+DEFAULT_COMPATIBILITY_RELEASE="0.3.0"
 RELEASE_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
 
 CODEX_MODEL_RE='^(gpt-6(\.[0-9]+)?(-[a-z0-9]+)?|gpt-5\.6(-[a-z0-9]+)?)$'
@@ -650,9 +650,6 @@ main() {
         *) _fail "unsupported profile for Antigravity model mapping: $profile" ;;
         esac
         ag_model="$model_in"
-        if [ -z "$ag_model" ]; then
-            ag_model=$(_matrix_field "$matrix_json" "$profile" ".antigravity.model")
-        fi
         if [ -z "$ag_model" ]; then
             local models picked agy_rc=0
             models=$(_agy_models) || agy_rc=$?

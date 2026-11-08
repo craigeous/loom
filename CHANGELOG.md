@@ -4,6 +4,16 @@ All notable changes to loom are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+- M9 — Extended harness support and release conformance:
+  - Admitted Herdr host adapter (`hc-host/v1`) via `loom-host-hc` observation and cleanup helper.
+  - Admitted Orca host adapter (`orca-host/v1`) via `loom-host-orca` observation and cleanup helper.
+  - Admitted Antigravity model adapter (`antigravity-plugin-root/v1`) with model provider family resolution.
+  - Implemented model-family-aware cross-family evaluation rotation and routing persistence (`--author-model`, `--routing-file`).
+  - Implemented host harness evaluator governance: host interactive authoring with evaluator delegation to independent, sanitized POSIX workspaces.
+  - Updated release evidence schema and repository validation for 5-harness release conformance.
+
 ## [0.2.0]
 
 Unreleased: this section records the changes leading to v0.2.0; it does not claim

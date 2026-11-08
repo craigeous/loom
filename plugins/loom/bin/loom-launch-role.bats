@@ -160,51 +160,51 @@ launch_env() {
 # Positive: Codex, all five roles (all three profiles), stubbed child
 # ---------------------------------------------------------------------------
 
-@test "codex: researcher launches on Economy/gpt-5.6-terra/low" {
+@test "codex: researcher launches on Economy/gpt-6.1-terra/low" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Economy"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6-terra"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
     [[ "$output" == *'"effort":"low"'* ]]
     run cat "$RECORD"
     [[ "$output" == *'ACTIVE=1'* ]]
     [[ "$output" == *'ARG:$loom-researcher'* ]]
 }
 
-@test "codex: developer launches on Standard/gpt-5.6/medium" {
+@test "codex: developer launches on Standard/gpt-6.1-terra/medium" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex developer
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Standard"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
     [[ "$output" == *'"effort":"medium"'* ]]
 }
 
-@test "codex: planner launches on Deep review/gpt-5.6/high" {
+@test "codex: planner launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex planner
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
-@test "codex: plan-evaluator launches on Deep review/gpt-5.6/high" {
+@test "codex: plan-evaluator launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex plan-evaluator
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
-@test "codex: code-evaluator launches on Deep review/gpt-5.6/high" {
+@test "codex: code-evaluator launches on Deep review/gpt-6.1-sol/high" {
     make_stub
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex code-evaluator
     [ "$status" -eq 0 ]
     [[ "$output" == *'"profile":"Deep review"'* ]]
-    [[ "$output" == *'"model":"gpt-5.6"'* ]]
+    [[ "$output" == *'"model":"gpt-6.1-sol"'* ]]
     [[ "$output" == *'"effort":"high"'* ]]
 }
 
@@ -226,7 +226,7 @@ launch_env() {
     [[ "$output" == *'ARG:--sandbox'* ]]
     [[ "$output" == *'ARG:read-only'* ]]
     [[ "$output" == *'ARG:--model'* ]]
-    [[ "$output" == *'ARG:gpt-5.6-terra'* ]]
+    [[ "$output" == *'ARG:gpt-6.1-terra'* ]]
     [[ "$output" == *'ARG:model_reasoning_effort=low'* ]]
     [[ "$output" == *'ARG:tools.web_search=false'* ]]
     [[ "$output" != *'ARG:--output-schema'* ]]
@@ -237,7 +237,7 @@ launch_env() {
     LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" launch codex researcher
     [ "$status" -eq 0 ]
     run awk '/ARG:--model/{getline; print}' "$RECORD"
-    [ "$output" = "ARG:gpt-5.6-terra" ]
+    [ "$output" = "ARG:gpt-6.1-terra" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -418,7 +418,7 @@ launch_env() {
 @test "codex: missing compatibility matrix fails closed" {
     make_root
     make_stub
-    rm "$ROOT/adapters/compatibility/v0.2.0.json"
+    rm "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"compatibility matrix is missing"* ]]
@@ -427,8 +427,8 @@ launch_env() {
 @test "codex: wrong matrix schema identity fails closed" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"schema mismatch"* ]]
@@ -437,8 +437,8 @@ launch_env() {
 @test "codex: wrong matrix version fails closed" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.version = "9.9.9"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.version = "9.9.9"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"version mismatch"* ]]
@@ -447,8 +447,8 @@ launch_env() {
 @test "codex: a role absent from every profile's consumers fails closed (role/profile drift)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .consumers) = []' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .consumers) = []' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no profile mapped for role"* ]]
@@ -457,8 +457,8 @@ launch_env() {
 @test "codex: a missing model for the resolved profile fails closed (unavailable model)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.model)' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.model)' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no Codex model mapped"* ]]
@@ -467,8 +467,8 @@ launch_env() {
 @test "codex: a missing effort for the resolved profile fails closed (unavailable effort)" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.effort)' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex) |= del(.effort)' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"no Codex effort mapped"* ]]
@@ -477,8 +477,8 @@ launch_env() {
 @test "codex: a substituted model for the resolved profile is used verbatim and validated only by enumeration in the schema" {
     make_root
     make_stub
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '(.profiles[] | select(.profile=="Economy") | .codex.model) = "renamed-model"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '(.profiles[] | select(.profile=="Economy") | .codex.model) = "renamed-model"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 0 ]
     [[ "$output" == *'"model":"renamed-model"'* ]]
@@ -521,8 +521,8 @@ launch_env() {
     make_stub
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 0 ]
-    tmp="$ROOT/adapters/compatibility/v0.2.0.json.tmp"
-    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.2.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.schema = "bogus"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher
     [ "$status" -eq 2 ]
 }
@@ -536,16 +536,16 @@ normalize_launch() {
     jq -S 'del(.coldId)' "$1"
 }
 
-@test "release: no flag and --release 0.2.0 emit equivalent descriptors; coldId is fresh per launch" {
+@test "release: no flag and --release 0.3.0 emit equivalent descriptors; coldId is fresh per launch" {
     make_root
     make_stub
     local client role want_model want_effort
-    for client in claude codex; do
+    for client in claude codex antigravity; do
         for role in researcher developer planner plan-evaluator code-evaluator; do
             run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" "$client" "$role"
             [ "$status" -eq 0 ]
             printf '%s\n' "${lines[0]}" >"$BATS_TEST_TMPDIR/default.json"
-            run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" "$client" "$role" --release 0.2.0
+            run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" "$client" "$role" --release 0.3.0
             [ "$status" -eq 0 ]
             printf '%s\n' "${lines[0]}" >"$BATS_TEST_TMPDIR/pinned.json"
             normalize_launch "$BATS_TEST_TMPDIR/default.json" >"$BATS_TEST_TMPDIR/default.norm"
@@ -556,9 +556,9 @@ normalize_launch() {
             [ "$(jq -r .coldId "$BATS_TEST_TMPDIR/default.json")" != "$(jq -r .coldId "$BATS_TEST_TMPDIR/pinned.json")" ]
             if [ "$client" = codex ]; then
                 case "$role" in
-                researcher) want_model=gpt-5.6-terra want_effort=low ;;
-                developer) want_model=gpt-5.6 want_effort=medium ;;
-                *) want_model=gpt-5.6 want_effort=high ;;
+                researcher) want_model=gpt-6.1-terra want_effort=low ;;
+                developer) want_model=gpt-6.1-terra want_effort=medium ;;
+                *) want_model=gpt-6.1-sol want_effort=high ;;
                 esac
                 [ "$(jq -r .codex.model "$BATS_TEST_TMPDIR/default.json")" = "$want_model" ]
                 [ "$(jq -r .codex.effort "$BATS_TEST_TMPDIR/default.json")" = "$want_effort" ]
@@ -567,26 +567,25 @@ normalize_launch() {
     done
 }
 
-@test "release: --release 0.3.0 in a v0.2.0 build fails closed before any matrix read" {
+@test "release: --release 0.2.0 in a v0.3.0 build fails closed before any matrix read" {
     make_root
     make_stub
-    # make_root ships v0.3.0.json on purpose: the refusal must come from the pin.
-    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher --release 0.3.0
+    # make_root ships v0.2.0.json on purpose: the refusal must come from the pin.
+    run env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" codex researcher --release 0.2.0
     [ "$status" -eq 2 ]
     [[ "$output" == *"--release"* ]]
-    [[ "$output" == *"0.2.0"* ]]
+    [[ "$output" == *"0.3.0"* ]]
     [[ "$output" != *"loom-role-launch/v1"* ]]
-    [[ "$output" != *"gpt-6.1"* ]]
+    [[ "$output" != *"gpt-5.6"* ]]
     [[ "$output" != *"compatibility matrix"* ]]
     [ ! -e "$RECORD" ]
 }
 
 @test "release: LOOM_COMPATIBILITY_RELEASE in the environment is ignored" {
     make_stub
-    launch_env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" LOOM_COMPATIBILITY_RELEASE=0.3.0 -- codex researcher
+    launch_env LOOM_LAUNCH_ROLE_CODEX_BIN="$STUB" LOOM_COMPATIBILITY_RELEASE=0.2.0 -- codex researcher
     [ "$status" -eq 0 ]
-    [[ "$output" == *'"model":"gpt-5.6-terra"'* ]]
-    [[ "$output" != *"gpt-6.1"* ]]
+    [[ "$output" == *'"model":"gpt-6.1-terra"'* ]]
 }
 
 @test "release: the bound release equals the version in both plugin manifests" {
@@ -614,24 +613,25 @@ normalize_launch() {
     run env "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" claude researcher --release 0.4.0
     [ "$status" -eq 2 ]
     [[ "$output" == *"--release"* ]]
-    [[ "$output" == *"0.2.0"* ]]
+    [[ "$output" == *"0.3.0"* ]]
     [[ "$output" != *"loom-role-launch/v1"* ]]
 }
 
-@test "release: a v0.2.0.json whose version is 0.3.0 fails closed with a version mismatch" {
+@test "release: a v0.3.0.json whose version is 0.4.0 fails closed with a version mismatch" {
     make_root
-    cp "$ROOT/adapters/compatibility/v0.3.0.json" "$ROOT/adapters/compatibility/v0.2.0.json"
+    tmp="$ROOT/adapters/compatibility/v0.3.0.json.tmp"
+    jq '.version = "0.4.0"' "$ROOT/adapters/compatibility/v0.3.0.json" >"$tmp" && mv "$tmp" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" claude researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"version mismatch"* ]]
 }
 
-@test "release: a symlinked v0.2.0.json fails closed even when its target is a valid matrix" {
+@test "release: a symlinked v0.3.0.json fails closed even when its target is a valid matrix" {
     make_root
     local outside="$BATS_TEST_TMPDIR/outside-matrix.json"
-    cp "$REPO_ROOT/plugins/loom/adapters/compatibility/v0.2.0.json" "$outside"
-    rm "$ROOT/adapters/compatibility/v0.2.0.json"
-    ln -s "$outside" "$ROOT/adapters/compatibility/v0.2.0.json"
+    cp "$REPO_ROOT/plugins/loom/adapters/compatibility/v0.3.0.json" "$outside"
+    rm "$ROOT/adapters/compatibility/v0.3.0.json"
+    ln -s "$outside" "$ROOT/adapters/compatibility/v0.3.0.json"
     run env "$LOOM_TEST_BASH" "$ROOT/bin/loom-launch-role" claude researcher
     [ "$status" -eq 2 ]
     [[ "$output" == *"symlink"* ]]
@@ -640,7 +640,7 @@ normalize_launch() {
 @test "release: --release without a value, or given twice, is a usage error" {
     launch claude researcher --release
     [ "$status" -eq 1 ]
-    launch claude researcher --release 0.2.0 --release 0.2.0
+    launch claude researcher --release 0.3.0 --release 0.3.0
     [ "$status" -eq 1 ]
 }
 

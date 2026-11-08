@@ -574,7 +574,7 @@ EOF
     mutate_json plugins/loom/.codex-plugin/plugin.json '.version="0.2.1"'
     metadata
     [ "$status" -ne 0 ]
-    [[ "$output" == *"plugin.json: schema /version must be equal to constant"* ]]
+    [[ "$output" == *"plugin.json: schema /version must be equal to one of the allowed values"* ]]
 }
 
 @test "manifest shared identity drift fails independently" {
@@ -607,7 +607,7 @@ EOF
     mutate_json .claude-plugin/marketplace.json '.plugins[0].version="0.2.1"'
     metadata
     [ "$status" -ne 0 ]
-    [[ "$output" == *".claude-plugin/marketplace.json: schema /plugins/0/version must be equal to constant"* ]]
+    [[ "$output" == *".claude-plugin/marketplace.json: schema /plugins/0/version must be equal to one of the allowed values"* ]]
 }
 
 @test "client floor drift fails independently" {
@@ -721,7 +721,7 @@ EOF
 
 @test "release fixture drift fails independently" {
     make_metadata_root
-    mutate_json plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json '.description="fixture drift"'
+    mutate_json plugins/loom/adapters/fixtures/v0.3.0/metadata/claude-manifest.json '.description="fixture drift"'
     metadata
     [ "$status" -ne 0 ]
     [[ "$output" == *"claude-manifest.json: release fixture differs"* ]]
@@ -737,7 +737,7 @@ EOF
 
 @test "release fixture equality preserves array order" {
     make_metadata_root
-    mutate_json plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json '.workflows |= reverse'
+    mutate_json plugins/loom/adapters/fixtures/v0.3.0/metadata/compatibility.json '.workflows |= reverse'
     metadata
     [ "$status" -ne 0 ]
     [[ "$output" == *"compatibility.json: release fixture differs"* ]]
@@ -3141,4 +3141,51 @@ install_correction() {
     metadata
     [ "$status" -eq 1 ]
     [[ "$output" == *"missing or invalid clientFloors.antigravity entry"* ]]
+}
+
+install_v030_release_evidence() {
+    mkdir -p "$TEST_ROOT/.docs/evaluations/release-evidence"
+    jq '
+      .release = "0.3.0"
+      | .tag = "v0.3.0"
+      | .matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"
+      | .pairs[0].e1.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"
+      | .pairs[1].e1.matrix = "plugins/loom/adapters/compatibility/v0.3.0.json"
+      | .pairs += [
+          (.pairs[0] | .harness = "antigravity-cli" | .client = "antigravity" | .floor = "1.4.12" | .e1.entry = "antigravity" | .e2.binding = "antigravity-plugin-root/v1" | .authSource = "host-account-isolated"),
+          (.pairs[0] | .harness = "orca-host" | .client = "orca" | .floor = "1.4.250" | .e1.entry = "orca" | .e2.binding = "orca-host/v1" | .authSource = "host-session-isolated" | .evaluatorDelegation = {
+            evaluatorHarness: "codex-cli", evaluatorFamily: "openai", workspace: "isolated-posix", verified: true
+          }),
+          (.pairs[0] | .harness = "hc-host" | .client = "hc" | .floor = "0.1.16" | .e1.entry = "hc" | .e2.binding = "hc-host/v1" | .authSource = "host-session-isolated" | .evaluatorDelegation = {
+            evaluatorHarness: "claude-code-cli", evaluatorFamily: "anthropic", workspace: "isolated-posix", verified: true
+          })
+        ]
+      | .ownerAck.pairs = ["claude-code-cli", "codex-cli", "antigravity-cli", "orca-host", "hc-host"]
+    ' "$REPOSITORY_ROOT/scripts/tests/fixtures/release-evidence/v0.2.0-valid.json.in" >"$TEST_ROOT/.docs/evaluations/release-evidence/v0.3.0.json"
+}
+
+@test "release evidence: --release 0.3.0 fails when v0.3.0.json is absent" {
+    make_metadata_root
+    install_release_evidence
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --release 0.3.0
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release evidence record is required for --release 0.3.0"* ]]
+}
+
+@test "release evidence: valid v0.3.0 5-harness record passes metadata and --release 0.3.0" {
+    make_metadata_root
+    install_v030_release_evidence
+    metadata
+    [ "$status" -eq 0 ]
+    run "$LOOM_NODE" "$VALIDATOR" --root "$TEST_ROOT" --release 0.3.0
+    [ "$status" -eq 0 ]
+}
+
+@test "release evidence: host harness omitting evaluatorDelegation fails schema validation" {
+    make_metadata_root
+    install_v030_release_evidence
+    mutate_json .docs/evaluations/release-evidence/v0.3.0.json 'del(.pairs[3].evaluatorDelegation)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"evaluatorDelegation"* ]]
 }

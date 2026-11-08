@@ -18,6 +18,7 @@ let root;
 let mode;
 let rootArgumentSeen = false;
 let baselineRef;
+let releaseVersion;
 for (let index = 0; index < args.length; index += 1) {
   if (args[index] === "--root") {
     if (rootArgumentSeen) usage("unknown or repeated argument: --root");
@@ -28,11 +29,16 @@ for (let index = 0; index < args.length; index += 1) {
     if (baselineRef !== undefined) usage("unknown or repeated argument: --baseline");
     if (index + 1 >= args.length || args[index + 1].startsWith("-")) usage("--baseline requires a Git ref");
     baselineRef = args[++index];
+  } else if (args[index] === "--release") {
+    if (releaseVersion !== undefined) usage("unknown or repeated argument: --release");
+    if (index + 1 >= args.length || args[index + 1].startsWith("-")) usage("--release requires a release version");
+    releaseVersion = args[++index];
   } else if (["--metadata", "--links", "--all"].includes(args[index])) {
     if (mode) usage(`unknown or repeated argument: ${args[index]}`);
     mode = args[index].slice(2);
   } else usage(`unknown or repeated argument: ${args[index]}`);
 }
+if (!mode && releaseVersion) mode = "metadata";
 if (!mode) usage("exactly one of --metadata, --links, or --all is required");
 if (baselineRef !== undefined && mode !== "all") usage("--baseline is only valid with --all");
 if (!root) {
@@ -51,7 +57,7 @@ const report = (file, message) => diagnostics.push(`${slash(file)}: ${message}`)
 
 function usage(message) {
   console.error(`validate-repository: ${message}`);
-  console.error("usage: validate-repository.mjs [--root PATH] (--metadata|--links|--all) [--baseline REF]");
+  console.error("usage: validate-repository.mjs [--root PATH] (--metadata|--links|--all) [--baseline REF] [--release VERSION]");
   process.exit(2);
 }
 function git(gitArgs) {
@@ -271,7 +277,7 @@ function hasUnqualifiedEvaluationClaim(value) {
 }
 function validateClientVisibleClaims() {
   let valid = true;
-  const releaseFixtures = files.filter((relative) => relative.startsWith(RELEASE_METADATA_FIXTURE_ROOT) && relative.endsWith(".json"));
+  const releaseFixtures = files.filter((relative) => (relative.startsWith("plugins/loom/adapters/fixtures/v0.2.0/metadata/") || relative.startsWith("plugins/loom/adapters/fixtures/v0.3.0/metadata/")) && relative.endsWith(".json"));
   const surfaces = [...new Set([...CLIENT_VISIBLE_CLAIM_SURFACES, ...releaseFixtures])].sort();
   for (const relative of surfaces) {
     const value = relative.endsWith(".json") ? readJson(relative) : readText(relative);
@@ -365,6 +371,7 @@ async function validateMetadata() {
     ["plugins/loom/.codex-plugin/plugin.json", "scripts/schemas/codex-plugin-0.144.6.schema.json"],
     [".agents/plugins/marketplace.json", "scripts/schemas/codex-marketplace-0.144.6.schema.json"],
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
+    ["plugins/loom/adapters/compatibility/v0.3.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
     ["plugins/loom/adapters/roots/antigravity-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
@@ -398,22 +405,32 @@ async function validateMetadata() {
     }
   }
 
-  const fixtureBindings = [
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json", schemaBindings[0]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json", schemaBindings[1]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json", schemaBindings[2]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json", schemaBindings[3]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json", schemaBindings[4]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json", schemaBindings[5]],
-    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json", schemaBindings[6]]
+  const v030FixtureBindings = [
+    ["plugins/loom/adapters/fixtures/v0.3.0/metadata/claude-manifest.json", "plugins/loom/.claude-plugin/plugin.json", "scripts/schemas/claude-plugin-2.1.216.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.3.0/metadata/codex-manifest.json", "plugins/loom/.codex-plugin/plugin.json", "scripts/schemas/codex-plugin-0.144.6.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.3.0/metadata/compatibility.json", "plugins/loom/adapters/compatibility/v0.3.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"]
   ];
-  for (const [fixture, [live, schemaPath]] of fixtureBindings) {
+  for (const [fixture, live, schemaPath] of v030FixtureBindings) {
     const fixtureValid = validateJson(fixture, schemaPath, ajv);
     if (!fixtureValid) { structurallyValid = false; continue; }
     if (!schemaResults.get(live)) continue;
     const left = readJson(fixture);
     const right = readJson(live);
     if (!deepEqual(left, right)) report(fixture, `release fixture differs from ${live}`);
+  }
+
+  const v020HistoricalFixtures = [
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json", "scripts/schemas/claude-plugin-2.1.216.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json", "scripts/schemas/claude-marketplace-2.1.216.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json", "scripts/schemas/codex-plugin-0.144.6.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json", "scripts/schemas/codex-marketplace-0.144.6.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
+    ["plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
+  ];
+  for (const [fixture, schemaPath] of v020HistoricalFixtures) {
+    const fixtureValid = validateJson(fixture, schemaPath, ajv);
+    if (!fixtureValid) structurallyValid = false;
   }
 
   const frontmatter = [
@@ -450,14 +467,26 @@ function validateReleaseEvidence(target) {
   const matrix = readJson(record.matrix);
   if (matrix === JSON_READ_FAILURE || !isObject(matrix)) return;
   const floors = isObject(matrix.clientFloors) ? matrix.clientFloors : {};
+  const hostFloors = isObject(matrix.hostFloors) ? matrix.hostFloors : {};
   const bindings = Array.isArray(matrix.rootBindings) ? matrix.rootBindings : [];
   record.pairs.forEach((pair, index) => {
     const at = `pairs[${index}] (${pair.harness})`;
-    if (!Object.prototype.hasOwnProperty.call(floors, pair.client)) report(target, `${at}.client '${pair.client}' is not a client in ${record.matrix}`);
-    else if (pair.floor !== floors[pair.client]) report(target, `${at}.floor '${pair.floor}' differs from ${record.matrix} clientFloors.${pair.client} '${floors[pair.client]}'`);
+    if (Object.prototype.hasOwnProperty.call(floors, pair.client)) {
+      if (pair.floor !== floors[pair.client]) report(target, `${at}.floor '${pair.floor}' differs from ${record.matrix} clientFloors.${pair.client} '${floors[pair.client]}'`);
+    } else if (Object.prototype.hasOwnProperty.call(hostFloors, pair.client)) {
+      const hostFloor = hostFloors[pair.client]?.floor;
+      if (pair.floor !== hostFloor) report(target, `${at}.floor '${pair.floor}' differs from ${record.matrix} hostFloors.${pair.client}.floor '${hostFloor}'`);
+    } else {
+      report(target, `${at}.client '${pair.client}' is not a client in ${record.matrix}`);
+    }
     if (pair.e1.entry !== pair.client) report(target, `${at}.e1.entry '${pair.e1.entry}' must equal client '${pair.client}'`);
     const binding = bindings.find((item) => isObject(item) && typeof item.id === "string" && item.id.startsWith(`${pair.client}-`));
-    if (!binding || pair.e2.binding !== binding.id) report(target, `${at}.e2.binding '${pair.e2.binding}' differs from the ${record.matrix} rootBindings id for ${pair.client}`);
+    if (binding) {
+      if (pair.e2.binding !== binding.id) report(target, `${at}.e2.binding '${pair.e2.binding}' differs from the ${record.matrix} rootBindings id for ${pair.client}`);
+    } else if (pair.client === "hc" || pair.client === "orca") {
+      const expectedHostBinding = `${pair.client}-host/v1`;
+      if (pair.e2.binding !== expectedHostBinding) report(target, `${at}.e2.binding '${pair.e2.binding}' differs from expected host binding '${expectedHostBinding}'`);
+    }
     if (pair.e4.d_lifecycle.priorCandidate === record.candidate) report(target, `${at}.e4.d_lifecycle.priorCandidate must differ from candidate`);
   });
   if (record.ownerAck.candidate !== record.candidate) report(target, "ownerAck.candidate must equal candidate");
@@ -466,53 +495,64 @@ function validateReleaseEvidence(target) {
 // Release-evidence record plus its correction chain (spec 10 Corrections).
 function validateReleaseEvidenceChain(ajv, markInvalid) {
   const dir = ".docs/evaluations/release-evidence/";
-  const original = `${dir}v0.2.0.json`;
-  const corrections = [];
-  for (const relative of files) {
-    const match = relative.startsWith(dir) && relative.slice(dir.length).match(/^v0\.2\.0\.corr([0-9]+)\.json$/);
-    if (match) corrections.push({ relative, n: Number(match[1]) });
-  }
-  corrections.sort((left, right) => left.n - right.n);
-  const originalPresent = safeNode(original, { missing: false, regularFile: true });
-  if (!originalPresent && !corrections.length) return;
-  if (!originalPresent) {
-    report(corrections[0].relative, `correction record requires ${original}`);
-    markInvalid();
-  }
-  const chain = [];
-  if (originalPresent) chain.push({ relative: original, n: 0 });
-  corrections.forEach((entry, index) => {
-    if (entry.n !== index + 1) {
-      report(entry.relative, `correction numbers must run 1..N without gaps or leading zeros (expected corr${index + 1})`);
-      markInvalid();
+  const releasesToCheck = releaseVersion ? [releaseVersion] : ["0.2.0", "0.3.0"];
+  for (const ver of releasesToCheck) {
+    const original = `${dir}v${ver}.json`;
+    const originalPresent = safeNode(original, { missing: false, regularFile: true });
+    const corrections = [];
+    const escapedVer = ver.replace(/\./g, "\\.");
+    const corrPattern = new RegExp(`^v${escapedVer}\\.corr([0-9]+)\\.json$`);
+    for (const relative of files) {
+      const match = relative.startsWith(dir) && relative.slice(dir.length).match(corrPattern);
+      if (match) corrections.push({ relative, n: Number(match[1]) });
     }
-  });
-  chain.push(...corrections);
-  const schemaPath = "plugins/loom/schemas/loom-release-evidence-v1.schema.json";
-  const loaded = [];
-  for (const entry of chain) {
-    if (!safeNode(entry.relative, { missing: false, regularFile: true })) { markInvalid(); continue; }
-    if (validateJson(entry.relative, schemaPath, ajv)) {
-      validateReleaseEvidence(entry.relative);
-      loaded.push(entry);
-    } else markInvalid();
-  }
-  for (const entry of loaded) {
-    const record = readJson(entry.relative);
-    if (record === JSON_READ_FAILURE) continue;
-    if (entry.n === 0) {
-      if (record.supersedes !== undefined) report(entry.relative, "the original record must not carry supersedes");
+    corrections.sort((left, right) => left.n - right.n);
+    if (!originalPresent && !corrections.length) {
+      if (releaseVersion === ver) {
+        report(original, `release evidence record is required for --release ${ver}`);
+        markInvalid();
+      }
       continue;
     }
-    const predecessor = entry.n === 1 ? original : `${dir}v0.2.0.corr${entry.n - 1}.json`;
-    if (!record.supersedes) { report(entry.relative, `correction must carry supersedes naming ${predecessor}`); continue; }
-    if (record.supersedes.path !== predecessor) report(entry.relative, `supersedes.path '${record.supersedes.path}' must name its immediate predecessor ${predecessor}`);
-    const predecessorNode = safeNode(predecessor, { regularFile: true });
-    if (!predecessorNode) continue;
-    const actual = crypto.createHash("sha256").update(fs.readFileSync(predecessorNode.physical)).digest("hex");
-    if (record.supersedes.sha256 !== actual) report(entry.relative, `supersedes.sha256 does not match the SHA-256 of ${predecessor}`);
-    const base = readJson(original);
-    if (base !== JSON_READ_FAILURE && isObject(base) && base.candidate !== record.candidate) report(entry.relative, `a correction never changes the candidate (differs from ${original})`);
+    if (!originalPresent) {
+      report(corrections[0].relative, `correction record requires ${original}`);
+      markInvalid();
+    }
+    const chain = [];
+    if (originalPresent) chain.push({ relative: original, n: 0 });
+    corrections.forEach((entry, index) => {
+      if (entry.n !== index + 1) {
+        report(entry.relative, `correction numbers must run 1..N without gaps or leading zeros (expected corr${index + 1})`);
+        markInvalid();
+      }
+    });
+    chain.push(...corrections);
+    const schemaPath = "plugins/loom/schemas/loom-release-evidence-v1.schema.json";
+    const loaded = [];
+    for (const entry of chain) {
+      if (!safeNode(entry.relative, { missing: false, regularFile: true })) { markInvalid(); continue; }
+      if (validateJson(entry.relative, schemaPath, ajv)) {
+        validateReleaseEvidence(entry.relative);
+        loaded.push(entry);
+      } else markInvalid();
+    }
+    for (const entry of loaded) {
+      const record = readJson(entry.relative);
+      if (record === JSON_READ_FAILURE) continue;
+      if (entry.n === 0) {
+        if (record.supersedes !== undefined) report(entry.relative, "the original record must not carry supersedes");
+        continue;
+      }
+      const predecessor = entry.n === 1 ? original : `${dir}v${ver}.corr${entry.n - 1}.json`;
+      if (!record.supersedes) { report(entry.relative, `correction must carry supersedes naming ${predecessor}`); continue; }
+      if (record.supersedes.path !== predecessor) report(entry.relative, `supersedes.path '${record.supersedes.path}' must name its immediate predecessor ${predecessor}`);
+      const predecessorNode = safeNode(predecessor, { regularFile: true });
+      if (!predecessorNode) continue;
+      const actual = crypto.createHash("sha256").update(fs.readFileSync(predecessorNode.physical)).digest("hex");
+      if (record.supersedes.sha256 !== actual) report(entry.relative, `supersedes.sha256 does not match the SHA-256 of ${predecessor}`);
+      const base = readJson(original);
+      if (base !== JSON_READ_FAILURE && isObject(base) && base.candidate !== record.candidate) report(entry.relative, `a correction never changes the candidate (differs from ${original})`);
+    }
   }
 }
 
@@ -573,7 +613,7 @@ function semanticMetadata() {
   ];
   const roots = rootPaths.map(readJson);
   for (const [relative, value] of [["plugins/loom/.claude-plugin/plugin.json", claudeManifest], ["plugins/loom/.codex-plugin/plugin.json", codexManifest]]) {
-    if (value && (value.name !== "loom" || value.version !== "0.2.0" || value.license !== "MIT" || value.repository !== "https://github.com/craigeous/loom")) {
+    if (value && (value.name !== "loom" || value.version !== "0.3.0" || value.license !== "MIT" || value.repository !== "https://github.com/craigeous/loom")) {
       report(relative, "product name, exact SemVer, license, or repository identity drift");
     }
   }
@@ -589,7 +629,7 @@ function semanticMetadata() {
     if (!entry) report(relative, "catalog is missing loom client manifest");
     else {
       if (entry.source !== "./plugins/loom") report(relative, "catalog source identity drift");
-      if (requireVersion && entry.version !== "0.2.0") report(relative, "catalog release provenance drift");
+      if (requireVersion && entry.version !== "0.3.0") report(relative, "catalog release provenance drift");
       validateCatalogSource(relative, entry.source);
     }
   }
@@ -1256,7 +1296,7 @@ function validateEvaluations(markdownParser) {
   const events = new Map();
   for (const relative of files.filter((file) => file.startsWith(".docs/evaluations/"))) {
     const name = relative.slice(".docs/evaluations/".length);
-    if (/^release-evidence\/v0\.2\.0(?:\.corr[0-9]+)?\.json$/.test(name)) continue;
+    if (/^release-evidence\/v0\.[23]\.0(?:\.corr[0-9]+)?\.json$/.test(name)) continue;
     if (name.includes("/")) { ruleReport(relative, "eval-name", "unexpected nested path under .docs/evaluations"); continue; }
     if (name === "README.md" || name === "macos-dual-client-dogfood-evidence.json") continue;
     if (/^.+-(?:review-findings|acceptance)\.md$/.test(name)) continue;
@@ -1468,8 +1508,10 @@ function validatePackaging() {
     outsideFence.push(false);
     if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && marker[2].trim() === "") fence = null;
   }
-  const headings = lines.map((line, index) => (outsideFence[index] && line === "## [0.2.0]" ? index : -1)).filter((index) => index >= 0);
-  if (headings.length !== 1) { report("CHANGELOG.md", `must contain exactly one '## [0.2.0]' heading (found ${headings.length})`); return; }
+  const headings030 = lines.map((line, index) => (outsideFence[index] && line === "## [0.3.0]" ? index : -1)).filter((index) => index >= 0);
+  const targetHeading = (releaseVersion === "0.3.0" || headings030.length > 0) ? "## [0.3.0]" : "## [0.2.0]";
+  const headings = lines.map((line, index) => (outsideFence[index] && line === targetHeading ? index : -1)).filter((index) => index >= 0);
+  if (headings.length !== 1) { report("CHANGELOG.md", `must contain exactly one '${targetHeading}' heading (found ${headings.length})`); return; }
   const section = [];
   for (let index = headings[0] + 1; index < lines.length; index++) {
     if (!outsideFence[index]) continue;
@@ -1477,7 +1519,7 @@ function validatePackaging() {
     section.push(lines[index]);
   }
   if (!section.some((line) => /^\s*(?:[-*+]|\d+[.)])\s+\S/.test(line))) {
-    report("CHANGELOG.md", "'## [0.2.0]' section must contain at least one nonblank Markdown list item");
+    report("CHANGELOG.md", `'${targetHeading}' section must contain at least one nonblank Markdown list item`);
   }
 }
 

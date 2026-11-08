@@ -6,6 +6,6 @@
   "properties": {
     "name": { "const": "loom" }, "description": { "type": "string", "minLength": 1 },
     "owner": { "type": "object", "additionalProperties": false, "required": ["name", "email"], "properties": { "name": { "type": "string", "minLength": 1 }, "email": { "type": "string", "minLength": 3 } } },
-    "plugins": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["name", "source", "description", "version", "category"], "properties": { "name": { "const": "loom" }, "source": { "const": "./plugins/loom" }, "description": { "type": "string", "minLength": 1 }, "version": { "const": "0.2.0" }, "category": { "type": "string", "minLength": 1 } } } }
+    "plugins": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["name", "source", "description", "version", "category"], "properties": { "name": { "const": "loom" }, "source": { "const": "./plugins/loom" }, "description": { "type": "string", "minLength": 1 }, "version": { "enum": ["0.2.0", "0.3.0"] }, "category": { "type": "string", "minLength": 1 } } } }
   }
 }

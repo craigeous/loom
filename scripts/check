@@ -276,7 +276,7 @@ stage "toolchain contract and pinned digests"
 for command_name in bash curl git id jq stat tar awk; do require_command "$command_name"; done
 jq -e '
   . == {
-    contract:"loom-check-toolchain/v1", productVersion:"0.2.0",
+    contract:"loom-check-toolchain/v1", productVersion:"0.3.0",
     tools:{shfmt:"3.13.1",shellcheck:"0.11.0",bats:"1.13.0",claude:"2.1.216",node:"22.17.0",ajv:"8.17.1","ajv-formats":"3.0.1",yaml:"2.8.0","markdown-it":"14.1.0","github-slugger":"2.0.0"},
     runtimeFloors:{bash:"3.2",git:"2.34",jq:"1.6"},
     actions:{checkout:"11bd71901bbe5b1630ceea73d27597364c9af683"},
