@@ -1,15 +1,21 @@
-# Evaluation: Admit Antigravity, Orca, and Herdr (hc) to v0.3.0 Scope and Settle Evaluator Governance
+# Plan Evaluation: 0034-admit-antigravity-orca-and-herdr-to-v0.3-scope
 
-Status: Evaluated
+Artifact: [0034-admit-antigravity-orca-and-herdr-to-v0.3-scope](../ADR/0034-admit-antigravity-orca-and-herdr-to-v0.3-scope.md)
+Commit: bd5af10
 Round: 0
 Verdict: FAIL
+Reviewed against: [ADR 0031](../ADR/0031-herdr-as-an-hc-driven-client.md), [ADR 0032](../ADR/0032-release-client-mapping-and-retirement-of-dogfood-tier.md), [ADR 0033](../ADR/0033-narrow-v0.3-scope-and-retire-macos-checkpoint-tooling.md), [hc runtime reference](../research/2026-11-01-hc-agent-runtime-reference.md), and [plan-eval rubric](../../plugins/loom/skills/loom-playbook/references/plan-eval-rubric.md).
+
+## Summary
+
+The evaluation found major defects in the admission evidence, evaluator isolation, matrix and rotation directives, and supersession language. Specifically: admission prerequisites were missing verified CLI research and work lists; the evaluator isolation boundary lacked enforcement across a shared user account; the rotation rule treated client names as model families; and ADR 0031 §5 was misstated.
 
 ## Findings
 
-- **MAJOR** Admission prerequisites not satisfied: The admission does not satisfy ADR 0033 §1's stated prerequisites: it cites no verified CLI research for Orca or Antigravity, does not cite or address each harness's ADR 0032 §6 work list, and gives no E1–E5 plan per harness. The brief live-proof slice and reference to E1–E5 do not establish those plans.
-- **MAJOR** Evaluator isolation boundary across shared user account: Delegating to a CLI in a 0700 workspace does not itself prevent an evaluator under the same user account from accessing the hc core and author terminals. The runtime reference and ADR 0031 §5 expressly identify that exposure, so the claim that blindness is cryptographically and mechanically preserved is unsupported and the proposed separation lacks an enforceable boundary.
-- **MAJOR** Matrix bindings and actual model family rotation: The matrix decision lists version floors but does not specify the actual client, host, root or profile bindings needed for the admitted harnesses. Its rotation rule treats client names as model families and permits either evaluator for Antigravity without determining its author's actual model family; this cannot guarantee the stated cross-family rule.
-- **MAJOR** Misstatement of ADR 0031 §5 and surviving restrictions: The supersession description misstates ADR 0031 §5 as an absolute ban on Herdr workflows. That ADR already permits hc as an interactive host for non-evaluator roles subject to gates and prohibits hc evaluator roles. The new ADR does not clearly identify which existing evaluator restriction or live-probe gates change and which remain in force.
+- [MAJOR] Admission prerequisites not satisfied: The admission does not satisfy ADR 0033 §1's stated prerequisites: it cites no verified CLI research for Orca or Antigravity, does not cite or address each harness's ADR 0032 §6 work list, and gives no E1–E5 plan per harness. The brief live-proof slice and reference to E1–E5 do not establish those plans.
+- [MAJOR] Evaluator isolation boundary across shared user account: Delegating to a CLI in a 0700 workspace does not itself prevent an evaluator under the same user account from accessing the hc core and author terminals. The runtime reference and ADR 0031 §5 expressly identify that exposure, so the claim that blindness is cryptographically and mechanically preserved is unsupported and the proposed separation lacks an enforceable boundary.
+- [MAJOR] Matrix bindings and actual model family rotation: The matrix decision lists version floors but does not specify the actual client, host, root or profile bindings needed for the admitted harnesses. Its rotation rule treats client names as model families and permits either evaluator for Antigravity without determining its author's actual model family; this cannot guarantee the stated cross-family rule.
+- [MAJOR] Misstatement of ADR 0031 §5 and surviving restrictions: The supersession description misstates ADR 0031 §5 as an absolute ban on Herdr workflows. That ADR already permits hc as an interactive host for non-evaluator roles subject to gates and prohibits hc evaluator roles. The new ADR does not clearly identify which existing evaluator restriction or live-probe gates change and which remain in force.
 
 ## Required changes
 
@@ -21,7 +27,3 @@ Verdict: FAIL
 ## Notes
 
 - The ADR cites all four requested authorities, pins five floors, explicitly supersedes ADR 0033 §1 deferrals, and gives a four-slice order and release consequences.
-
-## Gate rerun evidence
-
-Evidence mode: not applicable: no gate rerun for plan evaluations
