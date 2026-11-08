@@ -2,7 +2,7 @@
 
 Verdict: FAIL
 Round: 1
-Commit: 0d87c1f17edb02d8478d59dbec9bc82d02c813be
+Commit: 0d87c1f17edb4d83a967ad941a53213be1b114e2
 Reviewed against: ADR 0032 §6, ADR 0034 §1, §2, §5, specs 07 and 10, research reference, and the plan-evaluation rubric.
 
 ## Summary
