@@ -23,9 +23,11 @@ evaluation governance must track the **underlying model provider family**, not s
   - `google`: `antigravity` model matching `gemini-*`.
   - `oss`: `antigravity` model matching `gpt-oss-*`.
 - Concrete model resolution: Every Antigravity launch resolves to a concrete model ID from the catalog; aliases (`flash`, `inherit`, `pro`) never map directly to a family and must resolve to concrete models or fail closed (`exit 2`).
-- Fail-closed deterministic resolution:
+- Evidence recording & propagation:
+  - When an author role (`planner`, `developer`) launches, its emitted `loom-role-launch/v1` descriptor records its concrete model (`.claude.selector`, `.codex.model`, `.antigravity.model`).
+  - Evaluator launches (`plan-evaluator`, `code-evaluator`) receive `--author-client <client>` and `--author-model <model>`.
   - For `claude` author: `authorFamily=anthropic`. For `codex` author: `authorFamily=openai`.
-  - For `antigravity` author: author MUST supply concrete `--author-model <id>` (via flag or routing file). If missing or unmapped, fail closed (`exit 2`) with `cannot deterministically resolve author model family: multi-family author client requires concrete --author-model`.
+  - For `antigravity` author: author MUST supply concrete `--author-model <id>`. If missing or an unresolved alias, fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
   - Evaluator family is deterministically resolved from its concrete model; unmapped models fail closed (`exit 2`).
   - If `authorFamily == evaluatorFamily`: fail closed (`exit 2`) with `cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)`.
 - Cross-family rotation rules:
@@ -36,7 +38,13 @@ evaluation governance must track the **underlying model provider family**, not s
   - Author `antigravity` with OpenAI (`openai`) -> evaluator `claude` (never `codex`).
 
 **Registration decision.** Antigravity registration belongs exclusively to **v0.3.0**.
-The v0.2.0 baseline file set (`plugins/loom/adapters/compatibility/v0.2.0.json`, `plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json`, `claude-manifest.json`, `codex-manifest.json`, `claude-plugin-root-v1.json`, `codex-skill-source-v1.json`) is mechanically verified byte-identical to tagged release `v0.2.0` (`git show v0.2.0:<path>`).
+The v0.2.0 baseline file set is mechanically verified byte-identical against tagged release `v0.2.0` (`git show v0.2.0:<path>`):
+1. `plugins/loom/adapters/compatibility/v0.2.0.json`
+2. `plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json`
+3. `plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json`
+4. `plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json`
+5. `plugins/loom/adapters/roots/claude-plugin-root-v1.json`
+6. `plugins/loom/adapters/roots/codex-skill-source-v1.json`
 
 ## Verified Antigravity CLI 1.4.12 Behaviors & Catalog
 
@@ -59,7 +67,10 @@ Documented in `../research/2026-11-08-orca-and-antigravity-runtime-reference.md`
    - `clientFloors`: add `antigravity: { "type": "string" }`.
    - `profiles[].items.properties`: add `antigravity: { "type": "object", "required": ["model"], "properties": { "model": { "type": "string" } }, "additionalProperties": false }`.
 3. Update `plugins/loom/schemas/loom-role-launch-v1.schema.json`:
-   - Add optional string properties `authorFamily` and `evaluatorFamily` (enum: `["anthropic", "openai", "google", "oss"]`) to all three client variants (`claude`, `codex`, `antigravity`).
+   - In all three variants (`claude`, `codex`, `antigravity`), add top-level optional properties:
+     `authorFamily` (enum: `["anthropic", "openai", "google", "oss"]`) and `evaluatorFamily` (enum: `["anthropic", "openai", "google", "oss"]`).
+   - Required fields remain: `["schema", "client", "role", "profile", "coldId", "cold", "delegation", "permissions", "<client>"]`.
+   - Additive fields (`authorClient`, `authorFamily`, `evaluatorFamily`, `crossFamilyVerified`) are emitted when cross-family verification passes, preserving backwards compatibility for all consumers.
 4. Re-pin schema digests in `scripts/check-toolchain.json`.
 
 ### Step 2: v0.3.0 Matrix, Root Descriptor & Release Fixture
@@ -84,14 +95,15 @@ In `plugins/loom/bin/loom-launch-role`:
      - `gpt-6*` | `gpt-5.6*` | `openai*`: return `openai`.
      - `gemini-*`: return `google`.
      - `gpt-oss-*`: return `oss`.
-     - Aliases `flash` | `inherit` | `pro` must resolve via `_agy_pick` or fail closed (never default to a family).
-     - Any unmapped model: return empty / exit 1.
+     - Reject aliases: aliases never pass to `_model_family`; concrete model is required.
+     - Unmapped model: return empty / exit 1.
 2. In role launch for `plan-evaluator` and `code-evaluator`:
    - Require author client: if absent under cross-family requirement, fail closed (`exit 2`).
    - Resolve `authorFamily`:
      - If `author_client` is `claude`: `authorFamily=anthropic`.
      - If `author_client` is `codex`: `authorFamily=openai`.
-     - If `author_client` is `antigravity`: read `--author-model`. If absent or unmapped, fail closed (`exit 2`) with `cannot deterministically resolve author model family: multi-family author client requires concrete --author-model`.
+     - If `author_client` is `antigravity`: read `--author-model`. If absent or an alias (`inherit`, `flash`, `pro`), fail closed (`exit 2`) with `author model must be a concrete model identifier, not an alias`.
+     - `authorFamily=$(_model_family "$author_client" "$author_model")` || `_fail "cannot deterministically resolve author model family: $author_model"`.
    - Resolve `evaluatorFamily`: `_model_family "$client" "$resolved_model"` || `_fail "cannot deterministically resolve evaluator model family: $resolved_model"`.
    - Enforce: `[ "$evaluatorFamily" != "$authorFamily" ] || _fail "cross-family evaluation violation: evaluator model family ($evaluatorFamily) matches author model family ($authorFamily)"`.
    - Emit in launch descriptor: `"authorClient":"$author_client","authorFamily":"$authorFamily","evaluatorFamily":"$evaluatorFamily","crossFamilyVerified":true`.
@@ -113,9 +125,9 @@ In `scripts/validate-repository.mjs`:
    - Cross-family rejection: `antigravity` running Claude model evaluating `claude` author fails closed with family violation.
    - Cross-family acceptance: `antigravity` running Gemini model evaluating `claude` author succeeds.
    - Multi-family author fail-closed: `antigravity` author without `--author-model` fails closed (exit 2).
+   - Alias rejection: `--author-model inherit` fails closed (exit 2).
    - Unknown author model fail-closed: `--author-model unknown-model` fails closed (exit 2).
-   - Alias resolution fail-closed: unresolved alias fails closed (exit 2).
-   - Same-family rejection: `antigravity` (Gemini) evaluating `antigravity` (Gemini) fails closed.
+   - Alias resolution same-family rejection: author Antigravity resolving to Claude model evaluated by Antigravity resolving to Claude model fails closed.
    - Dynamic discovery cache: verifies hit, 24h TTL expiration, and atomic 0600 file rewrite.
    - Version refusal: below-floor `agy` (< 1.4.12) or unknown version fails closed (exit 2).
 2. `scripts/tests/repository-validation.bats`:
@@ -128,13 +140,14 @@ In `scripts/validate-repository.mjs`:
 
 | Round | Phase | Verdict | Key Findings & Resolution |
 |---|---|---|---|
+| 2 | plan | FAIL | Author model propagation lacked concrete evidence capture definition; launch schema lacked complete 3-variant contract and consumer compatibility; threat-model overstated cognitive independence; baseline paths not fully specified. Resolved in Round 3 by specifying author descriptor capture and mandatory concrete `--author-model`, rejecting aliases in family extraction, detailing the complete 3-variant `loom-role-launch-v1` schema with additive compatibility, enumerating the exact 6-file v0.2.0 repository paths for git show validation, and narrowing the threat-model claim to provider-family classification separation. |
 | 1 | plan | FAIL | Step 3 mapped aliases to Google without establishing concrete model; `--author-family` permitted unverified claims; launch schema shape not detailed for all variants; v0.2.0 baseline and fixture comparisons inconsistent; threat-model overstated cognitive independence. Resolved in Round 2 by requiring concrete model resolution before family extraction, eliminating unverified `--author-family` in favor of mandatory concrete `--author-model`, defining exact launch schema additions across all three variants, specifying the 6-file v0.2.0 baseline verified against `git show v0.2.0:<path>`, and narrowing the threat-model claim strictly to provider-family separation. |
 | 0 | plan | FAIL | Author family resolution inferred from profile floor on multi-family Antigravity; `scripts/check` gate omitted; dynamic discovery cache and version refusal tests omitted; launch descriptor schema and `allowedHelpers` unspecified; mechanical baseline for v0.2.0 undefined. Resolved in Round 1 by requiring `--author-model` for multi-family author, adding `scripts/check` under Bash 3.2 and 5.3+, specifying descriptor schemas and `allowedHelpers`, adding cache and version refusal tests, and defining mechanical fixture baseline. |
 
 ## Out of Scope & Threat-Model Boundary
 
 - **Out of Scope:** Live E4 proof runs (reserved for Slice 5); editing v0.2.0 files or released tags; executing unstubbed `agy` in automated gates.
-- **Threat-Model Boundary:** Consistent with ADR 0022 and ADR 0034 §2, process isolation does not provide kernel-level sandboxing against malicious same-UID processes. The provider-family invariant enforces model provider family separation (`anthropic` vs `openai` vs `google` vs `oss`) ensuring distinct model weights and API endpoints across author and evaluator roles.
+- **Threat-Model Boundary:** Consistent with ADR 0022 and ADR 0034 §2, process isolation does not provide kernel-level sandboxing against malicious same-UID processes. The provider-family invariant enforces model provider family classification separation (`anthropic` vs `openai` vs `google` vs `oss`). It does not assert or guarantee independent physical infrastructure, non-overlapping dataset sources, or weight divergence beyond vendor classification boundaries.
 
 ## Verification Commands
 
