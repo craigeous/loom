@@ -1,0 +1,14 @@
+{
+  "schema": "loom-host-binding-v1",
+  "id": "hc-host/v1",
+  "host": "herdr",
+  "controlCli": "hc",
+  "floor": "0.1.16",
+  "helper": "loom-host-hc",
+  "helperPath": "bin/loom-host-hc",
+  "helperMustBeRegularFile": true,
+  "helperMustBeExecutable": true,
+  "helperDirectoryMustBeDirectChild": true,
+  "reachableVerbs": ["get", "wait", "events", "kill", "rm"],
+  "launch": "unsupported"
+}

@@ -9,7 +9,22 @@
     "product": { "const": "loom" },
     "version": { "type": "string", "pattern": "^0\\.[23]\\.0$" },
     "clientFloors": { "type": "object", "additionalProperties": false, "required": ["claude", "codex"], "properties": { "claude": { "const": "2.1.216" }, "codex": { "const": "0.144.6" } } },
-    "workflows": { "type": "array", "uniqueItems": true, "items": { "enum": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init"] }, "minItems": 8, "maxItems": 8 },
+    "hostFloors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["floor", "helper"],
+          "properties": {
+            "floor": { "const": "0.1.16" },
+            "helper": { "const": "loom-host-hc" }
+          }
+        }
+      }
+    },
+    "workflows": { "type": "array", "uniqueItems": true, "items": { "enum": ["run", "research", "plan", "eval-plan", "develop", "eval-code", "status", "init", "doctor"] }, "minItems": 8, "maxItems": 9 },
     "roles": { "type": "array", "uniqueItems": true, "items": { "enum": ["researcher", "planner", "plan-evaluator", "developer", "code-evaluator"] }, "minItems": 5, "maxItems": 5 },
     "hookWireFixtureVersion": { "const": "hook-wire-v1" },
     "rootBindings": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "type": "object", "additionalProperties": false, "required": ["id", "path"], "properties": { "id": { "enum": ["claude-plugin-root/v1", "codex-skill-source/v1"] }, "path": { "type": "string", "pattern": "^plugins/loom/adapters/roots/[a-z0-9-]+\\.json$" } } } },

@@ -2946,3 +2946,102 @@ install_correction() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"v0.2.0.corr1.json"*"must carry supersedes"* ]]
 }
+
+@test "host binding: valid tree passes and v0.2.0 fixtures/roots are byte-unchanged against HEAD" {
+    make_metadata_root
+    metadata
+    [ "$status" -eq 0 ]
+
+    # Regression assertion: v0.2.0 fixtures and root bindings are byte-unchanged against HEAD
+    for path in \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-manifest.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-marketplace.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-manifest.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-marketplace.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/compatibility.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/claude-root.json \
+        plugins/loom/adapters/fixtures/v0.2.0/metadata/codex-root.json \
+        plugins/loom/adapters/compatibility/v0.2.0.json \
+        plugins/loom/adapters/roots/claude-plugin-root-v1.json \
+        plugins/loom/adapters/roots/codex-skill-source-v1.json; do
+        head_bytes="$(git -C "$REPOSITORY_ROOT" show "HEAD:$path")"
+        curr_bytes="$(cat "$REPOSITORY_ROOT/$path")"
+        [ "$head_bytes" = "$curr_bytes" ]
+    done
+}
+
+@test "host binding: missing or wrong hostFloors in v0.3.0.json is reported" {
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json 'del(.hostFloors)'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing hostFloors.hc entry"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.hostFloors.hc.floor = "0.1.15"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hostFloors.hc.floor"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/compatibility/v0.3.0.json '.hostFloors.hc.helper = "wrong-helper"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hostFloors.hc.helper"* ]]
+}
+
+@test "host binding: unexpected files in hosts directory or wrong floor are reported" {
+    make_metadata_root
+    cp "$TEST_ROOT/plugins/loom/adapters/hosts/hc-host-v1.json" "$TEST_ROOT/plugins/loom/adapters/hosts/extra.json"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hosts/ directory must hold exactly"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/hosts/hc-host-v1.json '.floor = "0.1.15"'
+    metadata
+    [ "$status" -eq 1 ]
+}
+
+@test "host binding: fixture drifting from live binding or missing fixture is reported" {
+    make_metadata_root
+    mutate_json plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json '.floor = "0.1.17"'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"release fixture differs from"* ]]
+
+    make_metadata_root
+    rm -f "$TEST_ROOT/plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing v0.3.0 host-hc metadata fixture"* ]]
+}
+
+@test "host binding: missing or non-executable loom-host-hc is reported" {
+    make_metadata_root
+    rm -f "$TEST_ROOT/plugins/loom/bin/loom-host-hc"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"missing regular executable helper file"* ]]
+
+    make_metadata_root
+    chmod 644 "$TEST_ROOT/plugins/loom/bin/loom-host-hc"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"helper is not executable"* ]]
+}
+
+@test "host binding: loom-host-hc in ALLOWED_HELPERS or root allowedHelpers is reported" {
+    make_metadata_root
+    sed -i.bak 's/ALLOWED_HELPERS=(/ALLOWED_HELPERS=(loom-host-hc /' "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper"
+    rm -f "$TEST_ROOT/plugins/loom/bin/loom-resolve-helper.bak"
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"loom-host-hc must not appear in ALLOWED_HELPERS"* ]]
+
+    make_metadata_root
+    mutate_json plugins/loom/adapters/roots/claude-plugin-root-v1.json '.allowedHelpers += ["loom-host-hc"]'
+    metadata
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"loom-host-hc must not appear in root allowedHelpers"* ]]
+}

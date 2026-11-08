@@ -1,0 +1,172 @@
+#!/bin/bash
+# loom-host-hc — observation, lifecycle, and cleanup host adapter for Herdr (hc)
+# Bash 3.2 compatible.
+
+set -u
+
+LOOM_HC_BIN="${LOOM_HC_BIN:-hc}"
+
+_fail() {
+    printf 'loom-host-hc: %s\n' "$1" >&2
+    exit 2
+}
+
+_usage() {
+    printf 'usage: loom-host-hc <launch|status|wait|events|end> ...\n' >&2
+    exit 1
+}
+
+_validate_name() {
+    local name="${1:-}"
+    if [ -z "$name" ]; then
+        return 1
+    fi
+    case "$name" in
+    -*) return 1 ;;
+    esac
+    if printf '%s' "$name" | grep -Eq '^[a-z0-9][a-z0-9_-]{0,31}$'; then
+        return 0
+    fi
+    return 1
+}
+
+[ "$#" -ge 1 ] || _usage
+
+cmd="$1"
+shift
+
+case "$cmd" in
+launch)
+    printf 'unsupported: role launch on hc requires the owner-recorded probes (ADR 0031 section 6)\n' >&2
+    exit 2
+    ;;
+status)
+    [ "$#" -eq 1 ] || _usage
+    name="$1"
+    _validate_name "$name" || _fail "invalid terminal name: '$name'"
+    raw_out=""
+    set +e
+    raw_out=$("$LOOM_HC_BIN" get "$name" --json 2>/dev/null)
+    status_rc=$?
+    set -e
+    if [ "$status_rc" -eq 3 ]; then
+        printf 'not_found\n'
+        exit 2
+    elif [ "$status_rc" -ne 0 ]; then
+        _fail "hc get exited with status $status_rc"
+    fi
+    printf '%s\n' "$raw_out" | jq -c '{
+            name: (if has("name") then .name else null end),
+            state: (if has("state") then .state else null end),
+            status: (if has("status") then .status else null end),
+            reported: (if has("reported") then .reported else null end),
+            exitCode: (if has("exit_code") then .exit_code else null end)
+        }' || _fail "failed to parse hc get JSON"
+    exit 0
+    ;;
+wait)
+    [ "$#" -ge 1 ] || _usage
+    name="$1"
+    shift
+    _validate_name "$name" || _fail "invalid terminal name: '$name'"
+    timeout=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --timeout)
+            [ "$#" -ge 2 ] || _usage
+            timeout="$2"
+            shift 2
+            ;;
+        --timeout=*)
+            timeout="${1#--timeout=}"
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+    if [ -z "$timeout" ]; then
+        _usage
+    fi
+    if ! printf '%s' "$timeout" | grep -Eq '^[1-9][0-9]*$'; then
+        _usage
+    fi
+    if [ "$timeout" -lt 1 ] || [ "$timeout" -gt 3600 ]; then
+        _usage
+    fi
+    set +e
+    "$LOOM_HC_BIN" wait "$name" --timeout "$timeout" >/dev/null 2>&1
+    wait_rc=$?
+    set -e
+    if [ "$wait_rc" -eq 0 ]; then
+        printf 'returned: read the committed artifact\n'
+        exit 0
+    else
+        printf 'degraded: wait did not return (hc exit %d); not completion\n' "$wait_rc"
+        exit 4
+    fi
+    ;;
+events)
+    [ "$#" -ge 1 ] || _usage
+    name="$1"
+    shift
+    _validate_name "$name" || _fail "invalid terminal name: '$name'"
+    lines=500
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --lines)
+            [ "$#" -ge 2 ] || _usage
+            lines="$2"
+            shift 2
+            ;;
+        --lines=*)
+            lines="${1#--lines=}"
+            shift
+            ;;
+        *)
+            _usage
+            ;;
+        esac
+    done
+    if ! printf '%s' "$lines" | grep -Eq '^[1-9][0-9]*$'; then
+        _usage
+    fi
+    if [ "$lines" -lt 1 ] || [ "$lines" -gt 500 ]; then
+        _usage
+    fi
+    "$LOOM_HC_BIN" events --terminal "$name" 2>/dev/null | head -n "$lines"
+    exit 0
+    ;;
+end)
+    [ "$#" -eq 1 ] || _usage
+    name="$1"
+    _validate_name "$name" || _fail "invalid terminal name: '$name'"
+    set +e
+    "$LOOM_HC_BIN" kill "$name" >/dev/null 2>&1
+    kill_rc=$?
+    set -e
+    if [ "$kill_rc" -ne 0 ] && [ "$kill_rc" -ne 11 ]; then
+        _fail "hc kill exited with status $kill_rc"
+    fi
+    set +e
+    "$LOOM_HC_BIN" rm "$name" >/dev/null 2>&1
+    rm_rc=$?
+    set -e
+    if [ "$rm_rc" -ne 0 ]; then
+        _fail "hc rm exited with status $rm_rc"
+    fi
+    set +e
+    "$LOOM_HC_BIN" get "$name" --json >/dev/null 2>&1
+    get_rc=$?
+    set -e
+    if [ "$get_rc" -eq 3 ]; then
+        exit 0
+    else
+        _fail "hc get after rm did not return exit 3 (got $get_rc)"
+    fi
+    ;;
+*)
+    _usage
+    ;;
+esac

@@ -366,7 +366,8 @@ async function validateMetadata() {
     [".agents/plugins/marketplace.json", "scripts/schemas/codex-marketplace-0.144.6.schema.json"],
     ["plugins/loom/adapters/compatibility/v0.2.0.json", "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json"],
     ["plugins/loom/adapters/roots/claude-plugin-root-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
-    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"]
+    ["plugins/loom/adapters/roots/codex-skill-source-v1.json", "plugins/loom/schemas/loom-installed-root-binding-v1.schema.json"],
+    ["plugins/loom/adapters/hosts/hc-host-v1.json", "plugins/loom/schemas/loom-host-binding-v1.schema.json"]
   ];
   const schemaResults = new Map();
   for (const [target, schemaPath] of schemaBindings) {
@@ -436,6 +437,7 @@ async function validateMetadata() {
 
   // Schema-invalid release objects are never passed into semantic validation.
   if (structurallyValid) semanticMetadata();
+  validateHostBinding(ajv);
 }
 
 // Semantic checks the release-evidence schema cannot express (plan: release-conformance-and-evidence-schema).
@@ -656,6 +658,77 @@ function validateCatalogSource(catalogPath, source) {
   if (!node) { report(catalogPath, `catalog source is missing, escaped, or unsafe: ${source}`); return; }
   const expected = safeNode("plugins/loom", { missing: false });
   if (!expected || node.physical !== expected.physical) report(catalogPath, `catalog source resolves to different physical plugin root: ${source}`);
+}
+
+function validateHostBinding(ajv) {
+  const liveBindingPath = "plugins/loom/adapters/hosts/hc-host-v1.json";
+  const fixturePath = "plugins/loom/adapters/fixtures/v0.3.0/metadata/host-hc.json";
+  const v030Path = "plugins/loom/adapters/compatibility/v0.3.0.json";
+  const helperPath = "plugins/loom/bin/loom-host-hc";
+
+  // (a) Validate v0.3.0.json against matrix schema and require hostFloors.hc match
+  validateJson(v030Path, "plugins/loom/schemas/loom-compatibility-matrix-v1.schema.json", ajv);
+  const v030 = readJson(v030Path);
+  const liveBinding = readJson(liveBindingPath);
+  if (!v030 || typeof v030 !== "object" || !v030.hostFloors || !v030.hostFloors.hc) {
+    report(v030Path, "missing hostFloors.hc entry");
+  } else if (liveBinding && typeof liveBinding === "object") {
+    if (v030.hostFloors.hc.floor !== liveBinding.floor) {
+      report(v030Path, `hostFloors.hc.floor '${v030.hostFloors.hc.floor}' does not match host binding floor '${liveBinding.floor}'`);
+    }
+    if (v030.hostFloors.hc.helper !== liveBinding.helper) {
+      report(v030Path, `hostFloors.hc.helper '${v030.hostFloors.hc.helper}' does not match host binding helper '${liveBinding.helper}'`);
+    }
+  }
+
+  // (b) the hosts/ directory holds exactly that one binding file and floor is 0.1.16
+  const hostFiles = files.filter((f) => f.startsWith("plugins/loom/adapters/hosts/"));
+  if (hostFiles.length !== 1 || hostFiles[0] !== liveBindingPath) {
+    report(liveBindingPath, `hosts/ directory must hold exactly '${liveBindingPath}', found [${hostFiles.join(", ")}]`);
+  }
+  if (liveBinding && typeof liveBinding === "object" && liveBinding.floor !== "0.1.16") {
+    report(liveBindingPath, `host binding floor must be '0.1.16', found '${liveBinding.floor}'`);
+  }
+
+  // (c) the live binding and the v0.3.0 fixture are deep-equal
+  const fixtureNode = safeNode(fixturePath, { missing: false, regularFile: true });
+  if (!fixtureNode) {
+    report(fixturePath, "missing v0.3.0 host-hc metadata fixture");
+  } else {
+    validateJson(fixturePath, "plugins/loom/schemas/loom-host-binding-v1.schema.json", ajv);
+    const fixture = readJson(fixturePath);
+    if (liveBinding && fixture && !deepEqual(liveBinding, fixture)) {
+      report(fixturePath, `release fixture differs from ${liveBindingPath}`);
+    }
+  }
+
+  // (d) bin/loom-host-hc exists as a regular, executable file
+  const helperNode = safeNode(helperPath, { missing: false, regularFile: true });
+  if (!helperNode) {
+    report(helperPath, "missing regular executable helper file");
+  } else {
+    try {
+      fs.accessSync(helperNode.physical, fs.constants.X_OK);
+    } catch {
+      report(helperPath, "helper is not executable");
+    }
+  }
+
+  // (e) loom-host-hc appears in neither ALLOWED_HELPERS of loom-resolve-helper nor any root allowedHelpers
+  const resolverText = readText("plugins/loom/bin/loom-resolve-helper");
+  if (resolverText !== null && /ALLOWED_HELPERS=\([^)]*loom-host-hc[^)]*\)/.test(resolverText)) {
+    report("plugins/loom/bin/loom-resolve-helper", "loom-host-hc must not appear in ALLOWED_HELPERS");
+  }
+  const rootPaths = [
+    "plugins/loom/adapters/roots/claude-plugin-root-v1.json",
+    "plugins/loom/adapters/roots/codex-skill-source-v1.json"
+  ];
+  for (const rootPath of rootPaths) {
+    const rootJson = readJson(rootPath);
+    if (rootJson && Array.isArray(rootJson.allowedHelpers) && rootJson.allowedHelpers.includes("loom-host-hc")) {
+      report(rootPath, "loom-host-hc must not appear in root allowedHelpers");
+    }
+  }
 }
 
 async function validateLinks() {
