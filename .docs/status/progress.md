@@ -4,9 +4,10 @@ Status: Living
 
 The status source of truth and decision index for building loom.
 
-Current milestone: M9
+Current milestone: M10
 
 ## Action history
+- 2026-11-08 — Advanced milestone marker to M10 (Cross-Platform Conformance & Production Readiness) following v0.3.0 release publication; M9 closed complete.
 - 2026-11-08 — `v0.3.0` released: candidate commit `75762af01ea9a7803bb17c27803f360fe42045f0` tagged `v0.3.0` and release evidence commit `e9b9a58` (`.docs/evaluations/release-evidence/v0.3.0.json`, ADR 0032 E1–E5, ADR 0034) committed to `main`. Live conformance proven across all five admitted harnesses on macOS 14+ Apple silicon (Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr host).
 - 2026-11-08 — M9 / v0.3.0 Slice 5 `v0.3.0-live-proof` (release conformance, schema amendment to `loom-release-evidence-v1`, repository validator `--release` option and multi-release chain validation, product version bump to 0.3.0 across manifests and toolchain contracts, launcher default release, CHANGELOG `## [0.3.0]`, v0.3.0 metadata fixtures, and offline Bats test suites) landed; passed plan evaluation Round 0 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
 - 2026-11-08 — M9 / v0.3.0 Slice 4 `antigravity-model-adapter` (Antigravity model adapter, model-family extraction and cross-family invariant enforcement, v0.3.0 matrix and root registration, and offline Bats suite) landed; passed plan evaluation Round 8 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
@@ -39,7 +40,10 @@ Current milestone: M9
 
 ## Current state
 
-- **Current activity (2026-11-08) — `v0.3.0` Released and Published (ADR 0032 E1–E5, ADR 0034):**
+- **Current activity (2026-11-08) — M10 Transition & Scope Definition:**
+  Milestone marker advanced to M10 (Cross-Platform Conformance & Production Readiness) following v0.3.0 release publication and tag push to `origin`. Live conformance proven across all five harnesses on macOS 14+ Apple silicon. Transitioning to M10: drafting M10 problem document / research note, candidate slice selection, and first slice plan.
+
+- **Prior activity (2026-11-08) — `v0.3.0` Released and Published (ADR 0032 E1–E5, ADR 0034):**
   Candidate commit `75762af01ea9a7803bb17c27803f360fe42045f0` tagged `v0.3.0` and release evidence commit `e9b9a58` (`.docs/evaluations/release-evidence/v0.3.0.json`) committed to `main`. Live conformance proven across all five harnesses: Claude Code CLI (2.1.216 floor), Codex CLI (0.144.6 floor), Antigravity CLI (1.4.12 floor), Orca host (1.4.250 floor with delegated cold POSIX evaluators per ADR 0034 §2), and Herdr (`hc`) host (0.1.16 floor with delegated cold POSIX evaluators per ADR 0034 §2). Dual-platform gate verified under macOS Bash 3.2.57 and Bash 5.3.9; all repository validations passing.
 
 - **Prior activity (2026-11-08) — `v0.3.0-live-proof` Landed (M9 / v0.3.0 Slice 5):**

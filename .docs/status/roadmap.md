@@ -5,7 +5,7 @@ Status: Living
 Milestone order for building loom. "What's next and why"; detailed status in
 `progress.md`, restart context in `handoff.md`.
 
-Current milestone: M9
+Current milestone: M10
 
 ## Repository improvement program (2026)
 
@@ -38,7 +38,7 @@ Current milestone: M9
   `[x] packaging-conformance`; `[x] readme-refresh`.
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
-- [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+- [x] **M9 — Client compatibility: Herdr and native app integration** (complete):
   - Landed 2026-11-08: v0.3.0 released; release tag `v0.3.0` and evidence record committed to `main` (ADR 0032 E1–E5, ADR 0034). Live conformance proven across all five admitted harnesses on macOS 14+ Apple silicon: Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr (`hc`) host.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 5: `v0.3.0-live-proof` (release conformance, schema amendment to `loom-release-evidence-v1`, repository validator `--release` option and multi-release chain validation, product version bump to 0.3.0 across manifests and toolchain contracts, launcher default release, CHANGELOG `## [0.3.0]`, v0.3.0 metadata fixtures, and offline Bats test suites); passed plan evaluation Round 0 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 4: `antigravity-model-adapter` (Antigravity model adapter, model-family extraction and cross-family invariant enforcement, v0.3.0 matrix and root registration, and offline Bats suite); passed plan evaluation Round 8 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
@@ -58,10 +58,14 @@ Current milestone: M9
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification). All three slices landed (offline fixture verification only); live Herdr and native-app execution evidence is separate owner-run work and remains outstanding.
+- [ ] **M10 — Cross-Platform Conformance & Production Readiness** (in progress):
+  - Multi-platform Linux / Ubuntu CI runner support and runtime verification (ADR 0019).
+  - Self-hosting marketplace distribution and installation automation (ADR 0006).
+  - Multi-harness paired workflow benchmarks across the five admitted clients (ADR 0028, Spec 04).
 
-## Next: Post-v0.3.0 Scope Admission & Roadmap (ADR 0033 §1)
+## Next: M10 Scope Definition & First Slice Planning (ADR 0033 §1)
 
-All five v0.3.0 milestone slices have landed and live conformance has been proven across all five admitted harnesses on macOS 14+ Apple silicon (Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr host) under ADR 0032 E1–E5 and ADR 0034. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Release evidence is recorded at `.docs/evaluations/release-evidence/v0.3.0.json`. The next action is follow-on scope admission and planning under ADR 0033 §1 / owner direction.
+Milestone M9 is complete with all five v0.3.0 slices landed and live conformance proven across Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr (`hc`) host on macOS 14+ Apple silicon. Release tag `v0.3.0` and evidence record `.docs/evaluations/release-evidence/v0.3.0.json` are published to `origin/main`. Milestone M10 begins: drafting the M10 problem document / research note, deciding candidate slices, and establishing the first M10 slice plan.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition

@@ -32,9 +32,9 @@ or human checkpoint you declare.
 
 ## Status
 
-Current milestone: M9
+Current milestone: M10
 
-**Milestones M0 through M8 complete; M9 in progress.**
+**Milestones M0 through M9 complete; M10 in progress.**
 
 - **M0 — Baseline & Multi-Client Proof**: Reproducible local gate (`scripts/check`),
   four-cell hosted CI, static Claude Code / Codex packaging contracts, and verified
@@ -61,6 +61,9 @@ Current milestone: M9
 - **M8 — Process Cost & Repository Noise**: Paired workflow benchmark harness (`scripts/workflow-benchmark.sh`),
   owner-selected workflow profiles and recommendations (`plugins/loom/bin/loom-profile`), and provisional
   landing history policy with squash publication and durable tracked evidence (ADR 0028).
+- **M9 — Client Compatibility & Native App Integration**: Full five-harness matrix support across Claude Code CLI,
+  Codex CLI, Antigravity CLI, Orca host, and Herdr (`hc`) host; host evaluator delegation to isolated cold POSIX
+  workspaces (ADR 0034); cross-family evaluation invariant enforcement; and published v0.3.0 live proof with release evidence record.
 
 Authoritative design lives in [`.docs/spec/`](.docs/spec/README.md) — start with
 [`00-overview.md`](.docs/spec/00-overview.md); architecture decisions are in

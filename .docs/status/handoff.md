@@ -5,7 +5,7 @@ Status: Living
 Restart instructions and compact current context. `progress.md` is the status
 source of truth; `roadmap.md` is milestone order.
 
-Current milestone: M9
+Current milestone: M10
 
 ## Start here each session
 
@@ -34,5 +34,5 @@ Current milestone: M9
 - **Landed (2026-11-05):** `dogfood-retirement` (ADR 0033 D1) via remote-direct: the macOS dual-client checkpoint tooling and its temporary gate exclusion list are deleted; the preserved evidence record and its schema check remain; `dogfood-int-race` is Abandoned.
 - **Landed (2026-11-05):** `herdr-surface-retirement` (M9 4 of 4) via remote-direct: Herdr plugin surfaces retired; Claude and Codex are the only supported clients.
 - **Landed (2026-11-02):** `hc-guard-deny-policy` (M9 1 of 4) via remote-direct. M9 slices `herdr-client-adapter`, `herdr-native-app-hooks`, `herdr-verification` Landed; 952 Bats tests passing (offline fixtures only).
-- **Next action:** Scope admission and planning for follow-on milestones under ADR 0033 §1 / owner direction.
+- **Next action:** M10 scope definition and first slice planning under ADR 0033 §1 / owner direction (Cross-Platform Conformance & Production Readiness).
 - **Session history:** Archived in [`archive/handoff-history.md`](archive/handoff-history.md) so this handoff stays within the 150-line cold-start budget.
