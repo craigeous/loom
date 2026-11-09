@@ -1,0 +1,422 @@
+{
+  "schema": "loom-release-evidence/v1",
+  "release": "0.3.0",
+  "tag": "v0.3.0",
+  "candidate": "75762af01ea9a7803bb17c27803f360fe42045f0",
+  "platform": {
+    "os": "macOS 14+",
+    "arch": "arm64"
+  },
+  "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+  "bashRuns": {
+    "bash32": {
+      "bashVersion": "3.2.57",
+      "result": "pass",
+      "log": "logs/bash/bash32.log",
+      "logSha256": "2feeb78cb4ae8ded3bb9f9dfe82b4a9cf8eebbcb60af32c565e24baeb555c2d1"
+    },
+    "bash5": {
+      "bashVersion": "5.3.9",
+      "result": "pass",
+      "log": "logs/bash/bash5.log",
+      "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+    }
+  },
+  "pairs": [
+    {
+      "harness": "claude-code-cli",
+      "client": "claude",
+      "floor": "2.1.216",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+        "entry": "claude"
+      },
+      "e2": {
+        "binding": "claude-plugin-root/v1"
+      },
+      "e3": {
+        "runId": "e3-claude-launch-matrix",
+        "result": "pass",
+        "log": "logs/claude/e3.log",
+        "logSha256": "886cb87896268400788c9406aead5b23caf6eb46c4935653d784101cf3dcf0c3"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/claude/role-researcher.log",
+            "logSha256": "5967aa7dc366f1a22f1c36de2255817d1d00d0b474f8b9aecfac3da908b4eaa0",
+            "outputHash": "5967aa7dc366f1a22f1c36de2255817d1d00d0b474f8b9aecfac3da908b4eaa0"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/claude/role-planner.log",
+            "logSha256": "948eb52bc80ae9672d7007f93cd798c5c455222b4f26000836a631f36cd6bdd9",
+            "outputHash": "948eb52bc80ae9672d7007f93cd798c5c455222b4f26000836a631f36cd6bdd9"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-plan-evaluator.log",
+            "logSha256": "f8e62b849e21d976b89223d4b559c51354ea6f09db994ecc13192ac7a2cefaeb",
+            "outputHash": "f8e62b849e21d976b89223d4b559c51354ea6f09db994ecc13192ac7a2cefaeb"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/claude/role-developer.log",
+            "logSha256": "12497e111e60e61c7e7c233ee9a0762267a7fbd547ba617e902aee5e66d55f49",
+            "outputHash": "12497e111e60e61c7e7c233ee9a0762267a7fbd547ba617e902aee5e66d55f49"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/claude/role-code-evaluator.log",
+            "logSha256": "e2ef82c6c1aae3e863e765b9d4eb35183303355311ad4c364068672884305826",
+            "outputHash": "e2ef82c6c1aae3e863e765b9d4eb35183303355311ad4c364068672884305826"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-claude-v030",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/claude/loop.log",
+          "logSha256": "3093dbf1ae1a2b35477815e020c307d9588685796a95cd0c6b2a2873f1c68fcd"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/claude/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+          "result": "pass",
+          "log": "logs/claude/lifecycle.log",
+          "logSha256": "bb69424be9af21ea327b6df8f03d7a78ac5752503ea3ffcd25795c9dbbc3bbdb"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "codex-cli",
+      "client": "codex",
+      "floor": "0.144.6",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+        "entry": "codex"
+      },
+      "e2": {
+        "binding": "codex-skill-source/v1"
+      },
+      "e3": {
+        "runId": "e3-codex-launch-matrix",
+        "result": "pass",
+        "log": "logs/codex/e3.log",
+        "logSha256": "a4f1a78749353313eacc3c38d367ca66dbf807af70dddbb7ff2ef866e341dfd2"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/codex/role-researcher.log",
+            "logSha256": "aa434557ff955b34f9e1ab2e2daad1b66e7739cddd006f23e522bd5fabdb05ba",
+            "outputHash": "aa434557ff955b34f9e1ab2e2daad1b66e7739cddd006f23e522bd5fabdb05ba"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/codex/role-planner.log",
+            "logSha256": "bc5ab5e945b8f4c31105154f97b805753706d31919c932ed983fed8ef41c30f3",
+            "outputHash": "bc5ab5e945b8f4c31105154f97b805753706d31919c932ed983fed8ef41c30f3"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-plan-evaluator.log",
+            "logSha256": "2a5d87f7c47007770e416f07fe76d6ae2a8d3b587edce7dea0e8659ec61eafbe",
+            "outputHash": "2a5d87f7c47007770e416f07fe76d6ae2a8d3b587edce7dea0e8659ec61eafbe"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/codex/role-developer.log",
+            "logSha256": "c393f5d159e93c40e62cc834d2e2a7c0aaaed336143f7f12355d7921eaf49b2c",
+            "outputHash": "c393f5d159e93c40e62cc834d2e2a7c0aaaed336143f7f12355d7921eaf49b2c"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/codex/role-code-evaluator.log",
+            "logSha256": "09289d3bc654f32032c9d3024a720bb2a1ac34c30900635d52aadd4938d70c23",
+            "outputHash": "09289d3bc654f32032c9d3024a720bb2a1ac34c30900635d52aadd4938d70c23"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-codex-v030",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/codex/loop.log",
+          "logSha256": "2256a106322e3ebc972c4061bf5b82ca508537f9f4a62ace66d16633ef8ce871"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/codex/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+          "result": "pass",
+          "log": "logs/codex/lifecycle.log",
+          "logSha256": "99c7ad764025840420be7ce19aaf66faf721199febd82b6acecfb9dcb2906bb6"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "antigravity-cli",
+      "client": "antigravity",
+      "floor": "1.4.12",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+        "entry": "antigravity"
+      },
+      "e2": {
+        "binding": "antigravity-plugin-root/v1"
+      },
+      "e3": {
+        "runId": "e3-antigravity-launch-matrix",
+        "result": "pass",
+        "log": "logs/antigravity/e3.log",
+        "logSha256": "2beea3a1cc64530d2b379494b0ab9519d5b99ffc17af61b77cdc78662870d0ad"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/antigravity/role-researcher.log",
+            "logSha256": "9a8645c80e8d90d0c4a9cd63ac804862ef5f4d451b33711237406ec35820eb02",
+            "outputHash": "9a8645c80e8d90d0c4a9cd63ac804862ef5f4d451b33711237406ec35820eb02"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/antigravity/role-planner.log",
+            "logSha256": "520a244734a25b325f5014218e2011112871e0da6675e651646a4f2bfe8e2abb",
+            "outputHash": "520a244734a25b325f5014218e2011112871e0da6675e651646a4f2bfe8e2abb"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/antigravity/role-plan-evaluator.log",
+            "logSha256": "a3362534b56dab436a2f83e48a903517f0293958d6a92a2e61a1285955dc42c7",
+            "outputHash": "a3362534b56dab436a2f83e48a903517f0293958d6a92a2e61a1285955dc42c7"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/antigravity/role-developer.log",
+            "logSha256": "6d9bd057445e4a7fb20ae57eb569e7f96df6ead99379b351ac67cc9bec7dc32b",
+            "outputHash": "6d9bd057445e4a7fb20ae57eb569e7f96df6ead99379b351ac67cc9bec7dc32b"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/antigravity/role-code-evaluator.log",
+            "logSha256": "da48c480089dd6502c322448c961283f5fde97b4af675dc7a7763bb02e43ac01",
+            "outputHash": "da48c480089dd6502c322448c961283f5fde97b4af675dc7a7763bb02e43ac01"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-antigravity-v030",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/antigravity/loop.log",
+          "logSha256": "b4b3ebbe0c55eab6dff86daaeecab4e182550355e7330eb8b15d63acff6409c6"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/antigravity/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+          "result": "pass",
+          "log": "logs/antigravity/lifecycle.log",
+          "logSha256": "4ccfb64ba6b2edf8415cd6082065086e3aa8fef01ed3954fe700b41dc2dae572"
+        }
+      },
+      "authSource": "owner-login-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "orca-host",
+      "client": "orca",
+      "floor": "1.4.250",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+        "entry": "orca"
+      },
+      "e2": {
+        "binding": "orca-host/v1"
+      },
+      "e3": {
+        "runId": "e3-orca-launch-matrix",
+        "result": "pass",
+        "log": "logs/orca/e3.log",
+        "logSha256": "1aceac3aee9ccbf01f624a8baca14351af6dcfbe0dac2b425b3fbfc784f43351"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/orca/role-researcher.log",
+            "logSha256": "64bd53af50306fb8cf64d7824ab31afe61013aa35430f09802479ad0d2fe3af2",
+            "outputHash": "64bd53af50306fb8cf64d7824ab31afe61013aa35430f09802479ad0d2fe3af2"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/orca/role-planner.log",
+            "logSha256": "c6e743705488f482fd05b9c3fb87be685415d991fb674642f1bd422a1ebfc532",
+            "outputHash": "c6e743705488f482fd05b9c3fb87be685415d991fb674642f1bd422a1ebfc532"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/orca/role-plan-evaluator.log",
+            "logSha256": "e41c03dad35ca1641fb0be6884e8120c0d3ba6199d0925e6e28a6057de4f37f6",
+            "outputHash": "e41c03dad35ca1641fb0be6884e8120c0d3ba6199d0925e6e28a6057de4f37f6"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/orca/role-developer.log",
+            "logSha256": "fb1611a8109c5ec13645b0fe267d31d849062b2d495fd04c1a2718695a3859ae",
+            "outputHash": "fb1611a8109c5ec13645b0fe267d31d849062b2d495fd04c1a2718695a3859ae"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/orca/role-code-evaluator.log",
+            "logSha256": "fdefea76c1ef1d90fe504b0356bc37da843c703cfc20045af9b06ce1983ca043",
+            "outputHash": "fdefea76c1ef1d90fe504b0356bc37da843c703cfc20045af9b06ce1983ca043"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-orca-v030",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/orca/loop.log",
+          "logSha256": "fce70ad96295e9dbc2367a6d4a7a2ef22d406401b9492d830310951f589ffb56"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/orca/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+          "result": "pass",
+          "log": "logs/orca/lifecycle.log",
+          "logSha256": "c2f49ff05a2a76e0241557db608397283495c232111d105301a98f8eccdf59f1"
+        }
+      },
+      "evaluatorDelegation": {
+        "evaluatorHarness": "codex-cli",
+        "evaluatorFamily": "openai",
+        "workspace": "isolated-posix",
+        "verified": true
+      },
+      "authSource": "host-session-isolated",
+      "ownerStateUnchanged": true
+    },
+    {
+      "harness": "hc-host",
+      "client": "hc",
+      "floor": "0.1.16",
+      "e1": {
+        "matrix": "plugins/loom/adapters/compatibility/v0.3.0.json",
+        "entry": "hc"
+      },
+      "e2": {
+        "binding": "hc-host/v1"
+      },
+      "e3": {
+        "runId": "e3-hc-launch-matrix",
+        "result": "pass",
+        "log": "logs/hc/e3.log",
+        "logSha256": "27ecf9e6be52ac2bffa802c8df6f14f8992d8a588a86c085eb986d5859cd35f6"
+      },
+      "e4": {
+        "a_roles": {
+          "researcher": {
+            "result": "pass",
+            "log": "logs/hc/role-researcher.log",
+            "logSha256": "e6828f6145b26122c092d9cc3cf1beddebb45da6c98cb61f33319fa936068977",
+            "outputHash": "e6828f6145b26122c092d9cc3cf1beddebb45da6c98cb61f33319fa936068977"
+          },
+          "planner": {
+            "result": "pass",
+            "log": "logs/hc/role-planner.log",
+            "logSha256": "20b1b696b097c6187951739d9a3fe4881a79bd12f9785ed6d617f781a409ad5d",
+            "outputHash": "20b1b696b097c6187951739d9a3fe4881a79bd12f9785ed6d617f781a409ad5d"
+          },
+          "plan-evaluator": {
+            "result": "pass",
+            "log": "logs/hc/role-plan-evaluator.log",
+            "logSha256": "5ce4d0e3c98295c496206489e8eea1470d9954a53d4bec42fd7ae27916a6a03d",
+            "outputHash": "5ce4d0e3c98295c496206489e8eea1470d9954a53d4bec42fd7ae27916a6a03d"
+          },
+          "developer": {
+            "result": "pass",
+            "log": "logs/hc/role-developer.log",
+            "logSha256": "59c66d90c001464d8b22fde045dc4e7b5ad3e19e1689231b2518b28921d5a916",
+            "outputHash": "59c66d90c001464d8b22fde045dc4e7b5ad3e19e1689231b2518b28921d5a916"
+          },
+          "code-evaluator": {
+            "result": "pass",
+            "log": "logs/hc/role-code-evaluator.log",
+            "logSha256": "6c1eecfa6eb2c02ff7a659603f6c5f04a50c42b36156d5126757f6029926afcc",
+            "outputHash": "6c1eecfa6eb2c02ff7a659603f6c5f04a50c42b36156d5126757f6029926afcc"
+          }
+        },
+        "b_loop": {
+          "runId": "loop-hc-v030",
+          "result": "pass",
+          "blindReview": "verified",
+          "crossFamilyVerified": true,
+          "log": "logs/hc/loop.log",
+          "logSha256": "a3d7abea811ce9a59efc86732dde0d454885fdda42316bc6e0cb3457c5fe34db"
+        },
+        "c_gate": {
+          "command": "scripts/check",
+          "result": "pass",
+          "log": "logs/hc/gate.log",
+          "logSha256": "ea6a88a8a7808444d1261a00a2deb2e7d47e15f1d95ed03058091ef6e0ff6421"
+        },
+        "d_lifecycle": {
+          "priorCandidate": "78a21fb9dd681912b6b0f866bba5d4d58a2b13c5",
+          "result": "pass",
+          "log": "logs/hc/lifecycle.log",
+          "logSha256": "ef05ee3055f5df0e03e35370fa2bd10332634d95e32b45134201c825765f7f87"
+        }
+      },
+      "evaluatorDelegation": {
+        "evaluatorHarness": "claude-code-cli",
+        "evaluatorFamily": "anthropic",
+        "workspace": "isolated-posix",
+        "verified": true
+      },
+      "authSource": "host-session-isolated",
+      "ownerStateUnchanged": true
+    }
+  ],
+  "ownerAck": {
+    "by": "owner",
+    "pairs": [
+      "claude-code-cli",
+      "codex-cli",
+      "antigravity-cli",
+      "orca-host",
+      "hc-host"
+    ],
+    "evidenceSet": "3e024875b554af1f646537fc894adafe88b87466c135d7694d500c319182eeb6",
+    "candidate": "75762af01ea9a7803bb17c27803f360fe42045f0",
+    "date": "2026-11-08"
+  }
+}
