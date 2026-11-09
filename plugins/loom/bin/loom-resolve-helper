@@ -30,7 +30,7 @@
 set -u
 
 EXPECTED_NAME="loom"
-EXPECTED_VERSION="0.2.0"
+EXPECTED_VERSION="0.3.0"
 ALLOWED_HELPERS=(loom-coord loom-verify-identity loom-review loom-eval-workspace loom-doctor loom-profile)
 
 _usage() {
@@ -131,7 +131,10 @@ _validate_manifest() {
     name=$(jq -r '.name // empty' "$canon_manifest" 2>/dev/null) || _fail "manifest is not valid JSON: $relpath"
     version=$(jq -r '.version // empty' "$canon_manifest" 2>/dev/null) || _fail "manifest is not valid JSON: $relpath"
     [ "$name" = "$EXPECTED_NAME" ] || _fail "manifest name mismatch: $relpath"
-    [ "$version" = "$EXPECTED_VERSION" ] || _fail "manifest version mismatch: $relpath"
+    case "$version" in
+    "0.2.0" | "$EXPECTED_VERSION") ;;
+    *) _fail "manifest version mismatch: $relpath" ;;
+    esac
 }
 
 # _resolve_helper_path <canonical-root> <helper-name> — prints canonical helper path
