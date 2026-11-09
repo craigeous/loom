@@ -32,7 +32,11 @@ _loom_hook_validate_root() {
     [ -f "$manifest" ] || return 1
     name=$(jq -r '.name // empty' "$manifest" 2>/dev/null) || return 1
     version=$(jq -r '.version // empty' "$manifest" 2>/dev/null) || return 1
-    [ "$name" = "loom" ] && [ "$version" = "0.2.0" ] || return 1
+    [ "$name" = "loom" ] || return 1
+    case "$version" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) return 1 ;;
+    esac
 }
 
 _loom_hook_select_client() {
