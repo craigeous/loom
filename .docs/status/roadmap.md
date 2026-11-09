@@ -39,6 +39,7 @@ Current milestone: M9
 - [x] **M8 — Control process cost and repository noise** (complete):
   `[x] workflow-benchmark`; `[x] workflow-profiles`; `[x] landing-history-policy`.
 - [ ] **M9 — Client compatibility: Herdr and native app integration** (in progress):
+  - Landed 2026-11-08: v0.3.0 released; release tag `v0.3.0` and evidence record committed to `main` (ADR 0032 E1–E5, ADR 0034). Live conformance proven across all five admitted harnesses on macOS 14+ Apple silicon: Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr (`hc`) host.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 5: `v0.3.0-live-proof` (release conformance, schema amendment to `loom-release-evidence-v1`, repository validator `--release` option and multi-release chain validation, product version bump to 0.3.0 across manifests and toolchain contracts, launcher default release, CHANGELOG `## [0.3.0]`, v0.3.0 metadata fixtures, and offline Bats test suites); passed plan evaluation Round 0 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 4: `antigravity-model-adapter` (Antigravity model adapter, model-family extraction and cross-family invariant enforcement, v0.3.0 matrix and root registration, and offline Bats suite); passed plan evaluation Round 8 (PASS) and blind code evaluation Round 0 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
   - Landed 2026-11-08: M9 / v0.3.0 Slice 3: `orca-host-adapter` (`loom-host-orca` observation/cleanup helper, v0.3.0 matrix `hostFloors.orca` registration, `loom-host-binding-v1` schema update, fixture, and repository validator); passed plan evaluation Round 1 (PASS) and blind code evaluation Round 2 (PASS via OpenAI Codex `gpt-6.1-terra`); plan archived.
@@ -53,14 +54,14 @@ Current milestone: M9
   - Landed 2026-11-05: `dogfood-retirement` (ADR 0033 D1): macOS checkpoint tooling retired.
   - Landed 2026-11-05: `herdr-surface-retirement` (4 of 4): Herdr plugin surfaces retired.
   - Landed 2026-11-02: `hc-guard-deny-policy` (1 of 4). `hc-host-adapter` and `hc-live-probe` un-shelved per ADR 0034.
-  - **ADR 0034 Implementation Order:** (1) `hc-host-adapter`, (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Slices 1–3 use certified CLI evaluators per ADR 0034 §2.
+  - **ADR 0034 Implementation Order:** (1) `hc-host-adapter`, (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`, (5) `v0.3.0-live-proof`. All five slices Landed and verified.
   `[x] herdr-client-adapter`, `[x] herdr-native-app-hooks`, and `[x] herdr-verification` (add support
   for Herdr and its new native application: client adapter contracts, root bindings, role launch
   mappings, event hooks, and integration verification). All three slices landed (offline fixture verification only); live Herdr and native-app execution evidence is separate owner-run work and remains outstanding.
 
-## Next: v0.3.0 Harness Delivery (ADR 0034, Accepted 2026-11-08)
+## Next: Post-v0.3.0 Scope Admission & Roadmap (ADR 0033 §1)
 
-Order of work: (1) `hc-host-adapter` (`plugins/loom/bin/loom-host-hc` and `.docs/slice-plans/hc-host-adapter.md`), (2) `hc-live-probe`, (3) `orca-host-adapter`, (4) `antigravity-model-adapter`. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Conformance is verified for Claude Code CLI and Codex CLI on macOS 14+ Apple silicon under ADR 0032 E1–E5. The next action is to author and implement `antigravity-model-adapter`.
+All five v0.3.0 milestone slices have landed and live conformance has been proven across all five admitted harnesses on macOS 14+ Apple silicon (Claude Code CLI, Codex CLI, Antigravity CLI, Orca host, and Herdr host) under ADR 0032 E1–E5 and ADR 0034. Evaluator governance is settled by ADR 0034 §2: host harnesses run interactive roles, while evaluators execute in cold, isolated POSIX workspaces using certified model CLI clients (`codex` or `claude`). Release evidence is recorded at `.docs/evaluations/release-evidence/v0.3.0.json`. The next action is follow-on scope admission and planning under ADR 0033 §1 / owner direction.
 
 M0 is authoritative at settled remote result `51b249e`. The program-amendment
 checkbox is prospective until its configured remote target and protected transition
