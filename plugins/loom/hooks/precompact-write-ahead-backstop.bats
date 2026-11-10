@@ -644,9 +644,20 @@ assert_fixture() {
 
 @test "fixture codex/pre-compact/malformed" { assert_fixture codex malformed; }
 
-@test "root: multiple valid roots fail closed (ambiguous root selection)" {
+@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT point to same root selects codex" {
     make_repo
     run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual s-both)"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "root: multiple valid roots fail closed (ambiguous root selection)" {
+    make_repo
+    SECOND_ROOT="$(mktemp -d)"
+    mkdir -p "$SECOND_ROOT/.claude-plugin"
+    printf '{"name":"loom","version":"0.3.0"}\n' > "$SECOND_ROOT/.claude-plugin/plugin.json"
+    run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$SECOND_ROOT" "$LOOM_TEST_BASH" "$HOOK" <<<"$(mk_json manual s-both)"
+    rm -rf "$SECOND_ROOT"
     [ "$status" -eq 2 ]
     [ "$output" = "Loom hook input invalid for pre-compact." ]
 }

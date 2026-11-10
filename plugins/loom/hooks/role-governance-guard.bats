@@ -223,9 +223,25 @@ hc_wire_allowed() {
     [ "$output" = "Loom hook input invalid for pre-tool-use." ]
 }
 
-@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT validate (ambiguous) fails closed" {
+@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT point to same root selects codex" {
     json=$(jq -cn --arg c "git status" '{tool_input:{command:$c}}')
     run env LOOM_ROLE=code-evaluator PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    json=$(jq -cn --arg c "git commit -m x" '{tool_input:{command:$c}}')
+    run env LOOM_ROLE=code-evaluator PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "root: distinct valid PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT (ambiguous) fails closed" {
+    SECOND_ROOT="$(mktemp -d)"
+    mkdir -p "$SECOND_ROOT/.claude-plugin"
+    printf '{"name":"loom","version":"0.3.0"}\n' > "$SECOND_ROOT/.claude-plugin/plugin.json"
+    json=$(jq -cn --arg c "git status" '{tool_input:{command:$c}}')
+    run env LOOM_ROLE=code-evaluator PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$SECOND_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<"$json"
+    rm -rf "$SECOND_ROOT"
     [ "$status" -eq 2 ]
     [ "$output" = "Loom hook input invalid for pre-tool-use." ]
 }

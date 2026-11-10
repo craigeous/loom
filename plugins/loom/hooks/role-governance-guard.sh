@@ -39,16 +39,31 @@ _loom_hook_validate_root() {
     esac
 }
 
+# _loom_hook_select_client — prints "codex" or "claude" and returns 0 only
+# when exactly one valid root validates, or when both validate to the same
+# physical directory (Codex exports CLAUDE_PLUGIN_ROOT as a compatibility alias).
+# Ambiguous (multiple distinct valid roots) or zero valid roots fail closed with
+# return 1 (spec 10, ADR 0030 decision 3).
 _loom_hook_select_client() {
-    local codex_ok=1 n=0
-    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0 && n=$((n + 1))
-    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && n=$((n + 1))
-    [ "$n" -eq 1 ] || return 1
-    if [ "$codex_ok" -eq 0 ]; then
+    local codex_ok=1 claude_ok=1
+    _loom_hook_validate_root "${PLUGIN_ROOT:-}" ".codex-plugin/plugin.json" && codex_ok=0
+    _loom_hook_validate_root "${CLAUDE_PLUGIN_ROOT:-}" ".claude-plugin/plugin.json" && claude_ok=0
+
+    if [ "$codex_ok" -eq 0 ] && [ "$claude_ok" -eq 1 ]; then
         printf 'codex'
-    else
+        return 0
+    elif [ "$codex_ok" -eq 1 ] && [ "$claude_ok" -eq 0 ]; then
         printf 'claude'
+        return 0
+    elif [ "$codex_ok" -eq 0 ] && [ "$claude_ok" -eq 0 ]; then
+        local c1 c2
+        c1=$(CDPATH='' cd -- "${PLUGIN_ROOT:-}" 2>/dev/null && pwd -P) || return 1
+        c2=$(CDPATH='' cd -- "${CLAUDE_PLUGIN_ROOT:-}" 2>/dev/null && pwd -P) || return 1
+        [ "$c1" = "$c2" ] || return 1
+        printf 'codex'
+        return 0
     fi
+    return 1
 }
 
 _loom_hook_sanitize_reason() {

@@ -373,8 +373,22 @@ guard_codex() {
     [ "$output" = "Loom hook input invalid for pre-tool-use." ]
 }
 
-@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT validate (ambiguous) fails closed" {
+@test "root: both PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT point to same root selects codex" {
     run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<'{"tool_input":{"command":"git commit -m ok"}}'
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$REAL_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<'{"tool_input":{"command":"git commit --author=\"x <x@y>\" -m z"}}'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = "deny" ]
+}
+
+@test "root: distinct valid PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT (ambiguous) fails closed" {
+    SECOND_ROOT="$(mktemp -d)"
+    mkdir -p "$SECOND_ROOT/.claude-plugin"
+    printf '{"name":"loom","version":"0.3.0"}\n' > "$SECOND_ROOT/.claude-plugin/plugin.json"
+    run env PLUGIN_ROOT="$REAL_ROOT" CLAUDE_PLUGIN_ROOT="$SECOND_ROOT" "$LOOM_TEST_BASH" "$GUARD" <<<'{"tool_input":{"command":"git commit -m ok"}}'
+    rm -rf "$SECOND_ROOT"
     [ "$status" -eq 2 ]
     [ "$output" = "Loom hook input invalid for pre-tool-use." ]
 }
